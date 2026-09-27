@@ -434,7 +434,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
             onChanged: _saveDarkTheme,
           ),
           const Divider(),
-          ListTile(
+            ListTile(
             leading: const Icon(Icons.language, color: Colors.deepPurple),
             title: const Text("Language"),
             subtitle: Text(_language),
