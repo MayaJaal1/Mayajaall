@@ -203,7 +203,7 @@ class _HomeScreenState extends State<HomeScreen> {
     Future.delayed(const Duration(seconds: 1), () => _requestPermissions());
   }
 
-  Future<void> _requestPermissions() async {
+    Future<void> _requestPermissions() async {
     if (_permissionsChecked) return;
     _permissionsChecked = true;
     if (!await Permission.notification.isGranted) await Permission.notification.request();
@@ -370,9 +370,7 @@ class _HomeScreenState extends State<HomeScreen> {
       ),
     );
   }
-}
-
-class SettingsScreen extends StatefulWidget {
+} class SettingsScreen extends StatefulWidget {
   const SettingsScreen({super.key});
   @override
   State<SettingsScreen> createState() => _SettingsScreenState();
@@ -434,7 +432,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
             onChanged: _saveDarkTheme,
           ),
           const Divider(),
-            ListTile(
+          ListTile(
             leading: const Icon(Icons.language, color: Colors.deepPurple),
             title: const Text("Language"),
             subtitle: Text(_language),
@@ -518,26 +516,38 @@ class VideoPlayerScreen extends StatefulWidget {
 class _VideoPlayerScreenState extends State<VideoPlayerScreen> {
   late final WebViewController _controller;
   bool _isLoading = true;
+  bool _hasError = false;
 
   @override
   void initState() {
     super.initState();
-    _controller = WebViewController()
-      ..setJavaScriptMode(JavaScriptMode.unrestricted)
-      ..setNavigationDelegate(
-        NavigationDelegate(
-          onPageStarted: (url) => setState(() => _isLoading = true),
-          onPageFinished: (url) => setState(() => _isLoading = false),
-        ),
-      )
-      ..loadRequest(Uri.parse(widget.url));
+    
+    String targetUrl = widget.url;
+    if (!targetUrl.contains('fileId=')) {
+      _hasError = true;
+      _isLoading = false;
+    } else {
+      _controller = WebViewController()
+        ..setJavaScriptMode(JavaScriptMode.unrestricted)
+        ..setNavigationDelegate(
+          NavigationDelegate(
+            onPageStarted: (url) => setState(() => _isLoading = true),
+            onPageFinished: (url) => setState(() => _isLoading = false),
+            onWebResourceError: (error) => setState(() {
+              _hasError = true;
+              _isLoading = false;
+            }),
+          ),
+        )
+        ..loadRequest(Uri.parse(targetUrl));
+    }
   }
 
   @override
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(
-        title: const Text("Mayajaall"),
+        title: const Text("Mayajaall Player"),
         backgroundColor: Colors.deepPurple,
         foregroundColor: Colors.white,
         actions: [
@@ -547,12 +557,45 @@ class _VideoPlayerScreenState extends State<VideoPlayerScreen> {
           ),
         ],
       ),
-      body: Stack(
-        children: [
-          WebViewWidget(controller: _controller),
-          if (_isLoading) const Center(child: CircularProgressIndicator()),
-        ],
-      ),
+      body: _hasError
+          ? Center(
+              child: Padding(
+                padding: const EdgeInsets.all(24.0),
+                child: Column(
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  children: [
+                    const Icon(Icons.error_outline, size: 70, color: Colors.red),
+                    const SizedBox(height: 16),
+                    const Text(
+                      "Invalid Stream Link",
+                      style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold),
+                    ),
+                    const SizedBox(height: 8),
+                    const Text(
+                      "Link mein ?fileId= missing hai. Kripya Telegram bot se poora link copy karke dobara paste karein.",
+                      textAlign: TextAlign.center,
+                      style: TextStyle(color: Colors.grey, fontSize: 14),
+                    ),
+                    const SizedBox(height: 24),
+                    ElevatedButton.icon(
+                      onPressed: () => Navigator.pop(context),
+                      icon: const Icon(Icons.arrow_back),
+                      label: const Text("Go Back"),
+                      style: ElevatedButton.styleFrom(
+                        backgroundColor: Colors.deepPurple,
+                        foregroundColor: Colors.white,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            )
+          : Stack(
+              children: [
+                WebViewWidget(controller: _controller),
+                if (_isLoading) const Center(child: CircularProgressIndicator()),
+              ],
+            ),
     );
   }
 }
