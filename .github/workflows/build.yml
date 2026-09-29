@@ -25,6 +25,10 @@ jobs:
           flutter-version: '3.19.6'
           channel: 'stable'
 
+      - name: Setup Keystore
+        run: |
+          echo "${{ secrets.KEYSTORE_BASE64 }}" | base64 -d > android/app/mayajaal-release.jks
+
       - name: Create Android Folder Structure
         run: |
           mkdir -p android/app/src/main/kotlin/com/example/mayajaall
@@ -161,8 +165,20 @@ jobs:
                   versionCode flutterVersionCode.toInteger()
                   versionName flutterVersionName
               }
+              signingConfigs {
+                  release {
+                      storeFile file('mayajaal-release.jks')
+                      storePassword '${{ secrets.KEYSTORE_PASSWORD }}'
+                      keyAlias '${{ secrets.KEY_ALIAS }}'
+                      keyPassword '${{ secrets.KEY_PASSWORD }}'
+                  }
+              }
               buildTypes {
-                  release { signingConfig signingConfigs.debug }
+                  release {
+                      signingConfig signingConfigs.release
+                      minifyEnabled false
+                      shrinkResources false
+                  }
               }
           }
           flutter { source '../..' }
@@ -216,9 +232,16 @@ jobs:
       - name: Build Release APK
         run: flutter build apk --release
 
-      - name: Print SHA Fingerprints
+      - name: Print SHA256 of Release Keystore
         run: |
-          keytool -list -v -keystore ~/.android/debug.keystore -alias androiddebugkey -storepass android -keypass android | grep "SHA"
+          echo "=========================================="
+          echo "YOUR RELEASE SHA256 (Copy this):"
+          echo "=========================================="
+          keytool -list -v -keystore android/app/mayajaal-release.jks \
+            -alias "${{ secrets.KEY_ALIAS }}" \
+            -storepass "${{ secrets.KEYSTORE_PASSWORD }}" \
+            -keypass "${{ secrets.KEY_PASSWORD }}" | grep "SHA256:"
+          echo "=========================================="
 
       - name: Upload APK Artifact
         uses: actions/upload-artifact@v4
