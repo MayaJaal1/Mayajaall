@@ -1,7 +1,7 @@
 import 'dart:async';
 import 'dart:io';
 import 'dart:math' as math;
-import 'dart:convert' as json;
+import 'dart:convert';
 import 'package:flutter/material.dart';
 import 'package:app_links/app_links.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
@@ -17,25 +17,13 @@ import 'package:package_info_plus/package_info_plus.dart';
 import 'package:open_filex/open_filex.dart';
 import 'package:path_provider/path_provider.dart';
 
-// ═══════════════════════════════════════════
-// CONFIG
-// ═══════════════════════════════════════════
 const String supabaseUrl = 'https://inxlnctaixbkfblwlmhr.supabase.co';
 const String supabaseAnonKey = 'sb_publishable_6b9xe3mDBduO-soZTk3t2A_W1sQpD5K';
 const String webClientId = '985001671962-rok8qnng0rumjsd8mgr8uhr92o5vhs4n.apps.googleusercontent.com';
-
-// Backend URL (Railway)
 const String kBackendUrl = 'https://mayajaal-backend-production.up.railway.app';
+const String kApkDownloadUrl = 'https://github.com/ajayr0201/Mayajaall/releases/latest/download/app-release.apk';
+const String kGithubApiUrl = 'https://api.github.com/repos/ajayr0201/Mayajaall/releases/latest';
 
-// APK Download URL (GitHub Releases)
-const String kApkDownloadUrl =
-    'https://github.com/ajayr0201/Mayajaall/releases/latest/download/app-release.apk';
-
-// GitHub API for update check
-const String kGithubApiUrl =
-    'https://api.github.com/repos/ajayr0201/Mayajaall/releases/latest';
-
-// Matrix Theme Colors
 const Color kGreen = Color(0xFF00FF41);
 const Color kBg = Color(0xFF000000);
 const Color kCardBg = Color(0xFF0A0A0A);
@@ -52,9 +40,6 @@ Future<void> main() async {
   runApp(const MyApp());
 }
 
-// ═══════════════════════════════════════════
-// MY APP
-// ═══════════════════════════════════════════
 class MyApp extends StatefulWidget {
   const MyApp({super.key});
   @override
@@ -145,10 +130,7 @@ class _MyAppState extends State<MyApp> {
       },
     );
   }
-}// ═══════════════════════════════════════════
-// MATRIX RAIN WIDGET
-// ═══════════════════════════════════════════
-class MatrixRain extends StatefulWidget {
+}class MatrixRain extends StatefulWidget {
   const MatrixRain({super.key});
   @override
   State<MatrixRain> createState() => _MatrixRainState();
@@ -160,8 +142,7 @@ class _MatrixRainState extends State<MatrixRain> {
   final List<double> _speeds = [];
   final List<String> _letters = [];
   final math.Random _r = math.Random();
-  static const _chars =
-      'アイウエオカキクケコサシスセソタチツテトナニヌネノ0123456789ABCDEFXYZ';
+  static const _chars = 'アイウエオカキクケコサシスセソタチツテトナニヌネノ0123456789ABCDEFXYZ';
 
   @override
   void initState() {
@@ -218,9 +199,6 @@ class _MatrixRainState extends State<MatrixRain> {
   }
 }
 
-// ═══════════════════════════════════════════
-// SPLASH SCREEN
-// ═══════════════════════════════════════════
 class SplashScreen extends StatefulWidget {
   const SplashScreen({super.key});
   @override
@@ -275,8 +253,7 @@ class _SplashScreenState extends State<SplashScreen>
                         ),
                       ],
                     ),
-                    child: const Icon(Icons.movie_filter,
-                        size: 80, color: kGreen),
+                    child: const Icon(Icons.movie_filter, size: 80, color: kGreen),
                   ),
                 ),
                 const SizedBox(height: 30),
@@ -291,9 +268,7 @@ class _SplashScreenState extends State<SplashScreen>
                       fontFamily: 'monospace',
                       letterSpacing: 8,
                       shadows: [
-                        Shadow(
-                            color: kGreen.withOpacity(_a.value),
-                            blurRadius: 20),
+                        Shadow(color: kGreen.withOpacity(_a.value), blurRadius: 20),
                       ],
                     ),
                   ),
@@ -317,9 +292,6 @@ class _SplashScreenState extends State<SplashScreen>
   }
 }
 
-// ═══════════════════════════════════════════
-// AUTH GATE
-// ═══════════════════════════════════════════
 class AuthGate extends StatelessWidget {
   const AuthGate({super.key});
   @override
@@ -341,9 +313,6 @@ class AuthGate extends StatelessWidget {
   }
 }
 
-// ═══════════════════════════════════════════
-// LOGIN SCREEN
-// ═══════════════════════════════════════════
 class LoginScreen extends StatefulWidget {
   const LoginScreen({super.key});
   @override
@@ -360,8 +329,7 @@ class _LoginScreenState extends State<LoginScreen> {
       _error = '';
     });
     try {
-      final GoogleSignIn googleSignIn =
-          GoogleSignIn(serverClientId: webClientId);
+      final GoogleSignIn googleSignIn = GoogleSignIn(serverClientId: webClientId);
       final googleUser = await googleSignIn.signIn();
       if (googleUser == null) {
         setState(() => _loading = false);
@@ -399,8 +367,7 @@ class _LoginScreenState extends State<LoginScreen> {
                     border: Border.all(color: kGreen.withOpacity(0.5)),
                     borderRadius: BorderRadius.circular(14),
                     boxShadow: [
-                      BoxShadow(
-                          color: kGreen.withOpacity(0.2), blurRadius: 30),
+                      BoxShadow(color: kGreen.withOpacity(0.2), blurRadius: 30),
                     ],
                   ),
                   child: Column(
@@ -412,8 +379,7 @@ class _LoginScreenState extends State<LoginScreen> {
                           shape: BoxShape.circle,
                           border: Border.all(color: kGreen, width: 2),
                         ),
-                        child: const Icon(Icons.movie_filter,
-                            size: 50, color: kGreen),
+                        child: const Icon(Icons.movie_filter, size: 50, color: kGreen),
                       ),
                       const SizedBox(height: 24),
                       const Text(
@@ -487,8 +453,7 @@ class _LoginScreenState extends State<LoginScreen> {
                           ),
                           child: Text(
                             _error,
-                            style: const TextStyle(
-                                color: Colors.redAccent, fontSize: 12),
+                            style: const TextStyle(color: Colors.redAccent, fontSize: 12),
                             textAlign: TextAlign.center,
                           ),
                         ),
@@ -503,10 +468,7 @@ class _LoginScreenState extends State<LoginScreen> {
       ),
     );
   }
-}// ═══════════════════════════════════════════
-// HOME SCREEN
-// ═══════════════════════════════════════════
-class HomeScreen extends StatefulWidget {
+}class HomeScreen extends StatefulWidget {
   const HomeScreen({super.key});
   @override
   State<HomeScreen> createState() => _HomeScreenState();
@@ -522,7 +484,6 @@ class _HomeScreenState extends State<HomeScreen> {
     super.initState();
     _loadHistory();
     Future.delayed(const Duration(seconds: 1), () => _requestPermissions());
-    // In-app update check (3 sec baad)
     Future.delayed(const Duration(seconds: 3), () {
       if (mounted) UpdateChecker.checkForUpdate(context);
     });
@@ -540,7 +501,6 @@ class _HomeScreenState extends State<HomeScreen> {
     if (!await Permission.storage.isGranted) {
       await Permission.storage.request();
     }
-    // Install packages permission (in-app update ke liye)
     if (!await Permission.requestInstallPackages.isGranted) {
       await Permission.requestInstallPackages.request();
     }
@@ -613,30 +573,23 @@ class _HomeScreenState extends State<HomeScreen> {
             Divider(color: kGreen.withOpacity(0.3)),
             ListTile(
               leading: const Icon(Icons.settings, color: kGreen),
-              title: const Text('Settings',
-                  style: TextStyle(color: kGreen)),
+              title: const Text('Settings', style: TextStyle(color: kGreen)),
               onTap: () {
                 Navigator.pop(c);
-                Navigator.push(
-                  c,
-                  MaterialPageRoute(builder: (_) => const SettingsScreen()),
-                );
+                Navigator.push(c, MaterialPageRoute(builder: (_) => const SettingsScreen()));
               },
             ),
             ListTile(
               leading: const Icon(Icons.system_update, color: kGreen),
-              title: const Text('Check for Update',
-                  style: TextStyle(color: kGreen)),
+              title: const Text('Check for Update', style: TextStyle(color: kGreen)),
               onTap: () {
                 Navigator.pop(c);
                 UpdateChecker.checkForUpdate(context, force: true);
               },
             ),
             ListTile(
-              leading:
-                  const Icon(Icons.delete_sweep, color: Colors.orange),
-              title: const Text('Clear History',
-                  style: TextStyle(color: Colors.orange)),
+              leading: const Icon(Icons.delete_sweep, color: Colors.orange),
+              title: const Text('Clear History', style: TextStyle(color: Colors.orange)),
               onTap: () {
                 Navigator.pop(c);
                 _clearHistory();
@@ -644,8 +597,7 @@ class _HomeScreenState extends State<HomeScreen> {
             ),
             ListTile(
               leading: const Icon(Icons.logout, color: Colors.red),
-              title:
-                  const Text('Logout', style: TextStyle(color: Colors.red)),
+              title: const Text('Logout', style: TextStyle(color: Colors.red)),
               onTap: () {
                 Navigator.pop(c);
                 _showLogoutConfirm();
@@ -668,23 +620,18 @@ class _HomeScreenState extends State<HomeScreen> {
           side: BorderSide(color: kGreen.withOpacity(0.5)),
         ),
         title: const Text('Logout?', style: TextStyle(color: kGreen)),
-        content: const Text(
-          'Kya aap logout karna chahte ho?',
-          style: TextStyle(color: kDimGreen),
-        ),
+        content: const Text('Kya aap logout karna chahte ho?', style: TextStyle(color: kDimGreen)),
         actions: [
           TextButton(
             onPressed: () => Navigator.pop(c),
-            child: const Text('Cancel',
-                style: TextStyle(color: kDimGreen)),
+            child: const Text('Cancel', style: TextStyle(color: kDimGreen)),
           ),
           TextButton(
             onPressed: () {
               Navigator.pop(c);
               _logout();
             },
-            child:
-                const Text('Logout', style: TextStyle(color: Colors.red)),
+            child: const Text('Logout', style: TextStyle(color: Colors.red)),
           ),
         ],
       ),
@@ -703,8 +650,7 @@ class _HomeScreenState extends State<HomeScreen> {
       return;
     }
     if (input.startsWith('mayajaall://')) {
-      input = input.replaceFirst(
-          'mayajaall://', '$kBackendUrl/');
+      input = input.replaceFirst('mayajaall://', '$kBackendUrl/');
     }
     _saveToHistory(input);
     _linkController.clear();
@@ -746,8 +692,7 @@ class _HomeScreenState extends State<HomeScreen> {
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
               Container(
-                padding: const EdgeInsets.symmetric(
-                    horizontal: 14, vertical: 10),
+                padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
                 decoration: BoxDecoration(
                   color: kCardBg,
                   border: Border.all(color: kGreen.withOpacity(0.3)),
@@ -760,11 +705,7 @@ class _HomeScreenState extends State<HomeScreen> {
                     Expanded(
                       child: Text(
                         user?.email ?? 'User',
-                        style: const TextStyle(
-                          color: kGreen,
-                          fontSize: 13,
-                          fontFamily: 'monospace',
-                        ),
+                        style: const TextStyle(color: kGreen, fontSize: 13, fontFamily: 'monospace'),
                         overflow: TextOverflow.ellipsis,
                       ),
                     ),
@@ -776,8 +717,7 @@ class _HomeScreenState extends State<HomeScreen> {
                 decoration: BoxDecoration(
                   color: kCardBg,
                   borderRadius: BorderRadius.circular(12),
-                  border: Border.all(
-                      color: kGreen.withOpacity(0.5), width: 1.5),
+                  border: Border.all(color: kGreen.withOpacity(0.5), width: 1.5),
                 ),
                 child: Row(
                   children: [
@@ -788,26 +728,17 @@ class _HomeScreenState extends State<HomeScreen> {
                     Expanded(
                       child: TextField(
                         controller: _linkController,
-                        style: const TextStyle(
-                          color: kGreen,
-                          fontFamily: 'monospace',
-                          fontSize: 13,
-                        ),
+                        style: const TextStyle(color: kGreen, fontFamily: 'monospace', fontSize: 13),
                         decoration: InputDecoration(
                           hintText: 'Paste Mayajaal link here...',
-                          hintStyle: TextStyle(
-                            color: kGreen.withOpacity(0.4),
-                            fontSize: 12,
-                          ),
+                          hintStyle: TextStyle(color: kGreen.withOpacity(0.4), fontSize: 12),
                           border: InputBorder.none,
-                          contentPadding:
-                              const EdgeInsets.symmetric(vertical: 15),
+                          contentPadding: const EdgeInsets.symmetric(vertical: 15),
                         ),
                       ),
                     ),
                     IconButton(
-                      icon: const Icon(Icons.play_circle_fill,
-                          color: kGreen, size: 35),
+                      icon: const Icon(Icons.play_circle_fill, color: kGreen, size: 35),
                       onPressed: _searchAndPlay,
                     ),
                   ],
@@ -816,12 +747,7 @@ class _HomeScreenState extends State<HomeScreen> {
               const SizedBox(height: 25),
               const Text(
                 '> WATCH HISTORY',
-                style: TextStyle(
-                  fontSize: 14,
-                  fontWeight: FontWeight.bold,
-                  color: kGreen,
-                  letterSpacing: 2,
-                ),
+                style: TextStyle(fontSize: 14, fontWeight: FontWeight.bold, color: kGreen, letterSpacing: 2),
               ),
               const SizedBox(height: 12),
               Expanded(
@@ -830,17 +756,9 @@ class _HomeScreenState extends State<HomeScreen> {
                         child: Column(
                           mainAxisAlignment: MainAxisAlignment.center,
                           children: [
-                            Icon(Icons.history,
-                                size: 60,
-                                color: kGreen.withOpacity(0.4)),
+                            Icon(Icons.history, size: 60, color: kGreen.withOpacity(0.4)),
                             const SizedBox(height: 10),
-                            Text(
-                              'no history yet',
-                              style: TextStyle(
-                                color: kGreen.withOpacity(0.6),
-                                fontFamily: 'monospace',
-                              ),
-                            ),
+                            Text('no history yet', style: TextStyle(color: kGreen.withOpacity(0.6), fontFamily: 'monospace')),
                           ],
                         ),
                       )
@@ -853,34 +771,22 @@ class _HomeScreenState extends State<HomeScreen> {
                             decoration: BoxDecoration(
                               color: kCardBg,
                               borderRadius: BorderRadius.circular(10),
-                              border: Border.all(
-                                  color: kGreen.withOpacity(0.3)),
+                              border: Border.all(color: kGreen.withOpacity(0.3)),
                             ),
                             child: ListTile(
-                              leading: const Icon(
-                                  Icons.play_circle_outline,
-                                  color: kGreen),
+                              leading: const Icon(Icons.play_circle_outline, color: kGreen),
                               title: Text(
-                                item.length > 50
-                                    ? '${item.substring(0, 50)}...'
-                                    : item,
-                                style: const TextStyle(
-                                  fontSize: 12,
-                                  color: kGreen,
-                                  fontFamily: 'monospace',
-                                ),
+                                item.length > 50 ? '${item.substring(0, 50)}...' : item,
+                                style: const TextStyle(fontSize: 12, color: kGreen, fontFamily: 'monospace'),
                               ),
                               trailing: IconButton(
-                                icon: const Icon(Icons.close,
-                                    size: 16, color: Colors.redAccent),
+                                icon: const Icon(Icons.close, size: 16, color: Colors.redAccent),
                                 onPressed: () => _deleteHistoryItem(i),
                               ),
                               onTap: () {
                                 Navigator.push(
                                   c,
-                                  MaterialPageRoute(
-                                      builder: (_) =>
-                                          VideoPlayerScreen(url: item)),
+                                  MaterialPageRoute(builder: (_) => VideoPlayerScreen(url: item)),
                                 ).then((_) => _loadHistory());
                               },
                             ),
@@ -894,12 +800,7 @@ class _HomeScreenState extends State<HomeScreen> {
       ),
     );
   }
-}
-
-// ═══════════════════════════════════════════
-// SETTINGS SCREEN
-// ═══════════════════════════════════════════
-class SettingsScreen extends StatefulWidget {
+}class SettingsScreen extends StatefulWidget {
   const SettingsScreen({super.key});
   @override
   State<SettingsScreen> createState() => _SettingsScreenState();
@@ -910,16 +811,8 @@ class _SettingsScreenState extends State<SettingsScreen> {
   String _language = 'English';
   String _downloadLocation = 'Internal Storage / Mayajaall';
 
-  final List<String> _languages = [
-    'English', 'Hindi', 'Bengali', 'Tamil', 'Telugu',
-    'Marathi', 'Gujarati', 'Kannada', 'Malayalam', 'Punjabi'
-  ];
-  final List<String> _downloadLocations = [
-    'Internal Storage / Mayajaall',
-    'Internal Storage / Download',
-    'Internal Storage / Movies',
-    'SD Card / Mayajaall',
-  ];
+  final List<String> _languages = ['English', 'Hindi', 'Bengali', 'Tamil', 'Telugu', 'Marathi', 'Gujarati', 'Kannada', 'Malayalam', 'Punjabi'];
+  final List<String> _downloadLocations = ['Internal Storage / Mayajaall', 'Internal Storage / Download', 'Internal Storage / Movies', 'SD Card / Mayajaall'];
 
   @override
   void initState() {
@@ -932,8 +825,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
     setState(() {
       _darkTheme = prefs.getBool('dark_theme') ?? true;
       _language = prefs.getString('language') ?? 'English';
-      _downloadLocation = prefs.getString('download_location') ??
-          'Internal Storage / Mayajaall';
+      _downloadLocation = prefs.getString('download_location') ?? 'Internal Storage / Mayajaall';
     });
   }
 
@@ -960,75 +852,43 @@ class _SettingsScreenState extends State<SettingsScreen> {
   Widget build(BuildContext context) {
     return Scaffold(
       backgroundColor: kBg,
-      appBar: AppBar(
-        title: const Text('SETTINGS'),
-        backgroundColor: kBg,
-        foregroundColor: kGreen,
-      ),
+      appBar: AppBar(title: const Text('SETTINGS'), backgroundColor: kBg, foregroundColor: kGreen),
       body: ListView(
         children: [
           ListTile(
             leading: const Icon(Icons.dark_mode, color: kGreen),
-            title: const Text('Dark Theme',
-                style:
-                    TextStyle(color: kGreen, fontFamily: 'monospace')),
-            subtitle: Text(_darkTheme ? 'ON' : 'OFF',
-                style: TextStyle(
-                    color: kGreen.withOpacity(0.6), fontSize: 12)),
-            trailing: Switch(
-                value: _darkTheme,
-                activeColor: kGreen,
-                onChanged: _saveDarkTheme),
+            title: const Text('Dark Theme', style: TextStyle(color: kGreen, fontFamily: 'monospace')),
+            subtitle: Text(_darkTheme ? 'ON' : 'OFF', style: TextStyle(color: kGreen.withOpacity(0.6), fontSize: 12)),
+            trailing: Switch(value: _darkTheme, activeColor: kGreen, onChanged: _saveDarkTheme),
           ),
           Divider(color: kGreen.withOpacity(0.2)),
           ListTile(
             leading: const Icon(Icons.language, color: kGreen),
-            title: const Text('Language',
-                style:
-                    TextStyle(color: kGreen, fontFamily: 'monospace')),
-            subtitle: Text(_language,
-                style: TextStyle(
-                    color: kGreen.withOpacity(0.6), fontSize: 12)),
-            trailing: const Icon(Icons.arrow_forward_ios,
-                size: 14, color: kGreen),
+            title: const Text('Language', style: TextStyle(color: kGreen, fontFamily: 'monospace')),
+            subtitle: Text(_language, style: TextStyle(color: kGreen.withOpacity(0.6), fontSize: 12)),
+            trailing: const Icon(Icons.arrow_forward_ios, size: 14, color: kGreen),
             onTap: () => _showLanguageDialog(),
           ),
           Divider(color: kGreen.withOpacity(0.2)),
           ListTile(
             leading: const Icon(Icons.download, color: kGreen),
-            title: const Text('Download Location',
-                style:
-                    TextStyle(color: kGreen, fontFamily: 'monospace')),
-            subtitle: Text(_downloadLocation,
-                style: TextStyle(
-                    color: kGreen.withOpacity(0.6), fontSize: 12)),
-            trailing: const Icon(Icons.arrow_forward_ios,
-                size: 14, color: kGreen),
+            title: const Text('Download Location', style: TextStyle(color: kGreen, fontFamily: 'monospace')),
+            subtitle: Text(_downloadLocation, style: TextStyle(color: kGreen.withOpacity(0.6), fontSize: 12)),
+            trailing: const Icon(Icons.arrow_forward_ios, size: 14, color: kGreen),
             onTap: () => _showDownloadLocationDialog(),
           ),
           Divider(color: kGreen.withOpacity(0.2)),
           ListTile(
             leading: const Icon(Icons.system_update, color: kGreen),
-            title: const Text('Check for Update',
-                style:
-                    TextStyle(color: kGreen, fontFamily: 'monospace')),
-            subtitle: const Text('Latest version check karein',
-                style: TextStyle(color: kDimGreen, fontSize: 12)),
-            trailing: const Icon(Icons.arrow_forward_ios,
-                size: 14, color: kGreen),
+            title: const Text('Check for Update', style: TextStyle(color: kGreen, fontFamily: 'monospace')),
+            subtitle: const Text('Latest version check karein', style: TextStyle(color: kDimGreen, fontSize: 12)),
+            trailing: const Icon(Icons.arrow_forward_ios, size: 14, color: kGreen),
             onTap: () => UpdateChecker.checkForUpdate(context, force: true),
           ),
           Divider(color: kGreen.withOpacity(0.2)),
           const SizedBox(height: 30),
           Center(
-            child: Text(
-              '> MayaJaal v1.0.0',
-              style: TextStyle(
-                color: kGreen.withOpacity(0.5),
-                fontFamily: 'monospace',
-                fontSize: 12,
-              ),
-            ),
+            child: Text('> MayaJaal v1.0.0', style: TextStyle(color: kGreen.withOpacity(0.5), fontFamily: 'monospace', fontSize: 12)),
           ),
         ],
       ),
@@ -1044,16 +904,14 @@ class _SettingsScreenState extends State<SettingsScreen> {
           borderRadius: BorderRadius.circular(12),
           side: BorderSide(color: kGreen.withOpacity(0.5)),
         ),
-        title: const Text('Select Language',
-            style: TextStyle(color: kGreen)),
+        title: const Text('Select Language', style: TextStyle(color: kGreen)),
         content: SizedBox(
           width: double.maxFinite,
           child: ListView.builder(
             shrinkWrap: true,
             itemCount: _languages.length,
             itemBuilder: (c2, i) => RadioListTile<String>(
-              title: Text(_languages[i],
-                  style: const TextStyle(color: kGreen)),
+              title: Text(_languages[i], style: const TextStyle(color: kGreen)),
               value: _languages[i],
               groupValue: _language,
               activeColor: kGreen,
@@ -1067,11 +925,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
           ),
         ),
         actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(c),
-            child: const Text('Cancel',
-                style: TextStyle(color: kDimGreen)),
-          ),
+          TextButton(onPressed: () => Navigator.pop(c), child: const Text('Cancel', style: TextStyle(color: kDimGreen))),
         ],
       ),
     );
@@ -1082,9 +936,38 @@ class _SettingsScreenState extends State<SettingsScreen> {
       context: context,
       builder: (c) => AlertDialog(
         backgroundColor: kCardBg,
-// ═══════════════════════════════════════════
-// VIDEO PLAYER SCREEN (Native Player)
-// ═══════════════════════════════════════════
+        shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.circular(12),
+          side: BorderSide(color: kGreen.withOpacity(0.5)),
+        ),
+        title: const Text('Select Download Location', style: TextStyle(color: kGreen)),
+        content: SizedBox(
+          width: double.maxFinite,
+          child: ListView.builder(
+            shrinkWrap: true,
+            itemCount: _downloadLocations.length,
+            itemBuilder: (c2, i) => RadioListTile<String>(
+              title: Text(_downloadLocations[i], style: const TextStyle(color: kGreen, fontSize: 13)),
+              value: _downloadLocations[i],
+              groupValue: _downloadLocation,
+              activeColor: kGreen,
+              onChanged: (value) {
+                if (value != null) {
+                  _saveDownloadLocation(value);
+                  Navigator.pop(c);
+                }
+              },
+            ),
+          ),
+        ),
+        actions: [
+          TextButton(onPressed: () => Navigator.pop(c), child: const Text('Cancel', style: TextStyle(color: kDimGreen))),
+        ],
+      ),
+    );
+  }
+}
+
 class VideoPlayerScreen extends StatefulWidget {
   final String url;
   const VideoPlayerScreen({super.key, required this.url});
@@ -1098,7 +981,6 @@ class _VideoPlayerScreenState extends State<VideoPlayerScreen> {
   bool _isLoading = true;
   bool _hasError = false;
   String _errorMessage = '';
-  String _resolvedUrl = '';
 
   @override
   void initState() {
@@ -1106,36 +988,25 @@ class _VideoPlayerScreenState extends State<VideoPlayerScreen> {
     _initPlayer();
   }
 
-  /// URL resolve karo - /tb/ ya /v/ link se direct video URL nikalna
   Future<String> _resolveVideoUrl(String url) async {
-    // Agar already direct video URL hai
-    if (url.contains('.mp4') ||
-        url.contains('.m3u8') ||
-        url.contains('.mkv') ||
-        url.contains('.webm')) {
+    if (url.contains('.mp4') || url.contains('.m3u8') || url.contains('.mkv') || url.contains('.webm')) {
       return url;
     }
-
-    // Agar /tb/ link hai → API se video URL lo
     if (url.contains('/tb/')) {
       final shortId = url.split('/tb/').last.split('?').first;
       final apiUrl = '$kBackendUrl/api/tb/$shortId';
       try {
         final response = await http.get(Uri.parse(apiUrl));
         if (response.statusCode == 200) {
-          final data = json.jsonDecode(response.body);
+          final data = jsonDecode(response.body);
           final videoUrl = data['video_url'] as String?;
-          if (videoUrl != null && videoUrl.isNotEmpty) {
-            return videoUrl;
-          }
+          if (videoUrl != null && videoUrl.isNotEmpty) return videoUrl;
         }
       } catch (e) {
         debugPrint('API error: $e');
       }
       throw Exception('TB API failed');
     }
-
-    // Agar /v/ link hai → redirect follow karo
     if (url.contains('/v/')) {
       try {
         final dio = Dio();
@@ -1143,16 +1014,12 @@ class _VideoPlayerScreenState extends State<VideoPlayerScreen> {
         dio.options.validateStatus = (status) => true;
         final response = await dio.get(url);
         final location = response.headers.value('location');
-        if (location != null && location.startsWith('http')) {
-          return location;
-        }
+        if (location != null && location.startsWith('http')) return location;
       } catch (e) {
         debugPrint('Redirect error: $e');
       }
       throw Exception('V link redirect failed');
     }
-
-    // Warna as-is return karo
     return url;
   }
 
@@ -1163,18 +1030,13 @@ class _VideoPlayerScreenState extends State<VideoPlayerScreen> {
         _hasError = false;
       });
 
-      // URL resolve karo
       final videoUrl = await _resolveVideoUrl(widget.url);
-      _resolvedUrl = videoUrl;
-
       debugPrint('Resolved URL: $videoUrl');
 
-      // Native video player initialize karo
       _videoController = VideoPlayerController.networkUrl(
         Uri.parse(videoUrl),
         httpHeaders: {
-          'User-Agent':
-              'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 Chrome/120.0.0.0 Safari/537.36',
+          'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 Chrome/120.0.0.0 Safari/537.36',
         },
       );
 
@@ -1187,33 +1049,6 @@ class _VideoPlayerScreenState extends State<VideoPlayerScreen> {
         allowFullScreen: true,
         allowPlaybackSpeedChanging: true,
         aspectRatio: _videoController!.value.aspectRatio,
-        errorBuilder: (context, errorMessage) {
-          return Center(
-            child: Column(
-              mainAxisAlignment: MainAxisAlignment.center,
-              children: [
-                const Icon(Icons.error_outline,
-                    color: Colors.red, size: 60),
-                const SizedBox(height: 15),
-                Text(
-                  'Video error',
-                  style: TextStyle(
-                      color: kGreen, fontSize: 16, fontFamily: 'monospace'),
-                ),
-                const SizedBox(height: 10),
-                Padding(
-                  padding: const EdgeInsets.symmetric(horizontal: 20),
-                  child: Text(
-                    errorMessage,
-                    style: TextStyle(
-                        color: kGreen.withOpacity(0.6), fontSize: 12),
-                    textAlign: TextAlign.center,
-                  ),
-                ),
-              ],
-            ),
-          );
-        },
       );
 
       setState(() => _isLoading = false);
@@ -1272,14 +1107,7 @@ class _VideoPlayerScreenState extends State<VideoPlayerScreen> {
                 children: [
                   CircularProgressIndicator(color: kGreen),
                   SizedBox(height: 15),
-                  Text(
-                    '> loading stream...',
-                    style: TextStyle(
-                      color: kGreen,
-                      fontFamily: 'monospace',
-                      letterSpacing: 2,
-                    ),
-                  ),
+                  Text('> loading stream...', style: TextStyle(color: kGreen, fontFamily: 'monospace', letterSpacing: 2)),
                 ],
               ),
             )
@@ -1290,41 +1118,22 @@ class _VideoPlayerScreenState extends State<VideoPlayerScreen> {
                     child: Column(
                       mainAxisAlignment: MainAxisAlignment.center,
                       children: [
-                        const Icon(Icons.error_outline,
-                            size: 70, color: Colors.red),
+                        const Icon(Icons.error_outline, size: 70, color: Colors.red),
                         const SizedBox(height: 16),
-                        const Text(
-                          'Video load nahi ho paya',
-                          style: TextStyle(
-                            color: kGreen,
-                            fontSize: 18,
-                            fontFamily: 'monospace',
-                          ),
-                        ),
+                        const Text('Video load nahi ho paya', style: TextStyle(color: kGreen, fontSize: 18, fontFamily: 'monospace')),
                         const SizedBox(height: 10),
-                        Text(
-                          _errorMessage,
-                          textAlign: TextAlign.center,
-                          style: TextStyle(
-                            color: kGreen.withOpacity(0.6),
-                            fontSize: 12,
-                          ),
-                        ),
+                        Text(_errorMessage, textAlign: TextAlign.center, style: TextStyle(color: kGreen.withOpacity(0.6), fontSize: 12)),
                         const SizedBox(height: 24),
                         ElevatedButton.icon(
                           onPressed: _initPlayer,
                           icon: const Icon(Icons.refresh),
                           label: const Text('Retry'),
-                          style: ElevatedButton.styleFrom(
-                            backgroundColor: kGreen,
-                            foregroundColor: Colors.black,
-                          ),
+                          style: ElevatedButton.styleFrom(backgroundColor: kGreen, foregroundColor: Colors.black),
                         ),
                         const SizedBox(height: 10),
                         TextButton(
                           onPressed: () => Navigator.pop(context),
-                          child: const Text('Go Back',
-                              style: TextStyle(color: kGreen)),
+                          child: const Text('Go Back', style: TextStyle(color: kGreen)),
                         ),
                       ],
                     ),
@@ -1332,24 +1141,13 @@ class _VideoPlayerScreenState extends State<VideoPlayerScreen> {
                 )
               : _chewieController != null
                   ? Center(child: Chewie(controller: _chewieController!))
-                  : Center(
-                      child: Text(
-                        'Player not initialized',
-                        style: TextStyle(color: kGreen),
-                      ),
-                    ),
+                  : Center(child: Text('Player not initialized', style: TextStyle(color: kGreen))),
     );
   }
 }
 
-// ═══════════════════════════════════════════
-// UPDATE CHECKER (In-App Update)
-// ═══════════════════════════════════════════
 class UpdateChecker {
-  static Future<void> checkForUpdate(
-    BuildContext context, {
-    bool force = false,
-  }) async {
+  static Future<void> checkForUpdate(BuildContext context, {bool force = false}) async {
     try {
       final packageInfo = await PackageInfo.fromPlatform();
       final currentVersion = packageInfo.version;
@@ -1360,31 +1158,21 @@ class UpdateChecker {
       );
 
       if (response.statusCode != 200) {
-        if (force && context.mounted) {
-          _showSnack(context, 'Update check failed (${response.statusCode})');
-        }
+        if (force && context.mounted) _showSnack(context, 'Update check failed');
         return;
       }
 
-      final data = json.jsonDecode(response.body);
-      final latestVersion = (data['tag_name'] as String? ?? '0.0.0')
-          .replaceAll('v', '')
-          .trim();
+      final data = jsonDecode(response.body);
+      final latestVersion = (data['tag_name'] as String? ?? '0.0.0').replaceAll('v', '').trim();
 
       if (_isNewer(latestVersion, currentVersion)) {
-        if (context.mounted) {
-          _showUpdateDialog(context, latestVersion);
-        }
+        if (context.mounted) _showUpdateDialog(context, latestVersion);
       } else {
-        if (force && context.mounted) {
-          _showSnack(context, 'Aap latest version pe ho ✓ (v$currentVersion)');
-        }
+        if (force && context.mounted) _showSnack(context, 'Aap latest version pe ho');
       }
     } catch (e) {
       debugPrint('Update check failed: $e');
-      if (force && context.mounted) {
-        _showSnack(context, 'Update check failed');
-      }
+      if (force && context.mounted) _showSnack(context, 'Update check failed');
     }
   }
 
@@ -1423,8 +1211,7 @@ class UpdateChecker {
           children: const [
             Icon(Icons.system_update, color: kGreen),
             SizedBox(width: 10),
-            Text('Update Available',
-                style: TextStyle(color: kGreen, fontFamily: 'monospace')),
+            Text('Update Available', style: TextStyle(color: kGreen, fontFamily: 'monospace')),
           ],
         ),
         content: Text(
@@ -1434,18 +1221,14 @@ class UpdateChecker {
         actions: [
           TextButton(
             onPressed: () => Navigator.pop(c),
-            child:
-                Text('Later', style: TextStyle(color: kDimGreen)),
+            child: Text('Later', style: TextStyle(color: kDimGreen)),
           ),
           ElevatedButton(
             onPressed: () {
               Navigator.pop(c);
               downloadAndInstallApk(context);
             },
-            style: ElevatedButton.styleFrom(
-              backgroundColor: kGreen,
-              foregroundColor: Colors.black,
-            ),
+            style: ElevatedButton.styleFrom(backgroundColor: kGreen, foregroundColor: Colors.black),
             child: const Text('Update Now'),
           ),
         ],
@@ -1464,12 +1247,7 @@ class UpdateChecker {
             children: [
               const CircularProgressIndicator(color: kGreen),
               const SizedBox(width: 20),
-              Expanded(
-                child: Text(
-                  'Downloading update...',
-                  style: TextStyle(color: kGreen),
-                ),
-              ),
+              Expanded(child: Text('Downloading update...', style: TextStyle(color: kGreen))),
             ],
           ),
         ),
@@ -1493,9 +1271,7 @@ class UpdateChecker {
       if (await file.exists()) {
         await OpenFilex.open(filePath);
       } else {
-        if (context.mounted) {
-          _showSnack(context, 'Download failed');
-        }
+        if (context.mounted) _showSnack(context, 'Download failed');
       }
     } catch (e) {
       if (context.mounted) {
@@ -1504,4 +1280,4 @@ class UpdateChecker {
       }
     }
   }
-} 
+}
