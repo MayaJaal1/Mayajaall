@@ -16,16 +16,15 @@ const String supabaseUrl = 'https://inxlnctaixbkfblwlmhr.supabase.co';
 const String supabaseAnonKey = 'sb_publishable_6b9xe3mDBduO-soZTk3t2A_W1sQpD5K';
 const String webClientId = '985001671962-rok8qnng0rumjsd8mgr8uhr92o5vhs4n.apps.googleusercontent.com';
 
-// ═══════════════════════════════════════════
-// MATRIX COLORS
-// ═══════════════════════════════════════════
-class MatrixColors {
-  static const Color green = Color(0xFF00FF41);
-  static const Color darkGreen = Color(0xFF003B00);
-  static const Color bg = Color(0xFF000000);
-  static const Color cardBg = Color(0xFF0A0A0A);
-  static const Color dimGreen = Color(0xFF4FBF8B);
-}
+// Matrix Theme Colors
+const Color kGreen = Color(0xFF00FF41);
+const Color kBg = Color(0xFF000000);
+const Color kCardBg = Color(0xFF0A0A0A);
+const Color kDimGreen = Color(0xFF4FBF8B);
+
+// APK Download URL
+const String kApkDownloadUrl =
+    'https://github.com/ajayr0201/Mayajaall/releases/latest/download/app-release.apk';
 
 final ValueNotifier<ThemeMode> themeNotifier = ValueNotifier(ThemeMode.dark);
 
@@ -77,10 +76,8 @@ class _MyAppState extends State<MyApp> {
 
   void _handleLink(Uri uri) {
     String finalUrl = uri.toString();
-    if (uri.scheme == 'mayajaall') {
-      if (uri.queryParameters.containsKey('url')) {
-        finalUrl = uri.queryParameters['url']!;
-      }
+    if (uri.scheme == 'mayajaall' && uri.queryParameters.containsKey('url')) {
+      finalUrl = uri.queryParameters['url']!;
     }
     setState(() {
       _incomingUrl = finalUrl;
@@ -94,6 +91,25 @@ class _MyAppState extends State<MyApp> {
     super.dispose();
   }
 
+  ThemeData _buildTheme(bool isDark) {
+    return ThemeData(
+      brightness: isDark ? Brightness.dark : Brightness.light,
+      scaffoldBackgroundColor: isDark ? kBg : Colors.white,
+      colorScheme: ColorScheme.fromSeed(
+        seedColor: kGreen,
+        brightness: isDark ? Brightness.dark : Brightness.light,
+      ),
+      useMaterial3: true,
+      fontFamily: 'monospace',
+      appBarTheme: AppBarTheme(
+        backgroundColor: isDark ? kBg : Colors.white,
+        foregroundColor: kGreen,
+        elevation: 0,
+        centerTitle: true,
+      ),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     return ValueListenableBuilder<ThemeMode>(
@@ -103,8 +119,8 @@ class _MyAppState extends State<MyApp> {
           title: 'MayaJaal',
           debugShowCheckedModeBanner: false,
           themeMode: mode,
-          theme: _buildMatrixTheme(false),
-          darkTheme: _buildMatrixTheme(true),
+          theme: _buildTheme(false),
+          darkTheme: _buildTheme(true),
           home: _showSplash
               ? const SplashScreen()
               : (_incomingUrl == null
@@ -114,36 +130,83 @@ class _MyAppState extends State<MyApp> {
       },
     );
   }
+}
 
-  ThemeData _buildMatrixTheme(bool isDark) {
-    return ThemeData(
-      brightness: isDark ? Brightness.dark : Brightness.light,
-      scaffoldBackgroundColor: isDark ? MatrixColors.bg : Colors.white,
-      colorScheme: ColorScheme.fromSeed(
-        seedColor: MatrixColors.green,
-        brightness: isDark ? Brightness.dark : Brightness.light,
-      ),
-      useMaterial3: true,
-      fontFamily: 'monospace',
-      appBarTheme: AppBarTheme(
-        backgroundColor: isDark ? MatrixColors.bg : Colors.white,
-        foregroundColor: MatrixColors.green,
-        elevation: 0,
-        centerTitle: true,
-        titleTextStyle: const TextStyle(
-          color: MatrixColors.green,
-          fontSize: 18,
-          fontWeight: FontWeight.bold,
-          fontFamily: 'monospace',
-          letterSpacing: 2,
-        ),
-      ),
+// ═══════════════════════════════════════════
+// MATRIX RAIN WIDGET
+// ═══════════════════════════════════════════
+class MatrixRain extends StatefulWidget {
+  const MatrixRain({super.key});
+  @override
+  State<MatrixRain> createState() => _MatrixRainState();
+}
+
+class _MatrixRainState extends State<MatrixRain> {
+  late Timer _timer;
+  final List<double> _yPositions = [];
+  final List<double> _speeds = [];
+  final List<String> _letters = [];
+  final math.Random _r = math.Random();
+  static const _chars =
+      'アイウエオカキクケコサシスセソタチツテトナニヌネノ0123456789ABCDEFXYZ';
+
+  @override
+  void initState() {
+    super.initState();
+    for (int i = 0; i < 30; i++) {
+      _yPositions.add(-_r.nextInt(500).toDouble());
+      _speeds.add(3 + _r.nextDouble() * 5);
+      _letters.add(_chars[_r.nextInt(_chars.length)]);
+    }
+    _timer = Timer.periodic(const Duration(milliseconds: 80), (_) {
+      if (!mounted) return;
+      setState(() {
+        for (int i = 0; i < _yPositions.length; i++) {
+          _yPositions[i] += _speeds[i];
+          if (_yPositions[i] > 900) {
+            _yPositions[i] = -_r.nextInt(200).toDouble();
+            _letters[i] = _chars[_r.nextInt(_chars.length)];
+          }
+        }
+      });
+    });
+  }
+
+  @override
+  void dispose() {
+    _timer.cancel();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return LayoutBuilder(
+      builder: (context, c) {
+        final colWidth = c.maxWidth / _yPositions.length;
+        return Stack(
+          children: List.generate(_yPositions.length, (i) {
+            return Positioned(
+              left: i * colWidth,
+              top: _yPositions[i],
+              child: Text(
+                _letters[i],
+                style: TextStyle(
+                  color: kGreen.withOpacity(0.7),
+                  fontSize: 14,
+                  fontFamily: 'monospace',
+                  shadows: const [Shadow(color: kGreen, blurRadius: 8)],
+                ),
+              ),
+            );
+          }),
+        );
+      },
     );
   }
 }
 
 // ═══════════════════════════════════════════
-// SPLASH SCREEN
+// SPLASH SCREEN (NAYA — Matrix Style)
 // ═══════════════════════════════════════════
 class SplashScreen extends StatefulWidget {
   const SplashScreen({super.key});
@@ -153,31 +216,31 @@ class SplashScreen extends StatefulWidget {
 
 class _SplashScreenState extends State<SplashScreen>
     with SingleTickerProviderStateMixin {
-  late AnimationController _controller;
-  late Animation<double> _glowAnimation;
+  late AnimationController _c;
+  late Animation<double> _a;
 
   @override
   void initState() {
     super.initState();
-    _controller = AnimationController(
+    _c = AnimationController(
       vsync: this,
       duration: const Duration(milliseconds: 1500),
     )..repeat(reverse: true);
-    _glowAnimation = Tween<double>(begin: 0.6, end: 1.0).animate(
-      CurvedAnimation(parent: _controller, curve: Curves.easeInOut),
+    _a = Tween<double>(begin: 0.6, end: 1.0).animate(
+      CurvedAnimation(parent: _c, curve: Curves.easeInOut),
     );
   }
 
   @override
   void dispose() {
-    _controller.dispose();
+    _c.dispose();
     super.dispose();
   }
 
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: MatrixColors.bg,
+      backgroundColor: kBg,
       body: Stack(
         children: [
           const MatrixRain(),
@@ -186,63 +249,48 @@ class _SplashScreenState extends State<SplashScreen>
               mainAxisAlignment: MainAxisAlignment.center,
               children: [
                 AnimatedBuilder(
-                  animation: _glowAnimation,
-                  builder: (context, _) {
-                    return Container(
-                      padding: const EdgeInsets.all(20),
-                      decoration: BoxDecoration(
-                        shape: BoxShape.circle,
-                        boxShadow: [
-                          BoxShadow(
-                            color: MatrixColors.green
-                                .withOpacity(0.4 * _glowAnimation.value),
-                            blurRadius: 40,
-                            spreadRadius: 10,
-                          ),
-                        ],
-                      ),
-                      child: const Icon(
-                        Icons.movie_filter,
-                        size: 80,
-                        color: MatrixColors.green,
-                      ),
-                    );
-                  },
+                  animation: _a,
+                  builder: (c, _) => Container(
+                    padding: const EdgeInsets.all(20),
+                    decoration: BoxDecoration(
+                      shape: BoxShape.circle,
+                      boxShadow: [
+                        BoxShadow(
+                          color: kGreen.withOpacity(0.4 * _a.value),
+                          blurRadius: 40,
+                          spreadRadius: 10,
+                        ),
+                      ],
+                    ),
+                    child: const Icon(Icons.movie_filter,
+                        size: 80, color: kGreen),
+                  ),
                 ),
                 const SizedBox(height: 30),
                 AnimatedBuilder(
-                  animation: _glowAnimation,
-                  builder: (context, _) {
-                    return Text(
-                      'MAYA JAAL',
-                      style: TextStyle(
-                        fontSize: 36,
-                        fontWeight: FontWeight.bold,
-                        color: MatrixColors.green,
-                        fontFamily: 'monospace',
-                        letterSpacing: 8,
-                        shadows: [
-                          Shadow(
-                            color: MatrixColors.green
-                                .withOpacity(_glowAnimation.value),
-                            blurRadius: 20,
-                          ),
-                          Shadow(
-                            color: MatrixColors.green
-                                .withOpacity(0.6 * _glowAnimation.value),
-                            blurRadius: 40,
-                          ),
-                        ],
-                      ),
-                    );
-                  },
+                  animation: _a,
+                  builder: (c, _) => Text(
+                    'MAYA JAAL',
+                    style: TextStyle(
+                      fontSize: 36,
+                      fontWeight: FontWeight.bold,
+                      color: kGreen,
+                      fontFamily: 'monospace',
+                      letterSpacing: 8,
+                      shadows: [
+                        Shadow(
+                            color: kGreen.withOpacity(_a.value),
+                            blurRadius: 20),
+                      ],
+                    ),
+                  ),
                 ),
                 const SizedBox(height: 20),
                 Text(
                   '> initializing secure channel...',
                   style: TextStyle(
                     fontSize: 12,
-                    color: MatrixColors.green.withOpacity(0.7),
+                    color: kGreen.withOpacity(0.7),
                     fontFamily: 'monospace',
                     letterSpacing: 2,
                   ),
@@ -257,140 +305,7 @@ class _SplashScreenState extends State<SplashScreen>
 }
 
 // ═══════════════════════════════════════════
-// MATRIX RAIN
-// ═══════════════════════════════════════════
-class MatrixRain extends StatefulWidget {
-  const MatrixRain({super.key});
-  @override
-  State<MatrixRain> createState() => _MatrixRainState();
-}
-
-class _MatrixRainState extends State<MatrixRain> {
-  late Timer _timer;
-  final List<MatrixColumn> _columns = [];
-  final math.Random _random = math.Random();
-
-  static const String _chars =
-      'アイウエオカキクケコサシスセソタチツテトナニヌネノ0123456789ABCDEFXYZ';
-
-  @override
-  void initState() {
-    super.initState();
-    _timer = Timer.periodic(const Duration(milliseconds: 80), (_) {
-      setState(() {
-        for (final col in _columns) {
-          col.y += col.speed;
-          if (col.y > 900) {
-            col.y = -_random.nextInt(200).toDouble();
-            col.chars = _generateChars();
-          }
-        }
-      });
-    });
-  }
-
-  List<String> _generateChars() {
-    return List.generate(
-      15,
-      (_) => _chars[_random.nextInt(_chars.length)],
-    );
-  }
-
-  @override
-  void dispose() {
-    _timer.cancel();
-    super.dispose();
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    return LayoutBuilder(
-      builder: (context, constraints) {
-        if (_columns.isEmpty) {
-          const colWidth = 14.0;
-          final count = (constraints.maxWidth / colWidth).floor();
-          for (int i = 0; i < count; i++) {
-            _columns.add(MatrixColumn(
-              x: i * colWidth,
-              y: -_random.nextInt(500).toDouble(),
-              speed: 3 + _random.nextDouble() * 5,
-              chars: _generateChars(),
-            ));
-          }
-        }
-        return CustomPaint(
-          painter: MatrixRainPainter(columns: _columns),
-          size: Size(constraints.maxWidth, constraints.maxHeight),
-        );
-      },
-    );
-  }
-}
-
-class MatrixColumn {
-  final double x;
-  double y;
-  final double speed;
-  List<String> chars;
-
-  MatrixColumn({
-    required this.x,
-    required this.y,
-    required this.speed,
-    required this.chars,
-  });
-}
-
-class MatrixRainPainter extends CustomPainter {
-  final List<MatrixColumn> columns;
-
-  MatrixRainPainter({required this.columns});
-
-  @override
-  void paint(Canvas canvas, Size size) {
-    const fontSize = 14.0;
-
-    for (final col in columns) {
-      for (int i = 0; i < col.chars.length; i++) {
-        final y = col.y - (i * fontSize);
-        if (y < -fontSize || y > size.height) continue;
-
-        final opacity = (1.0 - (i / col.chars.length)).clamp(0.0, 1.0);
-
-        final tp = TextPainter(
-          text: TextSpan(
-            text: col.chars[i],
-            style: TextStyle(
-              color: i == 0
-                  ? Colors.white
-                  : MatrixColors.green.withOpacity(opacity * 0.85),
-              fontSize: fontSize,
-              fontFamily: 'monospace',
-              fontWeight: FontWeight.bold,
-              shadows: i == 0
-                  ? [
-                      const Shadow(
-                        color: MatrixColors.green,
-                        blurRadius: 8,
-                      ),
-                    ]
-                  : null,
-            ),
-          ),
-          textDirection: TextDirection.ltr,
-        );
-        tp.layout();
-        tp.paint(canvas, Offset(col.x, y));
-      }
-    }
-  }
-
-  @override
-  bool shouldRepaint(covariant CustomPainter oldDelegate) => true;
-}
-
-// ═══════════════════════════════════════════
-// AUTH GATE
+// AUTH GATE (waisa hi, sirf colors Matrix)
 // ═══════════════════════════════════════════
 class AuthGate extends StatelessWidget {
   const AuthGate({super.key});
@@ -401,10 +316,8 @@ class AuthGate extends StatelessWidget {
       builder: (context, snapshot) {
         if (snapshot.connectionState == ConnectionState.waiting) {
           return const Scaffold(
-            backgroundColor: MatrixColors.bg,
-            body: Center(
-              child: CircularProgressIndicator(color: MatrixColors.green),
-            ),
+            backgroundColor: kBg,
+            body: Center(child: CircularProgressIndicator(color: kGreen)),
           );
         }
         final session = Supabase.instance.client.auth.currentSession;
@@ -416,7 +329,7 @@ class AuthGate extends StatelessWidget {
 }
 
 // ═══════════════════════════════════════════
-// LOGIN SCREEN
+// LOGIN SCREEN (Matrix Style)
 // ═══════════════════════════════════════════
 class LoginScreen extends StatefulWidget {
   const LoginScreen({super.key});
@@ -434,7 +347,8 @@ class _LoginScreenState extends State<LoginScreen> {
       _error = '';
     });
     try {
-      final GoogleSignIn googleSignIn = GoogleSignIn(serverClientId: webClientId);
+      final GoogleSignIn googleSignIn =
+          GoogleSignIn(serverClientId: webClientId);
       final googleUser = await googleSignIn.signIn();
       if (googleUser == null) {
         setState(() => _loading = false);
@@ -457,7 +371,7 @@ class _LoginScreenState extends State<LoginScreen> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: MatrixColors.bg,
+      backgroundColor: kBg,
       body: Stack(
         children: [
           const MatrixRain(),
@@ -468,18 +382,12 @@ class _LoginScreenState extends State<LoginScreen> {
                 child: Container(
                   padding: const EdgeInsets.all(28),
                   decoration: BoxDecoration(
-                    color: MatrixColors.cardBg.withOpacity(0.9),
-                    border: Border.all(
-                      color: MatrixColors.green.withOpacity(0.5),
-                      width: 1,
-                    ),
+                    color: kCardBg.withOpacity(0.9),
+                    border: Border.all(color: kGreen.withOpacity(0.5)),
                     borderRadius: BorderRadius.circular(14),
                     boxShadow: [
                       BoxShadow(
-                        color: MatrixColors.green.withOpacity(0.2),
-                        blurRadius: 30,
-                        spreadRadius: 2,
-                      ),
+                          color: kGreen.withOpacity(0.2), blurRadius: 30),
                     ],
                   ),
                   child: Column(
@@ -489,22 +397,10 @@ class _LoginScreenState extends State<LoginScreen> {
                         padding: const EdgeInsets.all(16),
                         decoration: BoxDecoration(
                           shape: BoxShape.circle,
-                          border: Border.all(
-                            color: MatrixColors.green,
-                            width: 2,
-                          ),
-                          boxShadow: [
-                            BoxShadow(
-                              color: MatrixColors.green.withOpacity(0.5),
-                              blurRadius: 20,
-                            ),
-                          ],
+                          border: Border.all(color: kGreen, width: 2),
                         ),
-                        child: const Icon(
-                          Icons.movie_filter,
-                          size: 50,
-                          color: MatrixColors.green,
-                        ),
+                        child: const Icon(Icons.movie_filter,
+                            size: 50, color: kGreen),
                       ),
                       const SizedBox(height: 24),
                       const Text(
@@ -512,15 +408,10 @@ class _LoginScreenState extends State<LoginScreen> {
                         style: TextStyle(
                           fontSize: 28,
                           fontWeight: FontWeight.bold,
-                          color: MatrixColors.green,
+                          color: kGreen,
                           fontFamily: 'monospace',
                           letterSpacing: 6,
-                          shadows: [
-                            Shadow(
-                              color: MatrixColors.green,
-                              blurRadius: 15,
-                            ),
-                          ],
+                          shadows: [Shadow(color: kGreen, blurRadius: 15)],
                         ),
                       ),
                       const SizedBox(height: 8),
@@ -528,7 +419,7 @@ class _LoginScreenState extends State<LoginScreen> {
                         '> secure access node',
                         style: TextStyle(
                           fontSize: 11,
-                          color: MatrixColors.green.withOpacity(0.7),
+                          color: kGreen.withOpacity(0.7),
                           fontFamily: 'monospace',
                           letterSpacing: 2,
                         ),
@@ -540,13 +431,11 @@ class _LoginScreenState extends State<LoginScreen> {
                         child: ElevatedButton(
                           onPressed: _loading ? null : _signInWithGoogle,
                           style: ElevatedButton.styleFrom(
-                            backgroundColor: MatrixColors.green,
+                            backgroundColor: kGreen,
                             foregroundColor: Colors.black,
                             shape: RoundedRectangleBorder(
                               borderRadius: BorderRadius.circular(8),
                             ),
-                            elevation: 8,
-                            shadowColor: MatrixColors.green,
                           ),
                           child: _loading
                               ? const SizedBox(
@@ -586,9 +475,7 @@ class _LoginScreenState extends State<LoginScreen> {
                           child: Text(
                             _error,
                             style: const TextStyle(
-                              color: Colors.redAccent,
-                              fontSize: 12,
-                            ),
+                                color: Colors.redAccent, fontSize: 12),
                             textAlign: TextAlign.center,
                           ),
                         ),
@@ -604,7 +491,7 @@ class _LoginScreenState extends State<LoginScreen> {
     );
   }
 }// ═══════════════════════════════════════════
-// HOME SCREEN
+// HOME SCREEN (Matrix Style)
 // ═══════════════════════════════════════════
 class HomeScreen extends StatefulWidget {
   const HomeScreen({super.key});
@@ -675,116 +562,99 @@ class _HomeScreenState extends State<HomeScreen> {
   void _showMoreMenu() {
     showModalBottomSheet(
       context: context,
-      backgroundColor: MatrixColors.cardBg,
+      backgroundColor: kCardBg,
       shape: const RoundedRectangleBorder(
         borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
       ),
-      builder: (context) {
-        return SafeArea(
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              const SizedBox(height: 10),
-              Container(
-                width: 40,
-                height: 4,
-                decoration: BoxDecoration(
-                  color: MatrixColors.green.withOpacity(0.5),
-                  borderRadius: BorderRadius.circular(2),
-                ),
+      builder: (c) => SafeArea(
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            const SizedBox(height: 10),
+            Container(
+              width: 40,
+              height: 4,
+              decoration: BoxDecoration(
+                color: kGreen.withOpacity(0.5),
+                borderRadius: BorderRadius.circular(2),
               ),
-              const SizedBox(height: 20),
-              const Text(
-                '> OPTIONS',
-                style: TextStyle(
-                  fontSize: 16,
-                  fontWeight: FontWeight.bold,
-                  color: MatrixColors.green,
-                  letterSpacing: 3,
-                ),
+            ),
+            const SizedBox(height: 20),
+            const Text(
+              '> OPTIONS',
+              style: TextStyle(
+                fontSize: 16,
+                fontWeight: FontWeight.bold,
+                color: kGreen,
+                letterSpacing: 3,
               ),
-              const SizedBox(height: 10),
-              Divider(color: MatrixColors.green.withOpacity(0.3)),
-              ListTile(
-                leading: const Icon(Icons.settings, color: MatrixColors.green),
-                title: const Text(
-                  'Settings',
-                  style: TextStyle(color: MatrixColors.green),
-                ),
-                onTap: () {
-                  Navigator.pop(context);
-                  Navigator.push(
-                    context,
-                    MaterialPageRoute(
-                      builder: (context) => const SettingsScreen(),
-                    ),
-                  );
-                },
-              ),
-              ListTile(
-                leading: const Icon(Icons.delete_sweep, color: Colors.orange),
-                title: const Text(
-                  'Clear History',
-                  style: TextStyle(color: Colors.orange),
-                ),
-                onTap: () {
-                  Navigator.pop(context);
-                  _clearHistory();
-                },
-              ),
-              ListTile(
-                leading: const Icon(Icons.logout, color: Colors.red),
-                title: const Text(
-                  'Logout',
-                  style: TextStyle(color: Colors.red),
-                ),
-                onTap: () {
-                  Navigator.pop(context);
-                  _showLogoutConfirm();
-                },
-              ),
-              const SizedBox(height: 20),
-            ],
-          ),
-        );
-      },
+            ),
+            Divider(color: kGreen.withOpacity(0.3)),
+            ListTile(
+              leading: const Icon(Icons.settings, color: kGreen),
+              title: const Text('Settings',
+                  style: TextStyle(color: kGreen)),
+              onTap: () {
+                Navigator.pop(c);
+                Navigator.push(
+                  c,
+                  MaterialPageRoute(builder: (_) => const SettingsScreen()),
+                );
+              },
+            ),
+            ListTile(
+              leading:
+                  const Icon(Icons.delete_sweep, color: Colors.orange),
+              title: const Text('Clear History',
+                  style: TextStyle(color: Colors.orange)),
+              onTap: () {
+                Navigator.pop(c);
+                _clearHistory();
+              },
+            ),
+            ListTile(
+              leading: const Icon(Icons.logout, color: Colors.red),
+              title:
+                  const Text('Logout', style: TextStyle(color: Colors.red)),
+              onTap: () {
+                Navigator.pop(c);
+                _showLogoutConfirm();
+              },
+            ),
+            const SizedBox(height: 20),
+          ],
+        ),
+      ),
     );
   }
 
   void _showLogoutConfirm() {
     showDialog(
       context: context,
-      builder: (context) => AlertDialog(
-        backgroundColor: MatrixColors.cardBg,
+      builder: (c) => AlertDialog(
+        backgroundColor: kCardBg,
         shape: RoundedRectangleBorder(
           borderRadius: BorderRadius.circular(12),
-          side: BorderSide(color: MatrixColors.green.withOpacity(0.5)),
+          side: BorderSide(color: kGreen.withOpacity(0.5)),
         ),
-        title: const Text(
-          'Logout?',
-          style: TextStyle(color: MatrixColors.green),
-        ),
+        title: const Text('Logout?', style: TextStyle(color: kGreen)),
         content: const Text(
           'Kya aap logout karna chahte ho?',
-          style: TextStyle(color: MatrixColors.dimGreen),
+          style: TextStyle(color: kDimGreen),
         ),
         actions: [
           TextButton(
-            onPressed: () => Navigator.pop(context),
-            child: const Text(
-              'Cancel',
-              style: TextStyle(color: MatrixColors.dimGreen),
-            ),
+            onPressed: () => Navigator.pop(c),
+            child: const Text('Cancel',
+                style: TextStyle(color: kDimGreen)),
           ),
           TextButton(
             onPressed: () {
-              Navigator.pop(context);
+              Navigator.pop(c);
               _logout();
             },
-            child: const Text(
-              'Logout',
-              style: TextStyle(color: Colors.red),
-            ),
+            child:
+                const Text('Logout', style: TextStyle(color: Colors.red)),
           ),
         ],
       ),
@@ -797,22 +667,20 @@ class _HomeScreenState extends State<HomeScreen> {
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(
           content: Text('Please paste a Mayajaal link first!'),
-          backgroundColor: MatrixColors.cardBg,
+          backgroundColor: kCardBg,
         ),
       );
       return;
     }
     if (input.startsWith('mayajaall://')) {
       input = input.replaceFirst(
-        'mayajaall://',
-        'https://live-score-website-alpha.vercel.app/',
-      );
+          'mayajaall://', 'https://live-score-website-alpha.vercel.app/');
     }
     _saveToHistory(input);
     _linkController.clear();
     Navigator.push(
       context,
-      MaterialPageRoute(builder: (context) => VideoPlayerScreen(url: input)),
+      MaterialPageRoute(builder: (_) => VideoPlayerScreen(url: input)),
     ).then((_) => _loadHistory());
   }
 
@@ -821,15 +689,15 @@ class _HomeScreenState extends State<HomeScreen> {
     final user = Supabase.instance.client.auth.currentUser;
 
     return Scaffold(
-      backgroundColor: MatrixColors.bg,
+      backgroundColor: kBg,
       appBar: AppBar(
         title: const Text('MAYA JAAL'),
-        backgroundColor: MatrixColors.bg,
-        foregroundColor: MatrixColors.green,
+        backgroundColor: kBg,
+        foregroundColor: kGreen,
         elevation: 0,
         actions: [
           IconButton(
-            icon: const Icon(Icons.more_vert, color: MatrixColors.green),
+            icon: const Icon(Icons.more_vert, color: kGreen),
             onPressed: _showMoreMenu,
           ),
         ],
@@ -839,11 +707,7 @@ class _HomeScreenState extends State<HomeScreen> {
           gradient: LinearGradient(
             begin: Alignment.topCenter,
             end: Alignment.bottomCenter,
-            colors: [
-              MatrixColors.bg,
-              Color(0xFF001A0E),
-              MatrixColors.bg,
-            ],
+            colors: [kBg, Color(0xFF001A0E), kBg],
           ),
         ),
         child: Padding(
@@ -852,23 +716,22 @@ class _HomeScreenState extends State<HomeScreen> {
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
               Container(
-                padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+                padding: const EdgeInsets.symmetric(
+                    horizontal: 14, vertical: 10),
                 decoration: BoxDecoration(
-                  color: MatrixColors.cardBg,
-                  border: Border.all(
-                    color: MatrixColors.green.withOpacity(0.3),
-                  ),
+                  color: kCardBg,
+                  border: Border.all(color: kGreen.withOpacity(0.3)),
                   borderRadius: BorderRadius.circular(8),
                 ),
                 child: Row(
                   children: [
-                    const Icon(Icons.person, color: MatrixColors.green, size: 20),
+                    const Icon(Icons.person, color: kGreen, size: 20),
                     const SizedBox(width: 10),
                     Expanded(
                       child: Text(
                         user?.email ?? 'User',
                         style: const TextStyle(
-                          color: MatrixColors.green,
+                          color: kGreen,
                           fontSize: 13,
                           fontFamily: 'monospace',
                         ),
@@ -881,51 +744,40 @@ class _HomeScreenState extends State<HomeScreen> {
               const SizedBox(height: 20),
               Container(
                 decoration: BoxDecoration(
-                  color: MatrixColors.cardBg,
+                  color: kCardBg,
                   borderRadius: BorderRadius.circular(12),
                   border: Border.all(
-                    color: MatrixColors.green.withOpacity(0.5),
-                    width: 1.5,
-                  ),
-                  boxShadow: [
-                    BoxShadow(
-                      color: MatrixColors.green.withOpacity(0.1),
-                      blurRadius: 15,
-                    ),
-                  ],
+                      color: kGreen.withOpacity(0.5), width: 1.5),
                 ),
                 child: Row(
                   children: [
                     const Padding(
                       padding: EdgeInsets.symmetric(horizontal: 12),
-                      child: Icon(Icons.link, color: MatrixColors.green),
+                      child: Icon(Icons.link, color: kGreen),
                     ),
                     Expanded(
                       child: TextField(
                         controller: _linkController,
                         style: const TextStyle(
-                          color: MatrixColors.green,
+                          color: kGreen,
                           fontFamily: 'monospace',
                           fontSize: 13,
                         ),
                         decoration: InputDecoration(
                           hintText: 'Paste Mayajaal link here...',
                           hintStyle: TextStyle(
-                            color: MatrixColors.green.withOpacity(0.4),
+                            color: kGreen.withOpacity(0.4),
                             fontSize: 12,
                           ),
                           border: InputBorder.none,
-                          contentPadding: const EdgeInsets.symmetric(vertical: 15),
+                          contentPadding:
+                              const EdgeInsets.symmetric(vertical: 15),
                         ),
-                        maxLines: 1,
                       ),
                     ),
                     IconButton(
-                      icon: const Icon(
-                        Icons.play_circle_fill,
-                        color: MatrixColors.green,
-                        size: 35,
-                      ),
+                      icon: const Icon(Icons.play_circle_fill,
+                          color: kGreen, size: 35),
                       onPressed: _searchAndPlay,
                     ),
                   ],
@@ -937,7 +789,7 @@ class _HomeScreenState extends State<HomeScreen> {
                 style: TextStyle(
                   fontSize: 14,
                   fontWeight: FontWeight.bold,
-                  color: MatrixColors.green,
+                  color: kGreen,
                   letterSpacing: 2,
                 ),
               ),
@@ -948,16 +800,14 @@ class _HomeScreenState extends State<HomeScreen> {
                         child: Column(
                           mainAxisAlignment: MainAxisAlignment.center,
                           children: [
-                            Icon(
-                              Icons.history,
-                              size: 60,
-                              color: MatrixColors.green.withOpacity(0.4),
-                            ),
+                            Icon(Icons.history,
+                                size: 60,
+                                color: kGreen.withOpacity(0.4)),
                             const SizedBox(height: 10),
                             Text(
                               'no history yet',
                               style: TextStyle(
-                                color: MatrixColors.green.withOpacity(0.6),
+                                color: kGreen.withOpacity(0.6),
                                 fontFamily: 'monospace',
                               ),
                             ),
@@ -966,44 +816,41 @@ class _HomeScreenState extends State<HomeScreen> {
                       )
                     : ListView.builder(
                         itemCount: _history.length,
-                        itemBuilder: (context, index) {
-                          final item = _history[index];
+                        itemBuilder: (c, i) {
+                          final item = _history[i];
                           return Container(
                             margin: const EdgeInsets.only(bottom: 10),
                             decoration: BoxDecoration(
-                              color: MatrixColors.cardBg,
+                              color: kCardBg,
                               borderRadius: BorderRadius.circular(10),
                               border: Border.all(
-                                color: MatrixColors.green.withOpacity(0.3),
-                              ),
+                                  color: kGreen.withOpacity(0.3)),
                             ),
                             child: ListTile(
                               leading: const Icon(
-                                Icons.play_circle_outline,
-                                color: MatrixColors.green,
-                              ),
+                                  Icons.play_circle_outline,
+                                  color: kGreen),
                               title: Text(
-                                item.length > 50 ? '${item.substring(0, 50)}...' : item,
+                                item.length > 50
+                                    ? '${item.substring(0, 50)}...'
+                                    : item,
                                 style: const TextStyle(
                                   fontSize: 12,
-                                  color: MatrixColors.green,
+                                  color: kGreen,
                                   fontFamily: 'monospace',
                                 ),
                               ),
                               trailing: IconButton(
-                                icon: const Icon(
-                                  Icons.close,
-                                  size: 16,
-                                  color: Colors.redAccent,
-                                ),
-                                onPressed: () => _deleteHistoryItem(index),
+                                icon: const Icon(Icons.close,
+                                    size: 16, color: Colors.redAccent),
+                                onPressed: () => _deleteHistoryItem(i),
                               ),
                               onTap: () {
                                 Navigator.push(
-                                  context,
+                                  c,
                                   MaterialPageRoute(
-                                    builder: (context) => VideoPlayerScreen(url: item),
-                                  ),
+                                      builder: (_) =>
+                                          VideoPlayerScreen(url: item)),
                                 ).then((_) => _loadHistory());
                               },
                             ),
@@ -1020,7 +867,7 @@ class _HomeScreenState extends State<HomeScreen> {
 }
 
 // ═══════════════════════════════════════════
-// SETTINGS SCREEN
+// SETTINGS SCREEN (Matrix Style)
 // ═══════════════════════════════════════════
 class SettingsScreen extends StatefulWidget {
   const SettingsScreen({super.key});
@@ -1029,7 +876,7 @@ class SettingsScreen extends StatefulWidget {
 }
 
 class _SettingsScreenState extends State<SettingsScreen> {
-  bool _darkTheme = false;
+  bool _darkTheme = true;
   String _language = 'English';
   String _downloadLocation = 'Internal Storage / Mayajaall';
 
@@ -1082,45 +929,60 @@ class _SettingsScreenState extends State<SettingsScreen> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: MatrixColors.bg,
+      backgroundColor: kBg,
       appBar: AppBar(
         title: const Text('SETTINGS'),
-        backgroundColor: MatrixColors.bg,
-        foregroundColor: MatrixColors.green,
+        backgroundColor: kBg,
+        foregroundColor: kGreen,
       ),
       body: ListView(
         children: [
-          _buildTile(
-            icon: Icons.dark_mode,
-            title: 'Dark Theme',
-            subtitle: _darkTheme ? 'ON' : 'OFF',
+          ListTile(
+            leading: const Icon(Icons.dark_mode, color: kGreen),
+            title: const Text('Dark Theme',
+                style:
+                    TextStyle(color: kGreen, fontFamily: 'monospace')),
+            subtitle: Text(_darkTheme ? 'ON' : 'OFF',
+                style: TextStyle(
+                    color: kGreen.withOpacity(0.6), fontSize: 12)),
             trailing: Switch(
-              value: _darkTheme,
-              activeColor: MatrixColors.green,
-              onChanged: _saveDarkTheme,
-            ),
+                value: _darkTheme,
+                activeColor: kGreen,
+                onChanged: _saveDarkTheme),
           ),
-          _buildDivider(),
-          _buildTile(
-            icon: Icons.language,
-            title: 'Language',
-            subtitle: _language,
+          Divider(color: kGreen.withOpacity(0.2)),
+          ListTile(
+            leading: const Icon(Icons.language, color: kGreen),
+            title: const Text('Language',
+                style:
+                    TextStyle(color: kGreen, fontFamily: 'monospace')),
+            subtitle: Text(_language,
+                style: TextStyle(
+                    color: kGreen.withOpacity(0.6), fontSize: 12)),
+            trailing: const Icon(Icons.arrow_forward_ios,
+                size: 14, color: kGreen),
             onTap: () => _showLanguageDialog(),
           ),
-          _buildDivider(),
-          _buildTile(
-            icon: Icons.download,
-            title: 'Download Location',
-            subtitle: _downloadLocation,
+          Divider(color: kGreen.withOpacity(0.2)),
+          ListTile(
+            leading: const Icon(Icons.download, color: kGreen),
+            title: const Text('Download Location',
+                style:
+                    TextStyle(color: kGreen, fontFamily: 'monospace')),
+            subtitle: Text(_downloadLocation,
+                style: TextStyle(
+                    color: kGreen.withOpacity(0.6), fontSize: 12)),
+            trailing: const Icon(Icons.arrow_forward_ios,
+                size: 14, color: kGreen),
             onTap: () => _showDownloadLocationDialog(),
           ),
-          _buildDivider(),
+          Divider(color: kGreen.withOpacity(0.2)),
           const SizedBox(height: 30),
           Center(
             child: Text(
               '> MayaJaal v1.0.0',
               style: TextStyle(
-                color: MatrixColors.green.withOpacity(0.5),
+                color: kGreen.withOpacity(0.5),
                 fontFamily: 'monospace',
                 fontSize: 12,
               ),
@@ -1131,188 +993,90 @@ class _SettingsScreenState extends State<SettingsScreen> {
     );
   }
 
-  Widget _buildTile({
-    required IconData icon,
-    required String title,
-    required String subtitle,
-    Widget? trailing,
-    VoidCallback? onTap,
-  }) {
-    return ListTile(
-      leading: Icon(icon, color: MatrixColors.green),
-      title: Text(
-        title,
-        style: const TextStyle(
-          color: MatrixColors.green,
-          fontFamily: 'monospace',
-        ),
-      ),
-      subtitle: Text(
-        subtitle,
-        style: TextStyle(
-          color: MatrixColors.green.withOpacity(0.6),
-          fontFamily: 'monospace',
-          fontSize: 12,
-        ),
-      ),
-      trailing: trailing ??
-          const Icon(Icons.arrow_forward_ios, size: 14, color: MatrixColors.green),
-      onTap: onTap,
-    );
-  }
-
-  Widget _buildDivider() {
-    return Divider(color: MatrixColors.green.withOpacity(0.2));
-  }
-
   void _showLanguageDialog() {
     showDialog(
       context: context,
-      builder: (context) => AlertDialog(
-        backgroundColor: MatrixColors.cardBg,
+      builder: (c) => AlertDialog(
+        backgroundColor: kCardBg,
         shape: RoundedRectangleBorder(
           borderRadius: BorderRadius.circular(12),
-          side: BorderSide(color: MatrixColors.green.withOpacity(0.5)),
+          side: BorderSide(color: kGreen.withOpacity(0.5)),
         ),
-        title: const Text(
-          'Select Language',
-          style: TextStyle(color: MatrixColors.green),
-        ),
+        title: const Text('Select Language',
+            style: TextStyle(color: kGreen)),
         content: SizedBox(
           width: double.maxFinite,
           child: ListView.builder(
             shrinkWrap: true,
             itemCount: _languages.length,
-            itemBuilder: (context, index) {
-              final lang = _languages[index];
-              return RadioListTile<String>(
-                title: Text(lang, style: const TextStyle(color: MatrixColors.green)),
-                value: lang,
-                groupValue: _language,
-                activeColor: MatrixColors.green,
-                onChanged: (value) {
-                  if (value != null) {
-                    _saveLanguage(value);
-                    Navigator.pop(context);
-                  }
-                },
-              );
-            },
+            itemBuilder: (c2, i) => RadioListTile<String>(
+              title: Text(_languages[i],
+                  style: const TextStyle(color: kGreen)),
+              value: _languages[i],
+              groupValue: _language,
+              activeColor: kGreen,
+              onChanged: (value) {
+                if (value != null) {
+                  _saveLanguage(value);
+                  Navigator.pop(c);
+                }
+              },
+            ),
           ),
         ),
         actions: [
           TextButton(
-            onPressed: () => Navigator.pop(context),
-            child: con// ═══════════════════════════════════════════
-// VIDEO PLAYER SCREEN (Ye class pehle missing thi!)
-// ═══════════════════════════════════════════
-class VideoPlayerScreen extends StatefulWidget {
-  final String url;
-  const VideoPlayerScreen({super.key, required this.url});
-  @override
-  State<VideoPlayerScreen> createState() => _VideoPlayerScreenState();
-}
-
-class _VideoPlayerScreenState extends State<VideoPlayerScreen> {
-  late final WebViewController _controller;
-  bool _isLoading = true;
-  bool _hasError = false;
-
-  @override
-  void initState() {
-    super.initState();
-
-    String targetUrl = widget.url;
-
-    _controller = WebViewController()
-      ..setJavaScriptMode(JavaScriptMode.unrestricted)
-      ..setBackgroundColor(Colors.black)
-      ..setNavigationDelegate(
-        NavigationDelegate(
-          onPageStarted: (url) => setState(() => _isLoading = true),
-          onPageFinished: (url) => setState(() => _isLoading = false),
-          onWebResourceError: (error) => setState(() {
-            _hasError = true;
-            _isLoading = false;
-          }),
-        ),
-      )
-      ..loadRequest(Uri.parse(targetUrl));
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    return Scaffold(
-      backgroundColor: Colors.black,
-      appBar: AppBar(
-        title: const Text('MAYA JAAL PLAYER'),
-        backgroundColor: Colors.black,
-        foregroundColor: MatrixColors.green,
-        actions: [
-          IconButton(
-            icon: const Icon(Icons.refresh, color: MatrixColors.green),
-            onPressed: () => _controller.reload(),
-          ),
-          IconButton(
-            icon: const Icon(Icons.open_in_browser, color: MatrixColors.green),
-            onPressed: () async {
-              final uri = Uri.parse(widget.url);
-              if (await canLaunchUrl(uri)) {
-                await launchUrl(uri, mode: LaunchMode.externalApplication);
-              }
-            },
+            onPressed: () => Navigator.pop(c),
+            child: const Text('Cancel',
+                style: TextStyle(color: kDimGreen)),
           ),
         ],
       ),
-      body: Stack(
-        children: [
-          if (_hasError)
-            Center(
-              child: Column(
-                mainAxisAlignment: MainAxisAlignment.center,
-                children: [
-                  const Icon(Icons.error_outline, color: Colors.red, size: 60),
-                  const SizedBox(height: 15),
-                  const Text(
-                    'Video load nahi ho paya',
-                    style: TextStyle(color: MatrixColors.green, fontSize: 16),
-                  ),
-                  const SizedBox(height: 10),
-                  TextButton(
-                    onPressed: () => _controller.reload(),
-                    child: const Text(
-                      'Retry',
-                      style: TextStyle(color: MatrixColors.green),
-                    ),
-                  ),
-                ],
-              ),
-            )
-          else
-            WebViewWidget(controller: _controller),
-          if (_isLoading && !_hasError)
-            Container(
-              color: Colors.black.withOpacity(0.7),
-              child: const Center(
-                child: Column(
-                  mainAxisAlignment: MainAxisAlignment.center,
-                  children: [
-                    CircularProgressIndicator(color: MatrixColors.green),
-                    SizedBox(height: 15),
-                    Text(
-                      '> loading stream...',
-                      style: TextStyle(
-                        color: MatrixColors.green,
-                        fontFamily: 'monospace',
-                        letterSpacing: 2,
-                      ),
-                    ),
-                  ],
-                ),
-              ),
+    );
+  }
+
+  void _showDownloadLocationDialog() {
+    showDialog(
+      context: context,
+      builder: (c) => AlertDialog(
+        backgroundColor: kCardBg,
+        shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.circular(12),
+          side: BorderSide(color: kGreen.withOpacity(0.5)),
+        ),
+        title: const Text('Select Download Location',
+            style: TextStyle(color: kGreen)),
+        content: SizedBox(
+          width: double.maxFinite,
+          child: ListView.builder(
+            shrinkWrap: true,
+            itemCount: _downloadLocations.length,
+            itemBuilder: (c2, i) => RadioListTile<String>(
+              title: Text(_downloadLocations[i],
+                  style:
+                      const TextStyle(color: kGreen, fontSize: 13)),
+              value: _downloadLocations[i],
+              groupValue: _downloadLocation,
+              activeColor: kGreen,
+              onChanged: (value) {
+                if (value != null) {
+                  _saveDownloadLocation(value);
+                  Navigator.pop(c);
+                }
+              },
             ),
+          ),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(c),
+            child: const Text('Cancel',
+                style: TextStyle(color: kDimGreen)),
+          ),
         ],
       ),
     );
   }
 }
+
+// ════════════════════
