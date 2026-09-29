@@ -1079,4 +1079,161 @@ class _SettingsScreenState extends State<SettingsScreen> {
   }
 }
 
-// ════════════════════
+// ═══════════════════════════════════════════
+// VIDEO PLAYER SCREEN
+// ═══════════════════════════════════════════
+class VideoPlayerScreen extends StatefulWidget {
+  final String url;
+  const VideoPlayerScreen({super.key, required this.url});
+  @override
+  State<VideoPlayerScreen> createState() => _VideoPlayerScreenState();
+}
+
+class _VideoPlayerScreenState extends State<VideoPlayerScreen> {
+  late final WebViewController _controller;
+  bool _isLoading = true;
+  bool _hasError = false;
+
+  @override
+  void initState() {
+    super.initState();
+    _controller = WebViewController()
+      ..setJavaScriptMode(JavaScriptMode.unrestricted)
+      ..setBackgroundColor(Colors.black)
+      ..setNavigationDelegate(
+        NavigationDelegate(
+          onPageStarted: (url) => setState(() => _isLoading = true),
+          onPageFinished: (url) => setState(() => _isLoading = false),
+          onWebResourceError: (error) => setState(() {
+            _hasError = true;
+            _isLoading = false;
+          }),
+        ),
+      )
+      ..loadRequest(Uri.parse(widget.url));
+  }
+
+  Future<void> _downloadApk() async {
+    final uri = Uri.parse(kApkDownloadUrl);
+    if (await canLaunchUrl(uri)) {
+      await launchUrl(uri, mode: LaunchMode.externalApplication);
+    } else {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('APK download link open nahi ho paya'),
+            backgroundColor: kCardBg,
+          ),
+        );
+      }
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Scaffold(
+      backgroundColor: Colors.black,
+      appBar: AppBar(
+        title: const Text('MAYA JAAL PLAYER'),
+        backgroundColor: Colors.black,
+        foregroundColor: kGreen,
+        actions: [
+          IconButton(
+            icon: const Icon(Icons.refresh, color: kGreen),
+            tooltip: 'Reload',
+            onPressed: () => _controller.reload(),
+          ),
+          IconButton(
+            icon: const Icon(Icons.download, color: kGreen),
+            tooltip: 'Download Latest APK',
+            onPressed: _downloadApk,
+          ),
+          IconButton(
+            icon: const Icon(Icons.open_in_browser, color: kGreen),
+            tooltip: 'Open in Browser',
+            onPressed: () async {
+              final uri = Uri.parse(widget.url);
+              if (await canLaunchUrl(uri)) {
+                await launchUrl(uri, mode: LaunchMode.externalApplication);
+              }
+            },
+          ),
+        ],
+      ),
+      body: Stack(
+        children: [
+          if (_hasError)
+            Center(
+              child: Padding(
+                padding: const EdgeInsets.all(24.0),
+                child: Column(
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  children: [
+                    const Icon(Icons.error_outline,
+                        size: 70, color: Colors.red),
+                    const SizedBox(height: 16),
+                    const Text(
+                      'Video load nahi ho paya',
+                      style: TextStyle(
+                        color: kGreen,
+                        fontSize: 18,
+                        fontFamily: 'monospace',
+                      ),
+                    ),
+                    const SizedBox(height: 10),
+                    Text(
+                      'Kripya link dobara check karein ya retry dabayein.',
+                      textAlign: TextAlign.center,
+                      style: TextStyle(
+                        color: kGreen.withOpacity(0.6),
+                        fontSize: 13,
+                      ),
+                    ),
+                    const SizedBox(height: 24),
+                    ElevatedButton.icon(
+                      onPressed: () => _controller.reload(),
+                      icon: const Icon(Icons.refresh),
+                      label: const Text('Retry'),
+                      style: ElevatedButton.styleFrom(
+                        backgroundColor: kGreen,
+                        foregroundColor: Colors.black,
+                      ),
+                    ),
+                    const SizedBox(height: 10),
+                    TextButton(
+                      onPressed: () => Navigator.pop(context),
+                      child: const Text('Go Back',
+                          style: TextStyle(color: kGreen)),
+                    ),
+                  ],
+                ),
+              ),
+            )
+          else
+            WebViewWidget(controller: _controller),
+          if (_isLoading && !_hasError)
+            Container(
+              color: Colors.black.withOpacity(0.7),
+              child: const Center(
+                child: Column(
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  children: [
+                    CircularProgressIndicator(color: kGreen),
+                    SizedBox(height: 15),
+                    Text(
+                      '> loading stream...',
+                      style: TextStyle(
+                        color: kGreen,
+                        fontFamily: 'monospace',
+                        letterSpacing: 2,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ),
+        ],
+      ),
+    );
+  }
+}
