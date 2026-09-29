@@ -1082,7 +1082,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
       context: context,
       builder: (c) => AlertDialog(
         backgroundColor: kCardBg,
- // ═══════════════════════════════════════════
+// ═══════════════════════════════════════════
 // VIDEO PLAYER SCREEN (Native Player)
 // ═══════════════════════════════════════════
 class VideoPlayerScreen extends StatefulWidget {
@@ -1504,4 +1504,4 @@ class UpdateChecker {
       }
     }
   }
-}
+} 
