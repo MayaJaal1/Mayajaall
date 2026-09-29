@@ -13,7 +13,7 @@ dependencies:
   app_links: ^6.3.2
   webview_flutter: ^4.7.0
   video_player: ^2.8.6
-    chewie: ^1.7.5
+  chewie: ^1.7.5
   http: ^1.2.0
   package_info_plus: ^8.0.0
   open_filex: ^4.5.0
