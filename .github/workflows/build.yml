@@ -233,15 +233,15 @@ jobs:
       - name: Build Release APK
         run: flutter build apk --release
 
-      - name: Print SHA256
+      - name: Print SHA1 and SHA256 Fingerprints
         run: |
           echo "=========================================="
-          echo "SHA256 FINGERPRINT:"
+          echo "SHA1 and SHA256 FINGERPRINTS:"
           echo "=========================================="
           keytool -list -v -keystore android/app/mayajaal-release.jks \
             -alias mayajaal \
             -storepass MayajaalRelease2024 \
-            -keypass MayajaalRelease2024 | grep "SHA256:"
+            -keypass MayajaalRelease2024 | grep "SHA"
           echo "=========================================="
 
       - name: Upload APK Artifact
