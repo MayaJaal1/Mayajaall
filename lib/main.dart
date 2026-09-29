@@ -1,28 +1,17 @@
 import 'dart:async';
-import 'dart:io';
 import 'dart:math' as math;
-import 'dart:convert';
 import 'package:flutter/material.dart';
 import 'package:app_links/app_links.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:google_sign_in/google_sign_in.dart';
+import 'package:webview_flutter/webview_flutter.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:url_launcher/url_launcher.dart';
 import 'package:permission_handler/permission_handler.dart';
-import 'package:http/http.dart' as http;
-import 'package:dio/dio.dart';
-import 'package:video_player/video_player.dart';
-import 'package:chewie/chewie.dart';
-import 'package:package_info_plus/package_info_plus.dart';
-import 'package:open_filex/open_filex.dart';
-import 'package:path_provider/path_provider.dart';
 
 const String supabaseUrl = 'https://inxlnctaixbkfblwlmhr.supabase.co';
 const String supabaseAnonKey = 'sb_publishable_6b9xe3mDBduO-soZTk3t2A_W1sQpD5K';
 const String webClientId = '985001671962-rok8qnng0rumjsd8mgr8uhr92o5vhs4n.apps.googleusercontent.com';
-const String kBackendUrl = 'https://mayajaal-backend-production.up.railway.app';
-const String kApkDownloadUrl = 'https://github.com/ajayr0201/Mayajaall/releases/latest/download/app-release.apk';
-const String kGithubApiUrl = 'https://api.github.com/repos/ajayr0201/Mayajaall/releases/latest';
 
 const Color kGreen = Color(0xFF00FF41);
 const Color kBg = Color(0xFF000000);
@@ -484,9 +473,6 @@ class _HomeScreenState extends State<HomeScreen> {
     super.initState();
     _loadHistory();
     Future.delayed(const Duration(seconds: 1), () => _requestPermissions());
-    Future.delayed(const Duration(seconds: 3), () {
-      if (mounted) UpdateChecker.checkForUpdate(context);
-    });
   }
 
   Future<void> _requestPermissions() async {
@@ -500,9 +486,6 @@ class _HomeScreenState extends State<HomeScreen> {
     }
     if (!await Permission.storage.isGranted) {
       await Permission.storage.request();
-    }
-    if (!await Permission.requestInstallPackages.isGranted) {
-      await Permission.requestInstallPackages.request();
     }
   }
 
@@ -580,14 +563,6 @@ class _HomeScreenState extends State<HomeScreen> {
               },
             ),
             ListTile(
-              leading: const Icon(Icons.system_update, color: kGreen),
-              title: const Text('Check for Update', style: TextStyle(color: kGreen)),
-              onTap: () {
-                Navigator.pop(c);
-                UpdateChecker.checkForUpdate(context, force: true);
-              },
-            ),
-            ListTile(
               leading: const Icon(Icons.delete_sweep, color: Colors.orange),
               title: const Text('Clear History', style: TextStyle(color: Colors.orange)),
               onTap: () {
@@ -648,9 +623,6 @@ class _HomeScreenState extends State<HomeScreen> {
         ),
       );
       return;
-    }
-    if (input.startsWith('mayajaall://')) {
-      input = input.replaceFirst('mayajaall://', '$kBackendUrl/');
     }
     _saveToHistory(input);
     _linkController.clear();
@@ -800,7 +772,9 @@ class _HomeScreenState extends State<HomeScreen> {
       ),
     );
   }
-}class SettingsScreen extends StatefulWidget {
+}
+
+class SettingsScreen extends StatefulWidget {
   const SettingsScreen({super.key});
   @override
   State<SettingsScreen> createState() => _SettingsScreenState();
@@ -876,14 +850,6 @@ class _SettingsScreenState extends State<SettingsScreen> {
             subtitle: Text(_downloadLocation, style: TextStyle(color: kGreen.withOpacity(0.6), fontSize: 12)),
             trailing: const Icon(Icons.arrow_forward_ios, size: 14, color: kGreen),
             onTap: () => _showDownloadLocationDialog(),
-          ),
-          Divider(color: kGreen.withOpacity(0.2)),
-          ListTile(
-            leading: const Icon(Icons.system_update, color: kGreen),
-            title: const Text('Check for Update', style: TextStyle(color: kGreen, fontFamily: 'monospace')),
-            subtitle: const Text('Latest version check karein', style: TextStyle(color: kDimGreen, fontSize: 12)),
-            trailing: const Icon(Icons.arrow_forward_ios, size: 14, color: kGreen),
-            onTap: () => UpdateChecker.checkForUpdate(context, force: true),
           ),
           Divider(color: kGreen.withOpacity(0.2)),
           const SizedBox(height: 30),
@@ -966,9 +932,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
       ),
     );
   }
-}
-
-class VideoPlayerScreen extends StatefulWidget {
+}class VideoPlayerScreen extends StatefulWidget {
   final String url;
   const VideoPlayerScreen({super.key, required this.url});
   @override
@@ -976,103 +940,28 @@ class VideoPlayerScreen extends StatefulWidget {
 }
 
 class _VideoPlayerScreenState extends State<VideoPlayerScreen> {
-  VideoPlayerController? _videoController;
-  ChewieController? _chewieController;
+  late final WebViewController _controller;
   bool _isLoading = true;
   bool _hasError = false;
-  String _errorMessage = '';
 
   @override
   void initState() {
     super.initState();
-    _initPlayer();
-  }
-
-  Future<String> _resolveVideoUrl(String url) async {
-    if (url.contains('.mp4') || url.contains('.m3u8') || url.contains('.mkv') || url.contains('.webm')) {
-      return url;
-    }
-    if (url.contains('/tb/')) {
-      final shortId = url.split('/tb/').last.split('?').first;
-      final apiUrl = '$kBackendUrl/api/tb/$shortId';
-      try {
-        final response = await http.get(Uri.parse(apiUrl));
-        if (response.statusCode == 200) {
-          final data = jsonDecode(response.body);
-          final videoUrl = data['video_url'] as String?;
-          if (videoUrl != null && videoUrl.isNotEmpty) return videoUrl;
-        }
-      } catch (e) {
-        debugPrint('API error: $e');
-      }
-      throw Exception('TB API failed');
-    }
-    if (url.contains('/v/')) {
-      try {
-        final dio = Dio();
-        dio.options.followRedirects = false;
-        dio.options.validateStatus = (status) => true;
-        final response = await dio.get(url);
-        final location = response.headers.value('location');
-        if (location != null && location.startsWith('http')) return location;
-      } catch (e) {
-        debugPrint('Redirect error: $e');
-      }
-      throw Exception('V link redirect failed');
-    }
-    return url;
-  }
-
-  Future<void> _initPlayer() async {
-    try {
-      setState(() {
-        _isLoading = true;
-        _hasError = false;
-      });
-
-      final videoUrl = await _resolveVideoUrl(widget.url);
-      debugPrint('Resolved URL: $videoUrl');
-
-      _videoController = VideoPlayerController.networkUrl(
-        Uri.parse(videoUrl),
-        httpHeaders: {
-          'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 Chrome/120.0.0.0 Safari/537.36',
-        },
-      );
-
-      await _videoController!.initialize();
-
-      _chewieController = ChewieController(
-        videoPlayerController: _videoController!,
-        autoPlay: true,
-        looping: false,
-        allowFullScreen: true,
-        allowPlaybackSpeedChanging: true,
-        aspectRatio: _videoController!.value.aspectRatio,
-      );
-
-      setState(() => _isLoading = false);
-    } catch (e) {
-      setState(() {
-        _isLoading = false;
-        _hasError = true;
-        _errorMessage = e.toString();
-      });
-    }
-  }
-
-  Future<void> _openInBrowser() async {
-    final uri = Uri.parse(widget.url);
-    if (await canLaunchUrl(uri)) {
-      await launchUrl(uri, mode: LaunchMode.externalApplication);
-    }
-  }
-
-  @override
-  void dispose() {
-    _videoController?.dispose();
-    _chewieController?.dispose();
-    super.dispose();
+    _controller = WebViewController()
+      ..setJavaScriptMode(JavaScriptMode.unrestricted)
+      ..setBackgroundColor(Colors.black)
+      ..setMediaPlaybackRequiresUserGesture(false)
+      ..setNavigationDelegate(
+        NavigationDelegate(
+          onPageStarted: (url) => setState(() => _isLoading = true),
+          onPageFinished: (url) => setState(() => _isLoading = false),
+          onWebResourceError: (error) => setState(() {
+            _hasError = true;
+            _isLoading = false;
+          }),
+        ),
+      )
+      ..loadRequest(Uri.parse(widget.url));
   }
 
   @override
@@ -1086,198 +975,71 @@ class _VideoPlayerScreenState extends State<VideoPlayerScreen> {
         actions: [
           IconButton(
             icon: const Icon(Icons.refresh, color: kGreen),
-            tooltip: 'Reload',
-            onPressed: () {
-              _videoController?.dispose();
-              _chewieController?.dispose();
-              _initPlayer();
-            },
+            onPressed: () => _controller.reload(),
           ),
           IconButton(
             icon: const Icon(Icons.open_in_browser, color: kGreen),
-            tooltip: 'Open in Browser',
-            onPressed: _openInBrowser,
+            onPressed: () async {
+              final uri = Uri.parse(widget.url);
+              if (await canLaunchUrl(uri)) {
+                await launchUrl(uri, mode: LaunchMode.externalApplication);
+              }
+            },
           ),
         ],
       ),
-      body: _isLoading
-          ? const Center(
+      body: Stack(
+        children: [
+          if (_hasError)
+            Center(
               child: Column(
                 mainAxisAlignment: MainAxisAlignment.center,
                 children: [
-                  CircularProgressIndicator(color: kGreen),
-                  SizedBox(height: 15),
-                  Text('> loading stream...', style: TextStyle(color: kGreen, fontFamily: 'monospace', letterSpacing: 2)),
+                  const Icon(Icons.error_outline, size: 70, color: Colors.red),
+                  const SizedBox(height: 16),
+                  const Text(
+                    'Video load nahi ho paya',
+                    style: TextStyle(color: kGreen, fontSize: 18, fontFamily: 'monospace'),
+                  ),
+                  const SizedBox(height: 24),
+                  ElevatedButton.icon(
+                    onPressed: () => _controller.reload(),
+                    icon: const Icon(Icons.refresh),
+                    label: const Text('Retry'),
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: kGreen,
+                      foregroundColor: Colors.black,
+                    ),
+                  ),
+                  const SizedBox(height: 10),
+                  TextButton(
+                    onPressed: () => Navigator.pop(context),
+                    child: const Text('Go Back', style: TextStyle(color: kGreen)),
+                  ),
                 ],
               ),
             )
-          : _hasError
-              ? Center(
-                  child: Padding(
-                    padding: const EdgeInsets.all(24.0),
-                    child: Column(
-                      mainAxisAlignment: MainAxisAlignment.center,
-                      children: [
-                        const Icon(Icons.error_outline, size: 70, color: Colors.red),
-                        const SizedBox(height: 16),
-                        const Text('Video load nahi ho paya', style: TextStyle(color: kGreen, fontSize: 18, fontFamily: 'monospace')),
-                        const SizedBox(height: 10),
-                        Text(_errorMessage, textAlign: TextAlign.center, style: TextStyle(color: kGreen.withOpacity(0.6), fontSize: 12)),
-                        const SizedBox(height: 24),
-                        ElevatedButton.icon(
-                          onPressed: _initPlayer,
-                          icon: const Icon(Icons.refresh),
-                          label: const Text('Retry'),
-                          style: ElevatedButton.styleFrom(backgroundColor: kGreen, foregroundColor: Colors.black),
-                        ),
-                        const SizedBox(height: 10),
-                        TextButton(
-                          onPressed: () => Navigator.pop(context),
-                          child: const Text('Go Back', style: TextStyle(color: kGreen)),
-                        ),
-                      ],
+          else
+            WebViewWidget(controller: _controller),
+          if (_isLoading && !_hasError)
+            Container(
+              color: Colors.black.withOpacity(0.7),
+              child: const Center(
+                child: Column(
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  children: [
+                    CircularProgressIndicator(color: kGreen),
+                    SizedBox(height: 15),
+                    Text(
+                      '> loading stream...',
+                      style: TextStyle(color: kGreen, fontFamily: 'monospace', letterSpacing: 2),
                     ),
-                  ),
-                )
-              : _chewieController != null
-                  ? Center(child: Chewie(controller: _chewieController!))
-                  : Center(child: Text('Player not initialized', style: TextStyle(color: kGreen))),
-    );
-  }
-}
-
-class UpdateChecker {
-  static Future<void> checkForUpdate(BuildContext context, {bool force = false}) async {
-    try {
-      final packageInfo = await PackageInfo.fromPlatform();
-      final currentVersion = packageInfo.version;
-
-      final response = await http.get(
-        Uri.parse(kGithubApiUrl),
-        headers: {'Accept': 'application/vnd.github+json'},
-      );
-
-      if (response.statusCode != 200) {
-        if (force && context.mounted) _showSnack(context, 'Update check failed');
-        return;
-      }
-
-      final data = jsonDecode(response.body);
-      final latestVersion = (data['tag_name'] as String? ?? '0.0.0').replaceAll('v', '').trim();
-
-      if (_isNewer(latestVersion, currentVersion)) {
-        if (context.mounted) _showUpdateDialog(context, latestVersion);
-      } else {
-        if (force && context.mounted) _showSnack(context, 'Aap latest version pe ho');
-      }
-    } catch (e) {
-      debugPrint('Update check failed: $e');
-      if (force && context.mounted) _showSnack(context, 'Update check failed');
-    }
-  }
-
-  static bool _isNewer(String latest, String current) {
-    try {
-      final l = latest.split('.').map(int.parse).toList();
-      final c = current.split('.').map(int.parse).toList();
-      for (int i = 0; i < l.length && i < c.length; i++) {
-        if (l[i] > c[i]) return true;
-        if (l[i] < c[i]) return false;
-      }
-    } catch (_) {}
-    return false;
-  }
-
-  static void _showSnack(BuildContext context, String msg) {
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(
-        content: Text(msg, style: const TextStyle(color: kGreen)),
-        backgroundColor: kCardBg,
-      ),
-    );
-  }
-
-  static void _showUpdateDialog(BuildContext context, String newVersion) {
-    showDialog(
-      context: context,
-      barrierDismissible: false,
-      builder: (c) => AlertDialog(
-        backgroundColor: kCardBg,
-        shape: RoundedRectangleBorder(
-          borderRadius: BorderRadius.circular(12),
-          side: BorderSide(color: kGreen.withOpacity(0.5)),
-        ),
-        title: Row(
-          children: const [
-            Icon(Icons.system_update, color: kGreen),
-            SizedBox(width: 10),
-            Text('Update Available', style: TextStyle(color: kGreen, fontFamily: 'monospace')),
-          ],
-        ),
-        content: Text(
-          'Naya version aa gaya hai: v$newVersion\n\nAbhi update karein best experience ke liye.',
-          style: TextStyle(color: kGreen.withOpacity(0.8)),
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(c),
-            child: Text('Later', style: TextStyle(color: kDimGreen)),
-          ),
-          ElevatedButton(
-            onPressed: () {
-              Navigator.pop(c);
-              downloadAndInstallApk(context);
-            },
-            style: ElevatedButton.styleFrom(backgroundColor: kGreen, foregroundColor: Colors.black),
-            child: const Text('Update Now'),
-          ),
+                  ],
+                ),
+              ),
+            ),
         ],
       ),
     );
-  }
-
-  static Future<void> downloadAndInstallApk(BuildContext context) async {
-    try {
-      showDialog(
-        context: context,
-        barrierDismissible: false,
-        builder: (_) => AlertDialog(
-          backgroundColor: kCardBg,
-          content: Row(
-            children: [
-              const CircularProgressIndicator(color: kGreen),
-              const SizedBox(width: 20),
-              Expanded(child: Text('Downloading update...', style: TextStyle(color: kGreen))),
-            ],
-          ),
-        ),
-      );
-
-      final dir = await getExternalStorageDirectory();
-      final filePath = '${dir!.path}/mayajaal_update.apk';
-
-      await Dio().download(
-        kApkDownloadUrl,
-        filePath,
-        options: Options(
-          followRedirects: true,
-          validateStatus: (status) => status != null && status < 500,
-        ),
-      );
-
-      if (context.mounted) Navigator.pop(context);
-
-      final file = File(filePath);
-      if (await file.exists()) {
-        await OpenFilex.open(filePath);
-      } else {
-        if (context.mounted) _showSnack(context, 'Download failed');
-      }
-    } catch (e) {
-      if (context.mounted) {
-        Navigator.pop(context);
-        _showSnack(context, 'Update failed: $e');
-      }
-    }
   }
 }
