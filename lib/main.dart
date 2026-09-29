@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'dart:math' as math;
 import 'package:flutter/material.dart';
 import 'package:app_links/app_links.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
@@ -8,21 +9,38 @@ import 'package:shared_preferences/shared_preferences.dart';
 import 'package:url_launcher/url_launcher.dart';
 import 'package:permission_handler/permission_handler.dart';
 
+// ═══════════════════════════════════════════
+// CONFIG
+// ═══════════════════════════════════════════
 const String supabaseUrl = 'https://inxlnctaixbkfblwlmhr.supabase.co';
 const String supabaseAnonKey = 'sb_publishable_6b9xe3mDBduO-soZTk3t2A_W1sQpD5K';
 const String webClientId = '985001671962-rok8qnng0rumjsd8mgr8uhr92o5vhs4n.apps.googleusercontent.com';
 
-final ValueNotifier<ThemeMode> themeNotifier = ValueNotifier(ThemeMode.light);
+// ═══════════════════════════════════════════
+// MATRIX COLORS
+// ═══════════════════════════════════════════
+class MatrixColors {
+  static const Color green = Color(0xFF00FF41);
+  static const Color darkGreen = Color(0xFF003B00);
+  static const Color bg = Color(0xFF000000);
+  static const Color cardBg = Color(0xFF0A0A0A);
+  static const Color dimGreen = Color(0xFF4FBF8B);
+}
+
+final ValueNotifier<ThemeMode> themeNotifier = ValueNotifier(ThemeMode.dark);
 
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
   await Supabase.initialize(url: supabaseUrl, anonKey: supabaseAnonKey);
   final prefs = await SharedPreferences.getInstance();
-  final isDark = prefs.getBool('dark_theme') ?? false;
+  final isDark = prefs.getBool('dark_theme') ?? true;
   themeNotifier.value = isDark ? ThemeMode.dark : ThemeMode.light;
   runApp(const MyApp());
 }
 
+// ═══════════════════════════════════════════
+// MY APP
+// ═══════════════════════════════════════════
 class MyApp extends StatefulWidget {
   const MyApp({super.key});
   @override
@@ -33,11 +51,15 @@ class _MyAppState extends State<MyApp> {
   final AppLinks _appLinks = AppLinks();
   StreamSubscription<Uri>? _linkSubscription;
   String? _incomingUrl;
+  bool _showSplash = true;
 
   @override
   void initState() {
     super.initState();
     _initDeepLinks();
+    Future.delayed(const Duration(seconds: 3), () {
+      if (mounted) setState(() => _showSplash = false);
+    });
   }
 
   Future<void> _initDeepLinks() async {
@@ -60,7 +82,10 @@ class _MyAppState extends State<MyApp> {
         finalUrl = uri.queryParameters['url']!;
       }
     }
-    setState(() => _incomingUrl = finalUrl);
+    setState(() {
+      _incomingUrl = finalUrl;
+      _showSplash = false;
+    });
   }
 
   @override
@@ -75,28 +100,298 @@ class _MyAppState extends State<MyApp> {
       valueListenable: themeNotifier,
       builder: (context, mode, _) {
         return MaterialApp(
-          title: 'Mayajaall',
+          title: 'MayaJaal',
           debugShowCheckedModeBanner: false,
           themeMode: mode,
-          theme: ThemeData(
-            primarySwatch: Colors.deepPurple,
-            brightness: Brightness.light,
-            useMaterial3: true,
+          theme: _buildMatrixTheme(false),
+          darkTheme: _buildMatrixTheme(true),
+          home: _showSplash
+              ? const SplashScreen()
+              : (_incomingUrl == null
+                  ? const AuthGate()
+                  : VideoPlayerScreen(url: _incomingUrl!)),
+        );
+      },
+    );
+  }
+
+  ThemeData _buildMatrixTheme(bool isDark) {
+    return ThemeData(
+      brightness: isDark ? Brightness.dark : Brightness.light,
+      scaffoldBackgroundColor: isDark ? MatrixColors.bg : Colors.white,
+      colorScheme: ColorScheme.fromSeed(
+        seedColor: MatrixColors.green,
+        brightness: isDark ? Brightness.dark : Brightness.light,
+      ),
+      useMaterial3: true,
+      fontFamily: 'monospace',
+      appBarTheme: AppBarTheme(
+        backgroundColor: isDark ? MatrixColors.bg : Colors.white,
+        foregroundColor: MatrixColors.green,
+        elevation: 0,
+        centerTitle: true,
+        titleTextStyle: const TextStyle(
+          color: MatrixColors.green,
+          fontSize: 18,
+          fontWeight: FontWeight.bold,
+          fontFamily: 'monospace',
+          letterSpacing: 2,
+        ),
+      ),
+    );
+  }
+}
+
+// ═══════════════════════════════════════════
+// SPLASH SCREEN (Matrix Style)
+// ═══════════════════════════════════════════
+class SplashScreen extends StatefulWidget {
+  const SplashScreen({super.key});
+  @override
+  State<SplashScreen> createState() => _SplashScreenState();
+}
+
+class _SplashScreenState extends State<SplashScreen>
+    with SingleTickerProviderStateMixin {
+  late AnimationController _controller;
+  late Animation<double> _glowAnimation;
+
+  @override
+  void initState() {
+    super.initState();
+    _controller = AnimationController(
+      vsync: this,
+      duration: const Duration(milliseconds: 1500),
+    )..repeat(reverse: true);
+    _glowAnimation = Tween<double>(begin: 0.6, end: 1.0).animate(
+      CurvedAnimation(parent: _controller, curve: Curves.easeInOut),
+    );
+  }
+
+  @override
+  void dispose() {
+    _controller.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Scaffold(
+      backgroundColor: MatrixColors.bg,
+      body: Stack(
+        children: [
+          const MatrixRain(),
+          Center(
+            child: Column(
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: [
+                AnimatedBuilder(
+                  animation: _glowAnimation,
+                  builder: (context, _) {
+                    return Container(
+                      padding: const EdgeInsets.all(20),
+                      decoration: BoxDecoration(
+                        shape: BoxShape.circle,
+                        boxShadow: [
+                          BoxShadow(
+                            color: MatrixColors.green
+                                .withOpacity(0.4 * _glowAnimation.value),
+                            blurRadius: 40,
+                            spreadRadius: 10,
+                          ),
+                        ],
+                      ),
+                      child: const Icon(
+                        Icons.movie_filter,
+                        size: 80,
+                        color: MatrixColors.green,
+                      ),
+                    );
+                  },
+                ),
+                const SizedBox(height: 30),
+                AnimatedBuilder(
+                  animation: _glowAnimation,
+                  builder: (context, _) {
+                    return Text(
+                      'MAYA JAAL',
+                      style: TextStyle(
+                        fontSize: 36,
+                        fontWeight: FontWeight.bold,
+                        color: MatrixColors.green,
+                        fontFamily: 'monospace',
+                        letterSpacing: 8,
+                        shadows: [
+                          Shadow(
+                            color: MatrixColors.green
+                                .withOpacity(_glowAnimation.value),
+                            blurRadius: 20,
+                          ),
+                          Shadow(
+                            color: MatrixColors.green
+                                .withOpacity(0.6 * _glowAnimation.value),
+                            blurRadius: 40,
+                          ),
+                        ],
+                      ),
+                    );
+                  },
+                ),
+                const SizedBox(height: 20),
+                Text(
+                  '> initializing secure channel...',
+                  style: TextStyle(
+                    fontSize: 12,
+                    color: MatrixColors.green.withOpacity(0.7),
+                    fontFamily: 'monospace',
+                    letterSpacing: 2,
+                  ),
+                ),
+              ],
+            ),
           ),
-          darkTheme: ThemeData(
-            primarySwatch: Colors.deepPurple,
-            brightness: Brightness.dark,
-            useMaterial3: true,
-          ),
-          home: _incomingUrl == null
-              ? const AuthGate()
-              : VideoPlayerScreen(url: _incomingUrl!),
+        ],
+      ),
+    );
+  }
+}
+
+// ═══════════════════════════════════════════
+// MATRIX RAIN ANIMATION
+// ═══════════════════════════════════════════
+class MatrixRain extends StatefulWidget {
+  const MatrixRain({super.key});
+  @override
+  State<MatrixRain> createState() => _MatrixRainState();
+}
+
+class _MatrixRainState extends State<MatrixRain> {
+  late Timer _timer;
+  final List<MatrixColumn> _columns = [];
+  final math.Random _random = math.Random();
+
+  static const String _chars =
+      'アイウエオカキクケコサシスセソタチツテトナニヌネノ0123456789ABCDEFXYZ';
+
+  @override
+  void initState() {
+    super.initState();
+    _timer = Timer.periodic(const Duration(milliseconds: 80), (_) {
+      setState(() {
+        for (final col in _columns) {
+          col.y += col.speed;
+          if (col.y > 900) {
+            col.y = -_random.nextInt(200).toDouble();
+            col.chars = _generateChars();
+          }
+        }
+      });
+    });
+  }
+
+  List<String> _generateChars() {
+    return List.generate(
+      15,
+      (_) => _chars[_random.nextInt(_chars.length)],
+    );
+  }
+
+  @override
+  void dispose() {
+    _timer.cancel();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        if (_columns.isEmpty) {
+          final colWidth = 14.0;
+          final count = (constraints.maxWidth / colWidth).floor();
+          for (int i = 0; i < count; i++) {
+            _columns.add(MatrixColumn(
+              x: i * colWidth,
+              y: -_random.nextInt(500).toDouble(),
+              speed: 3 + _random.nextDouble() * 5,
+              chars: _generateChars(),
+            ));
+          }
+        }
+        return CustomPaint(
+          painter: MatrixRainPainter(columns: _columns),
+          size: Size(constraints.maxWidth, constraints.maxHeight),
         );
       },
     );
   }
 }
 
+class MatrixColumn {
+  final double x;
+  double y;
+  final double speed;
+  List<String> chars;
+
+  MatrixColumn({
+    required this.x,
+    required this.y,
+    required this.speed,
+    required this.chars,
+  });
+}
+
+class MatrixRainPainter extends CustomPainter {
+  final List<MatrixColumn> columns;
+
+  MatrixRainPainter({required this.columns});
+
+  @override
+  void paint(Canvas canvas, Size size) {
+    const fontSize = 14.0;
+
+    for (final col in columns) {
+      for (int i = 0; i < col.chars.length; i++) {
+        final y = col.y - (i * fontSize);
+        if (y < -fontSize || y > size.height) continue;
+
+        final opacity = (1.0 - (i / col.chars.length)).clamp(0.0, 1.0);
+
+        final tp = TextPainter(
+          text: TextSpan(
+            text: col.chars[i],
+            style: TextStyle(
+              color: i == 0
+                  ? Colors.white
+                  : MatrixColors.green.withOpacity(opacity * 0.85),
+              fontSize: fontSize,
+              fontFamily: 'monospace',
+              fontWeight: FontWeight.bold,
+              shadows: i == 0
+                  ? [
+                      const Shadow(
+                        color: MatrixColors.green,
+                        blurRadius: 8,
+                      ),
+                    ]
+                  : null,
+            ),
+          ),
+          textDirection: TextDirection.ltr,
+        );
+        tp.layout();
+        tp.paint(canvas, Offset(col.x, y));
+      }
+    }
+  }
+
+  @override
+  bool shouldRepaint(covariant CustomPainter oldDelegate) => true;
+}
+
+// ═══════════════════════════════════════════
+// AUTH GATE
+// ═══════════════════════════════════════════
 class AuthGate extends StatelessWidget {
   const AuthGate({super.key});
   @override
@@ -105,7 +400,12 @@ class AuthGate extends StatelessWidget {
       stream: Supabase.instance.client.auth.onAuthStateChange,
       builder: (context, snapshot) {
         if (snapshot.connectionState == ConnectionState.waiting) {
-          return const Scaffold(body: Center(child: CircularProgressIndicator()));
+          return const Scaffold(
+            backgroundColor: MatrixColors.bg,
+            body: Center(
+              child: CircularProgressIndicator(color: MatrixColors.green),
+            ),
+          );
         }
         final session = Supabase.instance.client.auth.currentSession;
         if (session != null) return const HomeScreen();
@@ -115,6 +415,9 @@ class AuthGate extends StatelessWidget {
   }
 }
 
+// ═══════════════════════════════════════════
+// LOGIN SCREEN (Matrix Style)
+// ═══════════════════════════════════════════
 class LoginScreen extends StatefulWidget {
   const LoginScreen({super.key});
   @override
@@ -126,11 +429,17 @@ class _LoginScreenState extends State<LoginScreen> {
   String _error = '';
 
   Future<void> _signInWithGoogle() async {
-    setState(() { _loading = true; _error = ''; });
+    setState(() {
+      _loading = true;
+      _error = '';
+    });
     try {
       final GoogleSignIn googleSignIn = GoogleSignIn(serverClientId: webClientId);
       final googleUser = await googleSignIn.signIn();
-      if (googleUser == null) { setState(() => _loading = false); return; }
+      if (googleUser == null) {
+        setState(() => _loading = false);
+        return;
+      }
       final googleAuth = await googleUser.authentication;
       if (googleAuth.idToken == null) throw 'No ID Token found.';
       await Supabase.instance.client.auth.signInWithIdToken(
@@ -148,43 +457,155 @@ class _LoginScreenState extends State<LoginScreen> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      body: Padding(
-        padding: const EdgeInsets.all(20),
-        child: Center(
-          child: Column(
-            mainAxisAlignment: MainAxisAlignment.center,
-            children: [
-              const Icon(Icons.movie, size: 100, color: Colors.deepPurple),
-              const SizedBox(height: 20),
-              const Text("Mayajaall", style: TextStyle(fontSize: 32, fontWeight: FontWeight.bold)),
-              const SizedBox(height: 10),
-              const Text("Login to continue", style: TextStyle(color: Colors.grey)),
-              const SizedBox(height: 40),
-              ElevatedButton.icon(
-                onPressed: _loading ? null : _signInWithGoogle,
-                icon: const Icon(Icons.login),
-                label: _loading
-                    ? const CircularProgressIndicator(color: Colors.white)
-                    : const Text("Sign in with Google"),
-                style: ElevatedButton.styleFrom(
-                  backgroundColor: Colors.deepPurple,
-                  foregroundColor: Colors.white,
-                  minimumSize: const Size(double.infinity, 55),
-                  textStyle: const TextStyle(fontSize: 18),
+      backgroundColor: MatrixColors.bg,
+      body: Stack(
+        children: [
+          const MatrixRain(),
+          SafeArea(
+            child: Center(
+              child: SingleChildScrollView(
+                padding: const EdgeInsets.all(24),
+                child: Container(
+                  padding: const EdgeInsets.all(28),
+                  decoration: BoxDecoration(
+                    color: MatrixColors.cardBg.withOpacity(0.9),
+                    border: Border.all(
+                      color: MatrixColors.green.withOpacity(0.5),
+                      width: 1,
+                    ),
+                    borderRadius: BorderRadius.circular(14),
+                    boxShadow: [
+                      BoxShadow(
+                        color: MatrixColors.green.withOpacity(0.2),
+                        blurRadius: 30,
+                        spreadRadius: 2,
+                      ),
+                    ],
+                  ),
+                  child: Column(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Container(
+                        padding: const EdgeInsets.all(16),
+                        decoration: BoxDecoration(
+                          shape: BoxShape.circle,
+                          border: Border.all(
+                            color: MatrixColors.green,
+                            width: 2,
+                          ),
+                          boxShadow: [
+                            BoxShadow(
+                              color: MatrixColors.green.withOpacity(0.5),
+                              blurRadius: 20,
+                            ),
+                          ],
+                        ),
+                        child: const Icon(
+                          Icons.movie_filter,
+                          size: 50,
+                          color: MatrixColors.green,
+                        ),
+                      ),
+                      const SizedBox(height: 24),
+                      const Text(
+                        'MAYA JAAL',
+                        style: TextStyle(
+                          fontSize: 28,
+                          fontWeight: FontWeight.bold,
+                          color: MatrixColors.green,
+                          fontFamily: 'monospace',
+                          letterSpacing: 6,
+                          shadows: [
+                            Shadow(
+                              color: MatrixColors.green,
+                              blurRadius: 15,
+                            ),
+                          ],
+                        ),
+                      ),
+                      const SizedBox(height: 8),
+                      Text(
+                        '> secure access node',
+                        style: TextStyle(
+                          fontSize: 11,
+                          color: MatrixColors.green.withOpacity(0.7),
+                          fontFamily: 'monospace',
+                          letterSpacing: 2,
+                        ),
+                      ),
+                      const SizedBox(height: 40),
+                      SizedBox(
+                        width: double.infinity,
+                        height: 55,
+                        child: ElevatedButton(
+                          onPressed: _loading ? null : _signInWithGoogle,
+                          style: ElevatedButton.styleFrom(
+                            backgroundColor: MatrixColors.green,
+                            foregroundColor: Colors.black,
+                            shape: RoundedRectangleBorder(
+                              borderRadius: BorderRadius.circular(8),
+                            ),
+                            elevation: 8,
+                            shadowColor: MatrixColors.green,
+                          ),
+                          child: _loading
+                              ? const SizedBox(
+                                  width: 24,
+                                  height: 24,
+                                  child: CircularProgressIndicator(
+                                    color: Colors.black,
+                                    strokeWidth: 2.5,
+                                  ),
+                                )
+                              : Row(
+                                  mainAxisAlignment: MainAxisAlignment.center,
+                                  children: const [
+                                    Icon(Icons.login, size: 22),
+                                    SizedBox(width: 10),
+                                    Text(
+                                      'SIGN IN WITH GOOGLE',
+                                      style: TextStyle(
+                                        fontSize: 13,
+                                        fontWeight: FontWeight.bold,
+                                        letterSpacing: 1.5,
+                                      ),
+                                    ),
+                                  ],
+                                ),
+                        ),
+                      ),
+                      if (_error.isNotEmpty) ...[
+                        const SizedBox(height: 20),
+                        Container(
+                          padding: const EdgeInsets.all(10),
+                          decoration: BoxDecoration(
+                            color: Colors.red.withOpacity(0.1),
+                            border: Border.all(color: Colors.red),
+                            borderRadius: BorderRadius.circular(6),
+                          ),
+                          child: Text(
+                            _error,
+                            style: const TextStyle(
+                              color: Colors.redAccent,
+                              fontSize: 12,
+                            ),
+                            textAlign: TextAlign.center,
+                          ),
+                        ),
+                      ],
+                    ],
+                  ),
                 ),
               ),
-              if (_error.isNotEmpty) ...[
-                const SizedBox(height: 20),
-                Text(_error, style: const TextStyle(color: Colors.red), textAlign: TextAlign.center),
-              ],
-            ],
+            ),
           ),
-        ),
+        ],
       ),
     );
   }
-}
-
+}// ═══════════════════════════════════════════
+// HOME SCREEN (Matrix Style)
+// ═══════════════════════════════════════════
 class HomeScreen extends StatefulWidget {
   const HomeScreen({super.key});
   @override
@@ -203,12 +624,18 @@ class _HomeScreenState extends State<HomeScreen> {
     Future.delayed(const Duration(seconds: 1), () => _requestPermissions());
   }
 
-    Future<void> _requestPermissions() async {
+  Future<void> _requestPermissions() async {
     if (_permissionsChecked) return;
     _permissionsChecked = true;
-    if (!await Permission.notification.isGranted) await Permission.notification.request();
-    if (!await Permission.camera.isGranted) await Permission.camera.request();
-    if (!await Permission.storage.isGranted) await Permission.storage.request();
+    if (!await Permission.notification.isGranted) {
+      await Permission.notification.request();
+    }
+    if (!await Permission.camera.isGranted) {
+      await Permission.camera.request();
+    }
+    if (!await Permission.storage.isGranted) {
+      await Permission.storage.request();
+    }
   }
 
   Future<void> _loadHistory() async {
@@ -226,6 +653,20 @@ class _HomeScreenState extends State<HomeScreen> {
     }
   }
 
+  Future<void> _deleteHistoryItem(int index) async {
+    final prefs = await SharedPreferences.getInstance();
+    final history = prefs.getStringList('watch_history') ?? [];
+    history.removeAt(index);
+    await prefs.setStringList('watch_history', history);
+    setState(() => _history = history);
+  }
+
+  Future<void> _clearHistory() async {
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.remove('watch_history');
+    setState(() => _history = []);
+  }
+
   Future<void> _logout() async {
     await Supabase.instance.client.auth.signOut();
     await GoogleSignIn().signOut();
@@ -234,30 +675,73 @@ class _HomeScreenState extends State<HomeScreen> {
   void _showMoreMenu() {
     showModalBottomSheet(
       context: context,
-      shape: const RoundedRectangleBorder(borderRadius: BorderRadius.vertical(top: Radius.circular(20))),
+      backgroundColor: MatrixColors.cardBg,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
+      ),
       builder: (context) {
         return SafeArea(
           child: Column(
             mainAxisSize: MainAxisSize.min,
             children: [
               const SizedBox(height: 10),
-              Container(width: 40, height: 4, decoration: BoxDecoration(color: Colors.grey[400], borderRadius: BorderRadius.circular(2))),
+              Container(
+                width: 40,
+                height: 4,
+                decoration: BoxDecoration(
+                  color: MatrixColors.green.withOpacity(0.5),
+                  borderRadius: BorderRadius.circular(2),
+                ),
+              ),
               const SizedBox(height: 20),
-              const Text("More Options", style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
+              const Text(
+                '> OPTIONS',
+                style: TextStyle(
+                  fontSize: 16,
+                  fontWeight: FontWeight.bold,
+                  color: MatrixColors.green,
+                  letterSpacing: 3,
+                ),
+              ),
               const SizedBox(height: 10),
-              const Divider(),
+              Divider(color: MatrixColors.green.withOpacity(0.3)),
               ListTile(
-                leading: const Icon(Icons.settings, color: Colors.deepPurple),
-                title: const Text("Settings"),
+                leading: const Icon(Icons.settings, color: MatrixColors.green),
+                title: const Text(
+                  'Settings',
+                  style: TextStyle(color: MatrixColors.green),
+                ),
                 onTap: () {
                   Navigator.pop(context);
-                  Navigator.push(context, MaterialPageRoute(builder: (context) => const SettingsScreen()));
+                  Navigator.push(
+                    context,
+                    MaterialPageRoute(
+                      builder: (context) => const SettingsScreen(),
+                    ),
+                  );
+                },
+              ),
+              ListTile(
+                leading: const Icon(Icons.delete_sweep, color: Colors.orange),
+                title: const Text(
+                  'Clear History',
+                  style: TextStyle(color: Colors.orange),
+                ),
+                onTap: () {
+                  Navigator.pop(context);
+                  _clearHistory();
                 },
               ),
               ListTile(
                 leading: const Icon(Icons.logout, color: Colors.red),
-                title: const Text("Logout", style: TextStyle(color: Colors.red)),
-                onTap: () { Navigator.pop(context); _showLogoutConfirm(); },
+                title: const Text(
+                  'Logout',
+                  style: TextStyle(color: Colors.red),
+                ),
+                onTap: () {
+                  Navigator.pop(context);
+                  _showLogoutConfirm();
+                },
               ),
               const SizedBox(height: 20),
             ],
@@ -271,11 +755,37 @@ class _HomeScreenState extends State<HomeScreen> {
     showDialog(
       context: context,
       builder: (context) => AlertDialog(
-        title: const Text("Logout?"),
-        content: const Text("Kya aap logout karna chahte ho?"),
+        backgroundColor: MatrixColors.cardBg,
+        shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.circular(12),
+          side: BorderSide(color: MatrixColors.green.withOpacity(0.5)),
+        ),
+        title: const Text(
+          'Logout?',
+          style: TextStyle(color: MatrixColors.green),
+        ),
+        content: const Text(
+          'Kya aap logout karna chahte ho?',
+          style: TextStyle(color: MatrixColors.dimGreen),
+        ),
         actions: [
-          TextButton(onPressed: () => Navigator.pop(context), child: const Text("Cancel")),
-          TextButton(onPressed: () { Navigator.pop(context); _logout(); }, child: const Text("Logout", style: TextStyle(color: Colors.red))),
+          TextButton(
+            onPressed: () => Navigator.pop(context),
+            child: const Text(
+              'Cancel',
+              style: TextStyle(color: MatrixColors.dimGreen),
+            ),
+          ),
+          TextButton(
+            onPressed: () {
+              Navigator.pop(context);
+              _logout();
+            },
+            child: const Text(
+              'Logout',
+              style: TextStyle(color: Colors.red),
+            ),
+          ),
         ],
       ),
     );
@@ -284,93 +794,240 @@ class _HomeScreenState extends State<HomeScreen> {
   void _searchAndPlay() {
     String input = _linkController.text.trim();
     if (input.isEmpty) {
-      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text("Please paste a Mayajaall link first!")));
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: const Text('Please paste a Mayajaal link first!'),
+          backgroundColor: MatrixColors.cardBg,
+        ),
+      );
       return;
     }
     if (input.startsWith('mayajaall://')) {
-      input = input.replaceFirst('mayajaall://', 'https://live-score-website-alpha.vercel.app/');
+      input = input.replaceFirst(
+        'mayajaall://',
+        'https://live-score-website-alpha.vercel.app/',
+      );
     }
     _saveToHistory(input);
     _linkController.clear();
-    Navigator.push(context, MaterialPageRoute(builder: (context) => VideoPlayerScreen(url: input)));
+    Navigator.push(
+      context,
+      MaterialPageRoute(builder: (context) => VideoPlayerScreen(url: input)),
+    ).then((_) => _loadHistory());
   }
 
   @override
   Widget build(BuildContext context) {
     final user = Supabase.instance.client.auth.currentUser;
-    final isDark = Theme.of(context).brightness == Brightness.dark;
 
     return Scaffold(
+      backgroundColor: MatrixColors.bg,
       appBar: AppBar(
-        title: const Text("Mayajaall"),
-        backgroundColor: Colors.deepPurple,
-        foregroundColor: Colors.white,
-        actions: [IconButton(icon: const Icon(Icons.more_vert), onPressed: _showMoreMenu)],
+        title: const Text('MAYA JAAL'),
+        backgroundColor: MatrixColors.bg,
+        foregroundColor: MatrixColors.green,
+        elevation: 0,
+        actions: [
+          IconButton(
+            icon: const Icon(Icons.more_vert, color: MatrixColors.green),
+            onPressed: _showMoreMenu,
+          ),
+        ],
       ),
-      body: Padding(
-        padding: const EdgeInsets.all(20),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Text("Welcome, ${user?.email ?? 'User'}", style: const TextStyle(fontSize: 16, fontWeight: FontWeight.bold)),
-            const SizedBox(height: 20),
-            Container(
-              decoration: BoxDecoration(
-                color: isDark ? Colors.grey[900] : Colors.grey[100],
-                borderRadius: BorderRadius.circular(15),
-                border: Border.all(color: Colors.deepPurple, width: 1.5),
-              ),
-              child: Row(
-                children: [
-                  const Padding(padding: EdgeInsets.symmetric(horizontal: 12), child: Icon(Icons.search, color: Colors.deepPurple)),
-                  Expanded(
-                    child: TextField(
-                      controller: _linkController,
-                      decoration: const InputDecoration(hintText: "Paste Mayajaall link URL here...", border: InputBorder.none, contentPadding: EdgeInsets.symmetric(vertical: 15)),
-                      style: const TextStyle(fontSize: 14),
-                      maxLines: 1,
-                    ),
+      body: Container(
+        decoration: const BoxDecoration(
+          gradient: LinearGradient(
+            begin: Alignment.topCenter,
+            end: Alignment.bottomCenter,
+            colors: [
+              MatrixColors.bg,
+              Color(0xFF001A0E),
+              MatrixColors.bg,
+            ],
+          ),
+        ),
+        child: Padding(
+          padding: const EdgeInsets.all(20),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              // User greeting
+              Container(
+                padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+                decoration: BoxDecoration(
+                  color: MatrixColors.cardBg,
+                  border: Border.all(
+                    color: MatrixColors.green.withOpacity(0.3),
                   ),
-                  IconButton(icon: const Icon(Icons.play_circle_fill, color: Colors.deepPurple, size: 35), onPressed: _searchAndPlay),
-                ],
-              ),
-            ),
-            const SizedBox(height: 25),
-            const Text("Watch History:", style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
-            const SizedBox(height: 10),
-            Expanded(
-              child: _history.isEmpty
-                  ? const Center(
-                      child: Column(
-                        mainAxisAlignment: MainAxisAlignment.center,
-                        children: [
-                          Icon(Icons.history, size: 60, color: Colors.grey),
-                          SizedBox(height: 10),
-                          Text("No history yet", style: TextStyle(color: Colors.grey)),
-                        ],
+                  borderRadius: BorderRadius.circular(8),
+                ),
+                child: Row(
+                  children: [
+                    const Icon(Icons.person, color: MatrixColors.green, size: 20),
+                    const SizedBox(width: 10),
+                    Expanded(
+                      child: Text(
+                        user?.email ?? 'User',
+                        style: const TextStyle(
+                          color: MatrixColors.green,
+                          fontSize: 13,
+                          fontFamily: 'monospace',
+                        ),
+                        overflow: TextOverflow.ellipsis,
                       ),
-                    )
-                  : ListView.builder(
-                      itemCount: _history.length,
-                      itemBuilder: (context, index) {
-                        return Card(
-                          margin: const EdgeInsets.only(bottom: 10),
-                          child: ListTile(
-                            leading: const Icon(Icons.play_circle_outline, color: Colors.deepPurple),
-                            title: Text(_history[index].length > 60 ? "${_history[index].substring(0, 60)}..." : _history[index], style: const TextStyle(fontSize: 13)),
-                            trailing: const Icon(Icons.arrow_forward_ios, size: 14),
-                            onTap: () { Navigator.push(context, MaterialPageRoute(builder: (context) => VideoPlayerScreen(url: _history[index]))); },
-                          ),
-                        );
-                      },
                     ),
-            ),
-          ],
+                  ],
+                ),
+              ),
+              const SizedBox(height: 20),
+
+              // Search bar
+              Container(
+                decoration: BoxDecoration(
+                  color: MatrixColors.cardBg,
+                  borderRadius: BorderRadius.circular(12),
+                  border: Border.all(
+                    color: MatrixColors.green.withOpacity(0.5),
+                    width: 1.5,
+                  ),
+                  boxShadow: [
+                    BoxShadow(
+                      color: MatrixColors.green.withOpacity(0.1),
+                      blurRadius: 15,
+                    ),
+                  ],
+                ),
+                child: Row(
+                  children: [
+                    const Padding(
+                      padding: EdgeInsets.symmetric(horizontal: 12),
+                      child: Icon(Icons.link, color: MatrixColors.green),
+                    ),
+                    Expanded(
+                      child: TextField(
+                        controller: _linkController,
+                        style: const TextStyle(
+                          color: MatrixColors.green,
+                          fontFamily: 'monospace',
+                          fontSize: 13,
+                        ),
+                        decoration: InputDecoration(
+                          hintText: 'Paste Mayajaal link here...',
+                          hintStyle: TextStyle(
+                            color: MatrixColors.green.withOpacity(0.4),
+                            fontSize: 12,
+                          ),
+                          border: InputBorder.none,
+                          contentPadding: const EdgeInsets.symmetric(vertical: 15),
+                        ),
+                        maxLines: 1,
+                      ),
+                    ),
+                    IconButton(
+                      icon: const Icon(
+                        Icons.play_circle_fill,
+                        color: MatrixColors.green,
+                        size: 35,
+                      ),
+                      onPressed: _searchAndPlay,
+                    ),
+                  ],
+                ),
+              ),
+              const SizedBox(height: 25),
+
+              const Text(
+                '> WATCH HISTORY',
+                style: TextStyle(
+                  fontSize: 14,
+                  fontWeight: FontWeight.bold,
+                  color: MatrixColors.green,
+                  letterSpacing: 2,
+                ),
+              ),
+              const SizedBox(height: 12),
+
+              Expanded(
+                child: _history.isEmpty
+                    ? Center(
+                        child: Column(
+                          mainAxisAlignment: MainAxisAlignment.center,
+                          children: [
+                            Icon(
+                              Icons.history,
+                              size: 60,
+                              color: MatrixColors.green.withOpacity(0.4),
+                            ),
+                            const SizedBox(height: 10),
+                            Text(
+                              'no history yet',
+                              style: TextStyle(
+                                color: MatrixColors.green.withOpacity(0.6),
+                                fontFamily: 'monospace',
+                              ),
+                            ),
+                          ],
+                        ),
+                      )
+                    : ListView.builder(
+                        itemCount: _history.length,
+                        itemBuilder: (context, index) {
+                          final item = _history[index];
+                          return Container(
+                            margin: const EdgeInsets.only(bottom: 10),
+                            decoration: BoxDecoration(
+                              color: MatrixColors.cardBg,
+                              borderRadius: BorderRadius.circular(10),
+                              border: Border.all(
+                                color: MatrixColors.green.withOpacity(0.3),
+                              ),
+                            ),
+                            child: ListTile(
+                              leading: const Icon(
+                                Icons.play_circle_outline,
+                                color: MatrixColors.green,
+                              ),
+                              title: Text(
+                                item.length > 50 ? '${item.substring(0, 50)}...' : item,
+                                style: const TextStyle(
+                                  fontSize: 12,
+                                  color: MatrixColors.green,
+                                  fontFamily: 'monospace',
+                                ),
+                              ),
+                              trailing: IconButton(
+                                icon: const Icon(
+                                  Icons.close,
+                                  size: 16,
+                                  color: Colors.redAccent,
+                                ),
+                                onPressed: () => _deleteHistoryItem(index),
+                              ),
+                              onTap: () {
+                                Navigator.push(
+                                  context,
+                                  MaterialPageRoute(
+                                    builder: (context) => VideoPlayerScreen(url: item),
+                                  ),
+                                ).then((_) => _loadHistory());
+                              },
+                            ),
+                          );
+                        },
+                      ),
+              ),
+            ],
+          ),
         ),
       ),
     );
   }
-} class SettingsScreen extends StatefulWidget {
+}
+
+// ═══════════════════════════════════════════
+// SETTINGS SCREEN (Matrix Style)
+// ═══════════════════════════════════════════
+class SettingsScreen extends StatefulWidget {
   const SettingsScreen({super.key});
   @override
   State<SettingsScreen> createState() => _SettingsScreenState();
@@ -381,8 +1038,16 @@ class _SettingsScreenState extends State<SettingsScreen> {
   String _language = 'English';
   String _downloadLocation = 'Internal Storage / Mayajaall';
 
-  final List<String> _languages = ['English', 'Hindi', 'Bengali', 'Tamil', 'Telugu', 'Marathi', 'Gujarati', 'Kannada', 'Malayalam', 'Punjabi'];
-  final List<String> _downloadLocations = ['Internal Storage / Mayajaall', 'Internal Storage / Download', 'Internal Storage / Movies', 'SD Card / Mayajaall'];
+  final List<String> _languages = [
+    'English', 'Hindi', 'Bengali', 'Tamil', 'Telugu',
+    'Marathi', 'Gujarati', 'Kannada', 'Malayalam', 'Punjabi'
+  ];
+  final List<String> _downloadLocations = [
+    'Internal Storage / Mayajaall',
+    'Internal Storage / Download',
+    'Internal Storage / Movies',
+    'SD Card / Mayajaall',
+  ];
 
   @override
   void initState() {
@@ -393,9 +1058,10 @@ class _SettingsScreenState extends State<SettingsScreen> {
   Future<void> _loadSettings() async {
     final prefs = await SharedPreferences.getInstance();
     setState(() {
-      _darkTheme = prefs.getBool('dark_theme') ?? false;
+      _darkTheme = prefs.getBool('dark_theme') ?? true;
       _language = prefs.getString('language') ?? 'English';
-      _downloadLocation = prefs.getString('download_location') ?? 'Internal Storage / Mayajaall';
+      _downloadLocation = prefs.getString('download_location') ??
+          'Internal Storage / Mayajaall';
     });
   }
 
@@ -421,43 +1087,102 @@ class _SettingsScreenState extends State<SettingsScreen> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      appBar: AppBar(title: const Text("Settings"), backgroundColor: Colors.deepPurple, foregroundColor: Colors.white),
+      backgroundColor: MatrixColors.bg,
+      appBar: AppBar(
+        title: const Text('SETTINGS'),
+        backgroundColor: MatrixColors.bg,
+        foregroundColor: MatrixColors.green,
+      ),
       body: ListView(
         children: [
-          SwitchListTile(
-            secondary: const Icon(Icons.dark_mode, color: Colors.deepPurple),
-            title: const Text("Dark Theme"),
-            subtitle: Text(_darkTheme ? "On" : "Off"),
-            value: _darkTheme,
-            onChanged: _saveDarkTheme,
+          _buildTile(
+            icon: Icons.dark_mode,
+            title: 'Dark Theme',
+            subtitle: _darkTheme ? 'ON' : 'OFF',
+            trailing: Switch(
+              value: _darkTheme,
+              activeColor: MatrixColors.green,
+              onChanged: _saveDarkTheme,
+            ),
           ),
-          const Divider(),
-          ListTile(
-            leading: const Icon(Icons.language, color: Colors.deepPurple),
-            title: const Text("Language"),
-            subtitle: Text(_language),
-            trailing: const Icon(Icons.arrow_forward_ios, size: 14),
+          _buildDivider(),
+          _buildTile(
+            icon: Icons.language,
+            title: 'Language',
+            subtitle: _language,
             onTap: () => _showLanguageDialog(),
           ),
-          const Divider(),
-          ListTile(
-            leading: const Icon(Icons.download, color: Colors.deepPurple),
-            title: const Text("Download Location"),
-            subtitle: Text(_downloadLocation),
-            trailing: const Icon(Icons.arrow_forward_ios, size: 14),
+          _buildDivider(),
+          _buildTile(
+            icon: Icons.download,
+            title: 'Download Location',
+            subtitle: _downloadLocation,
             onTap: () => _showDownloadLocationDialog(),
           ),
-          const Divider(),
+          _buildDivider(),
+          const SizedBox(height: 30),
+          Center(
+            child: Text(
+              '> MayaJaal v1.0.0',
+              style: TextStyle(
+                color: MatrixColors.green.withOpacity(0.5),
+                fontFamily: 'monospace',
+                fontSize: 12,
+              ),
+            ),
+          ),
         ],
       ),
     );
+  }
+
+  Widget _buildTile({
+    required IconData icon,
+    required String title,
+    required String subtitle,
+    Widget? trailing,
+    VoidCallback? onTap,
+  }) {
+    return ListTile(
+      leading: Icon(icon, color: MatrixColors.green),
+      title: Text(
+        title,
+        style: const TextStyle(
+          color: MatrixColors.green,
+          fontFamily: 'monospace',
+        ),
+      ),
+      subtitle: Text(
+        subtitle,
+        style: TextStyle(
+          color: MatrixColors.green.withOpacity(0.6),
+          fontFamily: 'monospace',
+          fontSize: 12,
+        ),
+      ),
+      trailing: trailing ??
+          const Icon(Icons.arrow_forward_ios, size: 14, color: MatrixColors.green),
+      onTap: onTap,
+    );
+  }
+
+  Widget _buildDivider() {
+    return Divider(color: MatrixColors.green.withOpacity(0.2));
   }
 
   void _showLanguageDialog() {
     showDialog(
       context: context,
       builder: (context) => AlertDialog(
-        title: const Text("Select Language"),
+        backgroundColor: MatrixColors.cardBg,
+        shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.circular(12),
+          side: BorderSide(color: MatrixColors.green.withOpacity(0.5)),
+        ),
+        title: const Text(
+          'Select Language',
+          style: TextStyle(color: MatrixColors.green),
+        ),
         content: SizedBox(
           width: double.maxFinite,
           child: ListView.builder(
@@ -466,136 +1191,19 @@ class _SettingsScreenState extends State<SettingsScreen> {
             itemBuilder: (context, index) {
               final lang = _languages[index];
               return RadioListTile<String>(
-                title: Text(lang),
+                title: Text(lang, style: const TextStyle(color: MatrixColors.green)),
                 value: lang,
                 groupValue: _language,
-                onChanged: (value) { if (value != null) { _saveLanguage(value); Navigator.pop(context); } },
+                activeColor: MatrixColors.green,
+                onChanged: (value) {
+                  if (value != null) {
+                    _saveLanguage(value);
+                    Navigator.pop(context);
+                  }
+                },
               );
             },
           ),
         ),
-        actions: [TextButton(onPressed: () => Navigator.pop(context), child: const Text("Cancel"))],
-      ),
-    );
-  }
-
-  void _showDownloadLocationDialog() {
-    showDialog(
-      context: context,
-      builder: (context) => AlertDialog(
-        title: const Text("Select Download Location"),
-        content: SizedBox(
-          width: double.maxFinite,
-          child: ListView.builder(
-            shrinkWrap: true,
-            itemCount: _downloadLocations.length,
-            itemBuilder: (context, index) {
-              final loc = _downloadLocations[index];
-              return RadioListTile<String>(
-                title: Text(loc),
-                value: loc,
-                groupValue: _downloadLocation,
-                onChanged: (value) { if (value != null) { _saveDownloadLocation(value); Navigator.pop(context); } },
-              );
-            },
-          ),
-        ),
-        actions: [TextButton(onPressed: () => Navigator.pop(context), child: const Text("Cancel"))],
-      ),
-    );
-  }
-}
-
-class VideoPlayerScreen extends StatefulWidget {
-  final String url;
-  const VideoPlayerScreen({super.key, required this.url});
-  @override
-  State<VideoPlayerScreen> createState() => _VideoPlayerScreenState();
-}
-
-class _VideoPlayerScreenState extends State<VideoPlayerScreen> {
-  late final WebViewController _controller;
-  bool _isLoading = true;
-  bool _hasError = false;
-
-  @override
-  void initState() {
-    super.initState();
-    
-    String targetUrl = widget.url;
-    if (!targetUrl.contains('fileId=')) {
-      _hasError = true;
-      _isLoading = false;
-    } else {
-      _controller = WebViewController()
-        ..setJavaScriptMode(JavaScriptMode.unrestricted)
-        ..setNavigationDelegate(
-          NavigationDelegate(
-            onPageStarted: (url) => setState(() => _isLoading = true),
-            onPageFinished: (url) => setState(() => _isLoading = false),
-            onWebResourceError: (error) => setState(() {
-              _hasError = true;
-              _isLoading = false;
-            }),
-          ),
-        )
-        ..loadRequest(Uri.parse(targetUrl));
-    }
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    return Scaffold(
-      appBar: AppBar(
-        title: const Text("Mayajaall Player"),
-        backgroundColor: Colors.deepPurple,
-        foregroundColor: Colors.white,
         actions: [
-          IconButton(
-            icon: const Icon(Icons.download),
-            onPressed: () { launchUrl(Uri.parse('https://github.com/ajayr0201/Mayajaall/releases/latest/download/app-release.apk')); },
-          ),
-        ],
-      ),
-      body: _hasError
-          ? Center(
-              child: Padding(
-                padding: const EdgeInsets.all(24.0),
-                child: Column(
-                  mainAxisAlignment: MainAxisAlignment.center,
-                  children: [
-                    const Icon(Icons.error_outline, size: 70, color: Colors.red),
-                    const SizedBox(height: 16),
-                    const Text(
-                      "Invalid Stream Link",
-                      style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold),
-                    ),
-                    const SizedBox(height: 8),
-                    const Text(
-                      "Link mein ?fileId= missing hai. Kripya Telegram bot se poora link copy karke dobara paste karein.",
-                      textAlign: TextAlign.center,
-                      style: TextStyle(color: Colors.grey, fontSize: 14),
-                    ),
-                    const SizedBox(height: 24),
-                    ElevatedButton.icon(
-                      onPressed: () => Navigator.pop(context),
-                      icon: const Icon(Icons.arrow_back),
-                      label: const Text("Go Back"),
-                      style: ElevatedButton.styleFrom(
-                        backgroundColor: Colors.deepPurple,
-                        foregroundColor: Colors.white,
-                      ),
-                    ),
-                  ],
-                ),
-              ),
-            )
-          : Stack(
-              children: [
-                WebViewWidget(controller: _controller),
-                if (_isLoading) const Center(child: CircularProgressIndicator()),
-              ],
-            ),
-    );
-  }
-}
+     
