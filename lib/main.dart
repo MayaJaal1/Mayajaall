@@ -143,7 +143,7 @@ class _MyAppState extends State<MyApp> {
 }
 
 // ═══════════════════════════════════════════
-// SPLASH SCREEN (Matrix Style)
+// SPLASH SCREEN
 // ═══════════════════════════════════════════
 class SplashScreen extends StatefulWidget {
   const SplashScreen({super.key});
@@ -257,7 +257,7 @@ class _SplashScreenState extends State<SplashScreen>
 }
 
 // ═══════════════════════════════════════════
-// MATRIX RAIN ANIMATION
+// MATRIX RAIN
 // ═══════════════════════════════════════════
 class MatrixRain extends StatefulWidget {
   const MatrixRain({super.key});
@@ -307,7 +307,7 @@ class _MatrixRainState extends State<MatrixRain> {
     return LayoutBuilder(
       builder: (context, constraints) {
         if (_columns.isEmpty) {
-          final colWidth = 14.0;
+          const colWidth = 14.0;
           final count = (constraints.maxWidth / colWidth).floor();
           for (int i = 0; i < count; i++) {
             _columns.add(MatrixColumn(
@@ -416,7 +416,7 @@ class AuthGate extends StatelessWidget {
 }
 
 // ═══════════════════════════════════════════
-// LOGIN SCREEN (Matrix Style)
+// LOGIN SCREEN
 // ═══════════════════════════════════════════
 class LoginScreen extends StatefulWidget {
   const LoginScreen({super.key});
@@ -557,9 +557,9 @@ class _LoginScreenState extends State<LoginScreen> {
                                     strokeWidth: 2.5,
                                   ),
                                 )
-                              : Row(
+                              : const Row(
                                   mainAxisAlignment: MainAxisAlignment.center,
-                                  children: const [
+                                  children: [
                                     Icon(Icons.login, size: 22),
                                     SizedBox(width: 10),
                                     Text(
@@ -604,7 +604,7 @@ class _LoginScreenState extends State<LoginScreen> {
     );
   }
 }// ═══════════════════════════════════════════
-// HOME SCREEN (Matrix Style)
+// HOME SCREEN
 // ═══════════════════════════════════════════
 class HomeScreen extends StatefulWidget {
   const HomeScreen({super.key});
@@ -795,8 +795,8 @@ class _HomeScreenState extends State<HomeScreen> {
     String input = _linkController.text.trim();
     if (input.isEmpty) {
       ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: const Text('Please paste a Mayajaal link first!'),
+        const SnackBar(
+          content: Text('Please paste a Mayajaal link first!'),
           backgroundColor: MatrixColors.cardBg,
         ),
       );
@@ -851,7 +851,6 @@ class _HomeScreenState extends State<HomeScreen> {
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              // User greeting
               Container(
                 padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
                 decoration: BoxDecoration(
@@ -880,8 +879,6 @@ class _HomeScreenState extends State<HomeScreen> {
                 ),
               ),
               const SizedBox(height: 20),
-
-              // Search bar
               Container(
                 decoration: BoxDecoration(
                   color: MatrixColors.cardBg,
@@ -935,7 +932,6 @@ class _HomeScreenState extends State<HomeScreen> {
                 ),
               ),
               const SizedBox(height: 25),
-
               const Text(
                 '> WATCH HISTORY',
                 style: TextStyle(
@@ -946,7 +942,6 @@ class _HomeScreenState extends State<HomeScreen> {
                 ),
               ),
               const SizedBox(height: 12),
-
               Expanded(
                 child: _history.isEmpty
                     ? Center(
@@ -1025,7 +1020,7 @@ class _HomeScreenState extends State<HomeScreen> {
 }
 
 // ═══════════════════════════════════════════
-// SETTINGS SCREEN (Matrix Style)
+// SETTINGS SCREEN
 // ═══════════════════════════════════════════
 class SettingsScreen extends StatefulWidget {
   const SettingsScreen({super.key});
@@ -1206,4 +1201,118 @@ class _SettingsScreenState extends State<SettingsScreen> {
           ),
         ),
         actions: [
-     
+          TextButton(
+            onPressed: () => Navigator.pop(context),
+            child: con// ═══════════════════════════════════════════
+// VIDEO PLAYER SCREEN (Ye class pehle missing thi!)
+// ═══════════════════════════════════════════
+class VideoPlayerScreen extends StatefulWidget {
+  final String url;
+  const VideoPlayerScreen({super.key, required this.url});
+  @override
+  State<VideoPlayerScreen> createState() => _VideoPlayerScreenState();
+}
+
+class _VideoPlayerScreenState extends State<VideoPlayerScreen> {
+  late final WebViewController _controller;
+  bool _isLoading = true;
+  bool _hasError = false;
+
+  @override
+  void initState() {
+    super.initState();
+
+    String targetUrl = widget.url;
+
+    _controller = WebViewController()
+      ..setJavaScriptMode(JavaScriptMode.unrestricted)
+      ..setBackgroundColor(Colors.black)
+      ..setNavigationDelegate(
+        NavigationDelegate(
+          onPageStarted: (url) => setState(() => _isLoading = true),
+          onPageFinished: (url) => setState(() => _isLoading = false),
+          onWebResourceError: (error) => setState(() {
+            _hasError = true;
+            _isLoading = false;
+          }),
+        ),
+      )
+      ..loadRequest(Uri.parse(targetUrl));
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Scaffold(
+      backgroundColor: Colors.black,
+      appBar: AppBar(
+        title: const Text('MAYA JAAL PLAYER'),
+        backgroundColor: Colors.black,
+        foregroundColor: MatrixColors.green,
+        actions: [
+          IconButton(
+            icon: const Icon(Icons.refresh, color: MatrixColors.green),
+            onPressed: () => _controller.reload(),
+          ),
+          IconButton(
+            icon: const Icon(Icons.open_in_browser, color: MatrixColors.green),
+            onPressed: () async {
+              final uri = Uri.parse(widget.url);
+              if (await canLaunchUrl(uri)) {
+                await launchUrl(uri, mode: LaunchMode.externalApplication);
+              }
+            },
+          ),
+        ],
+      ),
+      body: Stack(
+        children: [
+          if (_hasError)
+            Center(
+              child: Column(
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: [
+                  const Icon(Icons.error_outline, color: Colors.red, size: 60),
+                  const SizedBox(height: 15),
+                  const Text(
+                    'Video load nahi ho paya',
+                    style: TextStyle(color: MatrixColors.green, fontSize: 16),
+                  ),
+                  const SizedBox(height: 10),
+                  TextButton(
+                    onPressed: () => _controller.reload(),
+                    child: const Text(
+                      'Retry',
+                      style: TextStyle(color: MatrixColors.green),
+                    ),
+                  ),
+                ],
+              ),
+            )
+          else
+            WebViewWidget(controller: _controller),
+          if (_isLoading && !_hasError)
+            Container(
+              color: Colors.black.withOpacity(0.7),
+              child: const Center(
+                child: Column(
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  children: [
+                    CircularProgressIndicator(color: MatrixColors.green),
+                    SizedBox(height: 15),
+                    Text(
+                      '> loading stream...',
+                      style: TextStyle(
+                        color: MatrixColors.green,
+                        fontFamily: 'monospace',
+                        letterSpacing: 2,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ),
+        ],
+      ),
+    );
+  }
+}
