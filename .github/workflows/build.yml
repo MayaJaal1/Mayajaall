@@ -25,9 +25,10 @@ jobs:
           flutter-version: '3.19.6'
           channel: 'stable'
 
-      - name: Setup Keystore
+      - name: Copy Keystore
         run: |
-          echo "${{ secrets.KEYSTORE_BASE64 }}" | base64 -d > android/app/mayajaal-release.jks
+          mkdir -p android/app
+          cp mayajaal-release.jks android/app/mayajaal-release.jks
 
       - name: Create Android Folder Structure
         run: |
@@ -168,9 +169,9 @@ jobs:
               signingConfigs {
                   release {
                       storeFile file('mayajaal-release.jks')
-                      storePassword '${{ secrets.KEYSTORE_PASSWORD }}'
-                      keyAlias '${{ secrets.KEY_ALIAS }}'
-                      keyPassword '${{ secrets.KEY_PASSWORD }}'
+                      storePassword 'MayajaalRelease2024'
+                      keyAlias 'mayajaal'
+                      keyPassword 'MayajaalRelease2024'
                   }
               }
               buildTypes {
@@ -232,15 +233,15 @@ jobs:
       - name: Build Release APK
         run: flutter build apk --release
 
-      - name: Print SHA256 of Release Keystore
+      - name: Print SHA256
         run: |
           echo "=========================================="
-          echo "YOUR RELEASE SHA256 (Copy this):"
+          echo "SHA256 FINGERPRINT:"
           echo "=========================================="
           keytool -list -v -keystore android/app/mayajaal-release.jks \
-            -alias "${{ secrets.KEY_ALIAS }}" \
-            -storepass "${{ secrets.KEYSTORE_PASSWORD }}" \
-            -keypass "${{ secrets.KEY_PASSWORD }}" | grep "SHA256:"
+            -alias mayajaal \
+            -storepass MayajaalRelease2024 \
+            -keypass MayajaalRelease2024 | grep "SHA256:"
           echo "=========================================="
 
       - name: Upload APK Artifact
