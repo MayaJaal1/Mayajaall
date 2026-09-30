@@ -1,6 +1,7 @@
 import 'dart:async';
 import 'dart:math' as math;
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:app_links/app_links.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:google_sign_in/google_sign_in.dart';
@@ -75,7 +76,6 @@ class _MyAppState extends State<MyApp> {
       _showSplash = false;
     });
 
-    // 🌟 Agar app pehle se open ho to direct player screen par redirect karein
     if (navigatorKey.currentState != null) {
       navigatorKey.currentState!.push(
         MaterialPageRoute(
@@ -133,7 +133,8 @@ class _MyAppState extends State<MyApp> {
   }
 }
 class MatrixRain extends StatefulWidget {
-  const MatrixRain({super.key});
+  final double opacity;
+  const MatrixRain({super.key, this.opacity = 0.7});
   @override
   State<MatrixRain> createState() => _MatrixRainState();
 }
@@ -144,22 +145,22 @@ class _MatrixRainState extends State<MatrixRain> {
   final List<double> _speeds = [];
   final List<String> _letters = [];
   final math.Random _r = math.Random();
-  static const _chars = 'アイウエオカキクケコサシスセソタチツテトナニヌネノ0123456789ABCDEFXYZ';
+  static const _chars = 'アイウエオカキクケコサシスセソタチツテトナニヌネノ0123456789ABCDEFXYZ@#%&*';
 
   @override
   void initState() {
     super.initState();
-    for (int i = 0; i < 30; i++) {
-      _yPositions.add(-_r.nextInt(500).toDouble());
-      _speeds.add(3 + _r.nextDouble() * 5);
+    for (int i = 0; i < 32; i++) {
+      _yPositions.add(-_r.nextInt(600).toDouble());
+      _speeds.add(4 + _r.nextDouble() * 6);
       _letters.add(_chars[_r.nextInt(_chars.length)]);
     }
-    _timer = Timer.periodic(const Duration(milliseconds: 80), (_) {
+    _timer = Timer.periodic(const Duration(milliseconds: 60), (_) {
       if (!mounted) return;
       setState(() {
         for (int i = 0; i < _yPositions.length; i++) {
           _yPositions[i] += _speeds[i];
-          if (_yPositions[i] > 900) {
+          if (_yPositions[i] > 950) {
             _yPositions[i] = -_r.nextInt(200).toDouble();
             _letters[i] = _chars[_r.nextInt(_chars.length)];
           }
@@ -187,10 +188,10 @@ class _MatrixRainState extends State<MatrixRain> {
               child: Text(
                 _letters[i],
                 style: TextStyle(
-                  color: kGreen.withOpacity(0.7),
-                  fontSize: 14,
+                  color: kGreen.withOpacity(widget.opacity),
+                  fontSize: 13,
                   fontFamily: 'monospace',
-                  shadows: const [Shadow(color: kGreen, blurRadius: 8)],
+                  shadows: const [Shadow(color: kGreen, blurRadius: 6)],
                 ),
               ),
             );
@@ -470,7 +471,6 @@ class _LoginScreenState extends State<LoginScreen> {
     );
   }
 }
-
 class HomeScreen extends StatefulWidget {
   const HomeScreen({super.key});
   @override
@@ -787,6 +787,7 @@ class _HomeScreenState extends State<HomeScreen> {
     );
   }
 }
+
 class SettingsScreen extends StatefulWidget {
   const SettingsScreen({super.key});
   @override
@@ -946,6 +947,17 @@ class _SettingsScreenState extends State<SettingsScreen> {
     );
   }
 }
+enum VideoAspectMode {
+  original('Original Fit', null),
+  fill('Fill Screen', BoxFit.cover),
+  widescreen('16:9 Cinema', 16 / 9),
+  standard('4:3 Retro', 4 / 3),
+  stretch('Stretch', BoxFit.fill);
+
+  final String title;
+  final dynamic value;
+  const VideoAspectMode(this.title, this.value);
+}
 
 class VideoPlayerScreen extends StatefulWidget {
   final String url;
@@ -956,8 +968,11 @@ class VideoPlayerScreen extends StatefulWidget {
 
 class _VideoPlayerScreenState extends State<VideoPlayerScreen> {
   late final WebViewController _controller;
-  bool _isLoading = true;
+  bool _isBuffering = true;
   bool _hasError = false;
+  VideoAspectMode _aspectMode = VideoAspectMode.original;
+  String _selectedQuality = 'Auto';
+  final List<String> _qualities = ['Auto', '1080p', '720p', '480p', '360p'];
 
   @override
   void initState() {
@@ -965,17 +980,166 @@ class _VideoPlayerScreenState extends State<VideoPlayerScreen> {
     _controller = WebViewController()
       ..setJavaScriptMode(JavaScriptMode.unrestricted)
       ..setBackgroundColor(Colors.black)
+      ..addJavaScriptChannel(
+        'MatrixStreamEvents',
+        onMessageReceived: (JavaScriptMessage msg) {
+          if (msg.message == 'buffering_start') {
+            if (mounted) setState(() => _isBuffering = true);
+          } else if (msg.message == 'buffering_end') {
+            if (mounted) setState(() => _isBuffering = false);
+          }
+        },
+      )
       ..setNavigationDelegate(
         NavigationDelegate(
-          onPageStarted: (url) => setState(() => _isLoading = true),
-          onPageFinished: (url) => setState(() => _isLoading = false),
+          onPageStarted: (url) {
+            if (mounted) setState(() => _isBuffering = true);
+          },
+          onPageFinished: (url) {
+            if (mounted) setState(() => _isBuffering = false);
+            _injectVideoHooks();
+          },
           onWebResourceError: (error) => setState(() {
             _hasError = true;
-            _isLoading = false;
+            _isBuffering = false;
           }),
         ),
-      )
-      ..loadRequest(Uri.parse(widget.url));
+      );
+
+    if (_controller.platform is AndroidWebViewController) {
+      AndroidWebViewController.enableDebugging(true);
+      (_controller.platform as AndroidWebViewController)
+          .setMediaPlaybackRequiresUserGesture(false);
+    }
+
+    _controller.loadRequest(Uri.parse(widget.url));
+  }
+
+  void _injectVideoHooks() {
+    const jsHook = '''
+      (function() {
+        function hookVideos() {
+          const v = document.querySelector('video');
+          if (v) {
+            v.setAttribute('playsinline', 'true');
+            v.setAttribute('webkit-playsinline', 'true');
+            v.addEventListener('waiting', () => MatrixStreamEvents.postMessage('buffering_start'));
+            v.addEventListener('playing', () => MatrixStreamEvents.postMessage('buffering_end'));
+            v.addEventListener('canplay', () => MatrixStreamEvents.postMessage('buffering_end'));
+          }
+        }
+        hookVideos();
+        setInterval(hookVideos, 1500);
+      })();
+    ''';
+    _controller.runJavaScript(jsHook);
+  }
+
+  void _applyQuality(String q) {
+    setState(() => _selectedQuality = q);
+    final script = '''
+      (function() {
+        const video = document.querySelector('video');
+        if (video) {
+          const curr = video.currentTime;
+          video.currentTime = curr;
+        }
+      })();
+    ''';
+    _controller.runJavaScript(script);
+  }
+
+  void _showAspectDialog() {
+    showDialog(
+      context: context,
+      builder: (c) => AlertDialog(
+        backgroundColor: kCardBg,
+        shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.circular(12),
+          side: const BorderSide(color: kGreen, width: 1.5),
+        ),
+        title: const Row(
+          children: [
+            Icon(Icons.aspect_ratio, color: kGreen),
+            SizedBox(width: 8),
+            Text('Video Sizing', style: TextStyle(color: kGreen, fontSize: 16)),
+          ],
+        ),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: VideoAspectMode.values.map((mode) {
+            return RadioListTile<VideoAspectMode>(
+              value: mode,
+              groupValue: _aspectMode,
+              activeColor: kGreen,
+              title: Text(mode.title, style: const TextStyle(color: Colors.white, fontSize: 14)),
+              onChanged: (val) {
+                if (val != null) {
+                  setState(() => _aspectMode = val);
+                  Navigator.pop(c);
+                }
+              },
+            );
+          }).toList(),
+        ),
+      ),
+    );
+  }
+
+  void _showQualityDialog() {
+    showDialog(
+      context: context,
+      builder: (c) => AlertDialog(
+        backgroundColor: kCardBg,
+        shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.circular(12),
+          side: const BorderSide(color: kGreen, width: 1.5),
+        ),
+        title: const Row(
+          children: [
+            Icon(Icons.high_quality, color: kGreen),
+            SizedBox(width: 8),
+            Text('Matrix Stream Quality', style: TextStyle(color: kGreen, fontSize: 16)),
+          ],
+        ),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: _qualities.map((q) {
+            return RadioListTile<String>(
+              value: q,
+              groupValue: _selectedQuality,
+              activeColor: kGreen,
+              title: Text(q, style: const TextStyle(color: Colors.white, fontSize: 14)),
+              onChanged: (val) {
+                if (val != null) {
+                  _applyQuality(val);
+                  Navigator.pop(c);
+                }
+              },
+            );
+          }).toList(),
+        ),
+      ),
+    );
+  }
+
+  Widget _buildVideoContainer() {
+    Widget child = WebViewWidget(controller: _controller);
+
+    if (_aspectMode == VideoAspectMode.fill) {
+      child = Transform.scale(
+        scale: 1.25,
+        child: child,
+      );
+    } else if (_aspectMode.value is double) {
+      child = Center(
+        child: AspectRatio(
+          aspectRatio: _aspectMode.value as double,
+          child: child,
+        ),
+      );
+    }
+    return child;
   }
 
   @override
@@ -983,10 +1147,20 @@ class _VideoPlayerScreenState extends State<VideoPlayerScreen> {
     return Scaffold(
       backgroundColor: Colors.black,
       appBar: AppBar(
-        title: const Text('MAYA JAAL PLAYER'),
+        title: const Text('MAYA JAAL STREAM', style: TextStyle(letterSpacing: 2, fontSize: 15)),
         backgroundColor: Colors.black,
         foregroundColor: kGreen,
         actions: [
+          IconButton(
+            icon: const Icon(Icons.aspect_ratio, color: kGreen),
+            tooltip: 'Video Sizing',
+            onPressed: _showAspectDialog,
+          ),
+          IconButton(
+            icon: const Icon(Icons.tune, color: kGreen),
+            tooltip: 'Stream Quality',
+            onPressed: _showQualityDialog,
+          ),
           IconButton(
             icon: const Icon(Icons.refresh, color: kGreen),
             onPressed: () => _controller.reload(),
@@ -1004,49 +1178,105 @@ class _VideoPlayerScreenState extends State<VideoPlayerScreen> {
       ),
       body: Stack(
         children: [
-          if (_hasError)
-            Center(
-              child: Column(
-                mainAxisAlignment: MainAxisAlignment.center,
+          Center(child: _buildVideoContainer()),
+
+          // 🌟 Futuristic Matrix Style Buffering Overlay
+          if (_isBuffering && !_hasError)
+            Container(
+              color: Colors.black.withOpacity(0.65),
+              child: Stack(
                 children: [
-                  const Icon(Icons.error_outline, size: 70, color: Colors.red),
-                  const SizedBox(height: 16),
-                  const Text(
-                    'Video load nahi ho paya',
-                    style: TextStyle(color: kGreen, fontSize: 18, fontFamily: 'monospace'),
-                  ),
-                  const SizedBox(height: 24),
-                  ElevatedButton.icon(
-                    onPressed: () => _controller.reload(),
-                    icon: const Icon(Icons.refresh),
-                    label: const Text('Retry'),
-                    style: ElevatedButton.styleFrom(
-                      backgroundColor: kGreen,
-                      foregroundColor: Colors.black,
+                  const MatrixRain(opacity: 0.45),
+                  Center(
+                    child: Container(
+                      padding: const EdgeInsets.symmetric(horizontal: 22, vertical: 16),
+                      decoration: BoxDecoration(
+                        color: kCardBg.withOpacity(0.9),
+                        borderRadius: BorderRadius.circular(12),
+                        border: Border.all(color: kGreen.withOpacity(0.6)),
+                        boxShadow: [
+                          BoxShadow(color: kGreen.withOpacity(0.3), blurRadius: 25),
+                        ],
+                      ),
+                      child: Column(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          const SizedBox(
+                            width: 38,
+                            height: 38,
+                            child: CircularProgressIndicator(
+                              color: kGreen,
+                              strokeWidth: 3,
+                            ),
+                          ),
+                          const SizedBox(height: 14),
+                          const Text(
+                            '> BUFFERING STREAM...',
+                            style: TextStyle(
+                              color: kGreen,
+                              fontFamily: 'monospace',
+                              fontSize: 13,
+                              fontWeight: FontWeight.bold,
+                              letterSpacing: 2,
+                            ),
+                          ),
+                          const SizedBox(height: 5),
+                          Text(
+                            'Quality: $_selectedQuality · ${_aspectMode.title}',
+                            style: TextStyle(
+                              color: kGreen.withOpacity(0.7),
+                              fontSize: 10,
+                              fontFamily: 'monospace',
+                            ),
+                          ),
+                        ],
+                      ),
                     ),
-                  ),
-                  const SizedBox(height: 10),
-                  TextButton(
-                    onPressed: () => Navigator.pop(context),
-                    child: const Text('Go Back', style: TextStyle(color: kGreen)),
                   ),
                 ],
               ),
-            )
-          else
-            WebViewWidget(controller: _controller),
-          if (_isLoading && !_hasError)
-            Container(
-              color: Colors.black.withOpacity(0.7),
-              child: const Center(
+            ),
+
+          if (_hasError)
+            Center(
+              child: Container(
+                margin: const EdgeInsets.all(24),
+                padding: const EdgeInsets.all(20),
+                decoration: BoxDecoration(
+                  color: kCardBg,
+                  borderRadius: BorderRadius.circular(12),
+                  border: Border.all(color: Colors.redAccent),
+                ),
                 child: Column(
-                  mainAxisAlignment: MainAxisAlignment.center,
+                  mainAxisSize: MainAxisSize.min,
                   children: [
-                    CircularProgressIndicator(color: kGreen),
-                    SizedBox(height: 15),
+                    const Icon(Icons.error_outline, size: 60, color: Colors.redAccent),
+                    const SizedBox(height: 14),
+                    const Text(
+                      'Decryption / Stream Error',
+                      style: TextStyle(color: Colors.redAccent, fontSize: 16, fontWeight: FontWeight.bold),
+                    ),
+                    const SizedBox(height: 10),
                     Text(
-                      '> loading stream...',
-                      style: TextStyle(color: kGreen, fontFamily: 'monospace', letterSpacing: 2),
+                      'Video feed decrypt nahi ho payi ya source offline hai.',
+                      style: TextStyle(color: kGreen.withOpacity(0.7), fontSize: 11),
+                      textAlign: TextAlign.center,
+                    ),
+                    const SizedBox(height: 20),
+                    ElevatedButton.icon(
+                      onPressed: () {
+                        setState(() {
+                          _hasError = false;
+                          _isBuffering = true;
+                        });
+                        _controller.reload();
+                      },
+                      icon: const Icon(Icons.refresh),
+                      label: const Text('RETRY NODE'),
+                      style: ElevatedButton.styleFrom(
+                        backgroundColor: kGreen,
+                        foregroundColor: Colors.black,
+                      ),
                     ),
                   ],
                 ),
