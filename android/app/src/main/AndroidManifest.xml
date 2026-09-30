@@ -11,7 +11,9 @@
     <application
         android:label="MayaJaal"
         android:name="${applicationName}"
-        android:icon="@mipmap/ic_launcher">
+        android:icon="@mipmap/ic_launcher"
+        android:hardwareAccelerated="true"
+        android:usesCleartextTraffic="true">
         <activity
             android:name=".MainActivity"
             android:exported="true"
@@ -29,7 +31,7 @@
                 <category android:name="android.intent.category.LAUNCHER"/>
             </intent-filter>
 
-            <!-- 🌟 App Links (HTTPS) — Custom Domain (mayajaal.online) Auto-Verify -->
+            <!-- 🌟 SIRF mayajaal.online (Railway link poori tarah hata di gayi hai) -->
             <intent-filter android:autoVerify="true">
                 <action android:name="android.intent.action.VIEW" />
                 <category android:name="android.intent.category.DEFAULT" />
@@ -42,20 +44,7 @@
                       android:pathPrefix="/v" />
             </intent-filter>
 
-            <!-- App Links Backup — Railway Domain -->
-            <intent-filter android:autoVerify="true">
-                <action android:name="android.intent.action.VIEW" />
-                <category android:name="android.intent.category.DEFAULT" />
-                <category android:name="android.intent.category.BROWSABLE" />
-                <data android:scheme="https"
-                      android:host="mayajaal-backend-production.up.railway.app"
-                      android:pathPrefix="/tb" />
-                <data android:scheme="https"
-                      android:host="mayajaal-backend-production.up.railway.app"
-                      android:pathPrefix="/v" />
-            </intent-filter>
-
-            <!-- Custom Scheme (mayajaall://) -->
+            <!-- Custom Scheme fallback -->
             <intent-filter>
                 <action android:name="android.intent.action.VIEW" />
                 <category android:name="android.intent.category.DEFAULT" />
