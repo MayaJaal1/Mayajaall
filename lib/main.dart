@@ -1,6 +1,7 @@
 import 'dart:async';
 import 'dart:math' as math;
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:app_links/app_links.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:google_sign_in/google_sign_in.dart';
@@ -130,6 +131,7 @@ class _MyAppState extends State<MyApp> {
     );
   }
 }
+
 class MatrixRain extends StatefulWidget {
   final double opacity;
   const MatrixRain({super.key, this.opacity = 0.7});
@@ -199,7 +201,6 @@ class _MatrixRainState extends State<MatrixRain> {
     );
   }
 }
-
 class SplashScreen extends StatefulWidget {
   const SplashScreen({super.key});
   @override
@@ -292,6 +293,7 @@ class _SplashScreenState extends State<SplashScreen>
     );
   }
 }
+
 class AuthGate extends StatelessWidget {
   const AuthGate({super.key});
   @override
@@ -946,10 +948,11 @@ class _SettingsScreenState extends State<SettingsScreen> {
   }
 }
 enum VideoAspectMode {
-  original('Original Fit', null),
-  fill('Fill Screen', BoxFit.cover),
-  widescreen('16:9 Cinema', 16 / 9),
-  standard('4:3 Retro', 4 / 3);
+  cinema169('16:9 Cinema (Standard)', 16 / 9),
+  fill('Fill Screen (Zoom)', 'fill'),
+  reel916('9:16 Full Reel', 9 / 16),
+  standard43('4:3 Retro Box', 4 / 3),
+  original('Match Frame', null);
 
   final String title;
   final dynamic value;
@@ -963,27 +966,68 @@ class VideoPlayerScreen extends StatefulWidget {
   State<VideoPlayerScreen> createState() => _VideoPlayerScreenState();
 }
 
-class _VideoPlayerScreenState extends State<VideoPlayerScreen> {
+class _VideoPlayerScreenState extends State<VideoPlayerScreen> with SingleTickerProviderStateMixin {
   late final WebViewController _controller;
   bool _isBuffering = true;
   bool _hasError = false;
-  VideoAspectMode _aspectMode = VideoAspectMode.original;
+  bool _isPlaying = true;
+  bool _showControls = true;
+  bool _isLandscape = false;
+  Timer? _hideControlsTimer;
+
+  // Video Timeline status
+  double _currentTime = 0;
+  double _duration = 1;
+  bool _isDraggingSeek = false;
+
+  VideoAspectMode _aspectMode = VideoAspectMode.cinema169;
   String _selectedQuality = 'Auto';
   final List<String> _qualities = ['Auto', '1080p', '720p', '480p', '360p'];
+
+  late AnimationController _pulseController;
+  late Animation<double> _pulseAnimation;
 
   @override
   void initState() {
     super.initState();
+    _pulseController = AnimationController(
+      vsync: this,
+      duration: const Duration(milliseconds: 1200),
+    )..repeat(reverse: true);
+    _pulseAnimation = Tween<double>(begin: 0.85, end: 1.15).animate(
+      CurvedAnimation(parent: _pulseController, curve: Curves.easeInOut),
+    );
+
     _controller = WebViewController()
       ..setJavaScriptMode(JavaScriptMode.unrestricted)
       ..setBackgroundColor(Colors.black)
       ..addJavaScriptChannel(
         'MatrixStreamEvents',
         onMessageReceived: (JavaScriptMessage msg) {
-          if (msg.message == 'buffering_start') {
+          final payload = msg.message;
+          if (payload == 'buffering_start') {
             if (mounted) setState(() => _isBuffering = true);
-          } else if (msg.message == 'buffering_end') {
+          } else if (payload == 'buffering_end') {
             if (mounted) setState(() => _isBuffering = false);
+          } else if (payload == 'paused') {
+            if (mounted) setState(() => _isPlaying = false);
+          } else if (payload == 'playing') {
+            if (mounted) setState(() {
+              _isPlaying = true;
+              _isBuffering = false;
+            });
+          } else if (payload.startsWith('time:')) {
+            final parts = payload.substring(5).split('/');
+            if (parts.length == 2 && !_isDraggingSeek) {
+              final c = double.tryParse(parts[0]) ?? 0;
+              final d = double.tryParse(parts[1]) ?? 1;
+              if (mounted && d > 0) {
+                setState(() {
+                  _currentTime = c;
+                  _duration = d;
+                });
+              }
+            }
           }
         },
       )
@@ -993,54 +1037,121 @@ class _VideoPlayerScreenState extends State<VideoPlayerScreen> {
             if (mounted) setState(() => _isBuffering = true);
           },
           onPageFinished: (url) {
-            if (mounted) setState(() => _isBuffering = false);
             _injectVideoHooks();
           },
-          onWebResourceError: (error) => setState(() {
-            _hasError = true;
-            _isBuffering = false;
-          }),
+          onWebResourceError: (error) {
+            if (error.isForMainFrame ?? false) {
+              if (mounted) {
+                setState(() {
+                  _hasError = true;
+                  _isBuffering = false;
+                });
+              }
+            }
+          },
         ),
       )
       ..loadRequest(Uri.parse(widget.url));
+
+    _startControlsTimer();
+  }
+
+  @override
+  void dispose() {
+    _hideControlsTimer?.cancel();
+    _pulseController.dispose();
+    SystemChrome.setPreferredOrientations([
+      DeviceOrientation.portraitUp,
+    ]);
+    super.dispose();
+  }
+
+  void _startControlsTimer() {
+    _hideControlsTimer?.cancel();
+    _hideControlsTimer = Timer(const Duration(seconds: 4), () {
+      if (mounted && _isPlaying) {
+        setState(() => _showControls = false);
+      }
+    });
+  }
+
+  void _toggleControls() {
+    setState(() => _showControls = !_showControls);
+    if (_showControls) _startControlsTimer();
   }
 
   void _injectVideoHooks() {
     const jsHook = '''
       (function() {
+        const style = document.createElement('style');
+        style.innerHTML = `
+          header, footer, nav, .ad, .ads, [class*="banner"], [id*="banner"] { display: none !important; }
+          body, html { background: #000 !important; overflow: hidden !important; margin: 0 !important; padding: 0 !important; }
+          video { width: 100% !important; height: 100% !important; object-fit: contain !important; }
+        `;
+        document.head.appendChild(style);
+
         function hookVideos() {
           const v = document.querySelector('video');
           if (v) {
             v.setAttribute('playsinline', 'true');
             v.setAttribute('webkit-playsinline', 'true');
             v.setAttribute('autoplay', 'true');
-            v.addEventListener('waiting', () => MatrixStreamEvents.postMessage('buffering_start'));
-            v.addEventListener('playing', () => MatrixStreamEvents.postMessage('buffering_end'));
-            v.addEventListener('canplay', () => MatrixStreamEvents.postMessage('buffering_end'));
+            v.controls = false;
+            
+            v.onwaiting = () => MatrixStreamEvents.postMessage('buffering_start');
+            v.onplaying = () => MatrixStreamEvents.postMessage('playing');
+            v.onpause = () => MatrixStreamEvents.postMessage('paused');
+            v.oncanplay = () => MatrixStreamEvents.postMessage('buffering_end');
+            
+            v.ontimeupdate = () => {
+              MatrixStreamEvents.postMessage('time:' + v.currentTime + '/' + (v.duration || 1));
+            };
           }
         }
         hookVideos();
-        setInterval(hookVideos, 1500);
+        setInterval(hookVideos, 1000);
       })();
     ''';
     _controller.runJavaScript(jsHook);
   }
 
-  void _applyQuality(String q) {
-    setState(() => _selectedQuality = q);
-    final script = '''
-      (function() {
-        const video = document.querySelector('video');
-        if (video) {
-          const curr = video.currentTime;
-          video.currentTime = curr;
-        }
-      })();
-    ''';
-    _controller.runJavaScript(script);
+  void _togglePlayPause() {
+    final cmd = _isPlaying
+        ? "const v = document.querySelector('video'); if (v) v.pause();"
+        : "const v = document.querySelector('video'); if (v) v.play();";
+    _controller.runJavaScript(cmd);
+    setState(() => _isPlaying = !_isPlaying);
+    _startControlsTimer();
   }
 
-  void _showAspectDialog() {
+  void _seekVideo(double value) {
+    _controller.runJavaScript("const v = document.querySelector('video'); if (v) v.currentTime = $value;");
+    setState(() => _currentTime = value);
+  }
+
+  void _toggleOrientation() {
+    setState(() => _isLandscape = !_isLandscape);
+    if (_isLandscape) {
+      SystemChrome.setPreferredOrientations([
+        DeviceOrientation.landscapeLeft,
+        DeviceOrientation.landscapeRight,
+      ]);
+    } else {
+      SystemChrome.setPreferredOrientations([
+        DeviceOrientation.portraitUp,
+      ]);
+    }
+  }
+
+  String _formatDuration(double seconds) {
+    final d = Duration(seconds: seconds.toInt());
+    final m = d.inMinutes.remainder(60).toString().padLeft(2, '0');
+    final s = d.inSeconds.remainder(60).toString().padLeft(2, '0');
+    final h = d.inHours > 0 ? '${d.inHours.toString().padLeft(2, '0')}:' : '';
+    return '$h$m:$s';
+  }
+    void _showAspectDialog() {
     showDialog(
       context: context,
       builder: (c) => AlertDialog(
@@ -1053,7 +1164,7 @@ class _VideoPlayerScreenState extends State<VideoPlayerScreen> {
           children: [
             Icon(Icons.aspect_ratio, color: kGreen),
             SizedBox(width: 8),
-            Text('Video Sizing', style: TextStyle(color: kGreen, fontSize: 16)),
+            Text('MATRIX SIZING NODE', style: TextStyle(color: kGreen, fontSize: 15, letterSpacing: 1.5)),
           ],
         ),
         content: Column(
@@ -1063,7 +1174,7 @@ class _VideoPlayerScreenState extends State<VideoPlayerScreen> {
               value: mode,
               groupValue: _aspectMode,
               activeColor: kGreen,
-              title: Text(mode.title, style: const TextStyle(color: Colors.white, fontSize: 14)),
+              title: Text(mode.title, style: const TextStyle(color: Colors.white, fontSize: 13, fontFamily: 'monospace')),
               onChanged: (val) {
                 if (val != null) {
                   setState(() => _aspectMode = val);
@@ -1088,9 +1199,9 @@ class _VideoPlayerScreenState extends State<VideoPlayerScreen> {
         ),
         title: const Row(
           children: [
-            Icon(Icons.high_quality, color: kGreen),
+            Icon(Icons.tune, color: kGreen),
             SizedBox(width: 8),
-            Text('Matrix Stream Quality', style: TextStyle(color: kGreen, fontSize: 16)),
+            Text('STREAM RESOLUTION', style: TextStyle(color: kGreen, fontSize: 15, letterSpacing: 1.5)),
           ],
         ),
         content: Column(
@@ -1100,10 +1211,10 @@ class _VideoPlayerScreenState extends State<VideoPlayerScreen> {
               value: q,
               groupValue: _selectedQuality,
               activeColor: kGreen,
-              title: Text(q, style: const TextStyle(color: Colors.white, fontSize: 14)),
+              title: Text(q, style: const TextStyle(color: Colors.white, fontSize: 13, fontFamily: 'monospace')),
               onChanged: (val) {
                 if (val != null) {
-                  _applyQuality(val);
+                  setState(() => _selectedQuality = val);
                   Navigator.pop(c);
                 }
               },
@@ -1114,12 +1225,12 @@ class _VideoPlayerScreenState extends State<VideoPlayerScreen> {
     );
   }
 
-  Widget _buildVideoContainer() {
+  Widget _buildVideoView() {
     Widget child = WebViewWidget(controller: _controller);
 
     if (_aspectMode == VideoAspectMode.fill) {
       child = Transform.scale(
-        scale: 1.25,
+        scale: 1.3,
         child: child,
       );
     } else if (_aspectMode.value is double) {
@@ -1137,142 +1248,286 @@ class _VideoPlayerScreenState extends State<VideoPlayerScreen> {
   Widget build(BuildContext context) {
     return Scaffold(
       backgroundColor: Colors.black,
-      appBar: AppBar(
-        title: const Text('MAYA JAAL STREAM', style: TextStyle(letterSpacing: 2, fontSize: 15)),
-        backgroundColor: Colors.black,
-        foregroundColor: kGreen,
-        actions: [
-          IconButton(
-            icon: const Icon(Icons.aspect_ratio, color: kGreen),
-            tooltip: 'Video Sizing',
-            onPressed: _showAspectDialog,
-          ),
-          IconButton(
-            icon: const Icon(Icons.tune, color: kGreen),
-            tooltip: 'Stream Quality',
-            onPressed: _showQualityDialog,
-          ),
-          IconButton(
-            icon: const Icon(Icons.refresh, color: kGreen),
-            onPressed: () => _controller.reload(),
-          ),
-          IconButton(
-            icon: const Icon(Icons.open_in_browser, color: kGreen),
-            onPressed: () async {
-              final uri = Uri.parse(widget.url);
-              if (await canLaunchUrl(uri)) {
-                await launchUrl(uri, mode: LaunchMode.externalApplication);
-              }
-            },
-          ),
-        ],
-      ),
-      body: Stack(
-        children: [
-          Center(child: _buildVideoContainer()),
+      body: SafeArea(
+        child: GestureDetector(
+          onTap: _toggleControls,
+          behavior: HitTestBehavior.opaque,
+          child: Stack(
+            children: [
+              Center(child: _buildVideoView()),
 
-          if (_isBuffering && !_hasError)
-            Container(
-              color: Colors.black.withOpacity(0.65),
-              child: Stack(
-                children: [
-                  const MatrixRain(opacity: 0.45),
-                  Center(
-                    child: Container(
-                      padding: const EdgeInsets.symmetric(horizontal: 22, vertical: 16),
-                      decoration: BoxDecoration(
-                        color: kCardBg.withOpacity(0.9),
-                        borderRadius: BorderRadius.circular(12),
-                        border: Border.all(color: kGreen.withOpacity(0.6)),
-                        boxShadow: [
-                          BoxShadow(color: kGreen.withOpacity(0.3), blurRadius: 25),
-                        ],
+              // 🌟 TOP MATRIX HUD BAR (Properly Arranged Action Icons)
+              AnimatedOpacity(
+                opacity: _showControls ? 1.0 : 0.0,
+                duration: const Duration(milliseconds: 300),
+                child: Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+                  decoration: BoxDecoration(
+                    gradient: LinearGradient(
+                      begin: Alignment.topCenter,
+                      end: Alignment.bottomCenter,
+                      colors: [Colors.black.withOpacity(0.85), Colors.transparent],
+                    ),
+                  ),
+                  child: Row(
+                    children: [
+                      IconButton(
+                        icon: const Icon(Icons.arrow_back_ios_new, color: kGreen, size: 20),
+                        onPressed: () => Navigator.pop(context),
                       ),
-                      child: Column(
-                        mainAxisSize: MainAxisSize.min,
-                        children: [
-                          const SizedBox(
-                            width: 38,
-                            height: 38,
-                            child: CircularProgressIndicator(
-                              color: kGreen,
-                              strokeWidth: 3,
-                            ),
+                      const SizedBox(width: 4),
+                      const Expanded(
+                        child: Text(
+                          '> MAYA JAAL // NODE_V1',
+                          style: TextStyle(
+                            color: kGreen,
+                            fontSize: 13,
+                            fontWeight: FontWeight.bold,
+                            letterSpacing: 2,
+                            shadows: [Shadow(color: kGreen, blurRadius: 10)],
                           ),
-                          const SizedBox(height: 14),
-                          const Text(
-                            '> BUFFERING STREAM...',
-                            style: TextStyle(
-                              color: kGreen,
-                              fontFamily: 'monospace',
-                              fontSize: 13,
-                              fontWeight: FontWeight.bold,
-                              letterSpacing: 2,
-                            ),
+                          overflow: TextOverflow.ellipsis,
+                        ),
+                      ),
+                      IconButton(
+                        icon: const Icon(Icons.aspect_ratio, color: kGreen),
+                        tooltip: 'Video Sizing',
+                        onPressed: _showAspectDialog,
+                      ),
+                      IconButton(
+                        icon: const Icon(Icons.tune, color: kGreen),
+                        tooltip: 'Stream Quality',
+                        onPressed: _showQualityDialog,
+                      ),
+                      IconButton(
+                        icon: Icon(_isLandscape ? Icons.screen_lock_portrait : Icons.screen_rotation, color: kGreen),
+                        tooltip: 'Rotate Screen',
+                        onPressed: _toggleOrientation,
+                      ),
+                      IconButton(
+                        icon: const Icon(Icons.refresh, color: kGreen),
+                        tooltip: 'Reload',
+                        onPressed: () => _controller.reload(),
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+
+              // 🌟 CENTER MATRIX STYLE PULSE PLAY / PAUSE BUTTON
+              if (_showControls && !_isBuffering)
+                Center(
+                  child: AnimatedBuilder(
+                    animation: _pulseAnimation,
+                    builder: (context, child) => Transform.scale(
+                      scale: !_isPlaying ? _pulseAnimation.value : 1.0,
+                      child: GestureDetector(
+                        onTap: _togglePlayPause,
+                        child: Container(
+                          width: 80,
+                          height: 80,
+                          decoration: BoxDecoration(
+                            shape: BoxShape.circle,
+                            color: Colors.black.withOpacity(0.7),
+                            border: Border.all(color: kGreen, width: 2),
+                            boxShadow: [
+                              BoxShadow(
+                                color: kGreen.withOpacity(0.4),
+                                blurRadius: 25,
+                                spreadRadius: 3,
+                              ),
+                            ],
                           ),
-                          const SizedBox(height: 5),
-                          Text(
-                            'Quality: $_selectedQuality · ${_aspectMode.title}',
-                            style: TextStyle(
-                              color: kGreen.withOpacity(0.7),
-                              fontSize: 10,
-                              fontFamily: 'monospace',
-                            ),
+                          child: Icon(
+                            _isPlaying ? Icons.pause : Icons.play_arrow,
+                            color: kGreen,
+                            size: 44,
                           ),
-                        ],
+                        ),
                       ),
                     ),
                   ),
-                ],
-              ),
-            ),
-
-          if (_hasError)
-            Center(
-              child: Container(
-                margin: const EdgeInsets.all(24),
-                padding: const EdgeInsets.all(20),
-                decoration: BoxDecoration(
-                  color: kCardBg,
-                  borderRadius: BorderRadius.circular(12),
-                  border: Border.all(color: Colors.redAccent),
                 ),
-                child: Column(
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    const Icon(Icons.error_outline, size: 60, color: Colors.redAccent),
-                    const SizedBox(height: 14),
-                    const Text(
-                      'Decryption / Stream Error',
-                      style: TextStyle(color: Colors.redAccent, fontSize: 16, fontWeight: FontWeight.bold),
-                    ),
-                    const SizedBox(height: 10),
-                    Text(
-                      'Video feed decrypt nahi ho payi ya source offline hai.',
-                      style: TextStyle(color: kGreen.withOpacity(0.7), fontSize: 11),
-                      textAlign: TextAlign.center,
-                    ),
-                    const SizedBox(height: 20),
-                    ElevatedButton.icon(
-                      onPressed: () {
-                        setState(() {
-                          _hasError = false;
-                          _isBuffering = true;
-                        });
-                        _controller.reload();
-                      },
-                      icon: const Icon(Icons.refresh),
-                      label: const Text('RETRY NODE'),
-                      style: ElevatedButton.styleFrom(
-                        backgroundColor: kGreen,
-                        foregroundColor: Colors.black,
+
+              // 🌟 BOTTOM MATRIX TIMELINE & DIGITAL CLOCK
+              Positioned(
+                bottom: 0,
+                left: 0,
+                right: 0,
+                child: AnimatedOpacity(
+                  opacity: _showControls ? 1.0 : 0.0,
+                  duration: const Duration(milliseconds: 300),
+                  child: Container(
+                    padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+                    decoration: BoxDecoration(
+                      gradient: LinearGradient(
+                        begin: Alignment.bottomCenter,
+                        end: Alignment.topCenter,
+                        colors: [Colors.black.withOpacity(0.9), Colors.transparent],
                       ),
                     ),
-                  ],
+                    child: Column(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        SliderTheme(
+                          data: SliderTheme.of(context).copyWith(
+                            trackHeight: 3.5,
+                            activeTrackColor: kGreen,
+                            inactiveTrackColor: kGreen.withOpacity(0.2),
+                            thumbColor: kGreen,
+                            thumbShape: const RoundSliderThumbShape(enabledThumbRadius: 6),
+                            overlayColor: kGreen.withOpacity(0.25),
+                          ),
+                          child: Slider(
+                            value: _currentTime.clamp(0, _duration),
+                            min: 0.0,
+                            max: _duration <= 0 ? 1.0 : _duration,
+                            onChangeStart: (_) => _isDraggingSeek = true,
+                            onChanged: (val) {
+                              setState(() => _currentTime = val);
+                            },
+                            onChangeEnd: (val) {
+                              _isDraggingSeek = false;
+                              _seekVideo(val);
+                            },
+                          ),
+                        ),
+                        Padding(
+                          padding: const EdgeInsets.symmetric(horizontal: 6),
+                          child: Row(
+                            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                            children: [
+                              Text(
+                                '[ ${_formatDuration(_currentTime)} ]',
+                                style: const TextStyle(
+                                  color: kGreen,
+                                  fontSize: 12,
+                                  fontFamily: 'monospace',
+                                  fontWeight: FontWeight.bold,
+                                  letterSpacing: 1.2,
+                                ),
+                              ),
+                              Text(
+                                '${_aspectMode.title.split(' ')[0]} // $_selectedQuality',
+                                style: TextStyle(
+                                  color: kGreen.withOpacity(0.7),
+                                  fontSize: 11,
+                                  fontFamily: 'monospace',
+                                ),
+                              ),
+                              Text(
+                                '[ ${_formatDuration(_duration)} ]',
+                                style: const TextStyle(
+                                  color: kGreen,
+                                  fontSize: 12,
+                                  fontFamily: 'monospace',
+                                  fontWeight: FontWeight.bold,
+                                  letterSpacing: 1.2,
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
                 ),
               ),
-            ),
-        ],
+
+              // 🌟 BUFFERING ANIMATION (NEON MATRIX RAIN OVERLAY)
+              if (_isBuffering && !_hasError)
+                Container(
+                  color: Colors.black.withOpacity(0.7),
+                  child: Stack(
+                    children: [
+                      const MatrixRain(opacity: 0.4),
+                      Center(
+                        child: Container(
+                          padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 16),
+                          decoration: BoxDecoration(
+                            color: kCardBg.withOpacity(0.9),
+                            borderRadius: BorderRadius.circular(12),
+                            border: Border.all(color: kGreen.withOpacity(0.7)),
+                            boxShadow: [
+                              BoxShadow(color: kGreen.withOpacity(0.3), blurRadius: 20),
+                            ],
+                          ),
+                          child: Column(
+                            mainAxisSize: MainAxisSize.min,
+                            children: [
+                              const SizedBox(
+                                width: 36,
+                                height: 36,
+                                child: CircularProgressIndicator(color: kGreen, strokeWidth: 3),
+                              ),
+                              const SizedBox(height: 12),
+                              const Text(
+                                '> DECRYPTING STREAM STREAM...',
+                                style: TextStyle(
+                                  color: kGreen,
+                                  fontFamily: 'monospace',
+                                  fontSize: 12,
+                                  fontWeight: FontWeight.bold,
+                                  letterSpacing: 2,
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+
+              // 🌟 ERROR OVERLAY (Sirf Main Page Block hone par)
+              if (_hasError)
+                Center(
+                  child: Container(
+                    margin: const EdgeInsets.all(24),
+                    padding: const EdgeInsets.all(20),
+                    decoration: BoxDecoration(
+                      color: kCardBg,
+                      borderRadius: BorderRadius.circular(12),
+                      border: Border.all(color: Colors.redAccent),
+                    ),
+                    child: Column(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        const Icon(Icons.error_outline, size: 55, color: Colors.redAccent),
+                        const SizedBox(height: 12),
+                        const Text(
+                          'Connection / Stream Blocked',
+                          style: TextStyle(color: Colors.redAccent, fontSize: 15, fontWeight: FontWeight.bold),
+                        ),
+                        const SizedBox(height: 8),
+                        Text(
+                          'Video server se direct connect nahi ho pa rahi.',
+                          style: TextStyle(color: kGreen.withOpacity(0.8), fontSize: 11),
+                          textAlign: TextAlign.center,
+                        ),
+                        const SizedBox(height: 18),
+                        ElevatedButton.icon(
+                          onPressed: () {
+                            setState(() {
+                              _hasError = false;
+                              _isBuffering = true;
+                            });
+                            _controller.reload();
+                          },
+                          icon: const Icon(Icons.refresh),
+                          label: const Text('RETRY NODE'),
+                          style: ElevatedButton.styleFrom(
+                            backgroundColor: kGreen,
+                            foregroundColor: Colors.black,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                ),
+            ],
+          ),
+        ),
       ),
     );
   }
