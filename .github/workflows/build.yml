@@ -79,16 +79,26 @@ jobs:
           </resources>
           EOF
 
+      # 🌟 UPDATED WITH ALL ANDROID 13+ PERMISSIONS & WAKE_LOCK
       - name: Create AndroidManifest.xml
         run: |
           cat > android/app/src/main/AndroidManifest.xml << 'EOF'
           <manifest xmlns:android="http://schemas.android.com/apk/res/android">
+
               <uses-permission android:name="android.permission.INTERNET"/>
-              <uses-permission android:name="android.permission.READ_EXTERNAL_STORAGE"/>
-              <uses-permission android:name="android.permission.WRITE_EXTERNAL_STORAGE"/>
+              <uses-permission android:name="android.permission.ACCESS_NETWORK_STATE"/>
+              
+              <uses-permission android:name="android.permission.READ_EXTERNAL_STORAGE" android:maxSdkVersion="32"/>
+              <uses-permission android:name="android.permission.WRITE_EXTERNAL_STORAGE" android:maxSdkVersion="32"/>
+              
+              <uses-permission android:name="android.permission.READ_MEDIA_VIDEO"/>
+              <uses-permission android:name="android.permission.READ_MEDIA_AUDIO"/>
+              <uses-permission android:name="android.permission.READ_MEDIA_IMAGES"/>
+
               <uses-permission android:name="android.permission.CAMERA"/>
               <uses-permission android:name="android.permission.POST_NOTIFICATIONS"/>
-              <uses-permission android:name="android.permission.ACCESS_NETWORK_STATE"/>
+              <uses-permission android:name="android.permission.WAKE_LOCK"/>
+
               <application
                   android:label="MayaJaal"
                   android:name="${applicationName}"
@@ -111,7 +121,7 @@ jobs:
                           <action android:name="android.intent.action.MAIN"/>
                           <category android:name="android.intent.category.LAUNCHER"/>
                       </intent-filter>
-                      <!-- 🌟 Custom Domain Auto-Verify (www.mayajaal.online & mayajaal.online) -->
+
                       <intent-filter android:autoVerify="true">
                           <action android:name="android.intent.action.VIEW" />
                           <category android:name="android.intent.category.DEFAULT" />
@@ -121,6 +131,7 @@ jobs:
                           <data android:scheme="https" android:host="mayajaal.online" android:pathPrefix="/tb" />
                           <data android:scheme="https" android:host="mayajaal.online" android:pathPrefix="/v" />
                       </intent-filter>
+
                       <intent-filter>
                           <action android:name="android.intent.action.VIEW" />
                           <category android:name="android.intent.category.DEFAULT" />
@@ -147,8 +158,8 @@ jobs:
           }
           def flutterRoot = localProperties.getProperty('flutter.sdk')
           if (flutterRoot == null) { throw new GradleException("Flutter SDK not found.") }
-          def flutterVersionCode = localProperties.getProperty('flutter.versionCode') ?: '1'
-          def flutterVersionName = localProperties.getProperty('flutter.versionName') ?: '1.0'
+          def flutterVersionCode = localProperties.getProperty('flutter.versionCode') ?: '2'
+          def flutterVersionName = localProperties.getProperty('flutter.versionName') ?: '1.1.0'
 
           apply plugin: 'com.android.application'
           apply plugin: 'kotlin-android'
@@ -238,20 +249,22 @@ jobs:
       - name: Build Release APK
         run: flutter build apk --release
 
-      - name: Print SHA1 and SHA256 Fingerprints
-        run: |
-          echo "=========================================="
-          echo "SHA1 and SHA256 FINGERPRINTS:"
-          echo "=========================================="
-          keytool -list -v -keystore android/app/mayajaal-release.jks \
-            -alias mayajaal \
-            -storepass MayajaalRelease2024 \
-            -keypass MayajaalRelease2024 | grep "SHA"
-          echo "=========================================="
-
       - name: Upload APK Artifact
         uses: actions/upload-artifact@v4
         with:
           name: release-apk
           path: build/app/outputs/flutter-apk/app-release.apk
+
+      # 🌟 AUTOMATIC DIRECT RELEASE UPDATE (Updates GitHub Latest Download Link)
+      - name: Release APK to GitHub Releases
+        uses: softprops/action-gh-release@v2
+        if: startsWith(github.ref, 'refs/heads/main')
+        with:
+          tag_name: latest
+          name: "MayaJaal Latest Release"
+          draft: false
+          prerelease: false
+          files: build/app/outputs/flutter-apk/app-release.apk
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           
