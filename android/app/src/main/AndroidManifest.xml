@@ -31,11 +31,21 @@
                 <category android:name="android.intent.category.LAUNCHER"/>
             </intent-filter>
 
-            <!-- 🌟 SIRF mayajaal.online (Railway link poori tarah hata di gayi hai) -->
+            <!-- 🌟 Auto-Verify: www.mayajaal.online aur mayajaal.online dono ke liye -->
             <intent-filter android:autoVerify="true">
                 <action android:name="android.intent.action.VIEW" />
                 <category android:name="android.intent.category.DEFAULT" />
                 <category android:name="android.intent.category.BROWSABLE" />
+
+                <!-- With www -->
+                <data android:scheme="https"
+                      android:host="www.mayajaal.online"
+                      android:pathPrefix="/tb" />
+                <data android:scheme="https"
+                      android:host="www.mayajaal.online"
+                      android:pathPrefix="/v" />
+
+                <!-- Without www -->
                 <data android:scheme="https"
                       android:host="mayajaal.online"
                       android:pathPrefix="/tb" />
