@@ -16,7 +16,7 @@ const String supabaseUrl = 'https://inxlnctaixbkfblwlmhr.supabase.co';
 const String supabaseAnonKey = 'sb_publishable_6b9xe3mDBduO-soZTk3t2A_W1sQpD5K';
 const String webClientId = '985001671962-rok8qnng0rumjsd8mgr8uhr92o5vhs4n.apps.googleusercontent.com';
 
-const int kAppCurrentVersionCode = 1;
+const int kAppCurrentVersionCode = 2;
 
 const Color kGreen = Color(0xFF00FF41);
 const Color kBg = Color(0xFF000000);
@@ -34,7 +34,6 @@ Future<void> main() async {
   themeNotifier.value = isDark ? ThemeMode.dark : ThemeMode.light;
   runApp(const MyApp());
 }
-
 class MyApp extends StatefulWidget {
   const MyApp({super.key});
   @override
@@ -952,7 +951,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
           Divider(color: kGreen.withOpacity(0.2)),
           const SizedBox(height: 30),
           Center(
-            child: Text('> MayaJaal v1.0.0', style: TextStyle(color: kGreen.withOpacity(0.5), fontFamily: 'monospace', fontSize: 12)),
+            child: Text('> MayaJaal v1.1.0', style: TextStyle(color: kGreen.withOpacity(0.5), fontFamily: 'monospace', fontSize: 12)),
           ),
         ],
       ),
