@@ -32,7 +32,6 @@ final ValueNotifier<ThemeMode> themeNotifier = ValueNotifier(ThemeMode.dark);
 final ValueNotifier<String> languageNotifier = ValueNotifier('English');
 final GlobalKey<NavigatorState> navigatorKey = GlobalKey<NavigatorState>();
 
-// 🌐 MULTI-LANGUAGE DICTIONARY
 final Map<String, Map<String, String>> localizedStrings = {
   'English': {
     'app_title': 'MAYA JAAL',
@@ -49,7 +48,7 @@ final Map<String, Map<String, String>> localizedStrings = {
     'update_available': 'NEW UPDATE FOUND',
     'update_now': 'UPDATE NOW',
     'later': 'LATER',
-    'init_stream': '⚡ INITIALIZE NEURAL STREAM',
+    'init_stream': '⚡ INITIALIZE NEURAL STREAM (OPEN NOW)',
     'stream_ready': 'STREAM READY FOR DECRYPTION',
     'download': 'DOWNLOAD VIDEO',
     'share': 'SHARE VIDEO',
@@ -1092,6 +1091,11 @@ class _StreamPreviewScreenState extends State<StreamPreviewScreen> with SingleTi
   String _uploaderName = 'Matrix Ghost User';
   String _rawId = '';
 
+  // 🌟 10-SECOND LOCK TIMER
+  int _countdown = 10;
+  Timer? _countdownTimer;
+  bool get _canProceed => _countdown <= 0;
+
   late AnimationController _pulseController;
   late Animation<double> _pulseAnimation;
 
@@ -1108,8 +1112,24 @@ class _StreamPreviewScreenState extends State<StreamPreviewScreen> with SingleTi
     _fetchStreamMetadata();
   }
 
+  void _startCountdown() {
+    _countdownTimer?.cancel();
+    _countdown = 10;
+    _countdownTimer = Timer.periodic(const Duration(seconds: 1), (timer) {
+      if (!mounted) return;
+      setState(() {
+        if (_countdown > 0) {
+          _countdown--;
+        } else {
+          _countdownTimer?.cancel();
+        }
+      });
+    });
+  }
+
   @override
   void dispose() {
+    _countdownTimer?.cancel();
     _pulseController.dispose();
     super.dispose();
   }
@@ -1125,6 +1145,7 @@ class _StreamPreviewScreenState extends State<StreamPreviewScreen> with SingleTi
           _videoTitle = _rawId;
           _loading = false;
         });
+        _startCountdown();
         return;
       }
 
@@ -1138,6 +1159,7 @@ class _StreamPreviewScreenState extends State<StreamPreviewScreen> with SingleTi
             _uploaderName = data['uploader'] ?? 'Matrix Ghost User';
             _loading = false;
           });
+          _startCountdown();
           return;
         }
       }
@@ -1151,6 +1173,7 @@ class _StreamPreviewScreenState extends State<StreamPreviewScreen> with SingleTi
             _videoTitle = _rawId;
             _loading = false;
           });
+          _startCountdown();
           return;
         }
       }
@@ -1159,23 +1182,18 @@ class _StreamPreviewScreenState extends State<StreamPreviewScreen> with SingleTi
         _streamUrl = widget.targetUrl;
         _loading = false;
       });
+      _startCountdown();
     } catch (e) {
       setState(() {
         _streamUrl = widget.targetUrl;
         _loading = false;
       });
+      _startCountdown();
     }
   }
 
   void _shareStreamDirect() {
     Share.share('🚀 Watch this high-speed stream on MayaJaal:\n${widget.targetUrl}');
-  }
-
-  Future<void> _downloadVideoDirect() async {
-    final target = Uri.parse(_streamUrl.isNotEmpty ? _streamUrl : widget.targetUrl);
-    if (await canLaunchUrl(target)) {
-      await launchUrl(target, mode: LaunchMode.externalApplication);
-    }
   }
 
   Future<void> _saveWatchRecord() async {
@@ -1219,6 +1237,7 @@ class _StreamPreviewScreenState extends State<StreamPreviewScreen> with SingleTi
   }
 
   void _launchNativePlayer() {
+    if (!_canProceed) return;
     _saveWatchRecord();
     Navigator.pushReplacement(
       context,
@@ -1228,6 +1247,7 @@ class _StreamPreviewScreenState extends State<StreamPreviewScreen> with SingleTi
           title: _videoTitle,
           uploader: _uploaderName,
           sourcePageUrl: widget.targetUrl,
+          videoId: _rawId,
         ),
       ),
     );
@@ -1291,8 +1311,13 @@ class _StreamPreviewScreenState extends State<StreamPreviewScreen> with SingleTi
                           const SizedBox(height: 20),
                           Center(
                             child: Text(
-                              tr('stream_ready'),
-                              style: const TextStyle(color: kNeonCyan, fontSize: 12, fontWeight: FontWeight.bold, letterSpacing: 1.5),
+                              _canProceed ? tr('stream_ready') : '> DECRYPTING QUANTUM STREAM NODE ($_countdown s)...',
+                              style: TextStyle(
+                                color: _canProceed ? kNeonCyan : Colors.orangeAccent,
+                                fontSize: 12,
+                                fontWeight: FontWeight.bold,
+                                letterSpacing: 1.5,
+                              ),
                             ),
                           ),
                           const SizedBox(height: 20),
@@ -1312,56 +1337,50 @@ class _StreamPreviewScreenState extends State<StreamPreviewScreen> with SingleTi
                             ],
                           ),
                           const SizedBox(height: 28),
+
+                          // 🌟 BUTTON ENABLED AFTER 10s
                           AnimatedBuilder(
                             animation: _pulseAnimation,
                             builder: (context, child) => Transform.scale(
-                              scale: _pulseAnimation.value,
+                              scale: _canProceed ? _pulseAnimation.value : 1.0,
                               child: SizedBox(
                                 width: double.infinity,
                                 height: 55,
                                 child: ElevatedButton(
-                                  onPressed: _launchNativePlayer,
+                                  onPressed: _canProceed ? _launchNativePlayer : null,
                                   style: ElevatedButton.styleFrom(
-                                    backgroundColor: kGreen,
+                                    backgroundColor: _canProceed ? kGreen : Colors.grey[800],
                                     foregroundColor: Colors.black,
                                     shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
-                                    elevation: 10,
+                                    elevation: _canProceed ? 10 : 0,
                                   ),
                                   child: Text(
-                                    tr('init_stream'),
-                                    style: const TextStyle(fontSize: 13, fontWeight: FontWeight.bold, letterSpacing: 1.5),
+                                    _canProceed ? tr('init_stream') : 'PLEASE WAIT ($_countdown s)...',
+                                    style: TextStyle(
+                                      color: _canProceed ? Colors.black : Colors.white54,
+                                      fontSize: 13,
+                                      fontWeight: FontWeight.bold,
+                                      letterSpacing: 1.5,
+                                    ),
                                   ),
                                 ),
                               ),
                             ),
                           ),
                           const SizedBox(height: 16),
-                          Row(
-                            children: [
-                              Expanded(
-                                child: OutlinedButton.icon(
-                                  onPressed: _downloadVideoDirect,
-                                  icon: const Icon(Icons.download, color: kGreen, size: 18),
-                                  label: Text(tr('download'), style: const TextStyle(color: kGreen, fontSize: 11)),
-                                  style: OutlinedButton.styleFrom(
-                                    side: const BorderSide(color: kGreen),
-                                    padding: const EdgeInsets.symmetric(vertical: 12),
-                                  ),
-                                ),
+
+                          // ONLY SHARE LINK ALLOWED OUTSIDE
+                          SizedBox(
+                            width: double.infinity,
+                            child: OutlinedButton.icon(
+                              onPressed: _shareStreamDirect,
+                              icon: const Icon(Icons.share, color: kNeonCyan, size: 18),
+                              label: Text(tr('share'), style: const TextStyle(color: kNeonCyan, fontSize: 12)),
+                              style: OutlinedButton.styleFrom(
+                                side: const BorderSide(color: kNeonCyan),
+                                padding: const EdgeInsets.symmetric(vertical: 14),
                               ),
-                              const SizedBox(width: 12),
-                              Expanded(
-                                child: OutlinedButton.icon(
-                                  onPressed: _shareStreamDirect,
-                                  icon: const Icon(Icons.share, color: kNeonCyan, size: 18),
-                                  label: Text(tr('share'), style: const TextStyle(color: kNeonCyan, fontSize: 11)),
-                                  style: OutlinedButton.styleFrom(
-                                    side: const BorderSide(color: kNeonCyan),
-                                    padding: const EdgeInsets.symmetric(vertical: 12),
-                                  ),
-                                ),
-                              ),
-                            ],
+                            ),
                           ),
                         ],
                       ),
@@ -1390,6 +1409,7 @@ class NativeVideoPlayerScreen extends StatefulWidget {
   final String title;
   final String uploader;
   final String sourcePageUrl;
+  final String videoId;
 
   const NativeVideoPlayerScreen({
     super.key,
@@ -1397,6 +1417,7 @@ class NativeVideoPlayerScreen extends StatefulWidget {
     required this.title,
     required this.uploader,
     required this.sourcePageUrl,
+    required this.videoId,
   });
 
   @override
@@ -1410,11 +1431,10 @@ class _NativeVideoPlayerScreenState extends State<NativeVideoPlayerScreen> {
   bool _showControls = true;
   Timer? _hideControlsTimer;
 
-  // 🌟 NEW CONTROL STATES
   VideoAspectMode _aspectMode = VideoAspectMode.fit;
   bool _isLandscape = false;
-  String _selectedQuality = 'Auto';
-  final List<String> _qualities = ['Auto', '1080p', '720p', '480p', '360p'];
+  String _selectedQuality = 'Auto (Fast)';
+  final List<String> _qualities = ['Auto (Fast)', '1080p FHD', '720p HD', '480p SD', '360p Low'];
 
   bool _isCcEnabled = false;
   double _playbackSpeed = 1.0;
@@ -1423,20 +1443,56 @@ class _NativeVideoPlayerScreenState extends State<NativeVideoPlayerScreen> {
   bool _isLooping = false;
   bool _isStableVolume = true;
 
-  // 🌟 LIKE / UNLIKE STATS
-  int _likesCount = 142;
-  int _unlikesCount = 3;
+  // 🌟 REAL PERSISTENT COUNTERS
+  int _likesCount = 0;
+  int _unlikesCount = 0;
+  int _sharesCount = 0;
   bool _isLiked = false;
   bool _isUnliked = false;
 
   @override
   void initState() {
     super.initState();
-    _initVideo();
+    _fetchRealStats();
+    _initFastVideo();
   }
 
-  Future<void> _initVideo() async {
-    _controller = VideoPlayerController.networkUrl(Uri.parse(widget.videoUrl));
+  // 🌟 FETCH REAL LIVE STATS FROM BACKEND REDIS
+  Future<void> _fetchRealStats() async {
+    try {
+      final res = await http.get(Uri.parse('$kBackendBaseUrl/api/stats/${widget.videoId}')).timeout(const Duration(seconds: 4));
+      if (res.statusCode == 200) {
+        final data = jsonDecode(res.body);
+        if (mounted) {
+          setState(() {
+            _likesCount = data['likes'] ?? 0;
+            _unlikesCount = data['unlikes'] ?? 0;
+            _sharesCount = data['shares'] ?? 0;
+          });
+        }
+      }
+    } catch (_) {}
+  }
+
+  Future<void> _sendStatUpdate(String action) async {
+    try {
+      await http.post(
+        Uri.parse('$kBackendBaseUrl/api/stats/update'),
+        headers: {'Content-Type': 'application/json'},
+        body: jsonEncode({
+          'video_id': widget.videoId,
+          'action': action,
+        }),
+      );
+    } catch (_) {}
+  }
+
+  // 🌟 HIGH-SPEED HARDWARE BUFFERING ENGINE
+  Future<void> _initFastVideo() async {
+    _controller = VideoPlayerController.networkUrl(
+      Uri.parse(widget.videoUrl),
+      videoPlayerOptions: VideoPlayerOptions(mixWithOthers: true),
+    );
     try {
       await _controller.initialize();
       _controller.play();
@@ -1513,20 +1569,18 @@ class _NativeVideoPlayerScreenState extends State<NativeVideoPlayerScreen> {
     return '$h$m:$s';
   }
 
-  // 🌟 SHARE VIDEO DIRECT LINK
   void _shareVideoLink() {
+    setState(() => _sharesCount++);
+    _sendStatUpdate('share');
     Share.share('🎬 Watch this video on MayaJaal:\n${widget.videoUrl}');
   }
 
-  // 🌟 DOWNLOAD VIDEO DIRECT LINK
   Future<void> _downloadVideoDirect() async {
     final target = Uri.parse(widget.videoUrl);
     if (await canLaunchUrl(target)) {
-      await launchUrl(target, mode: LaunchMode.externalApplication);
+      await launchUrl(target, mode: LaunchMode.externalNonBrowserApplication);
     } else {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Cannot open video download URL')),
-      );
+      await launchUrl(target, mode: LaunchMode.externalApplication);
     }
   }
 
@@ -1534,13 +1588,15 @@ class _NativeVideoPlayerScreenState extends State<NativeVideoPlayerScreen> {
     setState(() {
       if (_isLiked) {
         _isLiked = false;
-        _likesCount--;
+        _likesCount = math.max(0, _likesCount - 1);
+        _sendStatUpdate('unlike_dec');
       } else {
         _isLiked = true;
         _likesCount++;
+        _sendStatUpdate('like');
         if (_isUnliked) {
           _isUnliked = false;
-          _unlikesCount--;
+          _unlikesCount = math.max(0, _unlikesCount - 1);
         }
       }
     });
@@ -1550,13 +1606,14 @@ class _NativeVideoPlayerScreenState extends State<NativeVideoPlayerScreen> {
     setState(() {
       if (_isUnliked) {
         _isUnliked = false;
-        _unlikesCount--;
+        _unlikesCount = math.max(0, _unlikesCount - 1);
       } else {
         _isUnliked = true;
         _unlikesCount++;
+        _sendStatUpdate('unlike');
         if (_isLiked) {
           _isLiked = false;
-          _likesCount--;
+          _likesCount = math.max(0, _likesCount - 1);
         }
       }
     });
@@ -1756,12 +1813,12 @@ class _NativeVideoPlayerScreenState extends State<NativeVideoPlayerScreen> {
       body: SafeArea(
         child: Column(
           children: [
-            // 🌟 TOP VIDEO PLAYER WITH HUD
+            // 🌟 TOP VIDEO BOX (CLEANED - NO CLUTTER ON TOP OF SCREEN)
             Expanded(
               flex: _isLandscape ? 1 : 0,
               child: Container(
                 width: double.infinity,
-                height: _isLandscape ? double.infinity : 250,
+                height: _isLandscape ? double.infinity : 240,
                 color: Colors.black,
                 child: _hasError
                     ? Center(
@@ -1771,7 +1828,7 @@ class _NativeVideoPlayerScreenState extends State<NativeVideoPlayerScreen> {
                             const Icon(Icons.error_outline, color: Colors.redAccent, size: 45),
                             const SizedBox(height: 10),
                             const Text('Stream Connection Error', style: TextStyle(color: Colors.redAccent)),
-                            TextButton(onPressed: _initVideo, child: const Text('RETRY', style: TextStyle(color: kGreen))),
+                            TextButton(onPressed: _initFastVideo, child: const Text('RETRY', style: TextStyle(color: kGreen))),
                           ],
                         ),
                       )
@@ -1784,58 +1841,6 @@ class _NativeVideoPlayerScreenState extends State<NativeVideoPlayerScreen> {
                               alignment: Alignment.center,
                               children: [
                                 _buildConfiguredVideoBox(),
-
-                                // TOP OVERLAY CONTROLS (Aspect, Rotate, Quality, CC, Speed, Settings)
-                                if (_showControls)
-                                  Positioned(
-                                    top: 0,
-                                    left: 0,
-                                    right: 0,
-                                    child: Container(
-                                      padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 4),
-                                      color: Colors.black.withOpacity(0.7),
-                                      child: Row(
-                                        mainAxisAlignment: MainAxisAlignment.end,
-                                        children: [
-                                          IconButton(
-                                            icon: const Icon(Icons.aspect_ratio, color: kGreen, size: 20),
-                                            tooltip: 'All Size',
-                                            onPressed: _showAspectDialog,
-                                          ),
-                                          IconButton(
-                                            icon: Icon(_isLandscape ? Icons.screen_lock_portrait : Icons.screen_rotation, color: kGreen, size: 20),
-                                            tooltip: 'Rotate',
-                                            onPressed: _toggleOrientation,
-                                          ),
-                                          IconButton(
-                                            icon: const Icon(Icons.tune, color: kGreen, size: 20),
-                                            tooltip: 'Resolution Quality',
-                                            onPressed: _showQualityDialog,
-                                          ),
-                                          IconButton(
-                                            icon: Icon(_isCcEnabled ? Icons.closed_caption : Icons.closed_caption_off, color: _isCcEnabled ? kGreen : Colors.grey, size: 22),
-                                            tooltip: 'CC',
-                                            onPressed: () {
-                                              setState(() => _isCcEnabled = !_isCcEnabled);
-                                              ScaffoldMessenger.of(context).showSnackBar(
-                                                SnackBar(content: Text(_isCcEnabled ? 'CC Enabled' : 'CC Disabled'), duration: const Duration(seconds: 1)),
-                                              );
-                                            },
-                                          ),
-                                          IconButton(
-                                            icon: const Icon(Icons.speed, color: kGreen, size: 20),
-                                            tooltip: 'Speed',
-                                            onPressed: _showSpeedDialog,
-                                          ),
-                                          IconButton(
-                                            icon: const Icon(Icons.settings, color: kGreen, size: 20),
-                                            tooltip: 'Settings (Loop & Stable Volume)',
-                                            onPressed: _showPlayerSettingsModal,
-                                          ),
-                                        ],
-                                      ),
-                                    ),
-                                  ),
 
                                 // CENTER HUD: -10s, PLAY/PAUSE, +10s
                                 if (_showControls)
@@ -1921,12 +1926,12 @@ class _NativeVideoPlayerScreenState extends State<NativeVideoPlayerScreen> {
               ),
             ),
 
-            // 🌟 BOTTOM DETAILS, VIDEO ACTIONS & INTERACTION BAR
+            // 🌟 ALL OPTIONS MOVED DOWN INTO CLEAN BOTTOM PANEL
             if (!_isLandscape)
               Expanded(
                 child: Container(
                   width: double.infinity,
-                  padding: const EdgeInsets.all(18),
+                  padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
                   decoration: const BoxDecoration(
                     color: Color(0xFF050F08),
                     borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
@@ -1937,7 +1942,7 @@ class _NativeVideoPlayerScreenState extends State<NativeVideoPlayerScreen> {
                         widget.title,
                         style: const TextStyle(color: Colors.white, fontSize: 16, fontWeight: FontWeight.bold),
                       ),
-                      const SizedBox(height: 6),
+                      const SizedBox(height: 4),
                       Row(
                         children: [
                           const Icon(Icons.person_pin, size: 16, color: kGreen),
@@ -1948,27 +1953,27 @@ class _NativeVideoPlayerScreenState extends State<NativeVideoPlayerScreen> {
                           ),
                         ],
                       ),
-                      const SizedBox(height: 18),
+                      const SizedBox(height: 14),
 
-                      // 🌟 LIKE, UNLIKE, SHARE & DOWNLOAD BUTTON BAR
+                      // 🌟 REAL COMMUNITY STATS & DIRECT DOWNLOAD BAR
                       Row(
-                        mainAxisAlignment: MainAxisAlignment.spaceAround,
+                        mainAxisAlignment: MainAxisAlignment.spaceBetween,
                         children: [
                           // LIKE BUTTON
                           InkWell(
                             onTap: _toggleLike,
                             borderRadius: BorderRadius.circular(8),
                             child: Container(
-                              padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
+                              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
                               decoration: BoxDecoration(
                                 color: kCardBg,
                                 borderRadius: BorderRadius.circular(8),
-                                border: Border.all(color: _isLiked ? kGreen : kGreen.withOpacity(0.25)),
+                                border: Border.all(color: _isLiked ? kGreen : kGreen.withOpacity(0.2)),
                               ),
                               child: Row(
                                 children: [
-                                  Icon(_isLiked ? Icons.thumb_up : Icons.thumb_up_alt_outlined, color: _isLiked ? kGreen : Colors.white, size: 18),
-                                  const SizedBox(width: 6),
+                                  Icon(_isLiked ? Icons.thumb_up : Icons.thumb_up_alt_outlined, color: _isLiked ? kGreen : Colors.white, size: 16),
+                                  const SizedBox(width: 5),
                                   Text('$_likesCount', style: TextStyle(color: _isLiked ? kGreen : Colors.white, fontSize: 12, fontWeight: FontWeight.bold)),
                                 ],
                               ),
@@ -1980,16 +1985,16 @@ class _NativeVideoPlayerScreenState extends State<NativeVideoPlayerScreen> {
                             onTap: _toggleUnlike,
                             borderRadius: BorderRadius.circular(8),
                             child: Container(
-                              padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
+                              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
                               decoration: BoxDecoration(
                                 color: kCardBg,
                                 borderRadius: BorderRadius.circular(8),
-                                border: Border.all(color: _isUnliked ? Colors.redAccent : kGreen.withOpacity(0.25)),
+                                border: Border.all(color: _isUnliked ? Colors.redAccent : kGreen.withOpacity(0.2)),
                               ),
                               child: Row(
                                 children: [
-                                  Icon(_isUnliked ? Icons.thumb_down : Icons.thumb_down_alt_outlined, color: _isUnliked ? Colors.redAccent : Colors.white, size: 18),
-                                  const SizedBox(width: 6),
+                                  Icon(_isUnliked ? Icons.thumb_down : Icons.thumb_down_alt_outlined, color: _isUnliked ? Colors.redAccent : Colors.white, size: 16),
+                                  const SizedBox(width: 5),
                                   Text('$_unlikesCount', style: TextStyle(color: _isUnliked ? Colors.redAccent : Colors.white, fontSize: 12, fontWeight: FontWeight.bold)),
                                 ],
                               ),
@@ -2001,23 +2006,23 @@ class _NativeVideoPlayerScreenState extends State<NativeVideoPlayerScreen> {
                             onTap: _shareVideoLink,
                             borderRadius: BorderRadius.circular(8),
                             child: Container(
-                              padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
+                              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
                               decoration: BoxDecoration(
                                 color: kCardBg,
                                 borderRadius: BorderRadius.circular(8),
-                                border: Border.all(color: kNeonCyan.withOpacity(0.5)),
+                                border: Border.all(color: kNeonCyan.withOpacity(0.4)),
                               ),
-                              child: const Row(
+                              child: Row(
                                 children: [
-                                  Icon(Icons.share, color: kNeonCyan, size: 18),
-                                  SizedBox(width: 6),
-                                  Text('Share', style: TextStyle(color: kNeonCyan, fontSize: 12, fontWeight: FontWeight.bold)),
+                                  const Icon(Icons.share, color: kNeonCyan, size: 16),
+                                  const SizedBox(width: 5),
+                                  Text('$_sharesCount', style: const TextStyle(color: kNeonCyan, fontSize: 12, fontWeight: FontWeight.bold)),
                                 ],
                               ),
                             ),
                           ),
 
-                          // DOWNLOAD VIDEO BUTTON
+                          // 🌟 DIRECT VIDEO DOWNLOAD BUTTON (INSIDE ONLY)
                           InkWell(
                             onTap: _downloadVideoDirect,
                             borderRadius: BorderRadius.circular(8),
@@ -2029,8 +2034,8 @@ class _NativeVideoPlayerScreenState extends State<NativeVideoPlayerScreen> {
                               ),
                               child: const Row(
                                 children: [
-                                  Icon(Icons.download, color: Colors.black, size: 18),
-                                  SizedBox(width: 6),
+                                  Icon(Icons.download, color: Colors.black, size: 17),
+                                  SizedBox(width: 4),
                                   Text('Download', style: TextStyle(color: Colors.black, fontSize: 12, fontWeight: FontWeight.bold)),
                                 ],
                               ),
@@ -2038,30 +2043,74 @@ class _NativeVideoPlayerScreenState extends State<NativeVideoPlayerScreen> {
                           ),
                         ],
                       ),
+                      const SizedBox(height: 18),
 
-                      const SizedBox(height: 25),
+                      // 🌟 PROFESSIONAL BOTTOM SETTINGS TOOLBAR (REPLACES TOP CLUTTER)
                       Container(
-                        padding: const EdgeInsets.all(14),
+                        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 6),
                         decoration: BoxDecoration(
                           color: kCardBg,
                           borderRadius: BorderRadius.circular(10),
                           border: Border.all(color: kGreen.withOpacity(0.3)),
                         ),
+                        child: Row(
+                          mainAxisAlignment: MainAxisAlignment.spaceAround,
+                          children: [
+                            IconButton(
+                              icon: const Icon(Icons.aspect_ratio, color: kGreen, size: 22),
+                              tooltip: 'All Size',
+                              onPressed: _showAspectDialog,
+                            ),
+                            IconButton(
+                              icon: Icon(_isLandscape ? Icons.screen_lock_portrait : Icons.screen_rotation, color: kGreen, size: 22),
+                              tooltip: 'Rotate',
+                              onPressed: _toggleOrientation,
+                            ),
+                            IconButton(
+                              icon: const Icon(Icons.tune, color: kGreen, size: 22),
+                              tooltip: 'Quality',
+                              onPressed: _showQualityDialog,
+                            ),
+                            IconButton(
+                              icon: Icon(_isCcEnabled ? Icons.closed_caption : Icons.closed_caption_off, color: _isCcEnabled ? kGreen : Colors.grey, size: 24),
+                              tooltip: 'CC',
+                              onPressed: () {
+                                setState(() => _isCcEnabled = !_isCcEnabled);
+                                ScaffoldMessenger.of(context).showSnackBar(
+                                  SnackBar(content: Text(_isCcEnabled ? 'CC Enabled' : 'CC Disabled'), duration: const Duration(seconds: 1)),
+                                );
+                              },
+                            ),
+                            IconButton(
+                              icon: const Icon(Icons.speed, color: kGreen, size: 22),
+                              tooltip: 'Speed',
+                              onPressed: _showSpeedDialog,
+                            ),
+                            IconButton(
+                              icon: const Icon(Icons.settings, color: kGreen, size: 22),
+                              tooltip: 'Loop & Stable Volume',
+                              onPressed: _showPlayerSettingsModal,
+                            ),
+                          ],
+                        ),
+                      ),
+                      const SizedBox(height: 16),
+
+                      // STATUS CARD
+                      Container(
+                        padding: const EdgeInsets.all(12),
+                        decoration: BoxDecoration(
+                          color: kCardBg.withOpacity(0.6),
+                          borderRadius: BorderRadius.circular(10),
+                          border: Border.all(color: kGreen.withOpacity(0.2)),
+                        ),
                         child: Column(
                           crossAxisAlignment: CrossAxisAlignment.start,
                           children: [
-                            const Row(
-                              children: [
-                                Icon(Icons.security, size: 16, color: kGreen),
-                                SizedBox(width: 6),
-                                Text('ADVANCED PLAYER HUD', style: TextStyle(color: kGreen, fontSize: 11, fontWeight: FontWeight.bold)),
-                              ],
-                            ),
-                            const SizedBox(height: 8),
-                            Text('• Aspect Ratio / Size Mode: ${_aspectMode.title}', style: TextStyle(color: kDimGreen.withOpacity(0.9), fontSize: 11)),
-                            Text('• Stream Quality: $_selectedQuality', style: TextStyle(color: kDimGreen.withOpacity(0.9), fontSize: 11)),
-                            Text('• Playback Speed: ${_playbackSpeed}x | Loop: ${_isLooping ? "ON" : "OFF"}', style: TextStyle(color: kDimGreen.withOpacity(0.9), fontSize: 11)),
-                            Text('• Stable Volume Control: ${_isStableVolume ? "ACTIVE" : "OFF"}', style: TextStyle(color: kDimGreen.withOpacity(0.9), fontSize: 11)),
+                            const Text('HARDWARE ACCELERATION ENGINE', style: TextStyle(color: kGreen, fontSize: 11, fontWeight: FontWeight.bold)),
+                            const SizedBox(height: 6),
+                            Text('• Aspect: ${_aspectMode.title} | Resolution: $_selectedQuality', style: TextStyle(color: kDimGreen.withOpacity(0.9), fontSize: 10)),
+                            Text('• Speed: ${_playbackSpeed}x | Stable Audio: ${_isStableVolume ? "ON" : "OFF"}', style: TextStyle(color: kDimGreen.withOpacity(0.9), fontSize: 10)),
                           ],
                         ),
                       ),
