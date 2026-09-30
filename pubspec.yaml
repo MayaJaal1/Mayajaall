@@ -18,6 +18,12 @@ dependencies:
   url_launcher: ^6.2.2
   permission_handler: ^11.3.0
 
+  # 🌟 Naye Features ke liye zaroori packages
+  video_player: ^2.8.6
+  chewie: ^1.8.1
+  http: ^1.2.1
+  share_plus: ^9.0.0
+
 dev_dependencies:
   flutter_test:
     sdk: flutter
