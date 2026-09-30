@@ -5,6 +5,10 @@ on:
     branches: [ main ]
   workflow_dispatch:
 
+# 🌟 GITHUB RELEASES WRITE PERMISSION (403 ERROR FIX)
+permissions:
+  contents: write
+
 jobs:
   build:
     runs-on: ubuntu-latest
