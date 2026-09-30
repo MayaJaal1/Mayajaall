@@ -1,7 +1,9 @@
 import 'dart:async';
+import 'dart:convert';
 import 'dart:math' as math;
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
+import 'package:http/http.dart' as http;
 import 'package:app_links/app_links.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:google_sign_in/google_sign_in.dart';
@@ -13,6 +15,8 @@ import 'package:permission_handler/permission_handler.dart';
 const String supabaseUrl = 'https://inxlnctaixbkfblwlmhr.supabase.co';
 const String supabaseAnonKey = 'sb_publishable_6b9xe3mDBduO-soZTk3t2A_W1sQpD5K';
 const String webClientId = '985001671962-rok8qnng0rumjsd8mgr8uhr92o5vhs4n.apps.googleusercontent.com';
+
+const int kAppCurrentVersionCode = 1;
 
 const Color kGreen = Color(0xFF00FF41);
 const Color kBg = Color(0xFF000000);
@@ -131,7 +135,6 @@ class _MyAppState extends State<MyApp> {
     );
   }
 }
-
 class MatrixRain extends StatefulWidget {
   final double opacity;
   const MatrixRain({super.key, this.opacity = 0.7});
@@ -201,6 +204,7 @@ class _MatrixRainState extends State<MatrixRain> {
     );
   }
 }
+
 class SplashScreen extends StatefulWidget {
   const SplashScreen({super.key});
   @override
@@ -293,7 +297,6 @@ class _SplashScreenState extends State<SplashScreen>
     );
   }
 }
-
 class AuthGate extends StatelessWidget {
   const AuthGate({super.key});
   @override
@@ -487,6 +490,88 @@ class _HomeScreenState extends State<HomeScreen> {
     super.initState();
     _loadHistory();
     Future.delayed(const Duration(seconds: 1), () => _requestPermissions());
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      _checkServerForUpdate();
+    });
+  }
+
+  Future<void> _checkServerForUpdate() async {
+    try {
+      final res = await http.get(
+        Uri.parse('https://mayajaal.online/api/check-update'),
+      ).timeout(const Duration(seconds: 6));
+
+      if (res.statusCode == 200) {
+        final data = jsonDecode(res.body);
+        final int latestCode = data['latestVersionCode'] ?? 1;
+        final String updateUrl = data['updateUrl'] ?? 'https://mayajaal.online/download.html';
+        final String changelog = data['changelog'] ?? 'New version available with fixes!';
+
+        if (latestCode > kAppCurrentVersionCode) {
+          if (!mounted) return;
+          _showUpdateNotice(updateUrl, changelog);
+        }
+      }
+    } catch (_) {}
+  }
+
+  void _showUpdateNotice(String url, String info) {
+    showDialog(
+      context: context,
+      barrierDismissible: true,
+      builder: (c) => AlertDialog(
+        backgroundColor: kCardBg,
+        shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.circular(14),
+          side: const BorderSide(color: kGreen, width: 1.5),
+        ),
+        title: const Row(
+          children: [
+            Icon(Icons.system_update_rounded, color: kGreen),
+            SizedBox(width: 8),
+            Text(
+              'NEW UPDATE FOUND',
+              style: TextStyle(color: kGreen, fontSize: 15, fontWeight: FontWeight.bold, letterSpacing: 1.5),
+            ),
+          ],
+        ),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text(
+              info,
+              style: const TextStyle(color: Colors.white, fontSize: 13, fontFamily: 'monospace'),
+            ),
+            const SizedBox(height: 12),
+            Text(
+              '> Direct APK update is ready on official node.',
+              style: TextStyle(color: kDimGreen.withOpacity(0.9), fontSize: 11, fontFamily: 'monospace'),
+            ),
+          ],
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(c),
+            child: const Text('LATER', style: TextStyle(color: Colors.grey)),
+          ),
+          ElevatedButton(
+            style: ElevatedButton.styleFrom(
+              backgroundColor: kGreen,
+              foregroundColor: Colors.black,
+            ),
+            onPressed: () async {
+              Navigator.pop(c);
+              final target = Uri.parse(url);
+              if (await canLaunchUrl(target)) {
+                await launchUrl(target, mode: LaunchMode.externalApplication);
+              }
+            },
+            child: const Text('UPDATE NOW', style: TextStyle(fontWeight: FontWeight.bold)),
+          ),
+        ],
+      ),
+    );
   }
 
   Future<void> _requestPermissions() async {
@@ -645,8 +730,7 @@ class _HomeScreenState extends State<HomeScreen> {
       MaterialPageRoute(builder: (_) => VideoPlayerScreen(url: input)),
     ).then((_) => _loadHistory());
   }
-
-  @override
+    @override
   Widget build(BuildContext context) {
     final user = Supabase.instance.client.auth.currentUser;
 
@@ -975,7 +1059,6 @@ class _VideoPlayerScreenState extends State<VideoPlayerScreen> with SingleTicker
   bool _isLandscape = false;
   Timer? _hideControlsTimer;
 
-  // Video Timeline status
   double _currentTime = 0;
   double _duration = 1;
   bool _isDraggingSeek = false;
@@ -1151,7 +1234,8 @@ class _VideoPlayerScreenState extends State<VideoPlayerScreen> with SingleTicker
     final h = d.inHours > 0 ? '${d.inHours.toString().padLeft(2, '0')}:' : '';
     return '$h$m:$s';
   }
-    void _showAspectDialog() {
+
+  void _showAspectDialog() {
     showDialog(
       context: context,
       builder: (c) => AlertDialog(
@@ -1224,8 +1308,7 @@ class _VideoPlayerScreenState extends State<VideoPlayerScreen> with SingleTicker
       ),
     );
   }
-
-  Widget _buildVideoView() {
+    Widget _buildVideoView() {
     Widget child = WebViewWidget(controller: _controller);
 
     if (_aspectMode == VideoAspectMode.fill) {
@@ -1256,7 +1339,7 @@ class _VideoPlayerScreenState extends State<VideoPlayerScreen> with SingleTicker
             children: [
               Center(child: _buildVideoView()),
 
-              // 🌟 TOP MATRIX HUD BAR (Properly Arranged Action Icons)
+              // TOP MATRIX HUD BAR
               AnimatedOpacity(
                 opacity: _showControls ? 1.0 : 0.0,
                 duration: const Duration(milliseconds: 300),
@@ -1314,7 +1397,7 @@ class _VideoPlayerScreenState extends State<VideoPlayerScreen> with SingleTicker
                 ),
               ),
 
-              // 🌟 CENTER MATRIX STYLE PULSE PLAY / PAUSE BUTTON
+              // CENTER MATRIX PULSE PLAY / PAUSE BUTTON
               if (_showControls && !_isBuffering)
                 Center(
                   child: AnimatedBuilder(
@@ -1349,7 +1432,7 @@ class _VideoPlayerScreenState extends State<VideoPlayerScreen> with SingleTicker
                   ),
                 ),
 
-              // 🌟 BOTTOM MATRIX TIMELINE & DIGITAL CLOCK
+              // BOTTOM MATRIX TIMELINE
               Positioned(
                 bottom: 0,
                 left: 0,
@@ -1434,7 +1517,7 @@ class _VideoPlayerScreenState extends State<VideoPlayerScreen> with SingleTicker
                 ),
               ),
 
-              // 🌟 BUFFERING ANIMATION (NEON MATRIX RAIN OVERLAY)
+              // BUFFERING ANIMATION (MATRIX RAIN)
               if (_isBuffering && !_hasError)
                 Container(
                   color: Colors.black.withOpacity(0.7),
@@ -1462,7 +1545,7 @@ class _VideoPlayerScreenState extends State<VideoPlayerScreen> with SingleTicker
                               ),
                               const SizedBox(height: 12),
                               const Text(
-                                '> DECRYPTING STREAM STREAM...',
+                                '> DECRYPTING STREAM...',
                                 style: TextStyle(
                                   color: kGreen,
                                   fontFamily: 'monospace',
@@ -1479,7 +1562,7 @@ class _VideoPlayerScreenState extends State<VideoPlayerScreen> with SingleTicker
                   ),
                 ),
 
-              // 🌟 ERROR OVERLAY (Sirf Main Page Block hone par)
+              // ERROR OVERLAY
               if (_hasError)
                 Center(
                   child: Container(
