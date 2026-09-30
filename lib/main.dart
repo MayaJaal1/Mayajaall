@@ -34,12 +34,12 @@ Future<void> main() async {
   themeNotifier.value = isDark ? ThemeMode.dark : ThemeMode.light;
   runApp(const MyApp());
 }
+
 class MyApp extends StatefulWidget {
   const MyApp({super.key});
   @override
   State<MyApp> createState() => _MyAppState();
 }
-
 class _MyAppState extends State<MyApp> {
   final AppLinks _appLinks = AppLinks();
   StreamSubscription<Uri>? _linkSubscription;
@@ -498,7 +498,7 @@ class _HomeScreenState extends State<HomeScreen> {
     try {
       final client = HttpClient();
       client.connectionTimeout = const Duration(seconds: 5);
-      final request = await client.getUrl(Uri.parse('https://mayajaal.online/api/check-update'));
+      final request = await client.getUrl(Uri.parse('https://mayajaal.online/version.json'));
       final response = await request.close();
 
       if (response.statusCode == 200) {
@@ -921,6 +921,67 @@ class _SettingsScreenState extends State<SettingsScreen> {
     setState(() => _downloadLocation = value);
   }
 
+  Future<void> _manualCheckUpdate() async {
+    ScaffoldMessenger.of(context).showSnackBar(
+      const SnackBar(content: Text('Checking server for updates...'), duration: Duration(seconds: 1)),
+    );
+    try {
+      final client = HttpClient();
+      client.connectionTimeout = const Duration(seconds: 6);
+      final req = await client.getUrl(Uri.parse('https://mayajaal.online/version.json'));
+      final res = await req.close();
+      if (res.statusCode == 200) {
+        final body = await res.transform(utf8.decoder).join();
+        final data = jsonDecode(body);
+        final int latestCode = data['latestVersionCode'] ?? 1;
+        final String url = data['updateUrl'] ?? 'https://mayajaal.online/download.html';
+        final String log = data['changelog'] ?? 'New version available with fixes!';
+
+        if (!mounted) return;
+        if (latestCode > kAppCurrentVersionCode) {
+          showDialog(
+            context: context,
+            builder: (c) => AlertDialog(
+              backgroundColor: kCardBg,
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(14),
+                side: const BorderSide(color: kGreen, width: 1.5),
+              ),
+              title: const Row(
+                children: [
+                  Icon(Icons.system_update_rounded, color: kGreen),
+                  SizedBox(width: 8),
+                  Text('NEW UPDATE FOUND', style: TextStyle(color: kGreen, fontSize: 15, fontWeight: FontWeight.bold)),
+                ],
+              ),
+              content: Text(log, style: const TextStyle(color: Colors.white, fontSize: 13, fontFamily: 'monospace')),
+              actions: [
+                TextButton(onPressed: () => Navigator.pop(c), child: const Text('LATER', style: TextStyle(color: Colors.grey))),
+                ElevatedButton(
+                  style: ElevatedButton.styleFrom(backgroundColor: kGreen, foregroundColor: Colors.black),
+                  onPressed: () async {
+                    Navigator.pop(c);
+                    final u = Uri.parse(url);
+                    if (await canLaunchUrl(u)) await launchUrl(u, mode: LaunchMode.externalApplication);
+                  },
+                  child: const Text('UPDATE NOW', style: TextStyle(fontWeight: FontWeight.bold)),
+                ),
+              ],
+            ),
+          );
+        } else {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(content: Text('App is already up to date!')),
+          );
+        }
+      }
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Error: $e')));
+      }
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     return Scaffold(
@@ -949,6 +1010,14 @@ class _SettingsScreenState extends State<SettingsScreen> {
             subtitle: Text(_downloadLocation, style: TextStyle(color: kGreen.withOpacity(0.6), fontSize: 12)),
             trailing: const Icon(Icons.arrow_forward_ios, size: 14, color: kGreen),
             onTap: () => _showDownloadLocationDialog(),
+          ),
+          Divider(color: kGreen.withOpacity(0.2)),
+          ListTile(
+            leading: const Icon(Icons.system_update, color: kGreen),
+            title: const Text('Check for Updates', style: TextStyle(color: kGreen, fontFamily: 'monospace')),
+            subtitle: Text('Tap to check node updates', style: TextStyle(color: kGreen.withOpacity(0.6), fontSize: 12)),
+            trailing: const Icon(Icons.refresh, size: 20, color: kGreen),
+            onTap: _manualCheckUpdate,
           ),
           Divider(color: kGreen.withOpacity(0.2)),
           const SizedBox(height: 30),
@@ -1235,8 +1304,7 @@ class _VideoPlayerScreenState extends State<VideoPlayerScreen> with SingleTicker
     final h = d.inHours > 0 ? '${d.inHours.toString().padLeft(2, '0')}:' : '';
     return '$h$m:$s';
   }
-
-  void _showAspectDialog() {
+    void _showAspectDialog() {
     showDialog(
       context: context,
       builder: (c) => AlertDialog(
@@ -1309,7 +1377,8 @@ class _VideoPlayerScreenState extends State<VideoPlayerScreen> with SingleTicker
       ),
     );
   }
-    Widget _buildVideoView() {
+
+  Widget _buildVideoView() {
     Widget child = WebViewWidget(controller: _controller);
 
     if (_aspectMode == VideoAspectMode.fill) {
