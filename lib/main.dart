@@ -1,9 +1,9 @@
 import 'dart:async';
 import 'dart:convert';
+import 'dart:io';
 import 'dart:math' as math;
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
-import 'package:http/http.dart' as http;
 import 'package:app_links/app_links.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:google_sign_in/google_sign_in.dart';
@@ -496,12 +496,14 @@ class _HomeScreenState extends State<HomeScreen> {
 
   Future<void> _checkServerForUpdate() async {
     try {
-      final res = await http.get(
-        Uri.parse('https://mayajaal.online/api/check-update'),
-      ).timeout(const Duration(seconds: 6));
+      final client = HttpClient();
+      client.connectionTimeout = const Duration(seconds: 5);
+      final request = await client.getUrl(Uri.parse('https://mayajaal.online/api/check-update'));
+      final response = await request.close();
 
-      if (res.statusCode == 200) {
-        final data = jsonDecode(res.body);
+      if (response.statusCode == 200) {
+        final responseBody = await response.transform(utf8.decoder).join();
+        final data = jsonDecode(responseBody);
         final int latestCode = data['latestVersionCode'] ?? 1;
         final String updateUrl = data['updateUrl'] ?? 'https://mayajaal.online/download.html';
         final String changelog = data['changelog'] ?? 'New version available with fixes!';
