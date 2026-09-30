@@ -1,7 +1,6 @@
 import 'dart:async';
 import 'dart:math' as math;
 import 'package:flutter/material.dart';
-import 'package:flutter/services.dart';
 import 'package:app_links/app_links.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:google_sign_in/google_sign_in.dart';
@@ -70,7 +69,6 @@ class _MyAppState extends State<MyApp> {
     if (uri.scheme == 'mayajaall' && uri.queryParameters.containsKey('url')) {
       finalUrl = uri.queryParameters['url']!;
     }
-    
     setState(() {
       _incomingUrl = finalUrl;
       _showSplash = false;
@@ -951,8 +949,7 @@ enum VideoAspectMode {
   original('Original Fit', null),
   fill('Fill Screen', BoxFit.cover),
   widescreen('16:9 Cinema', 16 / 9),
-  standard('4:3 Retro', 4 / 3),
-  stretch('Stretch', BoxFit.fill);
+  standard('4:3 Retro', 4 / 3);
 
   final String title;
   final dynamic value;
@@ -1004,15 +1001,8 @@ class _VideoPlayerScreenState extends State<VideoPlayerScreen> {
             _isBuffering = false;
           }),
         ),
-      );
-
-    if (_controller.platform is AndroidWebViewController) {
-      AndroidWebViewController.enableDebugging(true);
-      (_controller.platform as AndroidWebViewController)
-          .setMediaPlaybackRequiresUserGesture(false);
-    }
-
-    _controller.loadRequest(Uri.parse(widget.url));
+      )
+      ..loadRequest(Uri.parse(widget.url));
   }
 
   void _injectVideoHooks() {
@@ -1023,6 +1013,7 @@ class _VideoPlayerScreenState extends State<VideoPlayerScreen> {
           if (v) {
             v.setAttribute('playsinline', 'true');
             v.setAttribute('webkit-playsinline', 'true');
+            v.setAttribute('autoplay', 'true');
             v.addEventListener('waiting', () => MatrixStreamEvents.postMessage('buffering_start'));
             v.addEventListener('playing', () => MatrixStreamEvents.postMessage('buffering_end'));
             v.addEventListener('canplay', () => MatrixStreamEvents.postMessage('buffering_end'));
@@ -1180,7 +1171,6 @@ class _VideoPlayerScreenState extends State<VideoPlayerScreen> {
         children: [
           Center(child: _buildVideoContainer()),
 
-          // 🌟 Futuristic Matrix Style Buffering Overlay
           if (_isBuffering && !_hasError)
             Container(
               color: Colors.black.withOpacity(0.65),
