@@ -19,6 +19,7 @@ const Color kCardBg = Color(0xFF0A0A0A);
 const Color kDimGreen = Color(0xFF4FBF8B);
 
 final ValueNotifier<ThemeMode> themeNotifier = ValueNotifier(ThemeMode.dark);
+final GlobalKey<NavigatorState> navigatorKey = GlobalKey<NavigatorState>();
 
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
@@ -68,10 +69,20 @@ class _MyAppState extends State<MyApp> {
     if (uri.scheme == 'mayajaall' && uri.queryParameters.containsKey('url')) {
       finalUrl = uri.queryParameters['url']!;
     }
+    
     setState(() {
       _incomingUrl = finalUrl;
       _showSplash = false;
     });
+
+    // 🌟 Agar app pehle se open ho to direct player screen par redirect karein
+    if (navigatorKey.currentState != null) {
+      navigatorKey.currentState!.push(
+        MaterialPageRoute(
+          builder: (_) => VideoPlayerScreen(url: finalUrl),
+        ),
+      );
+    }
   }
 
   @override
@@ -105,6 +116,7 @@ class _MyAppState extends State<MyApp> {
       valueListenable: themeNotifier,
       builder: (context, mode, _) {
         return MaterialApp(
+          navigatorKey: navigatorKey,
           title: 'MayaJaal',
           debugShowCheckedModeBanner: false,
           themeMode: mode,
@@ -119,7 +131,8 @@ class _MyAppState extends State<MyApp> {
       },
     );
   }
-}class MatrixRain extends StatefulWidget {
+}
+class MatrixRain extends StatefulWidget {
   const MatrixRain({super.key});
   @override
   State<MatrixRain> createState() => _MatrixRainState();
@@ -280,7 +293,6 @@ class _SplashScreenState extends State<SplashScreen>
     );
   }
 }
-
 class AuthGate extends StatelessWidget {
   const AuthGate({super.key});
   @override
@@ -457,7 +469,9 @@ class _LoginScreenState extends State<LoginScreen> {
       ),
     );
   }
-}class HomeScreen extends StatefulWidget {
+}
+
+class HomeScreen extends StatefulWidget {
   const HomeScreen({super.key});
   @override
   State<HomeScreen> createState() => _HomeScreenState();
@@ -773,7 +787,6 @@ class _HomeScreenState extends State<HomeScreen> {
     );
   }
 }
-
 class SettingsScreen extends StatefulWidget {
   const SettingsScreen({super.key});
   @override
@@ -932,7 +945,9 @@ class _SettingsScreenState extends State<SettingsScreen> {
       ),
     );
   }
-}class VideoPlayerScreen extends StatefulWidget {
+}
+
+class VideoPlayerScreen extends StatefulWidget {
   final String url;
   const VideoPlayerScreen({super.key, required this.url});
   @override
