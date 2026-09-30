@@ -92,7 +92,9 @@ jobs:
               <application
                   android:label="MayaJaal"
                   android:name="${applicationName}"
-                  android:icon="@mipmap/ic_launcher">
+                  android:icon="@mipmap/ic_launcher"
+                  android:hardwareAccelerated="true"
+                  android:usesCleartextTraffic="true">
                   <activity
                       android:name=".MainActivity"
                       android:exported="true"
@@ -109,12 +111,15 @@ jobs:
                           <action android:name="android.intent.action.MAIN"/>
                           <category android:name="android.intent.category.LAUNCHER"/>
                       </intent-filter>
+                      <!-- 🌟 Custom Domain Auto-Verify (www.mayajaal.online & mayajaal.online) -->
                       <intent-filter android:autoVerify="true">
                           <action android:name="android.intent.action.VIEW" />
                           <category android:name="android.intent.category.DEFAULT" />
                           <category android:name="android.intent.category.BROWSABLE" />
-                          <data android:scheme="https" android:host="mayajaal-backend-production.up.railway.app" android:pathPrefix="/tb" />
-                          <data android:scheme="https" android:host="mayajaal-backend-production.up.railway.app" android:pathPrefix="/v" />
+                          <data android:scheme="https" android:host="www.mayajaal.online" android:pathPrefix="/tb" />
+                          <data android:scheme="https" android:host="www.mayajaal.online" android:pathPrefix="/v" />
+                          <data android:scheme="https" android:host="mayajaal.online" android:pathPrefix="/tb" />
+                          <data android:scheme="https" android:host="mayajaal.online" android:pathPrefix="/v" />
                       </intent-filter>
                       <intent-filter>
                           <action android:name="android.intent.action.VIEW" />
@@ -249,3 +254,4 @@ jobs:
         with:
           name: release-apk
           path: build/app/outputs/flutter-apk/app-release.apk
+          
