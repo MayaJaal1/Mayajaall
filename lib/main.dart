@@ -48,7 +48,7 @@ final Map<String, Map<String, String>> localizedStrings = {
     'update_available': 'NEW UPDATE FOUND',
     'update_now': 'UPDATE NOW',
     'later': 'LATER',
-    'init_stream': 'INITIALIZE NEURAL STREAM',
+    'init_stream': 'INITIALIZE NEURAL STREAM\nSTREAM (OPEN NOW)',
     'stream_ready': 'STREAM READY FOR DECRYPTION',
     'download': 'DOWNLOAD VIDEO',
     'share': 'SHARE VIDEO',
@@ -70,7 +70,7 @@ final Map<String, Map<String, String>> localizedStrings = {
     'update_available': 'नया अपडेट उपलब्ध है',
     'update_now': 'अभी अपडेट करें',
     'later': 'बाद में',
-    'init_stream': 'INITIALIZE NEURAL STREAM',
+    'init_stream': 'INITIALIZE NEURAL STREAM\nSTREAM (OPEN NOW)',
     'stream_ready': 'STREAM READY FOR DECRYPTION',
     'download': 'वीडियो डाउनलोड करें',
     'share': 'वीडियो लिंक शेयर करें',
@@ -739,7 +739,7 @@ class _HomeScreenState extends State<HomeScreen> with SingleTickerProviderStateM
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.center,
             children: [
-              // 🌟 1. TOP APP BAR HEADER
+              // 1. TOP APP BAR HEADER
               Padding(
                 padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
                 child: Row(
@@ -804,7 +804,7 @@ class _HomeScreenState extends State<HomeScreen> with SingleTickerProviderStateM
                 ),
               ),
 
-              // 🌟 2. HERO MATRIX STREAMING UNIVERSE BANNER WITH FILM STRIPS
+              // 2. HERO MATRIX STREAMING BANNER
               Container(
                 width: double.infinity,
                 padding: const EdgeInsets.symmetric(vertical: 20),
@@ -838,6 +838,7 @@ class _HomeScreenState extends State<HomeScreen> with SingleTickerProviderStateM
                       ),
                     ),
 
+                    // CENTER NEON LOGO STAGE
                     AnimatedBuilder(
                       animation: _pulseAnimation,
                       builder: (context, child) => Transform.scale(
@@ -893,7 +894,7 @@ class _HomeScreenState extends State<HomeScreen> with SingleTickerProviderStateM
                 ),
               ),
 
-              // 🌟 3. MATRIX NEURAL STREAM NODE INPUT CARD
+              // 3. MATRIX NEURAL STREAM NODE INPUT CARD
               Padding(
                 padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
                 child: Container(
@@ -997,7 +998,7 @@ class _HomeScreenState extends State<HomeScreen> with SingleTickerProviderStateM
                 ),
               ),
 
-              // 🌟 4. CATEGORY CYBER CARDS (MOVIES, WEB SERIES, LIVE TV, FAVORITES)
+              // 4. CATEGORY CYBER CARDS
               Padding(
                 padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
                 child: Row(
@@ -1013,7 +1014,7 @@ class _HomeScreenState extends State<HomeScreen> with SingleTickerProviderStateM
                 ),
               ),
 
-              // 🌟 5. SECURE PIPELINE STATUS STRIP
+              // 5. STATUS PIPELINE STRIP
               Padding(
                 padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 6),
                 child: Container(
@@ -1039,7 +1040,7 @@ class _HomeScreenState extends State<HomeScreen> with SingleTickerProviderStateM
                 ),
               ),
 
-              // 🌟 6. BOTTOM CYBER AMBIENCE STRIP
+              // 6. BOTTOM STRIP
               Padding(
                 padding: const EdgeInsets.symmetric(vertical: 18),
                 child: Text(
@@ -1572,7 +1573,7 @@ class _StreamPreviewScreenState extends State<StreamPreviewScreen> with SingleTi
       vsync: this,
       duration: const Duration(milliseconds: 1400),
     )..repeat(reverse: true);
-    _pulseAnimation = Tween<double>(begin: 0.98, end: 1.02).animate(
+    _pulseAnimation = Tween<double>(begin: 0.95, end: 1.05).animate(
       CurvedAnimation(parent: _pulseController, curve: Curves.easeInOut),
     );
     _fetchStreamMetadata();
@@ -1659,7 +1660,7 @@ class _StreamPreviewScreenState extends State<StreamPreviewScreen> with SingleTi
   }
 
   void _shareStreamDirect() {
-    Share.share('🚀 Watch this high-speed stream on MayaJaal:\n${widget.targetUrl}');
+    Share.share('🚀 Watch this stream on MayaJaal:\n${widget.targetUrl}');
   }
 
   Future<void> _saveWatchRecord() async {
@@ -1725,169 +1726,150 @@ class _StreamPreviewScreenState extends State<StreamPreviewScreen> with SingleTi
       backgroundColor: Colors.black,
       body: SafeArea(
         child: SingleChildScrollView(
-          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
           child: Column(
-            crossAxisAlignment: CrossAxisAlignment.center,
             children: [
-              // 🌟 1. TOP BAR (CIRCULAR BACK BUTTON, TITLE, SHIELD ICON)
+              // 🌟 1. TOP BAR WITH BADGE
               Row(
-                mainAxisAlignment: MainAxisAlignment.spaceBetween,
                 children: [
-                  GestureDetector(
-                    onTap: () => Navigator.pop(context),
-                    child: Container(
-                      width: 44,
-                      height: 44,
-                      decoration: BoxDecoration(
-                        color: const Color(0xFF031A0B),
-                        shape: BoxShape.circle,
-                        border: Border.all(color: kGreen.withOpacity(0.6)),
-                      ),
-                      child: const Icon(Icons.arrow_back, color: kGreen, size: 22),
+                  IconButton(
+                    icon: const Icon(Icons.arrow_back_ios_new, color: kGreen, size: 22),
+                    onPressed: () => Navigator.pop(context),
+                  ),
+                  Expanded(
+                    child: Column(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        const Text(
+                          'NODE VERIFICATION',
+                          style: TextStyle(
+                            color: kGreen,
+                            fontSize: 19,
+                            fontWeight: FontWeight.w900,
+                            letterSpacing: 2,
+                            shadows: [Shadow(color: kGreen, blurRadius: 12)],
+                          ),
+                        ),
+                        Text(
+                          'MATRIX NEURAL STREAM',
+                          style: TextStyle(
+                            color: kGreen.withOpacity(0.7),
+                            fontSize: 9,
+                            letterSpacing: 2.5,
+                            fontWeight: FontWeight.w600,
+                          ),
+                        ),
+                      ],
                     ),
                   ),
-                  Column(
-                    children: [
-                      const Text(
-                        'NODE VERIFICATION',
-                        style: TextStyle(
-                          color: kGreen,
-                          fontSize: 19,
-                          fontWeight: FontWeight.w900,
-                          letterSpacing: 2,
-                          shadows: [Shadow(color: kGreen, blurRadius: 10)],
-                        ),
-                      ),
-                      const SizedBox(height: 2),
-                      Text(
-                        'MATRIX NEURAL STREAM',
-                        style: TextStyle(
-                          color: kGreen.withOpacity(0.7),
-                          fontSize: 10,
-                          letterSpacing: 2.5,
-                          fontWeight: FontWeight.bold,
-                        ),
-                      ),
-                    ],
-                  ),
                   Container(
-                    width: 44,
-                    height: 44,
+                    padding: const EdgeInsets.all(7),
                     decoration: BoxDecoration(
-                      color: const Color(0xFF031A0B),
                       shape: BoxShape.circle,
                       border: Border.all(color: kGreen.withOpacity(0.6)),
                     ),
-                    child: const Icon(Icons.security, color: kGreen, size: 22),
+                    child: const Icon(Icons.verified_user_rounded, color: kGreen, size: 18),
                   ),
                 ],
               ),
-              const SizedBox(height: 16),
+              const SizedBox(height: 15),
 
-              // 🌟 2. MAIN VERIFICATION CYBER CARD (EXACT SCREENSHOT UI)
+              // 🌟 2. MAIN CYBER GLASS CONTAINER (EXACT SCREENSHOT LAYOUT)
               Container(
                 width: double.infinity,
-                padding: const EdgeInsets.all(20),
+                padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 20),
                 decoration: BoxDecoration(
-                  color: const Color(0xFF021206),
-                  borderRadius: BorderRadius.circular(22),
-                  border: Border.all(color: kGreen.withOpacity(0.6), width: 1.5),
+                  color: const Color(0xFF011206),
+                  borderRadius: BorderRadius.circular(24),
+                  border: Border.all(color: kGreen.withOpacity(0.65), width: 1.5),
                   boxShadow: [
-                    BoxShadow(color: kGreen.withOpacity(0.2), blurRadius: 25),
+                    BoxShadow(color: kGreen.withOpacity(0.2), blurRadius: 30),
                   ],
                 ),
                 child: Column(
                   children: [
-                    // LOGO IN CENTER
-                    AnimatedBuilder(
-                      animation: _pulseAnimation,
-                      builder: (context, child) => Transform.scale(
-                        scale: _pulseAnimation.value,
-                        child: Container(
-                          width: 105,
-                          height: 105,
-                          decoration: BoxDecoration(
-                            borderRadius: BorderRadius.circular(22),
-                            border: Border.all(color: kGreen, width: 2),
-                            boxShadow: [
-                              BoxShadow(color: kGreen.withOpacity(0.5), blurRadius: 20),
-                            ],
-                          ),
-                          child: ClipRRect(
-                            borderRadius: BorderRadius.circular(20),
-                            child: Image.asset(
-                              'assets/icon/logo.png',
-                              fit: BoxFit.cover,
-                              errorBuilder: (context, error, stackTrace) => Container(
-                                color: Colors.black,
-                                child: const Icon(Icons.movie_filter, size: 55, color: kGreen),
-                              ),
-                            ),
+                    // NEON CENTER LOGO
+                    Container(
+                      width: 85,
+                      height: 85,
+                      decoration: BoxDecoration(
+                        borderRadius: BorderRadius.circular(20),
+                        border: Border.all(color: kGreen, width: 2),
+                        boxShadow: [
+                          BoxShadow(color: kGreen.withOpacity(0.55), blurRadius: 20),
+                        ],
+                      ),
+                      child: ClipRRect(
+                        borderRadius: BorderRadius.circular(18),
+                        child: Image.asset(
+                          'assets/icon/logo.png',
+                          fit: BoxFit.cover,
+                          errorBuilder: (context, error, stackTrace) => Container(
+                            color: Colors.black,
+                            child: const Icon(Icons.movie_filter, size: 45, color: kGreen),
                           ),
                         ),
                       ),
                     ),
                     const SizedBox(height: 18),
 
-                    // STREAM READY FOR DECRYPTION
+                    // STATUS TITLES
                     const Text(
                       'STREAM READY FOR DECRYPTION',
                       style: TextStyle(
                         color: kGreen,
-                        fontSize: 16,
+                        fontSize: 14.5,
                         fontWeight: FontWeight.w900,
-                        letterSpacing: 2,
-                        shadows: [Shadow(color: kGreen, blurRadius: 10)],
-                      ),
-                      textAlign: TextAlign.center,
-                    ),
-                    const SizedBox(height: 6),
-                    Text(
-                      '— NODE VERIFIED  •  SECURE  •  STABLE —',
-                      style: TextStyle(
-                        color: kGreen.withOpacity(0.8),
-                        fontSize: 10,
-                        fontWeight: FontWeight.bold,
                         letterSpacing: 1.5,
                       ),
                     ),
-                    const SizedBox(height: 20),
+                    const SizedBox(height: 6),
+                    Text(
+                      'NODE VERIFIED   •   SECURE   •   STABLE',
+                      style: TextStyle(
+                        color: kGreen.withOpacity(0.7),
+                        fontSize: 9.5,
+                        fontWeight: FontWeight.w700,
+                        letterSpacing: 1.5,
+                      ),
+                    ),
+                    const SizedBox(height: 18),
 
-                    // FILE NAME INNER TILE
+                    // INNER FILE DETAILS CARD
                     Container(
-                      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+                      padding: const EdgeInsets.all(14),
                       decoration: BoxDecoration(
-                        color: const Color(0xFF010A03),
+                        color: const Color(0xFF031A0B),
                         borderRadius: BorderRadius.circular(16),
                         border: Border.all(color: kGreen.withOpacity(0.35)),
                       ),
                       child: Column(
                         children: [
+                          // FILE NAME ROW
                           Row(
                             children: [
                               Container(
-                                width: 44,
-                                height: 44,
+                                padding: const EdgeInsets.all(10),
                                 decoration: BoxDecoration(
-                                  color: const Color(0xFF03220E),
                                   shape: BoxShape.circle,
-                                  border: Border.all(color: kGreen.withOpacity(0.6)),
+                                  color: Colors.black,
+                                  border: Border.all(color: kGreen.withOpacity(0.5)),
                                 ),
-                                child: const Icon(Icons.video_library, color: kGreen, size: 22),
+                                child: const Icon(Icons.video_collection_outlined, color: kGreen, size: 20),
                               ),
-                              const SizedBox(width: 12),
+                              const SizedBox(width: 14),
                               Expanded(
                                 child: Column(
                                   crossAxisAlignment: CrossAxisAlignment.start,
                                   children: [
                                     Text(
                                       'FILE NAME',
-                                      style: TextStyle(color: kDimGreen.withOpacity(0.7), fontSize: 10, letterSpacing: 1),
+                                      style: TextStyle(color: Colors.white.withOpacity(0.5), fontSize: 9.5, letterSpacing: 1),
                                     ),
                                     const SizedBox(height: 2),
                                     Text(
                                       _videoTitle,
-                                      style: const TextStyle(color: Colors.white, fontSize: 14, fontWeight: FontWeight.bold),
+                                      style: const TextStyle(color: Colors.white, fontSize: 13.5, fontWeight: FontWeight.bold),
                                       maxLines: 1,
                                       overflow: TextOverflow.ellipsis,
                                     ),
@@ -1900,31 +1882,31 @@ class _StreamPreviewScreenState extends State<StreamPreviewScreen> with SingleTi
                             padding: const EdgeInsets.symmetric(vertical: 8),
                             child: Divider(color: kGreen.withOpacity(0.15)),
                           ),
+                          // UPLOADER ROW
                           Row(
                             children: [
                               Container(
-                                width: 44,
-                                height: 44,
+                                padding: const EdgeInsets.all(10),
                                 decoration: BoxDecoration(
-                                  color: const Color(0xFF03220E),
                                   shape: BoxShape.circle,
-                                  border: Border.all(color: kGreen.withOpacity(0.6)),
+                                  color: Colors.black,
+                                  border: Border.all(color: kGreen.withOpacity(0.5)),
                                 ),
-                                child: const Icon(Icons.person, color: kGreen, size: 22),
+                                child: const Icon(Icons.person_outline, color: kGreen, size: 20),
                               ),
-                              const SizedBox(width: 12),
+                              const SizedBox(width: 14),
                               Expanded(
                                 child: Column(
                                   crossAxisAlignment: CrossAxisAlignment.start,
                                   children: [
                                     Text(
                                       'UPLOADER',
-                                      style: TextStyle(color: kDimGreen.withOpacity(0.7), fontSize: 10, letterSpacing: 1),
+                                      style: TextStyle(color: Colors.white.withOpacity(0.5), fontSize: 9.5, letterSpacing: 1),
                                     ),
                                     const SizedBox(height: 2),
                                     Text(
                                       _uploaderName,
-                                      style: const TextStyle(color: kGreen, fontSize: 14, fontWeight: FontWeight.bold),
+                                      style: const TextStyle(color: kGreen, fontSize: 13.5, fontWeight: FontWeight.bold),
                                     ),
                                   ],
                                 ),
@@ -1934,98 +1916,91 @@ class _StreamPreviewScreenState extends State<StreamPreviewScreen> with SingleTi
                         ],
                       ),
                     ),
-                    const SizedBox(height: 18),
+                    const SizedBox(height: 16),
 
-                    // 🌟 10-SECOND SINGLE HUD INDICATOR
+                    // 10S COUNTDOWN STATUS PILL / ACCESS GRANTED
                     Container(
                       width: double.infinity,
-                      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+                      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
                       decoration: BoxDecoration(
-                        color: const Color(0xFF011A08),
-                        borderRadius: BorderRadius.circular(16),
-                        border: Border.all(color: _canProceed ? kGreen : Colors.orangeAccent),
+                        color: const Color(0xFF03220E),
+                        borderRadius: BorderRadius.circular(14),
+                        border: Border.all(color: _canProceed ? kGreen : Colors.orangeAccent, width: 1.2),
                       ),
                       child: Row(
                         children: [
                           Icon(
-                            _canProceed ? Icons.verified : Icons.timer,
+                            _canProceed ? Icons.verified_user : Icons.timer,
                             color: _canProceed ? kGreen : Colors.orangeAccent,
-                            size: 26,
+                            size: 20,
                           ),
-                          const SizedBox(width: 12),
+                          const SizedBox(width: 10),
                           Expanded(
                             child: Column(
                               crossAxisAlignment: CrossAxisAlignment.start,
                               children: [
                                 Text(
-                                  _canProceed ? 'ACCESS GRANTED // READY' : 'DECRYPTING NODE (00:${_countdown.toString().padLeft(2, '0')})',
+                                  _canProceed ? 'ACCESS GRANTED // READY' : 'DECRYPTING STREAM NODE...',
                                   style: TextStyle(
                                     color: _canProceed ? kGreen : Colors.orangeAccent,
-                                    fontSize: 13,
+                                    fontSize: 12.5,
                                     fontWeight: FontWeight.bold,
-                                    letterSpacing: 1.5,
+                                    letterSpacing: 1,
                                   ),
                                 ),
-                                const SizedBox(height: 2),
                                 Text(
-                                  _canProceed ? 'NODE AUTHENTICATED' : 'PLEASE WAIT TO VERIFY SECURE KEY',
-                                  style: TextStyle(
-                                    color: (_canProceed ? kGreen : Colors.orangeAccent).withOpacity(0.7),
-                                    fontSize: 10,
-                                  ),
+                                  _canProceed ? 'NODE AUTHENTICATED' : 'WAIT FOR SECURITY CIPHER: 00:${_countdown.toString().padLeft(2, '0')}',
+                                  style: TextStyle(color: Colors.white.withOpacity(0.6), fontSize: 9.5),
                                 ),
                               ],
                             ),
                           ),
-                          Icon(Icons.double_arrow_rounded, color: (_canProceed ? kGreen : Colors.orangeAccent).withOpacity(0.6), size: 22),
+                          Icon(
+                            Icons.keyboard_double_arrow_right_rounded,
+                            color: _canProceed ? kGreen : Colors.orangeAccent,
+                            size: 22,
+                          ),
                         ],
                       ),
                     ),
-                    const SizedBox(height: 14),
+                    const SizedBox(height: 16),
 
                     // 🌟 INITIALIZE NEURAL STREAM ACTION BUTTON
-                    SizedBox(
-                      width: double.infinity,
-                      height: 52,
-                      child: ElevatedButton(
-                        onPressed: _canProceed ? _launchNativePlayer : null,
-                        style: ElevatedButton.styleFrom(
-                          backgroundColor: _canProceed ? kGreen : Colors.grey[850],
-                          foregroundColor: Colors.black,
-                          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
-                          elevation: _canProceed ? 8 : 0,
-                        ),
-                        child: Row(
-                          children: [
-                            const Icon(Icons.bolt, color: Colors.black, size: 24),
-                            const SizedBox(width: 10),
-                            Expanded(
-                              child: Column(
-                                mainAxisAlignment: MainAxisAlignment.center,
-                                crossAxisAlignment: CrossAxisAlignment.start,
-                                children: [
-                                  Text(
-                                    tr('init_stream'),
-                                    style: TextStyle(
-                                      color: _canProceed ? Colors.black : Colors.white38,
-                                      fontSize: 12,
-                                      fontWeight: FontWeight.bold,
-                                      letterSpacing: 1.2,
-                                    ),
-                                  ),
-                                  Text(
-                                    'STREAM (OPEN NOW)',
-                                    style: TextStyle(
-                                      color: _canProceed ? Colors.black87 : Colors.white24,
-                                      fontSize: 10,
-                                      fontWeight: FontWeight.bold,
-                                    ),
-                                  ),
-                                ],
-                              ),
+                    AnimatedBuilder(
+                      animation: _pulseAnimation,
+                      builder: (context, child) => Transform.scale(
+                        scale: _canProceed ? _pulseAnimation.value : 1.0,
+                        child: SizedBox(
+                          width: double.infinity,
+                          height: 54,
+                          child: ElevatedButton(
+                            onPressed: _canProceed ? _launchNativePlayer : null,
+                            style: ElevatedButton.styleFrom(
+                              backgroundColor: _canProceed ? kGreen : Colors.grey[850],
+                              foregroundColor: Colors.black,
+                              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
+                              elevation: _canProceed ? 12 : 0,
                             ),
-                            Icon(Icons.arrow_forward_rounded, color: _canProceed ? Colors.black : Colors.white24, size: 22),
-                          ],
+                            child: Row(
+                              mainAxisAlignment: MainAxisAlignment.center,
+                              children: [
+                                Icon(Icons.bolt, color: _canProceed ? Colors.black : Colors.white38, size: 24),
+                                const SizedBox(width: 8),
+                                Text(
+                                  _canProceed ? 'INITIALIZE NEURAL STREAM\nSTREAM (OPEN NOW)' : 'PLEASE WAIT TO DECRYPT...',
+                                  textAlign: TextAlign.center,
+                                  style: TextStyle(
+                                    color: _canProceed ? Colors.black : Colors.white38,
+                                    fontSize: 11.5,
+                                    fontWeight: FontWeight.bold,
+                                    letterSpacing: 1,
+                                  ),
+                                ),
+                                const SizedBox(width: 8),
+                                Icon(Icons.arrow_forward_rounded, color: _canProceed ? Colors.black : Colors.white38, size: 22),
+                              ],
+                            ),
+                          ),
                         ),
                       ),
                     ),
@@ -2034,54 +2009,61 @@ class _StreamPreviewScreenState extends State<StreamPreviewScreen> with SingleTi
               ),
               const SizedBox(height: 14),
 
-              // 🌟 3. YOUR AD HERE NEON BANNER
+              // 🌟 3. ADVERTISEMENT BANNER
               Container(
                 width: double.infinity,
-                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
-                            decoration: BoxDecoration(
-                              borderRadius: BorderRadius.circular(8),
-                              border: Border.all(color: kGreen.withOpacity(0.6)),
-                            ),
-                            child: const Text(
-                              'LEARN MORE →',
-                              style: TextStyle(color: kGreen, fontSize: 9, fontWeight: FontWeight.bold),
-                            ),
-                          ),
+                padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+                decoration: BoxDecoration(
+                  color: const Color(0xFF031408),
+                  borderRadius: BorderRadius.circular(18),
+                  border: Border.all(color: kGreen.withOpacity(0.4)),
+                ),
+                child: Row(
+                  children: [
+                    Container(
+                      padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                      decoration: BoxDecoration(
+                        color: kGreen,
+                        borderRadius: BorderRadius.circular(4),
+                      ),
+                      child: const Text('Ad', style: TextStyle(color: Colors.black, fontSize: 10, fontWeight: FontWeight.bold)),
+                    ),
+                    const SizedBox(width: 12),
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          const Text('YOUR AD HERE', style: TextStyle(color: Colors.white, fontSize: 13, fontWeight: FontWeight.bold)),
+                          Text('REACH MILLIONS OF USERS', style: TextStyle(color: Colors.white.withOpacity(0.55), fontSize: 9.5)),
                         ],
                       ),
                     ),
-                    const Icon(Icons.campaign_rounded, color: kGreen, size: 55),
+                    const Icon(Icons.campaign_outlined, color: kGreen, size: 28),
                   ],
                 ),
               ),
-              const SizedBox(height: 12),
+              const SizedBox(height: 14),
 
-              // 🌟 4. SHARE VIDEO CAPSULE BUTTON
-              GestureDetector(
-                onTap: _shareStreamDirect,
-                child: Container(
-                  width: double.infinity,
-                  padding: const EdgeInsets.symmetric(vertical: 12),
-                  decoration: BoxDecoration(
-                    color: Colors.black,
-                    borderRadius: BorderRadius.circular(30),
-                    border: Border.all(color: kNeonCyan.withOpacity(0.8), width: 1.5),
+              // 🌟 4. SHARE VIDEO OUTLINE BUTTON
+              SizedBox(
+                width: double.infinity,
+                height: 52,
+                child: OutlinedButton(
+                  onPressed: _shareStreamDirect,
+                  style: OutlinedButton.styleFrom(
+                    side: const BorderSide(color: kGreen, width: 1.5),
+                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(26)),
                   ),
                   child: Row(
                     mainAxisAlignment: MainAxisAlignment.center,
                     children: [
-                      const Icon(Icons.share, color: kNeonCyan, size: 20),
+                      const Icon(Icons.share, color: kGreen, size: 20),
                       const SizedBox(width: 10),
                       Column(
+                        mainAxisAlignment: MainAxisAlignment.center,
                         children: [
-                          const Text(
-                            'SHARE VIDEO',
-                            style: TextStyle(color: kNeonCyan, fontSize: 12, fontWeight: FontWeight.bold, letterSpacing: 1.5),
-                          ),
-                          Text(
-                            'SEND TO FRIENDS',
-                            style: TextStyle(color: kNeonCyan.withOpacity(0.7), fontSize: 9, letterSpacing: 1),
-                          ),
+                          const Text('SHARE VIDEO', style: TextStyle(color: kGreen, fontSize: 12, fontWeight: FontWeight.bold, letterSpacing: 1.5)),
+                          Text('SEND TO FRIENDS', style: TextStyle(color: kGreen.withOpacity(0.7), fontSize: 8.5)),
                         ],
                       ),
                     ],
@@ -2090,7 +2072,7 @@ class _StreamPreviewScreenState extends State<StreamPreviewScreen> with SingleTi
               ),
               const SizedBox(height: 12),
 
-              // 🌟 5. PIPELINE ACTIVE BOTTOM FOOTER
+              // 🌟 5. BOTTOM STATUS PILL
               Row(
                 mainAxisAlignment: MainAxisAlignment.center,
                 children: [
@@ -2098,18 +2080,19 @@ class _StreamPreviewScreenState extends State<StreamPreviewScreen> with SingleTi
                   const SizedBox(width: 6),
                   Text(
                     'SECURE QUANTUM STREAM PIPELINE ACTIVE',
-                    style: TextStyle(color: kGreen.withOpacity(0.75), fontSize: 10, letterSpacing: 1.2),
+                    style: TextStyle(color: kGreen.withOpacity(0.75), fontSize: 9.5, letterSpacing: 1.2),
                   ),
                 ],
               ),
-              const SizedBox(height: 10),
+              const SizedBox(height: 14),
             ],
           ),
         ),
       ),
     );
   }
-  class NativeVideoPlayerScreen extends StatefulWidget {
+}
+class NativeVideoPlayerScreen extends StatefulWidget {
   final String videoUrl;
   final String title;
   final String uploader;
@@ -2395,8 +2378,7 @@ class _NativeVideoPlayerScreenState extends State<NativeVideoPlayerScreen> {
       }
     });
   }
-
-  void _showQualityDialog() {
+    void _showQualityDialog() {
     showDialog(
       context: context,
       builder: (c) => AlertDialog(
@@ -2504,7 +2486,7 @@ class _NativeVideoPlayerScreenState extends State<NativeVideoPlayerScreen> {
       body: SafeArea(
         child: Column(
           children: [
-            // 🌟 TOP VIDEO VIEW (TOUCH-ONLY CLEAN PROFESSIONAL OVERLAYS)
+            // 🌟 TOP VIDEO VIEW (TOUCH TO REVEAL CONTROLS)
             Expanded(
               flex: _isFullscreen ? 1 : 0,
               child: Container(
@@ -2547,7 +2529,7 @@ class _NativeVideoPlayerScreenState extends State<NativeVideoPlayerScreen> {
                                     ),
                                   ),
 
-                                // 🌟 CONTROLS ONLY VISIBLE ON TOUCH
+                                // TOUCH CONTROLS
                                 if (_showControls) ...[
                                   Positioned(
                                     left: 20,
@@ -2629,7 +2611,7 @@ class _NativeVideoPlayerScreenState extends State<NativeVideoPlayerScreen> {
               ),
             ),
 
-            // 🌟 NEO & TRINITY MATRIX TIMELINE
+            // 🌟 NEO TIMELINE
             Container(
               padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 2),
               color: Colors.transparent,
@@ -2819,4 +2801,3 @@ class _NativeVideoPlayerScreenState extends State<NativeVideoPlayerScreen> {
     );
   }
 }
-  
