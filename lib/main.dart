@@ -21,11 +21,11 @@ const String webClientId = '985001671962-rok8qnng0rumjsd8mgr8uhr92o5vhs4n.apps.g
 const int kAppCurrentVersionCode = 2;
 const String kBackendBaseUrl = 'https://mayajaal.online';
 
-const Color kGreen = Color(0xFF00FF41);
+const Color kGreen = Color(0xFF00FF66);
 const Color kNeonCyan = Color(0xFF00F0FF);
 const Color kNeonPurple = Color(0xFF9D00FF);
-const Color kBg = Color(0xFF000000);
-const Color kCardBg = Color(0xFF0A0A0A);
+const Color kBg = Color(0xFF020703);
+const Color kCardBg = Color(0xFF041409);
 const Color kDimGreen = Color(0xFF4FBF8B);
 
 final ValueNotifier<ThemeMode> themeNotifier = ValueNotifier(ThemeMode.dark);
@@ -35,7 +35,7 @@ final GlobalKey<NavigatorState> navigatorKey = GlobalKey<NavigatorState>();
 final Map<String, Map<String, String>> localizedStrings = {
   'English': {
     'app_title': 'MAYA JAAL',
-    'paste_hint': 'Paste secure streaming URL...',
+    'paste_hint': 'Paste Stream URL',
     'watch_history': '> WATCH HISTORY',
     'no_history': 'no history yet',
     'settings': 'SETTINGS',
@@ -608,12 +608,16 @@ class _MainNavigationHolderState extends State<MainNavigationHolder> {
       ),
       bottomNavigationBar: Container(
         decoration: BoxDecoration(
-          color: kCardBg,
-          border: Border(top: BorderSide(color: kGreen.withOpacity(0.25), width: 1.2)),
+          color: const Color(0xFF020904),
+          border: Border(top: BorderSide(color: kGreen.withOpacity(0.35), width: 1.2)),
+          boxShadow: [
+            BoxShadow(color: kGreen.withOpacity(0.1), blurRadius: 15, offset: const Offset(0, -3)),
+          ],
         ),
         child: BottomNavigationBar(
           currentIndex: _currentIndex,
-          backgroundColor: kCardBg,
+          backgroundColor: Colors.transparent,
+          elevation: 0,
           selectedItemColor: kGreen,
           unselectedItemColor: Colors.white54,
           type: BottomNavigationBarType.fixed,
@@ -623,22 +627,22 @@ class _MainNavigationHolderState extends State<MainNavigationHolder> {
           items: const [
             BottomNavigationBarItem(
               icon: Icon(Icons.home_outlined),
-              activeIcon: Icon(Icons.home),
+              activeIcon: Icon(Icons.home, color: kGreen),
               label: 'Home',
             ),
             BottomNavigationBarItem(
               icon: Icon(Icons.ondemand_video_outlined),
-              activeIcon: Icon(Icons.ondemand_video),
+              activeIcon: Icon(Icons.ondemand_video, color: kGreen),
               label: 'Channel',
             ),
             BottomNavigationBarItem(
               icon: Icon(Icons.history_outlined),
-              activeIcon: Icon(Icons.history),
+              activeIcon: Icon(Icons.history, color: kGreen),
               label: 'History',
             ),
             BottomNavigationBarItem(
               icon: Icon(Icons.more_horiz_outlined),
-              activeIcon: Icon(Icons.more_horiz),
+              activeIcon: Icon(Icons.more_horiz, color: kGreen),
               label: 'More',
             ),
           ],
@@ -653,14 +657,35 @@ class HomeScreen extends StatefulWidget {
   State<HomeScreen> createState() => _HomeScreenState();
 }
 
-class _HomeScreenState extends State<HomeScreen> {
+class _HomeScreenState extends State<HomeScreen> with SingleTickerProviderStateMixin {
   final TextEditingController _linkController = TextEditingController();
+  late AnimationController _pulseController;
+  late Animation<double> _pulseAnimation;
+
+  @override
+  void initState() {
+    super.initState();
+    _pulseController = AnimationController(
+      vsync: this,
+      duration: const Duration(milliseconds: 1600),
+    )..repeat(reverse: true);
+    _pulseAnimation = Tween<double>(begin: 0.95, end: 1.05).animate(
+      CurvedAnimation(parent: _pulseController, curve: Curves.easeInOut),
+    );
+  }
+
+  @override
+  void dispose() {
+    _pulseController.dispose();
+    _linkController.dispose();
+    super.dispose();
+  }
 
   void _searchAndPlay() {
     String input = _linkController.text.trim();
     if (input.isEmpty) {
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Please insert video streaming link!'), backgroundColor: kCardBg),
+        const SnackBar(content: Text('Please paste a stream URL first!'), backgroundColor: kCardBg),
       );
       return;
     }
@@ -671,122 +696,368 @@ class _HomeScreenState extends State<HomeScreen> {
     );
   }
 
+  Widget _buildCategoryCard(IconData icon, String title, String subtitle) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 12),
+      decoration: BoxDecoration(
+        color: const Color(0xFF031408),
+        borderRadius: BorderRadius.circular(14),
+        border: Border.all(color: kGreen.withOpacity(0.4), width: 1.2),
+        boxShadow: [
+          BoxShadow(color: kGreen.withOpacity(0.08), blurRadius: 10),
+        ],
+      ),
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        mainAxisAlignment: MainAxisAlignment.center,
+        children: [
+          Icon(icon, color: kGreen, size: 28),
+          const SizedBox(height: 8),
+          Text(
+            title,
+            style: const TextStyle(color: Colors.white, fontSize: 13, fontWeight: FontWeight.bold),
+          ),
+          const SizedBox(height: 2),
+          Text(
+            subtitle,
+            style: TextStyle(color: Colors.white.withOpacity(0.55), fontSize: 9.5),
+            textAlign: TextAlign.center,
+            maxLines: 1,
+            overflow: TextOverflow.ellipsis,
+          ),
+        ],
+      ),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     return Scaffold(
       backgroundColor: Colors.black,
-      appBar: AppBar(
-        title: Text(tr('app_title')),
-      ),
-      body: Container(
-        decoration: const BoxDecoration(
-          gradient: LinearGradient(
-            begin: Alignment.topCenter,
-            end: Alignment.bottomCenter,
-            colors: [Colors.black, Color(0xFF00150B), Colors.black],
-          ),
-        ),
-        child: Padding(
-          padding: const EdgeInsets.symmetric(horizontal: 20),
+      body: SafeArea(
+        child: SingleChildScrollView(
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.center,
             children: [
-              const SizedBox(height: 18),
-
-              // 🌟 OFFICIAL LOGO DISPLAY ON HOME
-              Container(
-                width: 95,
-                height: 95,
-                decoration: BoxDecoration(
-                  borderRadius: BorderRadius.circular(22),
-                  border: Border.all(color: kGreen.withOpacity(0.7), width: 2),
-                  boxShadow: [
-                    BoxShadow(
-                      color: kGreen.withOpacity(0.35),
-                      blurRadius: 20,
-                      spreadRadius: 2,
-                    ),
-                  ],
-                ),
-                child: ClipRRect(
-                  borderRadius: BorderRadius.circular(20),
-                  child: Image.asset(
-                    'assets/icon/logo.png',
-                    fit: BoxFit.cover,
-                    errorBuilder: (context, error, stackTrace) => const Icon(Icons.movie_filter, size: 55, color: kGreen),
-                  ),
-                ),
-              ),
-              const SizedBox(height: 25),
-
-              // 🌟 PROFESSIONAL BOLD MATRIX STREAM DECODER HEADER
-              Container(
-                padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
-                decoration: BoxDecoration(
-                  color: Colors.black.withOpacity(0.6),
-                  borderRadius: BorderRadius.circular(10),
-                  border: Border.all(color: kGreen.withOpacity(0.55)),
-                ),
-                child: const Row(
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    Icon(Icons.terminal_rounded, color: kGreen, size: 20),
-                    SizedBox(width: 8),
-                    Text(
-                      'MATRIX NEURAL STREAM NODE // PASTE STREAM URL',
-                      style: TextStyle(
-                        color: kGreen,
-                        fontSize: 11,
-                        fontWeight: FontWeight.bold,
-                        fontFamily: 'monospace',
-                        letterSpacing: 1.4,
-                      ),
-                    ),
-                  ],
-                ),
-              ),
-              const SizedBox(height: 16),
-
-              // LINK INPUT CONTAINER
-              Container(
-                decoration: BoxDecoration(
-                  color: kCardBg,
-                  borderRadius: BorderRadius.circular(14),
-                  border: Border.all(color: kGreen.withOpacity(0.6), width: 1.5),
-                ),
+              // 🌟 1. TOP APP BAR HEADER
+              Padding(
+                padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
                 child: Row(
                   children: [
-                    const Padding(
-                      padding: EdgeInsets.symmetric(horizontal: 14),
-                      child: Icon(Icons.link, color: kGreen),
+                    IconButton(
+                      icon: const Icon(Icons.menu, color: kGreen, size: 26),
+                      onPressed: () {},
                     ),
                     Expanded(
-                      child: TextField(
-                        controller: _linkController,
-                        style: const TextStyle(color: kGreen, fontSize: 13),
-                        decoration: InputDecoration(
-                          hintText: tr('paste_hint'),
-                          hintStyle: TextStyle(color: kGreen.withOpacity(0.4), fontSize: 13),
-                          border: InputBorder.none,
-                          contentPadding: const EdgeInsets.symmetric(vertical: 16),
-                        ),
+                      child: Column(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          const Text(
+                            'MAYA JAAL',
+                            style: TextStyle(
+                              color: kGreen,
+                              fontSize: 24,
+                              fontWeight: FontWeight.w900,
+                              letterSpacing: 4,
+                              shadows: [
+                                Shadow(color: kGreen, blurRadius: 15),
+                              ],
+                            ),
+                          ),
+                          Text(
+                            'STREAM BEYOND LIMITS',
+                            style: TextStyle(
+                              color: kGreen.withOpacity(0.7),
+                              fontSize: 9,
+                              letterSpacing: 3,
+                              fontWeight: FontWeight.w600,
+                            ),
+                          ),
+                        ],
                       ),
                     ),
                     IconButton(
-                      icon: const Icon(Icons.play_circle_fill, color: kGreen, size: 36),
-                      onPressed: _searchAndPlay,
+                      icon: const Icon(Icons.search, color: kGreen, size: 24),
+                      onPressed: () {},
+                    ),
+                    Stack(
+                      children: [
+                        IconButton(
+                          icon: const Icon(Icons.notifications_none, color: kGreen, size: 24),
+                          onPressed: () {},
+                        ),
+                        Positioned(
+                          right: 11,
+                          top: 11,
+                          child: Container(
+                            width: 7,
+                            height: 7,
+                            decoration: const BoxDecoration(
+                              color: Colors.redAccent,
+                              shape: BoxShape.circle,
+                            ),
+                          ),
+                        ),
+                      ],
                     ),
                   ],
                 ),
               ),
-              const Spacer(),
-              Center(
-                child: Text(
-                  '> SECURE QUANTUM STREAM PIPELINE ACTIVE',
-                  style: TextStyle(color: kGreen.withOpacity(0.35), fontSize: 11, letterSpacing: 1.5),
+
+              // 🌟 2. HERO MATRIX STREAMING UNIVERSE BANNER WITH FILM STRIPS
+              Container(
+                width: double.infinity,
+                padding: const EdgeInsets.symmetric(vertical: 20),
+                child: Stack(
+                  alignment: Alignment.center,
+                  children: [
+                    // FILM STRIPS AMBIENCE TEXT
+                    Positioned(
+                      left: 18,
+                      child: Text(
+                        'MOVIES\nWEB SERIES\nLIVE TV\n& MORE',
+                        style: TextStyle(
+                          color: Colors.white.withOpacity(0.7),
+                          fontSize: 11,
+                          fontWeight: FontWeight.w700,
+                          letterSpacing: 1.5,
+                          height: 1.5,
+                        ),
+                      ),
+                    ),
+                    Positioned(
+                      right: 18,
+                      child: Text(
+                        'Your\nStreaming\nUniverse',
+                        style: TextStyle(
+                          color: const Color(0xFF66FF99).withOpacity(0.85),
+                          fontSize: 16,
+                          fontWeight: FontWeight.w700,
+                          fontStyle: FontStyle.italic,
+                          height: 1.2,
+                        ),
+                      ),
+                    ),
+
+                    // CENTER NEON LOGO STAGE
+                    AnimatedBuilder(
+                      animation: _pulseAnimation,
+                      builder: (context, child) => Transform.scale(
+                        scale: _pulseAnimation.value,
+                        child: Container(
+                          width: 140,
+                          height: 140,
+                          decoration: BoxDecoration(
+                            shape: BoxShape.circle,
+                            boxShadow: [
+                              BoxShadow(color: kGreen.withOpacity(0.25), blurRadius: 40, spreadRadius: 10),
+                            ],
+                          ),
+                          child: Stack(
+                            alignment: Alignment.center,
+                            children: [
+                              // Circular cyber rings
+                              Container(
+                                width: 130,
+                                height: 130,
+                                decoration: BoxDecoration(
+                                  shape: BoxShape.circle,
+                                  border: Border.all(color: kGreen.withOpacity(0.6), width: 1.5),
+                                ),
+                              ),
+                              // Logo Card
+                              Container(
+                                width: 95,
+                                height: 95,
+                                decoration: BoxDecoration(
+                                  borderRadius: BorderRadius.circular(22),
+                                  border: Border.all(color: kGreen, width: 2),
+                                  boxShadow: [
+                                    BoxShadow(color: kGreen.withOpacity(0.5), blurRadius: 20),
+                                  ],
+                                ),
+                                child: ClipRRect(
+                                  borderRadius: BorderRadius.circular(20),
+                                  child: Image.asset(
+                                    'assets/icon/logo.png',
+                                    fit: BoxFit.cover,
+                                    errorBuilder: (context, error, stackTrace) => Container(
+                                      color: Colors.black,
+                                      child: const Icon(Icons.movie_filter, size: 50, color: kGreen),
+                                    ),
+                                  ),
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
+                      ),
+                    ),
+                  ],
                 ),
               ),
-              const SizedBox(height: 16),
+
+              // 🌟 3. MATRIX NEURAL STREAM NODE INPUT CARD
+              Padding(
+                padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
+                child: Container(
+                  decoration: BoxDecoration(
+                    color: const Color(0xFF011206),
+                    borderRadius: BorderRadius.circular(22),
+                    border: Border.all(color: kGreen.withOpacity(0.6), width: 1.5),
+                    boxShadow: [
+                      BoxShadow(color: kGreen.withOpacity(0.2), blurRadius: 25),
+                    ],
+                  ),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      // NODE PILL BADGE
+                      Padding(
+                        padding: const EdgeInsets.only(left: 14, top: 12),
+                        child: Container(
+                          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 5),
+                          decoration: BoxDecoration(
+                            color: const Color(0xFF03220E),
+                            borderRadius: BorderRadius.circular(20),
+                            border: Border.all(color: kGreen.withOpacity(0.7)),
+                          ),
+                          child: Row(
+                            mainAxisSize: MainAxisSize.min,
+                            children: [
+                              const Icon(Icons.link, color: kGreen, size: 14),
+                              const SizedBox(width: 6),
+                              Text(
+                                'MATRIX NEURAL STREAM NODE',
+                                style: TextStyle(
+                                  color: kGreen,
+                                  fontSize: 10,
+                                  fontWeight: FontWeight.bold,
+                                  letterSpacing: 1.5,
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
+                      ),
+                      const SizedBox(height: 10),
+
+                      // INPUT FIELD INNER CARD WITH GLOWING PLAY BUTTON
+                      Padding(
+                        padding: const EdgeInsets.all(12),
+                        child: Container(
+                          padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
+                          decoration: BoxDecoration(
+                            color: const Color(0xFF031A0B),
+                            borderRadius: BorderRadius.circular(16),
+                            border: Border.all(color: kGreen.withOpacity(0.4)),
+                          ),
+                          child: Row(
+                            children: [
+                              const Icon(Icons.link_rounded, color: kGreen, size: 28),
+                              const SizedBox(width: 12),
+                              Expanded(
+                                child: Column(
+                                  crossAxisAlignment: CrossAxisAlignment.start,
+                                  children: [
+                                    TextField(
+                                      controller: _linkController,
+                                      style: const TextStyle(color: Colors.white, fontSize: 14, fontWeight: FontWeight.bold),
+                                      decoration: InputDecoration(
+                                        isDense: true,
+                                        contentPadding: EdgeInsets.zero,
+                                        hintText: 'Paste Stream URL',
+                                        hintStyle: const TextStyle(color: Colors.white, fontSize: 14, fontWeight: FontWeight.bold),
+                                        border: InputBorder.none,
+                                      ),
+                                    ),
+                                    const SizedBox(height: 2),
+                                    Text(
+                                      'Enter your link and start streaming securely',
+                                      style: TextStyle(color: Colors.white.withOpacity(0.5), fontSize: 10),
+                                    ),
+                                  ],
+                                ),
+                              ),
+                              GestureDetector(
+                                onTap: _searchAndPlay,
+                                child: Container(
+                                  width: 48,
+                                  height: 48,
+                                  decoration: BoxDecoration(
+                                    color: kGreen,
+                                    shape: BoxShape.circle,
+                                    boxShadow: [
+                                      BoxShadow(color: kGreen.withOpacity(0.6), blurRadius: 16),
+                                    ],
+                                  ),
+                                  child: const Icon(Icons.play_arrow_rounded, color: Colors.black, size: 32),
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+
+              // 🌟 4. CATEGORY CYBER CARDS (MOVIES, WEB SERIES, LIVE TV, FAVORITES)
+              Padding(
+                padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+                child: Row(
+                  children: [
+                    Expanded(child: _buildCategoryCard(Icons.movie_creation_outlined, 'Movies', 'Latest & Classic')),
+                    const SizedBox(width: 10),
+                    Expanded(child: _buildCategoryCard(Icons.live_tv_rounded, 'Web Series', 'Binge Watch')),
+                    const SizedBox(width: 10),
+                    Expanded(child: _buildCategoryCard(Icons.tv_rounded, 'Live TV', 'Sports • News • More')),
+                    const SizedBox(width: 10),
+                    Expanded(child: _buildCategoryCard(Icons.star_rounded, 'Favorites', 'Save & Watch Later')),
+                  ],
+                ),
+              ),
+
+              // 🌟 5. SECURE PIPELINE STATUS STRIP
+              Padding(
+                padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 6),
+                child: Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+                  decoration: BoxDecoration(
+                    color: const Color(0xFF031A0B),
+                    borderRadius: BorderRadius.circular(14),
+                    border: Border.all(color: kGreen.withOpacity(0.55)),
+                  ),
+                  child: Row(
+                    children: [
+                      const Icon(Icons.verified_user_rounded, color: kGreen, size: 20),
+                      const SizedBox(width: 10),
+                      const Expanded(
+                        child: Text(
+                          'Secure Quantum Stream Pipeline Active',
+                          style: TextStyle(color: Colors.white, fontSize: 12, fontWeight: FontWeight.bold),
+                        ),
+                      ),
+                      const Icon(Icons.arrow_forward_ios, color: kGreen, size: 14),
+                    ],
+                  ),
+                ),
+              ),
+
+              // 🌟 6. BOTTOM CYBER AMBIENCE STRIP
+              Padding(
+                padding: const EdgeInsets.symmetric(vertical: 18),
+                child: Text(
+                  '>   CONNECT   •   STREAM   •   ENJOY   <',
+                  style: TextStyle(
+                    color: kGreen.withOpacity(0.75),
+                    fontSize: 10.5,
+                    letterSpacing: 2,
+                    fontWeight: FontWeight.w700,
+                  ),
+                ),
+              ),
             ],
           ),
         ),
@@ -945,7 +1216,6 @@ class _HistoryScreenState extends State<HistoryScreen> {
   }
 }
 
-// 🌟 MORE SCREEN: GMAIL, SHARE, SETTINGS, HELP, PRIVACY/TERMS, JOIN US & LOGOUT AT BOTTOM
 class MoreScreen extends StatelessWidget {
   const MoreScreen({super.key});
 
@@ -1114,7 +1384,7 @@ class MoreScreen extends StatelessWidget {
           ),
           const SizedBox(height: 25),
 
-          // 🌟 7. LOGOUT OPTION AT THE VERY BOTTOM
+          // 7. LOGOUT OPTION AT THE VERY BOTTOM
           Container(
             decoration: BoxDecoration(
               color: Colors.red.withOpacity(0.08),
@@ -1664,7 +1934,6 @@ class _NativeVideoPlayerScreenState extends State<NativeVideoPlayerScreen> {
   String _flashFeedback = '';
   Timer? _feedbackTimer;
 
-  // 🌟 TOUCH-ONLY CONTROLS VISIBILITY (AUTO HIDE IN 3 SECONDS)
   bool _showControls = false;
   Timer? _controlsTimer;
 
@@ -2041,7 +2310,7 @@ class _NativeVideoPlayerScreenState extends State<NativeVideoPlayerScreen> {
                 child: _hasError
                     ? Center(
                         child: Column(
-                          mainAxisAlignment: MainAxisAlignment.center,
+                          mainAxisAlignment: Center(child: Text('')).runtimeType == Text ? MainAxisAlignment.center : MainAxisAlignment.center,
                           children: [
                             const Icon(Icons.error_outline, color: Colors.redAccent, size: 45),
                             const SizedBox(height: 10),
