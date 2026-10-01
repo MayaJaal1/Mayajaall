@@ -35,7 +35,7 @@ final GlobalKey<NavigatorState> navigatorKey = GlobalKey<NavigatorState>();
 final Map<String, Map<String, String>> localizedStrings = {
   'English': {
     'app_title': 'MAYA JAAL',
-    'paste_hint': 'Paste link here...',
+    'paste_hint': 'Paste secure streaming URL...',
     'watch_history': '> WATCH HISTORY',
     'no_history': 'no history yet',
     'settings': 'SETTINGS',
@@ -86,6 +86,13 @@ String tr(String key) {
 
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
+  SystemChrome.setSystemUIOverlayStyle(const SystemUiOverlayStyle(
+    statusBarColor: Colors.transparent,
+    statusBarBrightness: Brightness.dark,
+    statusBarIconBrightness: Brightness.light,
+    systemNavigationBarColor: Colors.black,
+    systemNavigationBarIconBrightness: Brightness.light,
+  ));
   await Supabase.initialize(url: supabaseUrl, anonKey: supabaseAnonKey);
   final prefs = await SharedPreferences.getInstance();
   final isDark = prefs.getBool('dark_theme') ?? true;
@@ -161,10 +168,12 @@ class _MyAppState extends State<MyApp> {
     super.dispose();
   }
 
-  ThemeData _buildTheme(bool isDark) {
+  ThemeData _buildPureDarkTheme() {
     return ThemeData(
       brightness: Brightness.dark,
-      scaffoldBackgroundColor: kBg,
+      scaffoldBackgroundColor: Colors.black,
+      canvasColor: Colors.black,
+      dialogBackgroundColor: kCardBg,
       colorScheme: const ColorScheme.dark(
         primary: kGreen,
         surface: kCardBg,
@@ -172,7 +181,7 @@ class _MyAppState extends State<MyApp> {
       useMaterial3: true,
       fontFamily: 'monospace',
       appBarTheme: const AppBarTheme(
-        backgroundColor: kBg,
+        backgroundColor: Colors.black,
         foregroundColor: kGreen,
         elevation: 0,
         centerTitle: true,
@@ -193,8 +202,8 @@ class _MyAppState extends State<MyApp> {
               title: 'MayaJaal',
               debugShowCheckedModeBanner: false,
               themeMode: ThemeMode.dark,
-              theme: _buildTheme(true),
-              darkTheme: _buildTheme(true),
+              theme: _buildPureDarkTheme(),
+              darkTheme: _buildPureDarkTheme(),
               home: _showSplash
                   ? const SplashScreen()
                   : AuthGate(pendingTargetUrl: _incomingUrl),
@@ -362,7 +371,7 @@ class _SplashScreenState extends State<SplashScreen>
                 ),
                 const SizedBox(height: 10),
                 Text(
-                  '> decrypting core channels...',
+                  '> initializing quantum cipher...',
                   style: TextStyle(
                     fontSize: 11,
                     color: kGreen.withOpacity(0.7),
@@ -390,7 +399,7 @@ class AuthGate extends StatelessWidget {
       builder: (context, snapshot) {
         if (snapshot.connectionState == ConnectionState.waiting) {
           return const Scaffold(
-            backgroundColor: kBg,
+            backgroundColor: Colors.black,
             body: Center(child: CircularProgressIndicator(color: kGreen)),
           );
         }
@@ -448,7 +457,7 @@ class _LoginScreenState extends State<LoginScreen> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: kBg,
+      backgroundColor: Colors.black,
       body: Stack(
         children: [
           const MatrixRain(),
@@ -499,7 +508,7 @@ class _LoginScreenState extends State<LoginScreen> {
                       ),
                       const SizedBox(height: 8),
                       Text(
-                        '> sign in required to decrypt links',
+                        '> authentication required to proceed',
                         style: TextStyle(
                           fontSize: 11,
                           color: kGreen.withOpacity(0.7),
@@ -592,7 +601,7 @@ class _MainNavigationHolderState extends State<MainNavigationHolder> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: kBg,
+      backgroundColor: Colors.black,
       body: IndexedStack(
         index: _currentIndex,
         children: _screens,
@@ -600,7 +609,7 @@ class _MainNavigationHolderState extends State<MainNavigationHolder> {
       bottomNavigationBar: Container(
         decoration: BoxDecoration(
           color: kCardBg,
-          border: Border(top: BorderSide(color: kGreen.withOpacity(0.3), width: 1.2)),
+          border: Border(top: BorderSide(color: kGreen.withOpacity(0.25), width: 1.2)),
         ),
         child: BottomNavigationBar(
           currentIndex: _currentIndex,
@@ -651,7 +660,7 @@ class _HomeScreenState extends State<HomeScreen> {
     String input = _linkController.text.trim();
     if (input.isEmpty) {
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Please paste a link first!'), backgroundColor: kCardBg),
+        const SnackBar(content: Text('Please insert video streaming link!'), backgroundColor: kCardBg),
       );
       return;
     }
@@ -665,7 +674,7 @@ class _HomeScreenState extends State<HomeScreen> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: kBg,
+      backgroundColor: Colors.black,
       appBar: AppBar(
         title: Text(tr('app_title')),
       ),
@@ -674,22 +683,22 @@ class _HomeScreenState extends State<HomeScreen> {
           gradient: LinearGradient(
             begin: Alignment.topCenter,
             end: Alignment.bottomCenter,
-            colors: [kBg, Color(0xFF001A0E), kBg],
+            colors: [Colors.black, Color(0xFF00150B), Colors.black],
           ),
         ),
         child: Padding(
-          padding: const EdgeInsets.all(20),
+          padding: const EdgeInsets.symmetric(horizontal: 20),
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.center,
             children: [
-              const SizedBox(height: 10),
+              const SizedBox(height: 18),
 
-              // 🌟 1. HOMEPAGE OFFICIAL LOGO DISPLAY
+              // 🌟 OFFICIAL LOGO DISPLAY ON HOME
               Container(
-                width: 90,
-                height: 90,
+                width: 95,
+                height: 95,
                 decoration: BoxDecoration(
-                  borderRadius: BorderRadius.circular(20),
+                  borderRadius: BorderRadius.circular(22),
                   border: Border.all(color: kGreen.withOpacity(0.7), width: 2),
                   boxShadow: [
                     BoxShadow(
@@ -700,37 +709,37 @@ class _HomeScreenState extends State<HomeScreen> {
                   ],
                 ),
                 child: ClipRRect(
-                  borderRadius: BorderRadius.circular(18),
+                  borderRadius: BorderRadius.circular(20),
                   child: Image.asset(
                     'assets/icon/logo.png',
                     fit: BoxFit.cover,
-                    errorBuilder: (context, error, stackTrace) => const Icon(Icons.movie_filter, size: 50, color: kGreen),
+                    errorBuilder: (context, error, stackTrace) => const Icon(Icons.movie_filter, size: 55, color: kGreen),
                   ),
                 ),
               ),
               const SizedBox(height: 25),
 
-              // 🌟 2. BIG BOLD EYE-CATCHING PROMPT TEXT
+              // 🌟 PROFESSIONAL BOLD MATRIX STREAM DECODER HEADER
               Container(
-                padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
+                padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
                 decoration: BoxDecoration(
-                  color: Colors.black.withOpacity(0.5),
+                  color: Colors.black.withOpacity(0.6),
                   borderRadius: BorderRadius.circular(10),
-                  border: Border.all(color: kNeonCyan.withOpacity(0.4)),
+                  border: Border.all(color: kGreen.withOpacity(0.55)),
                 ),
                 child: const Row(
                   mainAxisSize: MainAxisSize.min,
                   children: [
-                    Icon(Icons.video_library_rounded, color: kNeonCyan, size: 20),
+                    Icon(Icons.terminal_rounded, color: kGreen, size: 20),
                     SizedBox(width: 8),
                     Text(
-                      'LINK PASTE KARO AUR FAST STREAM DEKHO',
+                      'MATRIX NEURAL STREAM NODE // PASTE STREAM URL',
                       style: TextStyle(
-                        color: kNeonCyan,
-                        fontSize: 12,
+                        color: kGreen,
+                        fontSize: 11,
                         fontWeight: FontWeight.bold,
                         fontFamily: 'monospace',
-                        letterSpacing: 1.2,
+                        letterSpacing: 1.4,
                       ),
                     ),
                   ],
@@ -773,11 +782,11 @@ class _HomeScreenState extends State<HomeScreen> {
               const Spacer(),
               Center(
                 child: Text(
-                  '> MAYA JAAL // QUANTUM STREAM DECODER',
-                  style: TextStyle(color: kGreen.withOpacity(0.4), fontSize: 11, letterSpacing: 1.5),
+                  '> SECURE QUANTUM STREAM PIPELINE ACTIVE',
+                  style: TextStyle(color: kGreen.withOpacity(0.35), fontSize: 11, letterSpacing: 1.5),
                 ),
               ),
-              const SizedBox(height: 14),
+              const SizedBox(height: 16),
             ],
           ),
         ),
@@ -785,14 +794,13 @@ class _HomeScreenState extends State<HomeScreen> {
     );
   }
 }
-// 🌟 CHANNEL SCREEN: DISCORD / UPDATES / SYSTEM NODES (NO SOCIALS HERE)
 class ChannelScreen extends StatelessWidget {
   const ChannelScreen({super.key});
 
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: kBg,
+      backgroundColor: Colors.black,
       appBar: AppBar(title: const Text('CHANNELS & NODES')),
       body: ListView(
         padding: const EdgeInsets.all(20),
@@ -806,8 +814,8 @@ class ChannelScreen extends StatelessWidget {
             ),
             child: const ListTile(
               leading: Icon(Icons.bolt, color: kGreen, size: 32),
-              title: Text('Quantum Live Node', style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
-              subtitle: Text('Hardware acceleration node: ACTIVE', style: TextStyle(color: kDimGreen, fontSize: 12)),
+              title: Text('Quantum Streaming Node', style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
+              subtitle: Text('Direct hardware pipeline active', style: TextStyle(color: kDimGreen, fontSize: 12)),
             ),
           ),
           const SizedBox(height: 14),
@@ -820,8 +828,8 @@ class ChannelScreen extends StatelessWidget {
             ),
             child: const ListTile(
               leading: Icon(Icons.cloud_done, color: kNeonCyan, size: 32),
-              title: Text('Distributed Cache Stream', style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
-              subtitle: Text('Fast bandwidth streaming: ONLINE', style: TextStyle(color: kNeonCyan, fontSize: 12)),
+              title: Text('High Speed CDN Node', style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
+              subtitle: Text('Buffer acceleration: ENABLED', style: TextStyle(color: kNeonCyan, fontSize: 12)),
             ),
           ),
         ],
@@ -830,7 +838,6 @@ class ChannelScreen extends StatelessWidget {
   }
 }
 
-// 🌟 HISTORY SCREEN
 class HistoryScreen extends StatefulWidget {
   const HistoryScreen({super.key});
   @override
@@ -872,7 +879,7 @@ class _HistoryScreenState extends State<HistoryScreen> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: kBg,
+      backgroundColor: Colors.black,
       appBar: AppBar(
         title: const Text('WATCH HISTORY'),
         actions: [
@@ -938,7 +945,7 @@ class _HistoryScreenState extends State<HistoryScreen> {
   }
 }
 
-// 🌟 MORE SCREEN: GMAIL ID + SHARE APP + SETTINGS + JOIN US (INSTAGRAM & YOUTUBE)
+// 🌟 MORE SCREEN: GMAIL, SHARE, SETTINGS, HELP, PRIVACY/TERMS, JOIN US & LOGOUT AT BOTTOM
 class MoreScreen extends StatelessWidget {
   const MoreScreen({super.key});
 
@@ -955,7 +962,30 @@ class MoreScreen extends StatelessWidget {
   }
 
   void _shareApp() {
-    Share.share('🚀 Watch fast streaming videos on MayaJaal App!\nDownload now: https://mayajaal.online/download.html');
+    Share.share('🚀 Experience Matrix-speed streaming on MayaJaal App!\nDownload: https://mayajaal.online/download.html');
+  }
+
+  void _showPolicyDialog(BuildContext context, String title, String content) {
+    showDialog(
+      context: context,
+      builder: (c) => AlertDialog(
+        backgroundColor: kCardBg,
+        shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.circular(14),
+          side: const BorderSide(color: kGreen, width: 1.5),
+        ),
+        title: Text(title, style: const TextStyle(color: kGreen, fontSize: 15, fontWeight: FontWeight.bold)),
+        content: SingleChildScrollView(
+          child: Text(content, style: const TextStyle(color: Colors.white70, fontSize: 12, height: 1.4)),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(c),
+            child: const Text('CLOSE', style: TextStyle(color: kGreen)),
+          ),
+        ],
+      ),
+    );
   }
 
   @override
@@ -963,12 +993,12 @@ class MoreScreen extends StatelessWidget {
     final user = Supabase.instance.client.auth.currentUser;
 
     return Scaffold(
-      backgroundColor: kBg,
+      backgroundColor: Colors.black,
       appBar: AppBar(title: const Text('MORE OPTIONS')),
       body: ListView(
         padding: const EdgeInsets.all(16),
         children: [
-          // 🌟 1. LOGGED IN GMAIL ACCOUNT CARD
+          // 1. GMAIL ACCOUNT CARD
           Container(
             padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
             decoration: BoxDecoration(
@@ -997,43 +1027,62 @@ class MoreScreen extends StatelessWidget {
               ],
             ),
           ),
-          const SizedBox(height: 16),
+          const SizedBox(height: 14),
 
-          // 🌟 2. SHARE MAYAJAAL APP
+          // 2. SHARE APP
           ListTile(
             leading: const Icon(Icons.share, color: kNeonCyan),
             title: const Text('Share MayaJaal App', style: TextStyle(color: Colors.white)),
-            subtitle: const Text('Share app link with friends', style: TextStyle(color: Colors.grey, fontSize: 11)),
             trailing: const Icon(Icons.arrow_forward_ios, size: 14, color: kNeonCyan),
             onTap: _shareApp,
           ),
-          Divider(color: kGreen.withOpacity(0.2)),
+          Divider(color: kGreen.withOpacity(0.15)),
 
-          // 🌟 3. APP SETTINGS
+          // 3. SETTINGS
           ListTile(
             leading: const Icon(Icons.settings, color: kGreen),
             title: const Text('App Settings', style: TextStyle(color: Colors.white)),
-            subtitle: const Text('Theme, languages & downloads', style: TextStyle(color: Colors.grey, fontSize: 11)),
             trailing: const Icon(Icons.arrow_forward_ios, size: 14, color: kGreen),
             onTap: () => Navigator.push(context, MaterialPageRoute(builder: (_) => const SettingsScreen())),
           ),
-          Divider(color: kGreen.withOpacity(0.2)),
+          Divider(color: kGreen.withOpacity(0.15)),
 
-          // 🌟 4. LOGOUT
+          // 4. HELP & SUPPORT WITH GMAIL
           ListTile(
-            leading: const Icon(Icons.logout, color: Colors.redAccent),
-            title: const Text('Logout Session', style: TextStyle(color: Colors.redAccent)),
-            onTap: _logout,
+            leading: const Icon(Icons.support_agent, color: Colors.amberAccent),
+            title: const Text('Help & Support', style: TextStyle(color: Colors.white)),
+            subtitle: const Text('mayajaalsupport@gmail.com', style: TextStyle(color: Colors.amberAccent, fontSize: 11)),
+            trailing: const Icon(Icons.mail_outline, size: 18, color: Colors.amberAccent),
+            onTap: () => _launchURL('mailto:mayajaalsupport@gmail.com?subject=MayaJaal%20Support%20Request'),
           ),
-          const SizedBox(height: 25),
+          Divider(color: kGreen.withOpacity(0.15)),
 
-          // 🌟 5. JOIN US SECTION AT BOTTOM (INSTAGRAM & YOUTUBE)
-          const Text(
-            'JOIN US',
-            style: TextStyle(color: kGreen, fontSize: 13, fontWeight: FontWeight.bold, letterSpacing: 2),
+          // 5. PRIVACY POLICY & TERMS
+          ListTile(
+            leading: const Icon(Icons.privacy_tip_outlined, color: kDimGreen),
+            title: const Text('Privacy Policy', style: TextStyle(color: Colors.white)),
+            trailing: const Icon(Icons.arrow_forward_ios, size: 14, color: kDimGreen),
+            onTap: () => _showPolicyDialog(
+              context,
+              'PRIVACY POLICY',
+              'MayaJaal respects user privacy. No private credentials are sold or stored inappropriately. Stream decryption occurs locally on your hardware. Logins are handled securely via Supabase Google OAuth integration.',
+            ),
           ),
+          ListTile(
+            leading: const Icon(Icons.description_outlined, color: kDimGreen),
+            title: const Text('Terms & Conditions', style: TextStyle(color: Colors.white)),
+            trailing: const Icon(Icons.arrow_forward_ios, size: 14, color: kDimGreen),
+            onTap: () => _showPolicyDialog(
+              context,
+              'TERMS AND CONDITIONS',
+              'By utilizing MayaJaal, you agree to access encrypted streaming endpoints responsibly. Users are personally responsible for streams parsed through node references.',
+            ),
+          ),
+          const SizedBox(height: 20),
+
+          // 6. JOIN US SECTION
+          const Text('JOIN US', style: TextStyle(color: kGreen, fontSize: 13, fontWeight: FontWeight.bold, letterSpacing: 2)),
           const SizedBox(height: 12),
-
           Container(
             decoration: BoxDecoration(
               color: kCardBg,
@@ -1049,7 +1098,6 @@ class MoreScreen extends StatelessWidget {
             ),
           ),
           const SizedBox(height: 12),
-
           Container(
             decoration: BoxDecoration(
               color: kCardBg,
@@ -1064,7 +1112,22 @@ class MoreScreen extends StatelessWidget {
               onTap: () => _launchURL('https://www.youtube.com/@MayaJaalOfficial00'),
             ),
           ),
-          const SizedBox(height: 20),
+          const SizedBox(height: 25),
+
+          // 🌟 7. LOGOUT OPTION AT THE VERY BOTTOM
+          Container(
+            decoration: BoxDecoration(
+              color: Colors.red.withOpacity(0.08),
+              borderRadius: BorderRadius.circular(12),
+              border: Border.all(color: Colors.redAccent.withOpacity(0.4)),
+            ),
+            child: ListTile(
+              leading: const Icon(Icons.logout, color: Colors.redAccent),
+              title: const Text('Logout Session', style: TextStyle(color: Colors.redAccent, fontWeight: FontWeight.bold)),
+              onTap: _logout,
+            ),
+          ),
+          const SizedBox(height: 25),
         ],
       ),
     );
@@ -1126,7 +1189,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: kBg,
+      backgroundColor: Colors.black,
       appBar: AppBar(title: Text(tr('settings'))),
       body: ListView(
         children: [
@@ -1402,7 +1465,7 @@ class _StreamPreviewScreenState extends State<StreamPreviewScreen> with SingleTi
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: kBg,
+      backgroundColor: Colors.black,
       appBar: AppBar(
         title: const Text('NODE VERIFICATION'),
         leading: IconButton(
@@ -1492,7 +1555,7 @@ class _StreamPreviewScreenState extends State<StreamPreviewScreen> with SingleTi
                           ),
                           const SizedBox(height: 24),
 
-                          // 🌟 ONLY 1 FOCUSED COUNTDOWN HUD
+                          // SINGLE CENTERED MATRIX COUNTDOWN INDICATOR
                           Center(
                             child: Container(
                               padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
@@ -1601,6 +1664,10 @@ class _NativeVideoPlayerScreenState extends State<NativeVideoPlayerScreen> {
   String _flashFeedback = '';
   Timer? _feedbackTimer;
 
+  // 🌟 TOUCH-ONLY CONTROLS VISIBILITY (AUTO HIDE IN 3 SECONDS)
+  bool _showControls = false;
+  Timer? _controlsTimer;
+
   bool _isCcEnabled = false;
   double _playbackSpeed = 1.0;
   final List<double> _speeds = [0.5, 0.75, 1.0, 1.25, 1.5, 2.0];
@@ -1681,10 +1748,21 @@ class _NativeVideoPlayerScreenState extends State<NativeVideoPlayerScreen> {
 
   @override
   void dispose() {
+    _controlsTimer?.cancel();
     _feedbackTimer?.cancel();
     _controller.dispose();
     SystemChrome.setPreferredOrientations([DeviceOrientation.portraitUp]);
     super.dispose();
+  }
+
+  void _onScreenTapped() {
+    setState(() => _showControls = !_showControls);
+    _controlsTimer?.cancel();
+    if (_showControls) {
+      _controlsTimer = Timer(const Duration(seconds: 3), () {
+        if (mounted) setState(() => _showControls = false);
+      });
+    }
   }
 
   void _showFeedback(String text) {
@@ -1953,7 +2031,7 @@ class _NativeVideoPlayerScreenState extends State<NativeVideoPlayerScreen> {
       body: SafeArea(
         child: Column(
           children: [
-            // 🌟 TOP VIDEO VIEW
+            // 🌟 TOP VIDEO VIEW (TOUCH-ONLY CLEAN PROFESSIONAL OVERLAYS)
             Expanded(
               flex: _isFullscreen ? 1 : 0,
               child: Container(
@@ -1975,15 +2053,7 @@ class _NativeVideoPlayerScreenState extends State<NativeVideoPlayerScreen> {
                     : !_isInitialized
                         ? const Center(child: CircularProgressIndicator(color: kGreen))
                         : GestureDetector(
-                            onTap: () {
-                              if (_controller.value.isPlaying) {
-                                _controller.pause();
-                                _showFeedback('PAUSE');
-                              } else {
-                                _controller.play();
-                                _showFeedback('PLAY');
-                              }
-                            },
+                            onTap: _onScreenTapped,
                             behavior: HitTestBehavior.opaque,
                             child: Stack(
                               alignment: Alignment.center,
@@ -1994,9 +2064,9 @@ class _NativeVideoPlayerScreenState extends State<NativeVideoPlayerScreen> {
                                   Container(
                                     padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
                                     decoration: BoxDecoration(
-                                      color: Colors.black.withOpacity(0.5),
+                                      color: Colors.black.withOpacity(0.6),
                                       borderRadius: BorderRadius.circular(25),
-                                      border: Border.all(color: kGreen.withOpacity(0.7)),
+                                      border: Border.all(color: kGreen.withOpacity(0.8)),
                                     ),
                                     child: Text(
                                       _flashFeedback,
@@ -2004,59 +2074,82 @@ class _NativeVideoPlayerScreenState extends State<NativeVideoPlayerScreen> {
                                     ),
                                   ),
 
-                                Positioned(
-                                  left: 20,
-                                  child: IconButton(
-                                    iconSize: 38,
-                                    icon: const Icon(Icons.replay_10_rounded, color: Colors.white60),
-                                    onPressed: () => _seekRelative(-10),
+                                // 🌟 CONTROLS ONLY VISIBLE ON TOUCH
+                                if (_showControls) ...[
+                                  Positioned(
+                                    left: 20,
+                                    child: IconButton(
+                                      iconSize: 40,
+                                      icon: const Icon(Icons.replay_10_rounded, color: Colors.white),
+                                      onPressed: () => _seekRelative(-10),
+                                    ),
                                   ),
-                                ),
-                                Positioned(
-                                  right: 20,
-                                  child: IconButton(
-                                    iconSize: 38,
-                                    icon: const Icon(Icons.forward_10_rounded, color: Colors.white60),
-                                    onPressed: () => _seekRelative(10),
+                                  Positioned(
+                                    child: IconButton(
+                                      iconSize: 56,
+                                      icon: Icon(
+                                        _controller.value.isPlaying ? Icons.pause_circle_filled : Icons.play_circle_filled,
+                                        color: Colors.white,
+                                      ),
+                                      onPressed: () {
+                                        setState(() {
+                                          _controller.value.isPlaying ? _controller.pause() : _controller.play();
+                                        });
+                                        _showFeedback(_controller.value.isPlaying ? 'PLAY' : 'PAUSE');
+                                      },
+                                    ),
                                   ),
-                                ),
-
-                                // 🌟 IN-PLAYER OVERLAY CONTROLS
-                                Positioned(
-                                  bottom: 4,
-                                  left: 12,
-                                  right: 12,
-                                  child: Row(
-                                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                                    children: [
-                                      IconButton(
-                                        icon: Icon(_isFullscreen ? Icons.fullscreen_exit : Icons.fullscreen, color: kGreen, size: 24),
-                                        tooltip: 'Fullscreen Toggle',
-                                        onPressed: _toggleSmartFullscreen,
-                                      ),
-                                      IconButton(
-                                        icon: const Icon(Icons.tune, color: kGreen, size: 22),
-                                        tooltip: 'Resolution Quality',
-                                        onPressed: _showQualityDialog,
-                                      ),
-                                      IconButton(
-                                        icon: Icon(_isCcEnabled ? Icons.closed_caption : Icons.closed_caption_off, color: _isCcEnabled ? kGreen : Colors.white60, size: 24),
-                                        tooltip: 'CC',
-                                        onPressed: () {
-                                          setState(() => _isCcEnabled = !_isCcEnabled);
-                                          ScaffoldMessenger.of(context).showSnackBar(
-                                            SnackBar(content: Text(_isCcEnabled ? 'CC Enabled' : 'CC Disabled'), duration: const Duration(seconds: 1)),
-                                          );
-                                        },
-                                      ),
-                                      IconButton(
-                                        icon: const Icon(Icons.speed, color: kGreen, size: 22),
-                                        tooltip: 'Speed',
-                                        onPressed: _showSpeedDialog,
-                                      ),
-                                    ],
+                                  Positioned(
+                                    right: 20,
+                                    child: IconButton(
+                                      iconSize: 40,
+                                      icon: const Icon(Icons.forward_10_rounded, color: Colors.white),
+                                      onPressed: () => _seekRelative(10),
+                                    ),
                                   ),
-                                ),
+                                  Positioned(
+                                    bottom: 6,
+                                    left: 14,
+                                    right: 14,
+                                    child: Container(
+                                      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
+                                      decoration: BoxDecoration(
+                                        color: Colors.black.withOpacity(0.65),
+                                        borderRadius: BorderRadius.circular(10),
+                                      ),
+                                      child: Row(
+                                        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                                        children: [
+                                          IconButton(
+                                            icon: Icon(_isFullscreen ? Icons.fullscreen_exit : Icons.fullscreen, color: Colors.white, size: 24),
+                                            tooltip: 'Fullscreen Toggle',
+                                            onPressed: _toggleSmartFullscreen,
+                                          ),
+                                          IconButton(
+                                            icon: const Icon(Icons.tune, color: Colors.white, size: 22),
+                                            tooltip: 'Resolution Quality',
+                                            onPressed: _showQualityDialog,
+                                          ),
+                                          IconButton(
+                                            icon: Icon(_isCcEnabled ? Icons.closed_caption : Icons.closed_caption_off, color: _isCcEnabled ? kGreen : Colors.white60, size: 24),
+                                            tooltip: 'CC',
+                                            onPressed: () {
+                                              setState(() => _isCcEnabled = !_isCcEnabled);
+                                              ScaffoldMessenger.of(context).showSnackBar(
+                                                SnackBar(content: Text(_isCcEnabled ? 'CC Enabled' : 'CC Disabled'), duration: const Duration(seconds: 1)),
+                                              );
+                                            },
+                                          ),
+                                          IconButton(
+                                            icon: const Icon(Icons.speed, color: Colors.white, size: 22),
+                                            tooltip: 'Speed',
+                                            onPressed: _showSpeedDialog,
+                                          ),
+                                        ],
+                                      ),
+                                    ),
+                                  ),
+                                ],
                               ],
                             ),
                           ),
@@ -2110,7 +2203,7 @@ class _NativeVideoPlayerScreenState extends State<NativeVideoPlayerScreen> {
               ),
             ),
 
-            // 🌟 BOTTOM DETAILS & REAL COMMUNITY STATS (NO MORE BUTTON HERE)
+            // 🌟 BOTTOM DETAILS & REAL COMMUNITY STATS
             if (!_isFullscreen)
               Expanded(
                 child: Container(
