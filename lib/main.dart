@@ -35,7 +35,7 @@ final GlobalKey<NavigatorState> navigatorKey = GlobalKey<NavigatorState>();
 final Map<String, Map<String, String>> localizedStrings = {
   'English': {
     'app_title': 'MAYA JAAL',
-    'paste_hint': 'Paste Mayajaal link here...',
+    'paste_hint': 'Paste link here...',
     'watch_history': '> WATCH HISTORY',
     'no_history': 'no history yet',
     'settings': 'SETTINGS',
@@ -57,7 +57,7 @@ final Map<String, Map<String, String>> localizedStrings = {
   },
   'Hindi': {
     'app_title': 'माया जाल',
-    'paste_hint': 'यहाँ मायाजाल लिंक पेस्ट करें...',
+    'paste_hint': 'यहाँ लिंक पेस्ट करें...',
     'watch_history': '> देखने का इतिहास',
     'no_history': 'अभी कोई इतिहास नहीं है',
     'settings': 'सेटिंग्स',
@@ -573,7 +573,6 @@ class _LoginScreenState extends State<LoginScreen> {
     );
   }
 }
-// 🌟 4 TABS: HOME, CHANNEL, HISTORY, MORE
 class MainNavigationHolder extends StatefulWidget {
   const MainNavigationHolder({super.key});
   @override
@@ -652,7 +651,7 @@ class _HomeScreenState extends State<HomeScreen> {
     String input = _linkController.text.trim();
     if (input.isEmpty) {
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Please paste a Mayajaal link!'), backgroundColor: kCardBg),
+        const SnackBar(content: Text('Please paste a link first!'), backgroundColor: kCardBg),
       );
       return;
     }
@@ -665,8 +664,6 @@ class _HomeScreenState extends State<HomeScreen> {
 
   @override
   Widget build(BuildContext context) {
-    final user = Supabase.instance.client.auth.currentUser;
-
     return Scaffold(
       backgroundColor: kBg,
       appBar: AppBar(
@@ -683,40 +680,75 @@ class _HomeScreenState extends State<HomeScreen> {
         child: Padding(
           padding: const EdgeInsets.all(20),
           child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
+            crossAxisAlignment: CrossAxisAlignment.center,
             children: [
+              const SizedBox(height: 10),
+
+              // 🌟 1. HOMEPAGE OFFICIAL LOGO DISPLAY
               Container(
-                padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+                width: 90,
+                height: 90,
                 decoration: BoxDecoration(
-                  color: kCardBg,
-                  border: Border.all(color: kGreen.withOpacity(0.3)),
-                  borderRadius: BorderRadius.circular(10),
+                  borderRadius: BorderRadius.circular(20),
+                  border: Border.all(color: kGreen.withOpacity(0.7), width: 2),
+                  boxShadow: [
+                    BoxShadow(
+                      color: kGreen.withOpacity(0.35),
+                      blurRadius: 20,
+                      spreadRadius: 2,
+                    ),
+                  ],
                 ),
-                child: Row(
+                child: ClipRRect(
+                  borderRadius: BorderRadius.circular(18),
+                  child: Image.asset(
+                    'assets/icon/logo.png',
+                    fit: BoxFit.cover,
+                    errorBuilder: (context, error, stackTrace) => const Icon(Icons.movie_filter, size: 50, color: kGreen),
+                  ),
+                ),
+              ),
+              const SizedBox(height: 25),
+
+              // 🌟 2. BIG BOLD EYE-CATCHING PROMPT TEXT
+              Container(
+                padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
+                decoration: BoxDecoration(
+                  color: Colors.black.withOpacity(0.5),
+                  borderRadius: BorderRadius.circular(10),
+                  border: Border.all(color: kNeonCyan.withOpacity(0.4)),
+                ),
+                child: const Row(
+                  mainAxisSize: MainAxisSize.min,
                   children: [
-                    const Icon(Icons.person, color: kGreen, size: 20),
-                    const SizedBox(width: 10),
-                    Expanded(
-                      child: Text(
-                        user?.email ?? 'Matrix Guest Node',
-                        style: const TextStyle(color: kGreen, fontSize: 13),
-                        overflow: TextOverflow.ellipsis,
+                    Icon(Icons.video_library_rounded, color: kNeonCyan, size: 20),
+                    SizedBox(width: 8),
+                    Text(
+                      'LINK PASTE KARO AUR FAST STREAM DEKHO',
+                      style: TextStyle(
+                        color: kNeonCyan,
+                        fontSize: 12,
+                        fontWeight: FontWeight.bold,
+                        fontFamily: 'monospace',
+                        letterSpacing: 1.2,
                       ),
                     ),
                   ],
                 ),
               ),
-              const SizedBox(height: 25),
+              const SizedBox(height: 16),
+
+              // LINK INPUT CONTAINER
               Container(
                 decoration: BoxDecoration(
                   color: kCardBg,
-                  borderRadius: BorderRadius.circular(12),
+                  borderRadius: BorderRadius.circular(14),
                   border: Border.all(color: kGreen.withOpacity(0.6), width: 1.5),
                 ),
                 child: Row(
                   children: [
                     const Padding(
-                      padding: EdgeInsets.symmetric(horizontal: 12),
+                      padding: EdgeInsets.symmetric(horizontal: 14),
                       child: Icon(Icons.link, color: kGreen),
                     ),
                     Expanded(
@@ -725,7 +757,7 @@ class _HomeScreenState extends State<HomeScreen> {
                         style: const TextStyle(color: kGreen, fontSize: 13),
                         decoration: InputDecoration(
                           hintText: tr('paste_hint'),
-                          hintStyle: TextStyle(color: kGreen.withOpacity(0.4), fontSize: 12),
+                          hintStyle: TextStyle(color: kGreen.withOpacity(0.4), fontSize: 13),
                           border: InputBorder.none,
                           contentPadding: const EdgeInsets.symmetric(vertical: 16),
                         ),
@@ -745,7 +777,7 @@ class _HomeScreenState extends State<HomeScreen> {
                   style: TextStyle(color: kGreen.withOpacity(0.4), fontSize: 11, letterSpacing: 1.5),
                 ),
               ),
-              const SizedBox(height: 20),
+              const SizedBox(height: 14),
             ],
           ),
         ),
@@ -753,16 +785,9 @@ class _HomeScreenState extends State<HomeScreen> {
     );
   }
 }
-// 🌟 CHANNEL SCREEN: OFFICIAL SOCIAL HANDLES (INSTAGRAM & YOUTUBE)
+// 🌟 CHANNEL SCREEN: DISCORD / UPDATES / SYSTEM NODES (NO SOCIALS HERE)
 class ChannelScreen extends StatelessWidget {
   const ChannelScreen({super.key});
-
-  Future<void> _launchURL(String url) async {
-    final target = Uri.parse(url);
-    if (await canLaunchUrl(target)) {
-      await launchUrl(target, mode: LaunchMode.externalApplication);
-    }
-  }
 
   @override
   Widget build(BuildContext context) {
@@ -777,30 +802,26 @@ class ChannelScreen extends StatelessWidget {
             decoration: BoxDecoration(
               color: kCardBg,
               borderRadius: BorderRadius.circular(12),
-              border: Border.all(color: const Color(0xFFE1306C).withOpacity(0.5)),
+              border: Border.all(color: kGreen.withOpacity(0.4)),
             ),
-            child: ListTile(
-              leading: const Icon(Icons.camera_alt, color: Color(0xFFE1306C), size: 32),
-              title: const Text('Join Instagram Channel', style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
-              subtitle: const Text('@maya_jaal_official', style: TextStyle(color: Color(0xFFE1306C), fontSize: 12)),
-              trailing: const Icon(Icons.open_in_new, color: Color(0xFFE1306C), size: 20),
-              onTap: () => _launchURL('https://www.instagram.com/maya_jaal_official?stkn=MWVmZmxxMXlldWwwdg=='),
+            child: const ListTile(
+              leading: Icon(Icons.bolt, color: kGreen, size: 32),
+              title: Text('Quantum Live Node', style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
+              subtitle: Text('Hardware acceleration node: ACTIVE', style: TextStyle(color: kDimGreen, fontSize: 12)),
             ),
           ),
-          const SizedBox(height: 16),
+          const SizedBox(height: 14),
           Container(
             padding: const EdgeInsets.all(16),
             decoration: BoxDecoration(
               color: kCardBg,
               borderRadius: BorderRadius.circular(12),
-              border: Border.all(color: Colors.redAccent.withOpacity(0.5)),
+              border: Border.all(color: kNeonCyan.withOpacity(0.4)),
             ),
-            child: ListTile(
-              leading: const Icon(Icons.play_circle_filled, color: Colors.redAccent, size: 32),
-              title: const Text('Join YouTube Channel', style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
-              subtitle: const Text('@MayaJaalOfficial00', style: TextStyle(color: Colors.redAccent, fontSize: 12)),
-              trailing: const Icon(Icons.open_in_new, color: Colors.redAccent, size: 20),
-              onTap: () => _launchURL('https://www.youtube.com/@MayaJaalOfficial00'),
+            child: const ListTile(
+              leading: Icon(Icons.cloud_done, color: kNeonCyan, size: 32),
+              title: Text('Distributed Cache Stream', style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
+              subtitle: Text('Fast bandwidth streaming: ONLINE', style: TextStyle(color: kNeonCyan, fontSize: 12)),
             ),
           ),
         ],
@@ -809,7 +830,7 @@ class ChannelScreen extends StatelessWidget {
   }
 }
 
-// 🌟 HISTORY SCREEN: ISOLATED CLOUD/LOCAL WATCH HISTORY
+// 🌟 HISTORY SCREEN
 class HistoryScreen extends StatefulWidget {
   const HistoryScreen({super.key});
   @override
@@ -917,7 +938,7 @@ class _HistoryScreenState extends State<HistoryScreen> {
   }
 }
 
-// 🌟 MORE SCREEN: SETTINGS & ACCOUNT ACTIONS
+// 🌟 MORE SCREEN: GMAIL ID + SHARE APP + SETTINGS + JOIN US (INSTAGRAM & YOUTUBE)
 class MoreScreen extends StatelessWidget {
   const MoreScreen({super.key});
 
@@ -926,26 +947,124 @@ class MoreScreen extends StatelessWidget {
     await GoogleSignIn().signOut();
   }
 
+  Future<void> _launchURL(String url) async {
+    final target = Uri.parse(url);
+    if (await canLaunchUrl(target)) {
+      await launchUrl(target, mode: LaunchMode.externalApplication);
+    }
+  }
+
+  void _shareApp() {
+    Share.share('🚀 Watch fast streaming videos on MayaJaal App!\nDownload now: https://mayajaal.online/download.html');
+  }
+
   @override
   Widget build(BuildContext context) {
+    final user = Supabase.instance.client.auth.currentUser;
+
     return Scaffold(
       backgroundColor: kBg,
       appBar: AppBar(title: const Text('MORE OPTIONS')),
       body: ListView(
         padding: const EdgeInsets.all(16),
         children: [
+          // 🌟 1. LOGGED IN GMAIL ACCOUNT CARD
+          Container(
+            padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+            decoration: BoxDecoration(
+              color: kCardBg,
+              borderRadius: BorderRadius.circular(12),
+              border: Border.all(color: kGreen.withOpacity(0.4)),
+            ),
+            child: Row(
+              children: [
+                const Icon(Icons.account_circle, color: kGreen, size: 28),
+                const SizedBox(width: 12),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      const Text('LOGGED IN AS', style: TextStyle(color: Colors.grey, fontSize: 10, letterSpacing: 1)),
+                      const SizedBox(height: 2),
+                      Text(
+                        user?.email ?? 'Guest User',
+                        style: const TextStyle(color: kGreen, fontSize: 13, fontWeight: FontWeight.bold),
+                        overflow: TextOverflow.ellipsis,
+                      ),
+                    ],
+                  ),
+                ),
+              ],
+            ),
+          ),
+          const SizedBox(height: 16),
+
+          // 🌟 2. SHARE MAYAJAAL APP
+          ListTile(
+            leading: const Icon(Icons.share, color: kNeonCyan),
+            title: const Text('Share MayaJaal App', style: TextStyle(color: Colors.white)),
+            subtitle: const Text('Share app link with friends', style: TextStyle(color: Colors.grey, fontSize: 11)),
+            trailing: const Icon(Icons.arrow_forward_ios, size: 14, color: kNeonCyan),
+            onTap: _shareApp,
+          ),
+          Divider(color: kGreen.withOpacity(0.2)),
+
+          // 🌟 3. APP SETTINGS
           ListTile(
             leading: const Icon(Icons.settings, color: kGreen),
             title: const Text('App Settings', style: TextStyle(color: Colors.white)),
+            subtitle: const Text('Theme, languages & downloads', style: TextStyle(color: Colors.grey, fontSize: 11)),
             trailing: const Icon(Icons.arrow_forward_ios, size: 14, color: kGreen),
             onTap: () => Navigator.push(context, MaterialPageRoute(builder: (_) => const SettingsScreen())),
           ),
           Divider(color: kGreen.withOpacity(0.2)),
+
+          // 🌟 4. LOGOUT
           ListTile(
             leading: const Icon(Icons.logout, color: Colors.redAccent),
             title: const Text('Logout Session', style: TextStyle(color: Colors.redAccent)),
             onTap: _logout,
           ),
+          const SizedBox(height: 25),
+
+          // 🌟 5. JOIN US SECTION AT BOTTOM (INSTAGRAM & YOUTUBE)
+          const Text(
+            'JOIN US',
+            style: TextStyle(color: kGreen, fontSize: 13, fontWeight: FontWeight.bold, letterSpacing: 2),
+          ),
+          const SizedBox(height: 12),
+
+          Container(
+            decoration: BoxDecoration(
+              color: kCardBg,
+              borderRadius: BorderRadius.circular(12),
+              border: Border.all(color: const Color(0xFFE1306C).withOpacity(0.5)),
+            ),
+            child: ListTile(
+              leading: const Icon(Icons.camera_alt, color: Color(0xFFE1306C), size: 26),
+              title: const Text('Instagram Official', style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 13)),
+              subtitle: const Text('@maya_jaal_official', style: TextStyle(color: Color(0xFFE1306C), fontSize: 11)),
+              trailing: const Icon(Icons.open_in_new, color: Color(0xFFE1306C), size: 18),
+              onTap: () => _launchURL('https://www.instagram.com/maya_jaal_official?stkn=MWVmZmxxMXlldWwwdg=='),
+            ),
+          ),
+          const SizedBox(height: 12),
+
+          Container(
+            decoration: BoxDecoration(
+              color: kCardBg,
+              borderRadius: BorderRadius.circular(12),
+              border: Border.all(color: Colors.redAccent.withOpacity(0.5)),
+            ),
+            child: ListTile(
+              leading: const Icon(Icons.play_circle_fill, color: Colors.redAccent, size: 26),
+              title: const Text('YouTube Channel', style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 13)),
+              subtitle: const Text('@MayaJaalOfficial00', style: TextStyle(color: Colors.redAccent, fontSize: 11)),
+              trailing: const Icon(Icons.open_in_new, color: Colors.redAccent, size: 18),
+              onTap: () => _launchURL('https://www.youtube.com/@MayaJaalOfficial00'),
+            ),
+          ),
+          const SizedBox(height: 20),
         ],
       ),
     );
@@ -1489,9 +1608,6 @@ class _NativeVideoPlayerScreenState extends State<NativeVideoPlayerScreen> {
   String _selectedQuality = 'Auto (Fast)';
   final List<String> _qualities = ['Auto (Fast)', '1080p FHD', '720p HD', '480p SD', '360p Low'];
 
-  bool _isLooping = false;
-  bool _isStableVolume = true;
-
   bool _isDownloading = false;
   double _downloadProgress = 0.0;
 
@@ -1552,9 +1668,7 @@ class _NativeVideoPlayerScreenState extends State<NativeVideoPlayerScreen> {
     try {
       await _controller.initialize();
       _controller.play();
-      _controller.setLooping(_isLooping);
       _controller.setPlaybackSpeed(_playbackSpeed);
-      if (_isStableVolume) _controller.setVolume(0.85);
 
       _controller.addListener(() {
         if (mounted) setState(() {});
@@ -1627,7 +1741,6 @@ class _NativeVideoPlayerScreenState extends State<NativeVideoPlayerScreen> {
     Share.share('🎬 Watch this video on MayaJaal:\n${widget.videoUrl}');
   }
 
-  // 🌟 NO-PERMISSION-FAIL IN-APP DIRECT DOWNLOADER
   Future<void> _startInAppDownload() async {
     if (_isDownloading) return;
 
@@ -1908,7 +2021,7 @@ class _NativeVideoPlayerScreenState extends State<NativeVideoPlayerScreen> {
                                   ),
                                 ),
 
-                                // 🌟 IN-PLAYER OVERLAY CONTROLS (ONLY 1 FULLSCREEN BUTTON)
+                                // 🌟 IN-PLAYER OVERLAY CONTROLS
                                 Positioned(
                                   bottom: 4,
                                   left: 12,
@@ -1997,7 +2110,7 @@ class _NativeVideoPlayerScreenState extends State<NativeVideoPlayerScreen> {
               ),
             ),
 
-            // 🌟 REAL STATS & COMMUNITY ENGAGEMENT BAR
+            // 🌟 BOTTOM DETAILS & REAL COMMUNITY STATS (NO MORE BUTTON HERE)
             if (!_isFullscreen)
               Expanded(
                 child: Container(
