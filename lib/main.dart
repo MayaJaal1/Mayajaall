@@ -128,7 +128,6 @@ class _MyAppState extends State<MyApp> {
     );
   }
 
-  // 🌟 STRICT LOGIN GUARD: Check auth before opening any incoming video
   void _handleLink(Uri uri) {
     String finalUrl = uri.toString();
     if (uri.scheme == 'mayajaall' && uri.queryParameters.containsKey('url')) {
@@ -137,7 +136,6 @@ class _MyAppState extends State<MyApp> {
 
     final session = Supabase.instance.client.auth.currentSession;
     if (session == null) {
-      // User is not logged in: Store link for post-login redirection
       _incomingUrl = finalUrl;
       setState(() => _showSplash = false);
       return;
@@ -165,17 +163,17 @@ class _MyAppState extends State<MyApp> {
 
   ThemeData _buildTheme(bool isDark) {
     return ThemeData(
-      brightness: isDark ? Brightness.dark : Brightness.light,
-      scaffoldBackgroundColor: isDark ? kBg : const Color(0xFFF3F4F6),
-      colorScheme: ColorScheme.fromSeed(
-        seedColor: kGreen,
-        brightness: isDark ? Brightness.dark : Brightness.light,
+      brightness: Brightness.dark,
+      scaffoldBackgroundColor: kBg,
+      colorScheme: const ColorScheme.dark(
+        primary: kGreen,
+        surface: kCardBg,
       ),
       useMaterial3: true,
       fontFamily: 'monospace',
-      appBarTheme: AppBarTheme(
-        backgroundColor: isDark ? kBg : Colors.white,
-        foregroundColor: isDark ? kGreen : Colors.black87,
+      appBarTheme: const AppBarTheme(
+        backgroundColor: kBg,
+        foregroundColor: kGreen,
         elevation: 0,
         centerTitle: true,
       ),
@@ -194,8 +192,8 @@ class _MyAppState extends State<MyApp> {
               navigatorKey: navigatorKey,
               title: 'MayaJaal',
               debugShowCheckedModeBanner: false,
-              themeMode: mode,
-              theme: _buildTheme(false),
+              themeMode: ThemeMode.dark,
+              theme: _buildTheme(true),
               darkTheme: _buildTheme(true),
               home: _showSplash
                   ? const SplashScreen()
@@ -295,7 +293,7 @@ class _SplashScreenState extends State<SplashScreen>
       vsync: this,
       duration: const Duration(milliseconds: 1500),
     )..repeat(reverse: true);
-    _a = Tween<double>(begin: 0.6, end: 1.0).animate(
+    _a = Tween<double>(begin: 0.85, end: 1.15).animate(
       CurvedAnimation(parent: _c, curve: Curves.easeInOut),
     );
   }
@@ -309,49 +307,60 @@ class _SplashScreenState extends State<SplashScreen>
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: kBg,
+      backgroundColor: Colors.black,
       body: Stack(
         children: [
-          const MatrixRain(),
+          const MatrixRain(opacity: 0.5),
           Center(
             child: Column(
               mainAxisAlignment: MainAxisAlignment.center,
               children: [
                 AnimatedBuilder(
                   animation: _a,
-                  builder: (c, _) => Container(
-                    padding: const EdgeInsets.all(20),
-                    decoration: BoxDecoration(
-                      shape: BoxShape.circle,
-                      boxShadow: [
-                        BoxShadow(
-                          color: kGreen.withOpacity(0.4 * _a.value),
-                          blurRadius: 40,
-                          spreadRadius: 10,
+                  builder: (c, _) => Transform.scale(
+                    scale: _a.value,
+                    child: Container(
+                      width: 140,
+                      height: 140,
+                      decoration: BoxDecoration(
+                        borderRadius: BorderRadius.circular(28),
+                        boxShadow: [
+                          BoxShadow(
+                            color: kGreen.withOpacity(0.55),
+                            blurRadius: 35,
+                            spreadRadius: 8,
+                          ),
+                        ],
+                      ),
+                      child: ClipRRect(
+                        borderRadius: BorderRadius.circular(28),
+                        child: Image.asset(
+                          'assets/icon/logo.png',
+                          fit: BoxFit.cover,
+                          errorBuilder: (context, error, stackTrace) => Container(
+                            color: Colors.black,
+                            child: const Icon(Icons.movie_filter, size: 80, color: kGreen),
+                          ),
                         ),
-                      ],
-                    ),
-                    child: const Icon(Icons.movie_filter, size: 80, color: kGreen),
-                  ),
-                ),
-                const SizedBox(height: 30),
-                AnimatedBuilder(
-                  animation: _a,
-                  builder: (c, _) => Text(
-                    'MAYA JAAL',
-                    style: TextStyle(
-                      fontSize: 36,
-                      fontWeight: FontWeight.bold,
-                      color: kGreen,
-                      fontFamily: 'monospace',
-                      letterSpacing: 8,
-                      shadows: [
-                        Shadow(color: kGreen.withOpacity(_a.value), blurRadius: 20),
-                      ],
+                      ),
                     ),
                   ),
                 ),
-                const SizedBox(height: 20),
+                const SizedBox(height: 35),
+                Text(
+                  'MAYA JAAL',
+                  style: TextStyle(
+                    fontSize: 34,
+                    fontWeight: FontWeight.bold,
+                    color: kGreen,
+                    fontFamily: 'monospace',
+                    letterSpacing: 8,
+                    shadows: [
+                      Shadow(color: kGreen.withOpacity(0.8), blurRadius: 20),
+                    ],
+                  ),
+                ),
+                const SizedBox(height: 18),
                 Text(
                   '> initializing secure channel...',
                   style: TextStyle(
@@ -461,12 +470,20 @@ class _LoginScreenState extends State<LoginScreen> {
                     mainAxisSize: MainAxisSize.min,
                     children: [
                       Container(
-                        padding: const EdgeInsets.all(16),
+                        width: 75,
+                        height: 75,
                         decoration: BoxDecoration(
-                          shape: BoxShape.circle,
+                          borderRadius: BorderRadius.circular(16),
                           border: Border.all(color: kGreen, width: 2),
                         ),
-                        child: const Icon(Icons.movie_filter, size: 50, color: kGreen),
+                        child: ClipRRect(
+                          borderRadius: BorderRadius.circular(14),
+                          child: Image.asset(
+                            'assets/icon/logo.png',
+                            fit: BoxFit.cover,
+                            errorBuilder: (context, error, stackTrace) => const Icon(Icons.movie_filter, size: 45, color: kGreen),
+                          ),
+                        ),
                       ),
                       const SizedBox(height: 24),
                       const Text(
@@ -939,7 +956,6 @@ class _HomeScreenState extends State<HomeScreen> {
     );
   }
 }
-
 class SettingsScreen extends StatefulWidget {
   const SettingsScreen({super.key});
   @override
@@ -1315,13 +1331,21 @@ class _StreamPreviewScreenState extends State<StreamPreviewScreen> with SingleTi
                         children: [
                           Center(
                             child: Container(
-                              padding: const EdgeInsets.all(16),
+                              width: 75,
+                              height: 75,
                               decoration: BoxDecoration(
-                                shape: BoxShape.circle,
+                                borderRadius: BorderRadius.circular(16),
                                 border: Border.all(color: kGreen, width: 2),
                                 boxShadow: [BoxShadow(color: kGreen.withOpacity(0.4), blurRadius: 20)],
                               ),
-                              child: const Icon(Icons.play_circle_fill_rounded, color: kGreen, size: 55),
+                              child: ClipRRect(
+                                borderRadius: BorderRadius.circular(14),
+                                child: Image.asset(
+                                  'assets/icon/logo.png',
+                                  fit: BoxFit.cover,
+                                  errorBuilder: (context, error, stackTrace) => const Icon(Icons.play_circle_fill_rounded, color: kGreen, size: 55),
+                                ),
+                              ),
                             ),
                           ),
                           const SizedBox(height: 20),
@@ -1429,7 +1453,6 @@ class _NativeVideoPlayerScreenState extends State<NativeVideoPlayerScreen> {
   bool _isInitialized = false;
   bool _hasError = false;
 
-  // 🌟 NO CLUTTER OVERLAY STATES
   bool _isFullscreen = false;
   String _flashFeedback = '';
   Timer? _feedbackTimer;
@@ -1440,11 +1463,11 @@ class _NativeVideoPlayerScreenState extends State<NativeVideoPlayerScreen> {
   bool _isLooping = false;
   bool _isStableVolume = true;
 
-  // 🌟 IN-APP DOWNLOAD PROGRESS
   bool _isDownloading = false;
   double _downloadProgress = 0.0;
 
-  // 🌟 REAL STATS
+  // 🌟 REAL STATS (VIEWS, LIKES, UNLIKES, SHARES)
+  int _viewsCount = 0;
   int _likesCount = 0;
   int _unlikesCount = 0;
   int _sharesCount = 0;
@@ -1454,23 +1477,30 @@ class _NativeVideoPlayerScreenState extends State<NativeVideoPlayerScreen> {
   @override
   void initState() {
     super.initState();
-    _fetchRealStats();
+    _fetchRealStatsAndRegisterView();
     _initFastVideo();
   }
 
-  Future<void> _fetchRealStats() async {
+  // 🌟 FETCH REAL LIVE STATS & INCREMENT VIEW COUNT AUTOMATICALLY
+  Future<void> _fetchRealStatsAndRegisterView() async {
     try {
+      final prefs = await SharedPreferences.getInstance();
+      _isLiked = prefs.getBool('liked_${widget.videoId}') ?? false;
+      _isUnliked = prefs.getBool('unliked_${widget.videoId}') ?? false;
+
       final res = await http.get(Uri.parse('$kBackendBaseUrl/api/stats/${widget.videoId}')).timeout(const Duration(seconds: 4));
       if (res.statusCode == 200) {
         final data = jsonDecode(res.body);
         if (mounted) {
           setState(() {
+            _viewsCount = (data['views'] ?? 0) + 1;
             _likesCount = data['likes'] ?? 0;
             _unlikesCount = data['unlikes'] ?? 0;
             _sharesCount = data['shares'] ?? 0;
           });
         }
       }
+      await _sendStatUpdate('view');
     } catch (_) {}
   }
 
@@ -1539,7 +1569,7 @@ class _NativeVideoPlayerScreenState extends State<NativeVideoPlayerScreen> {
     _showFeedback(seconds > 0 ? '+10s' : '-10s');
   }
 
-  // 🌟 SMART FULLSCREEN: Auto rotate for widescreen (16:9), stays vertical for 9:16 reels
+  // 🌟 SMART FULLSCREEN & RESTORE
   void _toggleSmartFullscreen() {
     setState(() => _isFullscreen = !_isFullscreen);
     final isWide = _controller.value.aspectRatio >= 1.2;
@@ -1571,7 +1601,6 @@ class _NativeVideoPlayerScreenState extends State<NativeVideoPlayerScreen> {
     Share.share('🎬 Watch this video on MayaJaal:\n${widget.videoUrl}');
   }
 
-  // 🌟 IN-APP NATIVE VIDEO DOWNLOADER (NO BROWSER)
   Future<void> _startInAppDownload() async {
     if (_isDownloading) return;
     final status = await Permission.storage.request();
@@ -1639,36 +1668,44 @@ class _NativeVideoPlayerScreenState extends State<NativeVideoPlayerScreen> {
     }
   }
 
-  void _toggleLike() {
+  Future<void> _toggleLike() async {
+    final prefs = await SharedPreferences.getInstance();
     setState(() {
       if (_isLiked) {
         _isLiked = false;
         _likesCount = math.max(0, _likesCount - 1);
         _sendStatUpdate('unlike_dec');
+        prefs.setBool('liked_${widget.videoId}', false);
       } else {
         _isLiked = true;
         _likesCount++;
         _sendStatUpdate('like');
+        prefs.setBool('liked_${widget.videoId}', true);
         if (_isUnliked) {
           _isUnliked = false;
           _unlikesCount = math.max(0, _unlikesCount - 1);
+          prefs.setBool('unliked_${widget.videoId}', false);
         }
       }
     });
   }
 
-  void _toggleUnlike() {
+  Future<void> _toggleUnlike() async {
+    final prefs = await SharedPreferences.getInstance();
     setState(() {
       if (_isUnliked) {
         _isUnliked = false;
         _unlikesCount = math.max(0, _unlikesCount - 1);
+        prefs.setBool('unliked_${widget.videoId}', false);
       } else {
         _isUnliked = true;
         _unlikesCount++;
         _sendStatUpdate('unlike');
+        prefs.setBool('unliked_${widget.videoId}', true);
         if (_isLiked) {
           _isLiked = false;
           _likesCount = math.max(0, _likesCount - 1);
+          prefs.setBool('liked_${widget.videoId}', false);
         }
       }
     });
@@ -1800,7 +1837,7 @@ class _NativeVideoPlayerScreenState extends State<NativeVideoPlayerScreen> {
       body: SafeArea(
         child: Column(
           children: [
-            // 🌟 TOP VIDEO VIEW: NO BLACK CLUTTER, DIRECT GESTURES ONLY
+            // 🌟 TOP VIDEO BOX: CONTROLS EMBEDDED DIRECTLY INSIDE WITH SPACED ICONS
             Expanded(
               flex: _isFullscreen ? 1 : 0,
               child: Container(
@@ -1837,14 +1874,14 @@ class _NativeVideoPlayerScreenState extends State<NativeVideoPlayerScreen> {
                               children: [
                                 _buildSmartScaledVideo(),
 
-                                // MINIMALIST GESTURE FEEDBACK ICON (NO PERMANENT BLACK BOX)
+                                // MINIMAL GREEN PULSE FEEDBACK
                                 if (_flashFeedback.isNotEmpty)
                                   Container(
                                     padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
                                     decoration: BoxDecoration(
-                                      color: Colors.black.withOpacity(0.4),
+                                      color: Colors.black.withOpacity(0.5),
                                       borderRadius: BorderRadius.circular(25),
-                                      border: Border.all(color: kGreen.withOpacity(0.5)),
+                                      border: Border.all(color: kGreen.withOpacity(0.7)),
                                     ),
                                     child: Text(
                                       _flashFeedback,
@@ -1852,7 +1889,7 @@ class _NativeVideoPlayerScreenState extends State<NativeVideoPlayerScreen> {
                                     ),
                                   ),
 
-                                // FAST SEEK TAP DETECTORS
+                                // SEEK BUTTONS
                                 Positioned(
                                   left: 20,
                                   child: IconButton(
@@ -1869,13 +1906,69 @@ class _NativeVideoPlayerScreenState extends State<NativeVideoPlayerScreen> {
                                     onPressed: () => _seekRelative(10),
                                   ),
                                 ),
+
+                                // 🌟 EXIT FULLSCREEN MINIMIZE BUTTON (WHEN SCREEN IS EXPANDED)
+                                if (_isFullscreen)
+                                  Positioned(
+                                    top: 16,
+                                    right: 16,
+                                    child: InkWell(
+                                      onTap: _toggleSmartFullscreen,
+                                      child: Container(
+                                        padding: const EdgeInsets.all(8),
+                                        decoration: BoxDecoration(
+                                          color: Colors.black.withOpacity(0.6),
+                                          shape: BoxShape.circle,
+                                          border: Border.all(color: kGreen.withOpacity(0.5)),
+                                        ),
+                                        child: const Icon(Icons.fullscreen_exit, color: kGreen, size: 26),
+                                      ),
+                                    ),
+                                  ),
+
+                                // 🌟 IN-PLAYER BOTTOM OVERLAY CONTROLS (PROPERLY SPACED INSIDE PLAYER)
+                                Positioned(
+                                  bottom: 4,
+                                  left: 12,
+                                  right: 12,
+                                  child: Row(
+                                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                                    children: [
+                                      IconButton(
+                                        icon: Icon(_isFullscreen ? Icons.fullscreen_exit : Icons.fullscreen, color: kGreen, size: 24),
+                                        tooltip: 'Smart Fullscreen',
+                                        onPressed: _toggleSmartFullscreen,
+                                      ),
+                                      IconButton(
+                                        icon: Icon(_isCcEnabled ? Icons.closed_caption : Icons.closed_caption_off, color: _isCcEnabled ? kGreen : Colors.white60, size: 24),
+                                        tooltip: 'CC',
+                                        onPressed: () {
+                                          setState(() => _isCcEnabled = !_isCcEnabled);
+                                          ScaffoldMessenger.of(context).showSnackBar(
+                                            SnackBar(content: Text(_isCcEnabled ? 'CC Enabled' : 'CC Disabled'), duration: const Duration(seconds: 1)),
+                                          );
+                                        },
+                                      ),
+                                      IconButton(
+                                        icon: const Icon(Icons.speed, color: kGreen, size: 22),
+                                        tooltip: 'Speed',
+                                        onPressed: _showSpeedDialog,
+                                      ),
+                                      IconButton(
+                                        icon: const Icon(Icons.settings, color: kGreen, size: 22),
+                                        tooltip: 'Audio Normalization & Loop',
+                                        onPressed: _showPlayerSettingsModal,
+                                      ),
+                                    ],
+                                  ),
+                                ),
                               ],
                             ),
                           ),
               ),
             ),
 
-            // 🌟 NEO & TRINITY MATRIX RIVER TIMELINE (CLEAN, NO BLACK BOX)
+            // 🌟 NEO & TRINITY MATRIX RIVER TIMELINE
             Container(
               padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 2),
               color: Colors.transparent,
@@ -1922,7 +2015,7 @@ class _NativeVideoPlayerScreenState extends State<NativeVideoPlayerScreen> {
               ),
             ),
 
-            // 🌟 DOWN-PANEL CONTROLS & COMMUNITY STATS
+            // 🌟 BOTTOM DETAILS & REAL COMMUNITY STATS
             if (!_isFullscreen)
               Expanded(
                 child: Container(
@@ -1947,14 +2040,22 @@ class _NativeVideoPlayerScreenState extends State<NativeVideoPlayerScreen> {
                             'Uploaded by: ${widget.uploader}',
                             style: TextStyle(color: kGreen.withOpacity(0.8), fontSize: 12),
                           ),
+                          const Spacer(),
+                          const Icon(Icons.remove_red_eye_outlined, size: 15, color: kNeonCyan),
+                          const SizedBox(width: 4),
+                          Text(
+                            '$_viewsCount views',
+                            style: const TextStyle(color: kNeonCyan, fontSize: 12, fontWeight: FontWeight.bold),
+                          ),
                         ],
                       ),
                       const SizedBox(height: 14),
 
-                      // 🌟 REAL STATS & IN-APP DIRECT DOWNLOAD
+                      // 🌟 REAL STATS & IN-APP DIRECT DOWNLOAD BAR
                       Row(
                         mainAxisAlignment: MainAxisAlignment.spaceBetween,
                         children: [
+                          // LIKE BUTTON
                           InkWell(
                             onTap: _toggleLike,
                             borderRadius: BorderRadius.circular(8),
@@ -1974,6 +2075,8 @@ class _NativeVideoPlayerScreenState extends State<NativeVideoPlayerScreen> {
                               ),
                             ),
                           ),
+
+                          // UNLIKE BUTTON
                           InkWell(
                             onTap: _toggleUnlike,
                             borderRadius: BorderRadius.circular(8),
@@ -1993,6 +2096,8 @@ class _NativeVideoPlayerScreenState extends State<NativeVideoPlayerScreen> {
                               ),
                             ),
                           ),
+
+                          // SHARE VIDEO LINK BUTTON
                           InkWell(
                             onTap: _shareVideoLink,
                             borderRadius: BorderRadius.circular(8),
@@ -2046,48 +2151,6 @@ class _NativeVideoPlayerScreenState extends State<NativeVideoPlayerScreen> {
                           color: kGreen,
                         ),
                       ],
-
-                      const SizedBox(height: 16),
-
-                      // 🌟 CLEAN BOTTOM ACTIONS (SMART FULLSCREEN, SPEED, CC, SETTINGS)
-                      Container(
-                        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-                        decoration: BoxDecoration(
-                          color: kCardBg,
-                          borderRadius: BorderRadius.circular(10),
-                          border: Border.all(color: kGreen.withOpacity(0.3)),
-                        ),
-                        child: Row(
-                          mainAxisAlignment: MainAxisAlignment.spaceAround,
-                          children: [
-                            IconButton(
-                              icon: Icon(_isFullscreen ? Icons.fullscreen_exit : Icons.fullscreen, color: kGreen, size: 24),
-                              tooltip: 'Smart Fullscreen',
-                              onPressed: _toggleSmartFullscreen,
-                            ),
-                            IconButton(
-                              icon: Icon(_isCcEnabled ? Icons.closed_caption : Icons.closed_caption_off, color: _isCcEnabled ? kGreen : Colors.grey, size: 24),
-                              tooltip: 'CC',
-                              onPressed: () {
-                                setState(() => _isCcEnabled = !_isCcEnabled);
-                                ScaffoldMessenger.of(context).showSnackBar(
-                                  SnackBar(content: Text(_isCcEnabled ? 'CC Enabled' : 'CC Disabled'), duration: const Duration(seconds: 1)),
-                                );
-                              },
-                            ),
-                            IconButton(
-                              icon: const Icon(Icons.speed, color: kGreen, size: 22),
-                              tooltip: 'Speed',
-                              onPressed: _showSpeedDialog,
-                            ),
-                            IconButton(
-                              icon: const Icon(Icons.settings, color: kGreen, size: 22),
-                              tooltip: 'Loop & Audio Normalization',
-                              onPressed: _showPlayerSettingsModal,
-                            ),
-                          ],
-                        ),
-                      ),
                     ],
                   ),
                 ),
