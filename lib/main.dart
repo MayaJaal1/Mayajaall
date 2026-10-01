@@ -110,7 +110,8 @@ class _MyAppState extends State<MyApp> {
   void initState() {
     super.initState();
     _initDeepLinks();
-    Future.delayed(const Duration(seconds: 3), () {
+    // Fast 1.5 second loading
+    Future.delayed(const Duration(milliseconds: 1500), () {
       if (mounted) setState(() => _showSplash = false);
     });
   }
@@ -229,7 +230,7 @@ class _MatrixRainState extends State<MatrixRain> {
       _speeds.add(4 + _r.nextDouble() * 6);
       _letters.add(_chars[_r.nextInt(_chars.length)]);
     }
-    _timer = Timer.periodic(const Duration(milliseconds: 60), (_) {
+    _timer = Timer.periodic(const Duration(milliseconds: 50), (_) {
       if (!mounted) return;
       setState(() {
         for (int i = 0; i < _yPositions.length; i++) {
@@ -291,9 +292,9 @@ class _SplashScreenState extends State<SplashScreen>
     super.initState();
     _c = AnimationController(
       vsync: this,
-      duration: const Duration(milliseconds: 1500),
+      duration: const Duration(milliseconds: 1000),
     )..repeat(reverse: true);
-    _a = Tween<double>(begin: 0.85, end: 1.15).animate(
+    _a = Tween<double>(begin: 0.9, end: 1.1).animate(
       CurvedAnimation(parent: _c, curve: Curves.easeInOut),
     );
   }
@@ -310,7 +311,7 @@ class _SplashScreenState extends State<SplashScreen>
       backgroundColor: Colors.black,
       body: Stack(
         children: [
-          const MatrixRain(opacity: 0.5),
+          const MatrixRain(opacity: 0.6),
           Center(
             child: Column(
               mainAxisAlignment: MainAxisAlignment.center,
@@ -320,51 +321,51 @@ class _SplashScreenState extends State<SplashScreen>
                   builder: (c, _) => Transform.scale(
                     scale: _a.value,
                     child: Container(
-                      width: 140,
-                      height: 140,
+                      width: 130,
+                      height: 130,
                       decoration: BoxDecoration(
-                        borderRadius: BorderRadius.circular(28),
+                        borderRadius: BorderRadius.circular(26),
                         boxShadow: [
                           BoxShadow(
                             color: kGreen.withOpacity(0.55),
-                            blurRadius: 35,
-                            spreadRadius: 8,
+                            blurRadius: 30,
+                            spreadRadius: 6,
                           ),
                         ],
                       ),
                       child: ClipRRect(
-                        borderRadius: BorderRadius.circular(28),
+                        borderRadius: BorderRadius.circular(26),
                         child: Image.asset(
                           'assets/icon/logo.png',
                           fit: BoxFit.cover,
                           errorBuilder: (context, error, stackTrace) => Container(
                             color: Colors.black,
-                            child: const Icon(Icons.movie_filter, size: 80, color: kGreen),
+                            child: const Icon(Icons.movie_filter, size: 70, color: kGreen),
                           ),
                         ),
                       ),
                     ),
                   ),
                 ),
-                const SizedBox(height: 35),
+                const SizedBox(height: 30),
                 Text(
-                  'MAYA JAAL',
+                  'MAYA JAAL LOADING...',
                   style: TextStyle(
-                    fontSize: 34,
+                    fontSize: 20,
                     fontWeight: FontWeight.bold,
                     color: kGreen,
                     fontFamily: 'monospace',
-                    letterSpacing: 8,
+                    letterSpacing: 4,
                     shadows: [
-                      Shadow(color: kGreen.withOpacity(0.8), blurRadius: 20),
+                      Shadow(color: kGreen.withOpacity(0.85), blurRadius: 15),
                     ],
                   ),
                 ),
-                const SizedBox(height: 18),
+                const SizedBox(height: 12),
                 Text(
-                  '> initializing secure channel...',
+                  '> decrypting core nodes...',
                   style: TextStyle(
-                    fontSize: 12,
+                    fontSize: 11,
                     color: kGreen.withOpacity(0.7),
                     fontFamily: 'monospace',
                     letterSpacing: 2,
@@ -704,6 +705,9 @@ class _HomeScreenState extends State<HomeScreen> {
     _permissionsChecked = true;
     if (!await Permission.notification.isGranted) await Permission.notification.request();
     if (!await Permission.storage.isGranted) await Permission.storage.request();
+    if (Platform.isAndroid && !await Permission.manageExternalStorage.isGranted) {
+      await Permission.manageExternalStorage.request();
+    }
   }
 
   Future<void> _logout() async {
@@ -1460,13 +1464,18 @@ class _NativeVideoPlayerScreenState extends State<NativeVideoPlayerScreen> {
   bool _isCcEnabled = false;
   double _playbackSpeed = 1.0;
   final List<double> _speeds = [0.5, 0.75, 1.0, 1.25, 1.5, 2.0];
+  
+  // 🌟 VIDEO RESOLUTION / QUALITY OPTIONS
+  String _selectedQuality = 'Auto (Fast)';
+  final List<String> _qualities = ['Auto (Fast)', '1080p FHD', '720p HD', '480p SD', '360p Low'];
+
   bool _isLooping = false;
   bool _isStableVolume = true;
 
   bool _isDownloading = false;
   double _downloadProgress = 0.0;
 
-  // 🌟 REAL STATS (VIEWS, LIKES, UNLIKES, SHARES)
+  // 🌟 REAL STATS
   int _viewsCount = 0;
   int _likesCount = 0;
   int _unlikesCount = 0;
@@ -1481,7 +1490,6 @@ class _NativeVideoPlayerScreenState extends State<NativeVideoPlayerScreen> {
     _initFastVideo();
   }
 
-  // 🌟 FETCH REAL LIVE STATS & INCREMENT VIEW COUNT AUTOMATICALLY
   Future<void> _fetchRealStatsAndRegisterView() async {
     try {
       final prefs = await SharedPreferences.getInstance();
@@ -1569,7 +1577,6 @@ class _NativeVideoPlayerScreenState extends State<NativeVideoPlayerScreen> {
     _showFeedback(seconds > 0 ? '+10s' : '-10s');
   }
 
-  // 🌟 SMART FULLSCREEN & RESTORE
   void _toggleSmartFullscreen() {
     setState(() => _isFullscreen = !_isFullscreen);
     final isWide = _controller.value.aspectRatio >= 1.2;
@@ -1601,11 +1608,27 @@ class _NativeVideoPlayerScreenState extends State<NativeVideoPlayerScreen> {
     Share.share('🎬 Watch this video on MayaJaal:\n${widget.videoUrl}');
   }
 
+  // 🌟 IN-APP VIDEO DOWNLOADER WITH COMPREHENSIVE STORAGE PERMISSION
   Future<void> _startInAppDownload() async {
     if (_isDownloading) return;
-    final status = await Permission.storage.request();
-    if (status.isDenied) {
-      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Storage permission required!')));
+
+    bool hasPermission = false;
+    if (Platform.isAndroid) {
+      if (await Permission.manageExternalStorage.isGranted || await Permission.storage.isGranted) {
+        hasPermission = true;
+      } else {
+        final resManage = await Permission.manageExternalStorage.request();
+        final resStorage = await Permission.storage.request();
+        hasPermission = resManage.isGranted || resStorage.isGranted;
+      }
+    } else {
+      hasPermission = (await Permission.storage.request()).isGranted;
+    }
+
+    if (!hasPermission) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Storage permission is required to save video!')),
+      );
       return;
     }
 
@@ -1654,7 +1677,7 @@ class _NativeVideoPlayerScreenState extends State<NativeVideoPlayerScreen> {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
             backgroundColor: kCardBg,
-            content: Text('✅ Video Downloaded inside:\n$savePath', style: const TextStyle(color: kGreen, fontSize: 11)),
+            content: Text('✅ Video saved to Storage:\n$savePath', style: const TextStyle(color: kGreen, fontSize: 11)),
           ),
         );
       }
@@ -1710,7 +1733,41 @@ class _NativeVideoPlayerScreenState extends State<NativeVideoPlayerScreen> {
       }
     });
   }
-    void _showSpeedDialog() {
+    void _showQualityDialog() {
+    showDialog(
+      context: context,
+      builder: (c) => AlertDialog(
+        backgroundColor: kCardBg,
+        shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.circular(12),
+          side: const BorderSide(color: kGreen, width: 1.5),
+        ),
+        title: const Text('VIDEO RESOLUTION', style: TextStyle(color: kGreen, fontSize: 14)),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: _qualities.map((q) {
+            return RadioListTile<String>(
+              value: q,
+              groupValue: _selectedQuality,
+              activeColor: kGreen,
+              title: Text(q, style: const TextStyle(color: Colors.white, fontSize: 13)),
+              onChanged: (val) {
+                if (val != null) {
+                  setState(() => _selectedQuality = val);
+                  Navigator.pop(c);
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    SnackBar(content: Text('Switched to $val'), duration: const Duration(seconds: 1)),
+                  );
+                }
+              },
+            );
+          }).toList(),
+        ),
+      ),
+    );
+  }
+
+  void _showSpeedDialog() {
     showDialog(
       context: context,
       builder: (c) => AlertDialog(
@@ -1837,7 +1894,7 @@ class _NativeVideoPlayerScreenState extends State<NativeVideoPlayerScreen> {
       body: SafeArea(
         child: Column(
           children: [
-            // 🌟 TOP VIDEO BOX: CONTROLS EMBEDDED DIRECTLY INSIDE WITH SPACED ICONS
+            // 🌟 TOP VIDEO VIEW
             Expanded(
               flex: _isFullscreen ? 1 : 0,
               child: Container(
@@ -1874,7 +1931,6 @@ class _NativeVideoPlayerScreenState extends State<NativeVideoPlayerScreen> {
                               children: [
                                 _buildSmartScaledVideo(),
 
-                                // MINIMAL GREEN PULSE FEEDBACK
                                 if (_flashFeedback.isNotEmpty)
                                   Container(
                                     padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
@@ -1889,7 +1945,6 @@ class _NativeVideoPlayerScreenState extends State<NativeVideoPlayerScreen> {
                                     ),
                                   ),
 
-                                // SEEK BUTTONS
                                 Positioned(
                                   left: 20,
                                   child: IconButton(
@@ -1907,26 +1962,7 @@ class _NativeVideoPlayerScreenState extends State<NativeVideoPlayerScreen> {
                                   ),
                                 ),
 
-                                // 🌟 EXIT FULLSCREEN MINIMIZE BUTTON (WHEN SCREEN IS EXPANDED)
-                                if (_isFullscreen)
-                                  Positioned(
-                                    top: 16,
-                                    right: 16,
-                                    child: InkWell(
-                                      onTap: _toggleSmartFullscreen,
-                                      child: Container(
-                                        padding: const EdgeInsets.all(8),
-                                        decoration: BoxDecoration(
-                                          color: Colors.black.withOpacity(0.6),
-                                          shape: BoxShape.circle,
-                                          border: Border.all(color: kGreen.withOpacity(0.5)),
-                                        ),
-                                        child: const Icon(Icons.fullscreen_exit, color: kGreen, size: 26),
-                                      ),
-                                    ),
-                                  ),
-
-                                // 🌟 IN-PLAYER BOTTOM OVERLAY CONTROLS (PROPERLY SPACED INSIDE PLAYER)
+                                // 🌟 IN-PLAYER OVERLAY CONTROLS (NO DUPLICATE ICONS)
                                 Positioned(
                                   bottom: 4,
                                   left: 12,
@@ -1934,10 +1970,17 @@ class _NativeVideoPlayerScreenState extends State<NativeVideoPlayerScreen> {
                                   child: Row(
                                     mainAxisAlignment: MainAxisAlignment.spaceBetween,
                                     children: [
+                                      // ONLY SINGLE FULLSCREEN/MINIMIZE BUTTON
                                       IconButton(
                                         icon: Icon(_isFullscreen ? Icons.fullscreen_exit : Icons.fullscreen, color: kGreen, size: 24),
-                                        tooltip: 'Smart Fullscreen',
+                                        tooltip: 'Fullscreen Toggle',
                                         onPressed: _toggleSmartFullscreen,
+                                      ),
+                                      // QUALITY SELECTOR (ADDED BACK)
+                                      IconButton(
+                                        icon: const Icon(Icons.tune, color: kGreen, size: 22),
+                                        tooltip: 'Resolution Quality',
+                                        onPressed: _showQualityDialog,
                                       ),
                                       IconButton(
                                         icon: Icon(_isCcEnabled ? Icons.closed_caption : Icons.closed_caption_off, color: _isCcEnabled ? kGreen : Colors.white60, size: 24),
@@ -1956,7 +1999,7 @@ class _NativeVideoPlayerScreenState extends State<NativeVideoPlayerScreen> {
                                       ),
                                       IconButton(
                                         icon: const Icon(Icons.settings, color: kGreen, size: 22),
-                                        tooltip: 'Audio Normalization & Loop',
+                                        tooltip: 'Settings',
                                         onPressed: _showPlayerSettingsModal,
                                       ),
                                     ],
@@ -1968,7 +2011,7 @@ class _NativeVideoPlayerScreenState extends State<NativeVideoPlayerScreen> {
               ),
             ),
 
-            // 🌟 NEO & TRINITY MATRIX RIVER TIMELINE
+            // 🌟 NEO & TRINITY MATRIX TIMELINE
             Container(
               padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 2),
               color: Colors.transparent,
@@ -2015,7 +2058,7 @@ class _NativeVideoPlayerScreenState extends State<NativeVideoPlayerScreen> {
               ),
             ),
 
-            // 🌟 BOTTOM DETAILS & REAL COMMUNITY STATS
+            // 🌟 REAL STATS & COMMUNITY ENGAGEMENT BAR
             if (!_isFullscreen)
               Expanded(
                 child: Container(
@@ -2051,11 +2094,10 @@ class _NativeVideoPlayerScreenState extends State<NativeVideoPlayerScreen> {
                       ),
                       const SizedBox(height: 14),
 
-                      // 🌟 REAL STATS & IN-APP DIRECT DOWNLOAD BAR
+                      // LIKE, UNLIKE, SHARE & DOWNLOAD BUTTON BAR
                       Row(
                         mainAxisAlignment: MainAxisAlignment.spaceBetween,
                         children: [
-                          // LIKE BUTTON
                           InkWell(
                             onTap: _toggleLike,
                             borderRadius: BorderRadius.circular(8),
@@ -2076,7 +2118,6 @@ class _NativeVideoPlayerScreenState extends State<NativeVideoPlayerScreen> {
                             ),
                           ),
 
-                          // UNLIKE BUTTON
                           InkWell(
                             onTap: _toggleUnlike,
                             borderRadius: BorderRadius.circular(8),
@@ -2097,7 +2138,6 @@ class _NativeVideoPlayerScreenState extends State<NativeVideoPlayerScreen> {
                             ),
                           ),
 
-                          // SHARE VIDEO LINK BUTTON
                           InkWell(
                             onTap: _shareVideoLink,
                             borderRadius: BorderRadius.circular(8),
