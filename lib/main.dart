@@ -399,7 +399,7 @@ class AuthGate extends StatelessWidget {
           if (pendingTargetUrl != null && pendingTargetUrl!.isNotEmpty) {
             return StreamPreviewScreen(targetUrl: pendingTargetUrl!);
           }
-          return const HomeScreen();
+          return const MainNavigationHolder();
         }
         return LoginScreen(pendingTargetUrl: pendingTargetUrl);
       },
@@ -573,6 +573,72 @@ class _LoginScreenState extends State<LoginScreen> {
     );
   }
 }
+// 🌟 4 TABS: HOME, CHANNEL, HISTORY, MORE
+class MainNavigationHolder extends StatefulWidget {
+  const MainNavigationHolder({super.key});
+  @override
+  State<MainNavigationHolder> createState() => _MainNavigationHolderState();
+}
+
+class _MainNavigationHolderState extends State<MainNavigationHolder> {
+  int _currentIndex = 0;
+
+  final List<Widget> _screens = const [
+    HomeScreen(),
+    ChannelScreen(),
+    HistoryScreen(),
+    MoreScreen(),
+  ];
+
+  @override
+  Widget build(BuildContext context) {
+    return Scaffold(
+      backgroundColor: kBg,
+      body: IndexedStack(
+        index: _currentIndex,
+        children: _screens,
+      ),
+      bottomNavigationBar: Container(
+        decoration: BoxDecoration(
+          color: kCardBg,
+          border: Border(top: BorderSide(color: kGreen.withOpacity(0.3), width: 1.2)),
+        ),
+        child: BottomNavigationBar(
+          currentIndex: _currentIndex,
+          backgroundColor: kCardBg,
+          selectedItemColor: kGreen,
+          unselectedItemColor: Colors.white54,
+          type: BottomNavigationBarType.fixed,
+          selectedFontSize: 11,
+          unselectedFontSize: 11,
+          onTap: (index) => setState(() => _currentIndex = index),
+          items: const [
+            BottomNavigationBarItem(
+              icon: Icon(Icons.home_outlined),
+              activeIcon: Icon(Icons.home),
+              label: 'Home',
+            ),
+            BottomNavigationBarItem(
+              icon: Icon(Icons.ondemand_video_outlined),
+              activeIcon: Icon(Icons.ondemand_video),
+              label: 'Channel',
+            ),
+            BottomNavigationBarItem(
+              icon: Icon(Icons.history_outlined),
+              activeIcon: Icon(Icons.history),
+              label: 'History',
+            ),
+            BottomNavigationBarItem(
+              icon: Icon(Icons.more_horiz_outlined),
+              activeIcon: Icon(Icons.more_horiz),
+              label: 'More',
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
 class HomeScreen extends StatefulWidget {
   const HomeScreen({super.key});
   @override
@@ -581,219 +647,6 @@ class HomeScreen extends StatefulWidget {
 
 class _HomeScreenState extends State<HomeScreen> {
   final TextEditingController _linkController = TextEditingController();
-  List<Map<String, dynamic>> _history = [];
-  bool _permissionsChecked = false;
-
-  @override
-  void initState() {
-    super.initState();
-    _syncWatchHistory();
-    Future.delayed(const Duration(seconds: 1), () => _requestPermissions());
-    WidgetsBinding.instance.addPostFrameCallback((_) {
-      _checkServerForUpdate();
-    });
-  }
-
-  Future<void> _syncWatchHistory() async {
-    final prefs = await SharedPreferences.getInstance();
-    final user = Supabase.instance.client.auth.currentUser;
-    final localJson = prefs.getString('watch_history_v2');
-
-    if (localJson != null) {
-      try {
-        final List decoded = jsonDecode(localJson);
-        setState(() => _history = decoded.cast<Map<String, dynamic>>());
-      } catch (_) {}
-    }
-
-    if (user != null) {
-      try {
-        final res = await http.get(Uri.parse('$kBackendBaseUrl/api/history/${user.id}'));
-        if (res.statusCode == 200) {
-          final data = jsonDecode(res.body);
-          if (data['success'] == true && data['history'] is List) {
-            final cloudList = (data['history'] as List).cast<Map<String, dynamic>>();
-            setState(() => _history = cloudList);
-            await prefs.setString('watch_history_v2', jsonEncode(cloudList));
-          }
-        }
-      } catch (_) {}
-    }
-  }
-
-  Future<void> _deleteHistoryItem(int index) async {
-    final prefs = await SharedPreferences.getInstance();
-    setState(() => _history.removeAt(index));
-    await prefs.setString('watch_history_v2', jsonEncode(_history));
-  }
-
-  Future<void> _clearHistory() async {
-    final prefs = await SharedPreferences.getInstance();
-    await prefs.remove('watch_history_v2');
-    setState(() => _history = []);
-  }
-
-  Future<void> _checkServerForUpdate() async {
-    try {
-      final res = await http.get(Uri.parse('$kBackendBaseUrl/version.json'));
-      if (res.statusCode == 200) {
-        final data = jsonDecode(res.body);
-        final int latestCode = data['latestVersionCode'] ?? 1;
-        final String updateUrl = data['updateUrl'] ?? '$kBackendBaseUrl/download.html';
-        final String changelog = data['changelog'] ?? 'New version available with fixes!';
-
-        if (latestCode > kAppCurrentVersionCode && mounted) {
-          _showUpdateNotice(updateUrl, changelog);
-        }
-      }
-    } catch (_) {}
-  }
-
-  void _showUpdateNotice(String url, String info) {
-    showDialog(
-      context: context,
-      barrierDismissible: true,
-      builder: (c) => AlertDialog(
-        backgroundColor: kCardBg,
-        shape: RoundedRectangleBorder(
-          borderRadius: BorderRadius.circular(14),
-          side: const BorderSide(color: kGreen, width: 1.5),
-        ),
-        title: Row(
-          children: [
-            const Icon(Icons.system_update_rounded, color: kGreen),
-            const SizedBox(width: 8),
-            Text(
-              tr('update_available'),
-              style: const TextStyle(color: kGreen, fontSize: 14, fontWeight: FontWeight.bold),
-            ),
-          ],
-        ),
-        content: Column(
-          mainAxisSize: MainAxisSize.min,
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Text(info, style: const TextStyle(color: Colors.white, fontSize: 13)),
-            const SizedBox(height: 12),
-            Text('> Direct node build ready.', style: TextStyle(color: kDimGreen.withOpacity(0.9), fontSize: 11)),
-          ],
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(c),
-            child: Text(tr('later'), style: const TextStyle(color: Colors.grey)),
-          ),
-          ElevatedButton(
-            style: ElevatedButton.styleFrom(backgroundColor: kGreen, foregroundColor: Colors.black),
-            onPressed: () async {
-              Navigator.pop(c);
-              final target = Uri.parse(url);
-              if (await canLaunchUrl(target)) {
-                await launchUrl(target, mode: LaunchMode.externalApplication);
-              }
-            },
-            child: Text(tr('update_now'), style: const TextStyle(fontWeight: FontWeight.bold)),
-          ),
-        ],
-      ),
-    );
-  }
-
-  Future<void> _requestPermissions() async {
-    if (_permissionsChecked) return;
-    _permissionsChecked = true;
-    if (!await Permission.notification.isGranted) await Permission.notification.request();
-    if (!await Permission.storage.isGranted) await Permission.storage.request();
-  }
-
-  Future<void> _logout() async {
-    await Supabase.instance.client.auth.signOut();
-    await GoogleSignIn().signOut();
-  }
-    void _showMoreMenu() {
-    showModalBottomSheet(
-      context: context,
-      backgroundColor: kCardBg,
-      shape: const RoundedRectangleBorder(
-        borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
-      ),
-      builder: (c) => SafeArea(
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            const SizedBox(height: 10),
-            Container(
-              width: 40,
-              height: 4,
-              decoration: BoxDecoration(
-                color: kGreen.withOpacity(0.5),
-                borderRadius: BorderRadius.circular(2),
-              ),
-            ),
-            const SizedBox(height: 20),
-            const Text(
-              '> OPTIONS',
-              style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold, color: kGreen, letterSpacing: 3),
-            ),
-            Divider(color: kGreen.withOpacity(0.3)),
-            ListTile(
-              leading: const Icon(Icons.settings, color: kGreen),
-              title: Text(tr('settings'), style: const TextStyle(color: kGreen)),
-              onTap: () {
-                Navigator.pop(c);
-                Navigator.push(c, MaterialPageRoute(builder: (_) => const SettingsScreen()));
-              },
-            ),
-            ListTile(
-              leading: const Icon(Icons.delete_sweep, color: Colors.orange),
-              title: Text(tr('clear_history'), style: const TextStyle(color: Colors.orange)),
-              onTap: () {
-                Navigator.pop(c);
-                _clearHistory();
-              },
-            ),
-            ListTile(
-              leading: const Icon(Icons.logout, color: Colors.red),
-              title: Text(tr('logout'), style: const TextStyle(color: Colors.red)),
-              onTap: () {
-                Navigator.pop(c);
-                _showLogoutConfirm();
-              },
-            ),
-            const SizedBox(height: 20),
-          ],
-        ),
-      ),
-    );
-  }
-
-  void _showLogoutConfirm() {
-    showDialog(
-      context: context,
-      builder: (c) => AlertDialog(
-        backgroundColor: kCardBg,
-        shape: RoundedRectangleBorder(
-          borderRadius: BorderRadius.circular(12),
-          side: BorderSide(color: kGreen.withOpacity(0.5)),
-        ),
-        title: Text(tr('logout'), style: const TextStyle(color: kGreen)),
-        content: const Text('Kya aap logout karna chahte ho?', style: TextStyle(color: kDimGreen)),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(c),
-            child: const Text('Cancel', style: TextStyle(color: kDimGreen)),
-          ),
-          TextButton(
-            onPressed: () {
-              Navigator.pop(c);
-              _logout();
-            },
-            child: Text(tr('logout'), style: const TextStyle(color: Colors.red)),
-          ),
-        ],
-      ),
-    );
-  }
 
   void _searchAndPlay() {
     String input = _linkController.text.trim();
@@ -807,7 +660,7 @@ class _HomeScreenState extends State<HomeScreen> {
     Navigator.push(
       context,
       MaterialPageRoute(builder: (_) => StreamPreviewScreen(targetUrl: input)),
-    ).then((_) => _syncWatchHistory());
+    );
   }
 
   @override
@@ -818,12 +671,6 @@ class _HomeScreenState extends State<HomeScreen> {
       backgroundColor: kBg,
       appBar: AppBar(
         title: Text(tr('app_title')),
-        actions: [
-          IconButton(
-            icon: const Icon(Icons.more_vert, color: kGreen),
-            onPressed: _showMoreMenu,
-          ),
-        ],
       ),
       body: Container(
         decoration: const BoxDecoration(
@@ -839,11 +686,11 @@ class _HomeScreenState extends State<HomeScreen> {
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
               Container(
-                padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+                padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
                 decoration: BoxDecoration(
                   color: kCardBg,
                   border: Border.all(color: kGreen.withOpacity(0.3)),
-                  borderRadius: BorderRadius.circular(8),
+                  borderRadius: BorderRadius.circular(10),
                 ),
                 child: Row(
                   children: [
@@ -859,12 +706,12 @@ class _HomeScreenState extends State<HomeScreen> {
                   ],
                 ),
               ),
-              const SizedBox(height: 20),
+              const SizedBox(height: 25),
               Container(
                 decoration: BoxDecoration(
                   color: kCardBg,
                   borderRadius: BorderRadius.circular(12),
-                  border: Border.all(color: kGreen.withOpacity(0.5), width: 1.5),
+                  border: Border.all(color: kGreen.withOpacity(0.6), width: 1.5),
                 ),
                 child: Row(
                   children: [
@@ -880,78 +727,226 @@ class _HomeScreenState extends State<HomeScreen> {
                           hintText: tr('paste_hint'),
                           hintStyle: TextStyle(color: kGreen.withOpacity(0.4), fontSize: 12),
                           border: InputBorder.none,
-                          contentPadding: const EdgeInsets.symmetric(vertical: 15),
+                          contentPadding: const EdgeInsets.symmetric(vertical: 16),
                         ),
                       ),
                     ),
                     IconButton(
-                      icon: const Icon(Icons.play_circle_fill, color: kGreen, size: 35),
+                      icon: const Icon(Icons.play_circle_fill, color: kGreen, size: 36),
                       onPressed: _searchAndPlay,
                     ),
                   ],
                 ),
               ),
-              const SizedBox(height: 25),
-              Text(
-                tr('watch_history'),
-                style: const TextStyle(fontSize: 14, fontWeight: FontWeight.bold, color: kGreen, letterSpacing: 2),
+              const Spacer(),
+              Center(
+                child: Text(
+                  '> MAYA JAAL // QUANTUM STREAM DECODER',
+                  style: TextStyle(color: kGreen.withOpacity(0.4), fontSize: 11, letterSpacing: 1.5),
+                ),
               ),
-              const SizedBox(height: 12),
-              Expanded(
-                child: _history.isEmpty
-                    ? Center(
-                        child: Column(
-                          mainAxisAlignment: MainAxisAlignment.center,
-                          children: [
-                            Icon(Icons.history, size: 60, color: kGreen.withOpacity(0.4)),
-                            const SizedBox(height: 10),
-                            Text(tr('no_history'), style: TextStyle(color: kGreen.withOpacity(0.6))),
-                          ],
-                        ),
-                      )
-                    : ListView.builder(
-                        itemCount: _history.length,
-                        itemBuilder: (c, i) {
-                          final item = _history[i];
-                          return Container(
-                            margin: const EdgeInsets.only(bottom: 10),
-                            decoration: BoxDecoration(
-                              color: kCardBg,
-                              borderRadius: BorderRadius.circular(10),
-                              border: Border.all(color: kGreen.withOpacity(0.3)),
-                            ),
-                            child: ListTile(
-                              leading: const Icon(Icons.play_circle_outline, color: kGreen),
-                              title: Text(
-                                item['title'] ?? 'Media Node',
-                                style: const TextStyle(fontSize: 13, color: kGreen, fontWeight: FontWeight.bold),
-                                maxLines: 1,
-                                overflow: TextOverflow.ellipsis,
-                              ),
-                              subtitle: Text(
-                                'By: ${item['uploader'] ?? 'Node'}',
-                                style: TextStyle(fontSize: 11, color: kDimGreen.withOpacity(0.8)),
-                              ),
-                              trailing: IconButton(
-                                icon: const Icon(Icons.close, size: 16, color: Colors.redAccent),
-                                onPressed: () => _deleteHistoryItem(i),
-                              ),
-                              onTap: () {
-                                Navigator.push(
-                                  c,
-                                  MaterialPageRoute(
-                                    builder: (_) => StreamPreviewScreen(targetUrl: item['url']),
-                                  ),
-                                ).then((_) => _syncWatchHistory());
-                              },
-                            ),
-                          );
-                        },
-                      ),
-              ),
+              const SizedBox(height: 20),
             ],
           ),
         ),
+      ),
+    );
+  }
+}
+// 🌟 CHANNEL SCREEN: OFFICIAL SOCIAL HANDLES (INSTAGRAM & YOUTUBE)
+class ChannelScreen extends StatelessWidget {
+  const ChannelScreen({super.key});
+
+  Future<void> _launchURL(String url) async {
+    final target = Uri.parse(url);
+    if (await canLaunchUrl(target)) {
+      await launchUrl(target, mode: LaunchMode.externalApplication);
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Scaffold(
+      backgroundColor: kBg,
+      appBar: AppBar(title: const Text('CHANNELS & NODES')),
+      body: ListView(
+        padding: const EdgeInsets.all(20),
+        children: [
+          Container(
+            padding: const EdgeInsets.all(16),
+            decoration: BoxDecoration(
+              color: kCardBg,
+              borderRadius: BorderRadius.circular(12),
+              border: Border.all(color: const Color(0xFFE1306C).withOpacity(0.5)),
+            ),
+            child: ListTile(
+              leading: const Icon(Icons.camera_alt, color: Color(0xFFE1306C), size: 32),
+              title: const Text('Join Instagram Channel', style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
+              subtitle: const Text('@maya_jaal_official', style: TextStyle(color: Color(0xFFE1306C), fontSize: 12)),
+              trailing: const Icon(Icons.open_in_new, color: Color(0xFFE1306C), size: 20),
+              onTap: () => _launchURL('https://www.instagram.com/maya_jaal_official?stkn=MWVmZmxxMXlldWwwdg=='),
+            ),
+          ),
+          const SizedBox(height: 16),
+          Container(
+            padding: const EdgeInsets.all(16),
+            decoration: BoxDecoration(
+              color: kCardBg,
+              borderRadius: BorderRadius.circular(12),
+              border: Border.all(color: Colors.redAccent.withOpacity(0.5)),
+            ),
+            child: ListTile(
+              leading: const Icon(Icons.play_circle_filled, color: Colors.redAccent, size: 32),
+              title: const Text('Join YouTube Channel', style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
+              subtitle: const Text('@MayaJaalOfficial00', style: TextStyle(color: Colors.redAccent, fontSize: 12)),
+              trailing: const Icon(Icons.open_in_new, color: Colors.redAccent, size: 20),
+              onTap: () => _launchURL('https://www.youtube.com/@MayaJaalOfficial00'),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+// 🌟 HISTORY SCREEN: ISOLATED CLOUD/LOCAL WATCH HISTORY
+class HistoryScreen extends StatefulWidget {
+  const HistoryScreen({super.key});
+  @override
+  State<HistoryScreen> createState() => _HistoryScreenState();
+}
+
+class _HistoryScreenState extends State<HistoryScreen> {
+  List<Map<String, dynamic>> _history = [];
+
+  @override
+  void initState() {
+    super.initState();
+    _loadHistory();
+  }
+
+  Future<void> _loadHistory() async {
+    final prefs = await SharedPreferences.getInstance();
+    final localJson = prefs.getString('watch_history_v2');
+    if (localJson != null) {
+      try {
+        final List decoded = jsonDecode(localJson);
+        setState(() => _history = decoded.cast<Map<String, dynamic>>());
+      } catch (_) {}
+    }
+  }
+
+  Future<void> _deleteItem(int index) async {
+    final prefs = await SharedPreferences.getInstance();
+    setState(() => _history.removeAt(index));
+    await prefs.setString('watch_history_v2', jsonEncode(_history));
+  }
+
+  Future<void> _clearAll() async {
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.remove('watch_history_v2');
+    setState(() => _history = []);
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Scaffold(
+      backgroundColor: kBg,
+      appBar: AppBar(
+        title: const Text('WATCH HISTORY'),
+        actions: [
+          if (_history.isNotEmpty)
+            IconButton(
+              icon: const Icon(Icons.delete_sweep, color: Colors.orangeAccent),
+              onPressed: _clearAll,
+            ),
+        ],
+      ),
+      body: _history.isEmpty
+          ? Center(
+              child: Column(
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: [
+                  Icon(Icons.history, size: 60, color: kGreen.withOpacity(0.4)),
+                  const SizedBox(height: 12),
+                  Text(tr('no_history'), style: TextStyle(color: kGreen.withOpacity(0.6))),
+                ],
+              ),
+            )
+          : ListView.builder(
+              padding: const EdgeInsets.all(16),
+              itemCount: _history.length,
+              itemBuilder: (c, i) {
+                final item = _history[i];
+                return Container(
+                  margin: const EdgeInsets.only(bottom: 12),
+                  decoration: BoxDecoration(
+                    color: kCardBg,
+                    borderRadius: BorderRadius.circular(10),
+                    border: Border.all(color: kGreen.withOpacity(0.3)),
+                  ),
+                  child: ListTile(
+                    leading: const Icon(Icons.play_circle_outline, color: kGreen),
+                    title: Text(
+                      item['title'] ?? 'Media Node',
+                      style: const TextStyle(fontSize: 13, color: kGreen, fontWeight: FontWeight.bold),
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                    ),
+                    subtitle: Text(
+                      'By: ${item['uploader'] ?? 'Node'}',
+                      style: TextStyle(fontSize: 11, color: kDimGreen.withOpacity(0.8)),
+                    ),
+                    trailing: IconButton(
+                      icon: const Icon(Icons.close, size: 16, color: Colors.redAccent),
+                      onPressed: () => _deleteItem(i),
+                    ),
+                    onTap: () {
+                      Navigator.push(
+                        context,
+                        MaterialPageRoute(
+                          builder: (_) => StreamPreviewScreen(targetUrl: item['url']),
+                        ),
+                      ).then((_) => _loadHistory());
+                    },
+                  ),
+                );
+              },
+            ),
+    );
+  }
+}
+
+// 🌟 MORE SCREEN: SETTINGS & ACCOUNT ACTIONS
+class MoreScreen extends StatelessWidget {
+  const MoreScreen({super.key});
+
+  Future<void> _logout() async {
+    await Supabase.instance.client.auth.signOut();
+    await GoogleSignIn().signOut();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Scaffold(
+      backgroundColor: kBg,
+      appBar: AppBar(title: const Text('MORE OPTIONS')),
+      body: ListView(
+        padding: const EdgeInsets.all(16),
+        children: [
+          ListTile(
+            leading: const Icon(Icons.settings, color: kGreen),
+            title: const Text('App Settings', style: TextStyle(color: Colors.white)),
+            trailing: const Icon(Icons.arrow_forward_ios, size: 14, color: kGreen),
+            onTap: () => Navigator.push(context, MaterialPageRoute(builder: (_) => const SettingsScreen())),
+          ),
+          Divider(color: kGreen.withOpacity(0.2)),
+          ListTile(
+            leading: const Icon(Icons.logout, color: Colors.redAccent),
+            title: const Text('Logout Session', style: TextStyle(color: Colors.redAccent)),
+            onTap: _logout,
+          ),
+        ],
       ),
     );
   }
@@ -1378,7 +1373,7 @@ class _StreamPreviewScreenState extends State<StreamPreviewScreen> with SingleTi
                           ),
                           const SizedBox(height: 24),
 
-                          // 🌟 SINGLE ATTENTION-SEEKING COUNTDOWN DISPLAY (1 HI JAGAH)
+                          // 🌟 ONLY 1 FOCUSED COUNTDOWN HUD
                           Center(
                             child: Container(
                               padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
@@ -1632,15 +1627,9 @@ class _NativeVideoPlayerScreenState extends State<NativeVideoPlayerScreen> {
     Share.share('🎬 Watch this video on MayaJaal:\n${widget.videoUrl}');
   }
 
-  // 🌟 IN-APP VIDEO DOWNLOADER (ROBUST PERMISSION FALLBACK)
+  // 🌟 NO-PERMISSION-FAIL IN-APP DIRECT DOWNLOADER
   Future<void> _startInAppDownload() async {
     if (_isDownloading) return;
-
-    // Check standard permissions or proceed to app internal fallback if restricted
-    await Permission.storage.request();
-    if (Platform.isAndroid) {
-      await Permission.manageExternalStorage.request();
-    }
 
     setState(() {
       _isDownloading = true;
@@ -1743,13 +1732,7 @@ class _NativeVideoPlayerScreenState extends State<NativeVideoPlayerScreen> {
     });
   }
 
-  Future<void> _openSocialUrl(String url) async {
-    final target = Uri.parse(url);
-    if (await canLaunchUrl(target)) {
-      await launchUrl(target, mode: LaunchMode.externalApplication);
-    }
-  }
-    void _showQualityDialog() {
+  void _showQualityDialog() {
     showDialog(
       context: context,
       builder: (c) => AlertDialog(
@@ -1815,116 +1798,6 @@ class _NativeVideoPlayerScreenState extends State<NativeVideoPlayerScreen> {
     );
   }
 
-  void _showPlayerSettingsModal() {
-    showModalBottomSheet(
-      context: context,
-      backgroundColor: kCardBg,
-      shape: const RoundedRectangleBorder(
-        borderRadius: BorderRadius.vertical(top: Radius.circular(16)),
-      ),
-      builder: (c) => StatefulBuilder(
-        builder: (ctx, setMState) => SafeArea(
-          child: Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                Container(width: 40, height: 4, decoration: BoxDecoration(color: kGreen.withOpacity(0.4), borderRadius: BorderRadius.circular(2))),
-                const SizedBox(height: 16),
-                const Text('PLAYER CONFIGURATION', style: TextStyle(color: kGreen, fontWeight: FontWeight.bold, letterSpacing: 2)),
-                const SizedBox(height: 10),
-                SwitchListTile(
-                  activeColor: kGreen,
-                  title: const Text('Loop Video', style: TextStyle(color: Colors.white, fontSize: 13)),
-                  subtitle: const Text('Auto-restart playback continuously', style: TextStyle(color: Colors.grey, fontSize: 11)),
-                  value: _isLooping,
-                  onChanged: (val) {
-                    setMState(() => _isLooping = val);
-                    setState(() {
-                      _isLooping = val;
-                      _controller.setLooping(val);
-                    });
-                  },
-                ),
-                SwitchListTile(
-                  activeColor: kGreen,
-                  title: const Text('Stable Volume', style: TextStyle(color: Colors.white, fontSize: 13)),
-                  subtitle: const Text('Normalize high audio fluctuations', style: TextStyle(color: Colors.grey, fontSize: 11)),
-                  value: _isStableVolume,
-                  onChanged: (val) {
-                    setMState(() => _isStableVolume = val);
-                    setState(() {
-                      _isStableVolume = val;
-                      _controller.setVolume(val ? 0.85 : 1.0);
-                    });
-                  },
-                ),
-                const SizedBox(height: 12),
-              ],
-            ),
-          ),
-        ),
-      ),
-    );
-  }
-
-  // 🌟 NEW MORE OPTIONS MODAL (SETTINGS + INSTAGRAM & YOUTUBE JOIN US)
-  void _showMoreOptionsMenu() {
-    showModalBottomSheet(
-      context: context,
-      backgroundColor: kCardBg,
-      shape: const RoundedRectangleBorder(
-        borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
-      ),
-      builder: (c) => SafeArea(
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            const SizedBox(height: 10),
-            Container(width: 40, height: 4, decoration: BoxDecoration(color: kGreen.withOpacity(0.4), borderRadius: BorderRadius.circular(2))),
-            const SizedBox(height: 16),
-            const Text('MORE OPTIONS & COMMUNITY', style: TextStyle(color: kGreen, fontWeight: FontWeight.bold, letterSpacing: 2)),
-            Divider(color: kGreen.withOpacity(0.2)),
-
-            ListTile(
-              leading: const Icon(Icons.settings, color: kGreen),
-              title: const Text('Main Settings', style: TextStyle(color: Colors.white)),
-              subtitle: const Text('App customization & themes', style: TextStyle(color: Colors.grey, fontSize: 11)),
-              trailing: const Icon(Icons.arrow_forward_ios, size: 14, color: kGreen),
-              onTap: () {
-                Navigator.pop(c);
-                Navigator.push(context, MaterialPageRoute(builder: (_) => const SettingsScreen()));
-              },
-            ),
-
-            ListTile(
-              leading: const Icon(Icons.camera_alt_outlined, color: Color(0xFFE1306C)),
-              title: const Text('Join Us on Instagram', style: TextStyle(color: Colors.white)),
-              subtitle: const Text('@maya_jaal_official', style: TextStyle(color: Color(0xFFE1306C), fontSize: 11)),
-              trailing: const Icon(Icons.open_in_new, size: 18, color: Color(0xFFE1306C)),
-              onTap: () {
-                Navigator.pop(c);
-                _openSocialUrl('https://www.instagram.com/maya_jaal_official?stkn=MWVmZmxxMXlldWwwdg==');
-              },
-            ),
-
-            ListTile(
-              leading: const Icon(Icons.play_circle_fill, color: Colors.redAccent),
-              title: const Text('Join Us on YouTube', style: TextStyle(color: Colors.white)),
-              subtitle: const Text('@MayaJaalOfficial00', style: TextStyle(color: Colors.redAccent, fontSize: 11)),
-              trailing: const Icon(Icons.open_in_new, size: 18, color: Colors.redAccent),
-              onTap: () {
-                Navigator.pop(c);
-                _openSocialUrl('https://www.youtube.com/@MayaJaalOfficial00');
-              },
-            ),
-            const SizedBox(height: 16),
-          ],
-        ),
-      ),
-    );
-  }
-
   Widget _buildSmartScaledVideo() {
     if (_isFullscreen) {
       return SizedBox.expand(
@@ -1967,7 +1840,7 @@ class _NativeVideoPlayerScreenState extends State<NativeVideoPlayerScreen> {
       body: SafeArea(
         child: Column(
           children: [
-            // 🌟 TOP VIDEO BOX (SINGLE FULLSCREEN TOGGLE ONLY)
+            // 🌟 TOP VIDEO VIEW
             Expanded(
               flex: _isFullscreen ? 1 : 0,
               child: Container(
@@ -2035,7 +1908,7 @@ class _NativeVideoPlayerScreenState extends State<NativeVideoPlayerScreen> {
                                   ),
                                 ),
 
-                                // 🌟 IN-PLAYER OVERLAY CONTROLS (SPACED OUT & SINGLE FULLSCREEN BUTTON)
+                                // 🌟 IN-PLAYER OVERLAY CONTROLS (ONLY 1 FULLSCREEN BUTTON)
                                 Positioned(
                                   bottom: 4,
                                   left: 12,
@@ -2067,11 +1940,6 @@ class _NativeVideoPlayerScreenState extends State<NativeVideoPlayerScreen> {
                                         icon: const Icon(Icons.speed, color: kGreen, size: 22),
                                         tooltip: 'Speed',
                                         onPressed: _showSpeedDialog,
-                                      ),
-                                      IconButton(
-                                        icon: const Icon(Icons.settings, color: kGreen, size: 22),
-                                        tooltip: 'Settings',
-                                        onPressed: _showPlayerSettingsModal,
                                       ),
                                     ],
                                   ),
@@ -2129,7 +1997,7 @@ class _NativeVideoPlayerScreenState extends State<NativeVideoPlayerScreen> {
               ),
             ),
 
-            // 🌟 BOTTOM DETAILS, COMMUNITY STATS & MORE OPTIONS BUTTON
+            // 🌟 REAL STATS & COMMUNITY ENGAGEMENT BAR
             if (!_isFullscreen)
               Expanded(
                 child: Container(
@@ -2262,33 +2130,6 @@ class _NativeVideoPlayerScreenState extends State<NativeVideoPlayerScreen> {
                           color: kGreen,
                         ),
                       ],
-
-                      const SizedBox(height: 14),
-
-                      // 🌟 NEW MORE OPTIONS BUTTON (SETTINGS + SOCIAL COMMUNITY)
-                      InkWell(
-                        onTap: _showMoreOptionsMenu,
-                        borderRadius: BorderRadius.circular(10),
-                        child: Container(
-                          padding: const EdgeInsets.symmetric(vertical: 12),
-                          decoration: BoxDecoration(
-                            color: kCardBg,
-                            borderRadius: BorderRadius.circular(10),
-                            border: Border.all(color: kGreen.withOpacity(0.3)),
-                          ),
-                          child: const Row(
-                            mainAxisAlignment: MainAxisAlignment.center,
-                            children: [
-                              Icon(Icons.more_horiz, color: kGreen, size: 22),
-                              SizedBox(width: 8),
-                              Text(
-                                'MORE OPTIONS & COMMUNITY',
-                                style: TextStyle(color: kGreen, fontSize: 12, fontWeight: FontWeight.bold, letterSpacing: 1.5),
-                              ),
-                            ],
-                          ),
-                        ),
-                      ),
                     ],
                   ),
                 ),
