@@ -27,10 +27,10 @@ const Color kNeonPurple = Color(0xFF9D00FF);
 const Color kBg = Color(0xFF000000);
 const Color kCardBg = Color(0xFF031408);
 const Color kDimGreen = Color(0xFF4FBF8B);
+
 final ValueNotifier<ThemeMode> themeNotifier = ValueNotifier(ThemeMode.dark);
 final ValueNotifier<String> languageNotifier = ValueNotifier('English');
 final GlobalKey<NavigatorState> navigatorKey = GlobalKey<NavigatorState>();
-
 final Map<String, Map<String, String>> localizedStrings = {
   'English': {
     'app_title': 'MAYA JAAL',
@@ -82,6 +82,7 @@ String tr(String key) {
   final lang = languageNotifier.value;
   return localizedStrings[lang]?[key] ?? localizedStrings['English']?[key] ?? key;
 }
+
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
   SystemChrome.setSystemUIOverlayStyle(const SystemUiOverlayStyle(
@@ -99,7 +100,6 @@ Future<void> main() async {
   languageNotifier.value = lang;
   runApp(const MyApp());
 }
-
 class MyApp extends StatefulWidget {
   const MyApp({super.key});
   @override
@@ -166,7 +166,8 @@ class _MyAppState extends State<MyApp> {
     _linkSubscription?.cancel();
     super.dispose();
   }
-    ThemeData _buildPureDarkTheme() {
+
+  ThemeData _buildPureDarkTheme() {
     return ThemeData(
       brightness: Brightness.dark,
       scaffoldBackgroundColor: Colors.black,
@@ -212,7 +213,6 @@ class _MyAppState extends State<MyApp> {
     );
   }
 }
-
 class MatrixRain extends StatefulWidget {
   final double opacity;
   const MatrixRain({super.key, this.opacity = 0.7});
@@ -282,6 +282,7 @@ class _MatrixRainState extends State<MatrixRain> {
     );
   }
 }
+
 class SplashScreen extends StatefulWidget {
   const SplashScreen({super.key});
   @override
@@ -385,7 +386,6 @@ class _SplashScreenState extends State<SplashScreen>
     );
   }
 }
-
 class AuthGate extends StatelessWidget {
   final String? pendingTargetUrl;
   const AuthGate({super.key, this.pendingTargetUrl});
@@ -413,6 +413,7 @@ class AuthGate extends StatelessWidget {
     );
   }
 }
+
 class LoginScreen extends StatefulWidget {
   final String? pendingTargetUrl;
   const LoginScreen({super.key, this.pendingTargetUrl});
@@ -648,7 +649,6 @@ class _MainNavigationHolderState extends State<MainNavigationHolder> {
     );
   }
 }
-
 class HomeScreen extends StatefulWidget {
   const HomeScreen({super.key});
   @override
@@ -727,7 +727,8 @@ class _HomeScreenState extends State<HomeScreen> with SingleTickerProviderStateM
       ),
     );
   }
-    @override
+
+  @override
   Widget build(BuildContext context) {
     return Scaffold(
       backgroundColor: Colors.black,
@@ -799,7 +800,7 @@ class _HomeScreenState extends State<HomeScreen> with SingleTickerProviderStateM
                   ],
                 ),
               ),
-              Container(
+                            Container(
                 width: double.infinity,
                 padding: const EdgeInsets.symmetric(vertical: 20),
                 child: Stack(
@@ -885,7 +886,7 @@ class _HomeScreenState extends State<HomeScreen> with SingleTickerProviderStateM
                   ],
                 ),
               ),
-                            Padding(
+              Padding(
                 padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
                 child: Container(
                   decoration: BoxDecoration(
@@ -1607,13 +1608,13 @@ class _StreamPreviewScreenState extends State<StreamPreviewScreen> with SingleTi
         }
       }
 
-      final res2 = await http.get(Uri.parse('$kBackendBaseUrl/api/v/$_rawId')).timeout(const Duration(seconds: 8));
+      final res2 = await http.get(Uri.parse('$kBackendBaseUrl/api/v/$_rawId'));
       if (res2.statusCode == 200) {
         final data = jsonDecode(res2.body);
-        if (data['url'] != null) {
+        if (data['url'] != null || data['video_url'] != null) {
           setState(() {
-            _streamUrl = data['url'];
-            _videoTitle = data['title'] ?? _rawId;
+            _streamUrl = data['url'] ?? data['video_url'];
+            _videoTitle = _rawId;
             _loading = false;
           });
           _startCountdown();
@@ -2047,7 +2048,6 @@ class _StreamPreviewScreenState extends State<StreamPreviewScreen> with SingleTi
     );
   }
 }
-
 class NativeVideoPlayerScreen extends StatefulWidget {
   final String videoUrl;
   final String title;
@@ -2140,7 +2140,8 @@ class _NativeVideoPlayerScreenState extends State<NativeVideoPlayerScreen> {
       );
     } catch (_) {}
   }
-    Future<void> _initFastVideo() async {
+
+  Future<void> _initFastVideo() async {
     final Map<String, String> headers = {
       'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36',
       'Referer': 'https://mayajaal.online/',
@@ -2244,8 +2245,7 @@ class _NativeVideoPlayerScreenState extends State<NativeVideoPlayerScreen> {
     _sendStatUpdate('share');
     Share.share('🎬 Watch this video on MayaJaal:\n${widget.videoUrl}');
   }
-
-  Future<void> _startInAppDownload() async {
+    Future<void> _startInAppDownload() async {
     if (_isDownloading) return;
 
     setState(() {
@@ -2529,7 +2529,6 @@ class _NativeVideoPlayerScreenState extends State<NativeVideoPlayerScreen> {
                   ],
                 ),
               ),
-
             Expanded(
               flex: _isFullscreen ? 1 : 0,
               child: Padding(
@@ -2685,7 +2684,6 @@ class _NativeVideoPlayerScreenState extends State<NativeVideoPlayerScreen> {
                 ),
               ),
             ),
-
             if (!_isFullscreen)
               Expanded(
                 child: SingleChildScrollView(
@@ -2950,4 +2948,3 @@ class _NativeVideoPlayerScreenState extends State<NativeVideoPlayerScreen> {
       ),
     );
   }
-                     
