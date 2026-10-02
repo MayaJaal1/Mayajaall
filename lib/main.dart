@@ -83,6 +83,7 @@ String tr(String key) {
   final lang = languageNotifier.value;
   return localizedStrings[lang]?[key] ?? localizedStrings['English']?[key] ?? key;
 }
+
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
   SystemChrome.setSystemUIOverlayStyle(const SystemUiOverlayStyle(
@@ -100,7 +101,6 @@ Future<void> main() async {
   languageNotifier.value = lang;
   runApp(const MyApp());
 }
-
 class MyApp extends StatefulWidget {
   const MyApp({super.key});
   @override
@@ -214,7 +214,6 @@ class _MyAppState extends State<MyApp> {
     );
   }
 }
-
 class MatrixRain extends StatefulWidget {
   final double opacity;
   const MatrixRain({super.key, this.opacity = 0.7});
@@ -284,6 +283,7 @@ class _MatrixRainState extends State<MatrixRain> {
     );
   }
 }
+
 class SplashScreen extends StatefulWidget {
   const SplashScreen({super.key});
   @override
@@ -387,7 +387,6 @@ class _SplashScreenState extends State<SplashScreen>
     );
   }
 }
-
 class AuthGate extends StatelessWidget {
   final String? pendingTargetUrl;
   const AuthGate({super.key, this.pendingTargetUrl});
@@ -651,6 +650,7 @@ class _MainNavigationHolderState extends State<MainNavigationHolder> {
     );
   }
 }
+
 class HomeScreen extends StatefulWidget {
   const HomeScreen({super.key});
   @override
@@ -729,8 +729,7 @@ class _HomeScreenState extends State<HomeScreen> with SingleTickerProviderStateM
       ),
     );
   }
-
-  @override
+    @override
   Widget build(BuildContext context) {
     return Scaffold(
       backgroundColor: Colors.black,
@@ -1196,7 +1195,6 @@ class _HistoryScreenState extends State<HistoryScreen> {
     );
   }
 }
-
 class MoreScreen extends StatelessWidget {
   const MoreScreen({super.key});
 
@@ -1596,13 +1594,13 @@ class _StreamPreviewScreenState extends State<StreamPreviewScreen> with SingleTi
         return;
       }
 
-      final res = await http.get(Uri.parse('$kBackendBaseUrl/api/stream-info/$_rawId')).timeout(const Duration(seconds: 10));
+      final res = await http.get(Uri.parse('$kBackendBaseUrl/api/stream-info/$_rawId')).timeout(const Duration(seconds: 8));
       if (res.statusCode == 200) {
         final data = jsonDecode(res.body);
-        if (data['success'] == true && data['url'] != null) {
+        if (data['success'] == true && (data['url'] != null || data['video_url'] != null)) {
           setState(() {
-            _streamUrl = data['url'];
-            _videoTitle = data['title'] ?? _rawId;
+            _streamUrl = data['url'] ?? data['video_url'];
+            _videoTitle = data['title'] ?? data['file_name'] ?? _rawId;
             _uploaderName = data['uploader'] ?? '@john23413';
             _loading = false;
           });
@@ -1611,28 +1609,14 @@ class _StreamPreviewScreenState extends State<StreamPreviewScreen> with SingleTi
         }
       }
 
-      final res2 = await http.get(Uri.parse('$kBackendBaseUrl/api/v/$_rawId'));
-      if (res2.statusCode == 200) {
-        final data = jsonDecode(res2.body);
-        if (data['url'] != null) {
-          setState(() {
-            _streamUrl = data['url'];
-            _videoTitle = _rawId;
-            _loading = false;
-          });
-          _startCountdown();
-          return;
-        }
-      }
-
       setState(() {
-        _streamUrl = widget.targetUrl;
+        _streamUrl = '$kBackendBaseUrl/stream/$_rawId';
         _loading = false;
       });
       _startCountdown();
     } catch (e) {
       setState(() {
-        _streamUrl = widget.targetUrl;
+        _streamUrl = '$kBackendBaseUrl/stream/$_rawId';
         _loading = false;
       });
       _startCountdown();
@@ -1699,8 +1683,7 @@ class _StreamPreviewScreenState extends State<StreamPreviewScreen> with SingleTi
       ),
     );
   }
-
-  @override
+    @override
   Widget build(BuildContext context) {
     return Scaffold(
       backgroundColor: Colors.black,
@@ -2146,8 +2129,14 @@ class _NativeVideoPlayerScreenState extends State<NativeVideoPlayerScreen> {
   }
 
   Future<void> _initFastVideo() async {
+    final Map<String, String> headers = {
+      'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36',
+      'Referer': 'https://mayajaal.online/',
+    };
+
     _controller = VideoPlayerController.networkUrl(
       Uri.parse(widget.videoUrl),
+      httpHeaders: headers,
       videoPlayerOptions: VideoPlayerOptions(mixWithOthers: true),
     );
     try {
@@ -2161,6 +2150,7 @@ class _NativeVideoPlayerScreenState extends State<NativeVideoPlayerScreen> {
       setState(() => _isInitialized = true);
       _resetControlTimer();
     } catch (e) {
+      debugPrint("Player Init Error: $e");
       setState(() => _hasError = true);
     }
   }
@@ -2242,7 +2232,8 @@ class _NativeVideoPlayerScreenState extends State<NativeVideoPlayerScreen> {
     _sendStatUpdate('share');
     Share.share('🎬 Watch this video on MayaJaal:\n${widget.videoUrl}');
   }
-    Future<void> _startInAppDownload() async {
+
+  Future<void> _startInAppDownload() async {
     if (_isDownloading) return;
 
     setState(() {
@@ -2527,7 +2518,7 @@ class _NativeVideoPlayerScreenState extends State<NativeVideoPlayerScreen> {
                 ),
               ),
 
-            // 🌟 1. VIDEO VIEW WITH FULL CYBER OVERLAYS
+            // VIDEO VIEW
             Expanded(
               flex: _isFullscreen ? 1 : 0,
               child: Padding(
@@ -2563,8 +2554,6 @@ class _NativeVideoPlayerScreenState extends State<NativeVideoPlayerScreen> {
                                   alignment: Alignment.center,
                                   children: [
                                     _buildSmartScaledVideo(),
-
-                                    // TOP LEFT HD QUALITY BADGE
                                     Positioned(
                                       top: 10,
                                       left: 10,
@@ -2587,8 +2576,6 @@ class _NativeVideoPlayerScreenState extends State<NativeVideoPlayerScreen> {
                                         ),
                                       ),
                                     ),
-
-                                    // TOP PILL TITLE
                                     Positioned(
                                       top: 10,
                                       child: Container(
@@ -2603,8 +2590,6 @@ class _NativeVideoPlayerScreenState extends State<NativeVideoPlayerScreen> {
                                         ),
                                       ),
                                     ),
-
-                                    // CENTER PLAY BUTTON
                                     if (_showControls)
                                       GestureDetector(
                                         onTap: () {
@@ -2628,8 +2613,6 @@ class _NativeVideoPlayerScreenState extends State<NativeVideoPlayerScreen> {
                                           ),
                                         ),
                                       ),
-
-                                    // BOTTOM CONTROLS & TIMELINE
                                     Positioned(
                                       bottom: 6,
                                       left: 10,
@@ -2692,14 +2675,13 @@ class _NativeVideoPlayerScreenState extends State<NativeVideoPlayerScreen> {
               ),
             ),
 
-            // 🌟 2. BOTTOM DETAILS, BUTTONS & CARDS
+            // BOTTOM DETAILS
             if (!_isFullscreen)
               Expanded(
                 child: SingleChildScrollView(
                   padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
                   child: Column(
                     children: [
-                      // VIDEO INFO & ACTIONS CARD
                       Container(
                         padding: const EdgeInsets.all(12),
                         decoration: BoxDecoration(
@@ -2745,8 +2727,6 @@ class _NativeVideoPlayerScreenState extends State<NativeVideoPlayerScreen> {
                               ],
                             ),
                             const SizedBox(height: 12),
-
-                            // LIKE, DISLIKE, SHARE, SAVE & DOWNLOAD ROW
                             Row(
                               children: [
                                 Expanded(
@@ -2813,8 +2793,7 @@ class _NativeVideoPlayerScreenState extends State<NativeVideoPlayerScreen> {
                                         borderRadius: BorderRadius.circular(8),
                                         border: Border.all(color: _isSaved ? kGreen : kGreen.withOpacity(0.4)),
                                       ),
-                                      child: Column(
-                                        children: [
+                                      children: [
                                           Icon(_isSaved ? Icons.bookmark : Icons.bookmark_border, color: _isSaved ? kGreen : Colors.white, size: 14),
                                           const Text('Save', style: TextStyle(color: Colors.white54, fontSize: 9)),
                                         ],
@@ -2849,8 +2828,6 @@ class _NativeVideoPlayerScreenState extends State<NativeVideoPlayerScreen> {
                         ),
                       ),
                       const SizedBox(height: 12),
-
-                      // ADVERTISEMENT CARD
                       Container(
                         padding: const EdgeInsets.all(12),
                         decoration: BoxDecoration(
@@ -2880,8 +2857,6 @@ class _NativeVideoPlayerScreenState extends State<NativeVideoPlayerScreen> {
                         ),
                       ),
                       const SizedBox(height: 14),
-
-                      // RELATED VIDEOS HEADER
                       const Row(
                         children: [
                           Icon(Icons.play_circle_outline, color: kGreen, size: 18),
@@ -2892,8 +2867,6 @@ class _NativeVideoPlayerScreenState extends State<NativeVideoPlayerScreen> {
                         ],
                       ),
                       const SizedBox(height: 10),
-
-                      // RELATED VIDEO HORIZONTAL CARDS
                       SizedBox(
                         height: 130,
                         child: ListView(
@@ -2933,9 +2906,9 @@ class _NativeVideoPlayerScreenState extends State<NativeVideoPlayerScreen> {
             children: [
               Container(
                 height: 80,
-                decoration: BoxDecoration(
+                decoration: const BoxDecoration(
                   color: Colors.black26,
-                  borderRadius: const BorderRadius.vertical(top: Radius.circular(11)),
+                  borderRadius: BorderRadius.vertical(top: Radius.circular(11)),
                 ),
                 child: const Center(
                   child: Icon(Icons.image, color: Colors.white30, size: 30),
