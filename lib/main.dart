@@ -31,6 +31,7 @@ const Color kDimGreen = Color(0xFF4FBF8B);
 final ValueNotifier<ThemeMode> themeNotifier = ValueNotifier(ThemeMode.dark);
 final ValueNotifier<String> languageNotifier = ValueNotifier('English');
 final GlobalKey<NavigatorState> navigatorKey = GlobalKey<NavigatorState>();
+
 final Map<String, Map<String, String>> localizedStrings = {
   'English': {
     'app_title': 'MAYA JAAL',
@@ -649,6 +650,7 @@ class _MainNavigationHolderState extends State<MainNavigationHolder> {
     );
   }
 }
+
 class HomeScreen extends StatefulWidget {
   const HomeScreen({super.key});
   @override
@@ -727,8 +729,7 @@ class _HomeScreenState extends State<HomeScreen> with SingleTickerProviderStateM
       ),
     );
   }
-
-  @override
+    @override
   Widget build(BuildContext context) {
     return Scaffold(
       backgroundColor: Colors.black,
@@ -800,7 +801,7 @@ class _HomeScreenState extends State<HomeScreen> with SingleTickerProviderStateM
                   ],
                 ),
               ),
-                            Container(
+              Container(
                 width: double.infinity,
                 padding: const EdgeInsets.symmetric(vertical: 20),
                 child: Stack(
@@ -886,7 +887,7 @@ class _HomeScreenState extends State<HomeScreen> with SingleTickerProviderStateM
                   ],
                 ),
               ),
-              Padding(
+                            Padding(
                 padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
                 child: Container(
                   decoration: BoxDecoration(
@@ -1608,13 +1609,13 @@ class _StreamPreviewScreenState extends State<StreamPreviewScreen> with SingleTi
         }
       }
 
-      final res2 = await http.get(Uri.parse('$kBackendBaseUrl/api/v/$_rawId'));
+      final res2 = await http.get(Uri.parse('$kBackendBaseUrl/api/v/$_rawId')).timeout(const Duration(seconds: 8));
       if (res2.statusCode == 200) {
         final data = jsonDecode(res2.body);
         if (data['url'] != null || data['video_url'] != null) {
           setState(() {
             _streamUrl = data['url'] ?? data['video_url'];
-            _videoTitle = _rawId;
+            _videoTitle = data['title'] ?? data['file_name'] ?? _rawId;
             _loading = false;
           });
           _startCountdown();
@@ -1639,8 +1640,7 @@ class _StreamPreviewScreenState extends State<StreamPreviewScreen> with SingleTi
   void _shareStreamDirect() {
     Share.share('🚀 Watch this stream on MayaJaal:\n${widget.targetUrl}');
   }
-
-  Future<void> _saveWatchRecord() async {
+    Future<void> _saveWatchRecord() async {
     final prefs = await SharedPreferences.getInstance();
     final user = Supabase.instance.client.auth.currentUser;
     final localJson = prefs.getString('watch_history_v2');
@@ -1696,7 +1696,8 @@ class _StreamPreviewScreenState extends State<StreamPreviewScreen> with SingleTi
       ),
     );
   }
-    @override
+
+  @override
   Widget build(BuildContext context) {
     return Scaffold(
       backgroundColor: Colors.black,
@@ -2176,8 +2177,7 @@ class _NativeVideoPlayerScreenState extends State<NativeVideoPlayerScreen> {
     SystemChrome.setPreferredOrientations([DeviceOrientation.portraitUp]);
     super.dispose();
   }
-
-  void _resetControlTimer() {
+    void _resetControlTimer() {
     _controlsTimer?.cancel();
     _controlsTimer = Timer(const Duration(seconds: 4), () {
       if (mounted && _controller.value.isPlaying) {
@@ -2245,7 +2245,8 @@ class _NativeVideoPlayerScreenState extends State<NativeVideoPlayerScreen> {
     _sendStatUpdate('share');
     Share.share('🎬 Watch this video on MayaJaal:\n${widget.videoUrl}');
   }
-    Future<void> _startInAppDownload() async {
+
+  Future<void> _startInAppDownload() async {
     if (_isDownloading) return;
 
     setState(() {
@@ -2305,8 +2306,7 @@ class _NativeVideoPlayerScreenState extends State<NativeVideoPlayerScreen> {
       }
     }
   }
-
-  Future<void> _toggleLike() async {
+    Future<void> _toggleLike() async {
     final prefs = await SharedPreferences.getInstance();
     setState(() {
       if (_isLiked) {
@@ -2529,6 +2529,8 @@ class _NativeVideoPlayerScreenState extends State<NativeVideoPlayerScreen> {
                   ],
                 ),
               ),
+
+            // VIDEO VIEW
             Expanded(
               flex: _isFullscreen ? 1 : 0,
               child: Padding(
@@ -2684,7 +2686,7 @@ class _NativeVideoPlayerScreenState extends State<NativeVideoPlayerScreen> {
                 ),
               ),
             ),
-            if (!_isFullscreen)
+                        if (!_isFullscreen)
               Expanded(
                 child: SingleChildScrollView(
                   padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
@@ -2836,7 +2838,7 @@ class _NativeVideoPlayerScreenState extends State<NativeVideoPlayerScreen> {
                           ],
                         ),
                       ),
-                      const SizedBox(height: 12),
+                                            const SizedBox(height: 12),
                       Container(
                         padding: const EdgeInsets.all(12),
                         decoration: BoxDecoration(
@@ -2948,3 +2950,4 @@ class _NativeVideoPlayerScreenState extends State<NativeVideoPlayerScreen> {
       ),
     );
   }
+}
