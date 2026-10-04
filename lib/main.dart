@@ -430,6 +430,7 @@ class AuthGate extends StatelessWidget {
     );
   }
 }
+
 class LoginScreen extends StatefulWidget {
   final String? pendingTargetUrl;
   const LoginScreen({super.key, this.pendingTargetUrl});
@@ -446,7 +447,6 @@ class _LoginScreenState extends State<LoginScreen> with SingleTickerProviderStat
 
   final TextEditingController _idController = TextEditingController();
   final TextEditingController _passwordController = TextEditingController();
-  final AudioPlayer _audioPlayer = AudioPlayer();
 
   // Magic Login Glow & Scale Animation
   late AnimationController _magicController;
@@ -473,12 +473,11 @@ class _LoginScreenState extends State<LoginScreen> with SingleTickerProviderStat
   void dispose() {
     _idController.dispose();
     _passwordController.dispose();
-    _audioPlayer.dispose();
     _magicController.dispose();
     super.dispose();
   }
 
-  // Sound + Magic Animation Trigger
+  // Native Sound + Magic Animation Trigger
   Future<void> _triggerMagicUnlock() async {
     setState(() {
       _showMagicUnlock = true;
@@ -486,7 +485,9 @@ class _LoginScreenState extends State<LoginScreen> with SingleTickerProviderStat
     });
 
     try {
-      await _audioPlayer.play(AssetSource('sounds/magic_login.mp3'));
+      // Flutter Native System Sound & Vibrations (No gradle conflict)
+      await SystemSound.play(SystemSoundType.click);
+      HapticFeedback.heavyImpact();
     } catch (_) {}
 
     await _magicController.forward();
@@ -672,7 +673,6 @@ class _LoginScreenState extends State<LoginScreen> with SingleTickerProviderStat
                                 onTap: () => setState(() => _isLoginTab = true),
                                 child: Container(
                                   decoration: BoxDecoration(
-                                    color: _isLoginTab ? Colors.transparent : Colors.transparent,
                                     borderRadius: BorderRadius.circular(24),
                                     border: _isLoginTab
                                         ? Border.all(color: const Color(0xFF00FF66), width: 1.6)
@@ -717,7 +717,7 @@ class _LoginScreenState extends State<LoginScreen> with SingleTickerProviderStat
                           ],
                         ),
                       ),
-                      const SizedBox(height: 20),                                                                                                 
+                      const SizedBox(height: 20),
                       
                       // Input Fields Outer Box
                       Container(
@@ -927,7 +927,7 @@ class _LoginScreenState extends State<LoginScreen> with SingleTickerProviderStat
     );
   }
 }
-          
+      
 class MainNavigationHolder extends StatefulWidget {
   const MainNavigationHolder({super.key});
   @override
