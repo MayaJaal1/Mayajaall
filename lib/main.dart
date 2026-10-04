@@ -1,4 +1,3 @@
-import 'services/supabase_service.dart';
 import 'dart:async';
 import 'dart:convert';
 import 'dart:io';
@@ -1489,7 +1488,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
         ),
         title: Text(tr('language'), style: const TextStyle(color: kGreen)),
         content: Column(
-          mainAxisSize: dynamic,
+          mainAxisSize: MainAxisSize.min,
           children: _languages.map((l) {
             return RadioListTile<String>(
               title: Text(l, style: const TextStyle(color: kGreen)),
@@ -1520,7 +1519,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
         ),
         title: Text(tr('download_location'), style: const TextStyle(color: kGreen)),
         content: Column(
-          mainAxisSize: MainAxisSize.min,
+          mainAxisSize:MainAxisSize.min,
           children: _downloadLocations.map((loc) {
             return RadioListTile<String>(
               title: Text(loc, style: const TextStyle(color: kGreen, fontSize: 12)),
@@ -2999,5 +2998,59 @@ class _NativeVideoPlayerScreenState extends State<NativeVideoPlayerScreen> {
         ],
       ),
     );
+  }
+}
+class SupabaseService {
+  final SupabaseClient client = Supabase.instance.client;
+
+  Future<void> recordView(int videoId) async {
+    try {
+      await client.rpc('increment_views', params: {'row_id': videoId});
+    } catch (_) {}
+  }
+
+  Future<void> likeVideo(int videoId) async {
+    try {
+      await client.rpc('increment_likes', params: {'row_id': videoId});
+    } catch (_) {}
+  }
+
+  Future<void> unlikeVideo(int videoId) async {
+    try {
+      await client.rpc('decrement_likes', params: {'row_id': videoId});
+    } catch (_) {}
+  }
+
+  Future<void> recordShare(int videoId) async {
+    try {
+      await client.rpc('increment_shares', params: {'row_id': videoId});
+    } catch (_) {}
+  }
+
+  Future<int> getViewCount(int videoId) async {
+    try {
+      final res = await client.from('videos').select('views').eq('id', videoId).maybeSingle();
+      return (res?['views'] as int?) ?? 0;
+    } catch (_) {
+      return 0;
+    }
+  }
+
+  Future<int> getLikeCount(int videoId) async {
+    try {
+      final res = await client.from('videos').select('likes').eq('id', videoId).maybeSingle();
+      return (res?['likes'] as int?) ?? 0;
+    } catch (_) {
+      return 0;
+    }
+  }
+
+  Future<int> getShareCount(int videoId) async {
+    try {
+      final res = await client.from('videos').select('shares').eq('id', videoId).maybeSingle();
+      return (res?['shares'] as int?) ?? 0;
+    } catch (_) {
+      return 0;
+    }
   }
 }
