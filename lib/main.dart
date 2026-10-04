@@ -20,8 +20,7 @@ const String supabaseAnonKey = 'sb_publishable_MtWmh5_zEVtBhHBLwr5DvQ_dabhbGge';
 const String webClientId = '985001671962-rok8qnng0rumjsd8mgr8uhr92o5vhs4n.apps.googleusercontent.com';
 
 // 🔔 OneSignal App ID
-const String oneSignalAppId = 'YOUR_ONESIGNAL_APP_ID_HERE';
-
+const String oneSignalAppId = '06b99c2b-b3b4-413b-b6cc-480a624f4e25';
 const int kAppCurrentVersionCode = 2;
 const String kBackendBaseUrl = 'https://mayajaal.online';
 
