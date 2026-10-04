@@ -429,7 +429,6 @@ class AuthGate extends StatelessWidget {
     );
   }
 }
-
 class LoginScreen extends StatefulWidget {
   final String? pendingTargetUrl;
   const LoginScreen({super.key, this.pendingTargetUrl});
@@ -438,10 +437,97 @@ class LoginScreen extends StatefulWidget {
   State<LoginScreen> createState() => _LoginScreenState();
 }
 
-class _LoginScreenState extends State<LoginScreen> {
+class _LoginScreenState extends State<LoginScreen> with SingleTickerProviderStateMixin {
+  bool _isLoginTab = true;
   bool _loading = false;
+  bool _obscurePassword = true;
   String _error = '';
 
+  final TextEditingController _idController = TextEditingController();
+  final TextEditingController _passwordController = TextEditingController();
+  final AudioPlayer _audioPlayer = AudioPlayer();
+
+  // Magic Login Glow & Scale Animation
+  late AnimationController _magicController;
+  late Animation<double> _glowAnimation;
+  late Animation<double> _scaleAnimation;
+  bool _showMagicUnlock = false;
+
+  @override
+  void initState() {
+    super.initState();
+    _magicController = AnimationController(
+      vsync: this,
+      duration: const Duration(milliseconds: 1200),
+    );
+    _glowAnimation = Tween<double>(begin: 0.0, end: 40.0).animate(
+      CurvedAnimation(parent: _magicController, curve: Curves.easeInOut),
+    );
+    _scaleAnimation = Tween<double>(begin: 1.0, end: 1.04).animate(
+      CurvedAnimation(parent: _magicController, curve: Curves.easeInOut),
+    );
+  }
+
+  @override
+  void dispose() {
+    _idController.dispose();
+    _passwordController.dispose();
+    _audioPlayer.dispose();
+    _magicController.dispose();
+    super.dispose();
+  }
+
+  // Sound + Magic Animation Trigger
+  Future<void> _triggerMagicUnlock() async {
+    setState(() {
+      _showMagicUnlock = true;
+      _error = '';
+    });
+
+    try {
+      await _audioPlayer.play(AssetSource('sounds/magic_login.mp3'));
+    } catch (_) {}
+
+    await _magicController.forward();
+    await Future.delayed(const Duration(milliseconds: 400));
+  }
+
+  // Matrix ID / Email Login Logic
+  Future<void> _handleMatrixLogin() async {
+    final idOrEmail = _idController.text.trim();
+    final password = _passwordController.text.trim();
+
+    if (idOrEmail.isEmpty || password.isEmpty) {
+      setState(() => _error = 'Please enter Matrix ID and Password');
+      return;
+    }
+
+    setState(() {
+      _loading = true;
+      _error = '';
+    });
+
+    try {
+      final email = idOrEmail.contains('@') ? idOrEmail : '$idOrEmail@mayajaal.online';
+
+      final response = await Supabase.instance.client.auth.signInWithPassword(
+        email: email,
+        password: password,
+      );
+
+      if (response.session != null) {
+        await _triggerMagicUnlock();
+      }
+    } catch (e) {
+      setState(() {
+        _error = 'Matrix Authentication Failed: ${e.toString()}';
+      });
+    } finally {
+      if (mounted) setState(() => _loading = false);
+    }
+  }
+
+  // Google Sign In
   Future<void> _signInWithGoogle() async {
     setState(() {
       _loading = true;
@@ -460,6 +546,7 @@ class _LoginScreenState extends State<LoginScreen> {
         provider: OAuthProvider.google,
         idToken: googleAuth.idToken!,
       );
+      await _triggerMagicUnlock();
     } catch (e) {
       setState(() => _error = 'Error: $e');
     } finally {
@@ -473,113 +560,357 @@ class _LoginScreenState extends State<LoginScreen> {
       backgroundColor: Colors.black,
       body: Stack(
         children: [
-          const MatrixRain(),
+          // Background Matrix Rain
+          const MatrixRain(opacity: 0.55),
+
           SafeArea(
             child: Center(
               child: SingleChildScrollView(
-                padding: const EdgeInsets.all(24),
-                child: Container(
-                  padding: const EdgeInsets.all(28),
-                  decoration: BoxDecoration(
-                    color: const Color(0xFF011206).withOpacity(0.9),
-                    border: Border.all(color: kGreen.withOpacity(0.5)),
-                    borderRadius: BorderRadius.circular(14),
-                    boxShadow: [
-                      BoxShadow(color: kGreen.withOpacity(0.2), blurRadius: 30),
-                    ],
-                  ),
+                padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 20),
+                child: AnimatedBuilder(
+                  animation: _magicController,
+                  builder: (context, child) {
+                    return Transform.scale(
+                      scale: _scaleAnimation.value,
+                      child: Container(
+                        padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 26),
+                        decoration: BoxDecoration(
+                          color: const Color(0xFF021206).withOpacity(0.85),
+                          borderRadius: BorderRadius.circular(22),
+                          border: Border.all(
+                            color: _showMagicUnlock ? const Color(0xFF00FF66) : const Color(0xFF00FF66).withOpacity(0.4),
+                            width: _showMagicUnlock ? 2.2 : 1.2,
+                          ),
+                          boxShadow: [
+                            BoxShadow(
+                              color: const Color(0xFF00FF66).withOpacity(_showMagicUnlock ? 0.45 : 0.15),
+                              blurRadius: _glowAnimation.value + 15,
+                              spreadRadius: _showMagicUnlock ? 4 : 0,
+                            ),
+                          ],
+                        ),
+                        child: child,
+                      ),
+                    );
+                  },
                   child: Column(
                     mainAxisSize: MainAxisSize.min,
                     children: [
+                      // Matrix App Logo
                       Container(
-                        width: 75,
-                        height: 75,
+                        width: 82,
+                        height: 82,
+                        padding: const EdgeInsets.all(4),
                         decoration: BoxDecoration(
-                          borderRadius: BorderRadius.circular(16),
-                          border: Border.all(color: kGreen, width: 2),
+                          color: Colors.black,
+                          borderRadius: BorderRadius.circular(22),
+                          border: Border.all(color: const Color(0xFF00FF66), width: 1.8),
+                          boxShadow: [
+                            BoxShadow(
+                              color: const Color(0xFF00FF66).withOpacity(0.55),
+                              blurRadius: 18,
+                              spreadRadius: 2,
+                            ),
+                          ],
                         ),
                         child: ClipRRect(
-                          borderRadius: BorderRadius.circular(14),
+                          borderRadius: BorderRadius.circular(18),
                           child: Image.asset(
                             'assets/icon/logo.png',
                             fit: BoxFit.cover,
-                            errorBuilder: (context, error, stackTrace) => const Icon(Icons.movie_filter, size: 45, color: kGreen),
+                            errorBuilder: (context, error, stackTrace) => const Icon(
+                              Icons.change_history,
+                              size: 42,
+                              color: Color(0xFF00FF66),
+                            ),
                           ),
                         ),
                       ),
-                      const SizedBox(height: 24),
+                      const SizedBox(height: 18),
+
+                      // Title
                       const Text(
                         'MAYA JAAL',
                         style: TextStyle(
-                          fontSize: 28,
-                          fontWeight: FontWeight.bold,
-                          color: kGreen,
+                          fontSize: 30,
+                          fontWeight: FontWeight.w900,
+                          color: Color(0xFF00FF66),
                           fontFamily: 'monospace',
                           letterSpacing: 6,
-                          shadows: [Shadow(color: kGreen, blurRadius: 15)],
+                          shadows: [
+                            Shadow(color: Color(0xFF00FF66), blurRadius: 16),
+                          ],
                         ),
                       ),
-                      const SizedBox(height: 8),
+                      const SizedBox(height: 6),
                       Text(
-                        '> authentication required to proceed',
+                        '> Enter the real world behind\n   the digital veil _',
+                        textAlign: TextAlign.center,
                         style: TextStyle(
-                          fontSize: 11,
-                          color: kGreen.withOpacity(0.7),
+                          fontSize: 12,
+                          color: const Color(0xFF00FF66).withOpacity(0.85),
                           fontFamily: 'monospace',
-                          letterSpacing: 2,
+                          letterSpacing: 1.5,
+                          height: 1.3,
                         ),
                       ),
-                      const SizedBox(height: 40),
+                      const SizedBox(height: 24),
+
+                      // LOGIN / SIGN UP Pill Toggle
+                      Container(
+                        height: 44,
+                        decoration: BoxDecoration(
+                          color: Colors.black,
+                          borderRadius: BorderRadius.circular(24),
+                          border: Border.all(color: const Color(0xFF00FF66).withOpacity(0.6)),
+                        ),
+                        child: Row(
+                          children: [
+                            Expanded(
+                              child: GestureDetector(
+                                onTap: () => setState(() => _isLoginTab = true),
+                                child: Container(
+                                  decoration: BoxDecoration(
+                                    color: _isLoginTab ? Colors.transparent : Colors.transparent,
+                                    borderRadius: BorderRadius.circular(24),
+                                    border: _isLoginTab
+                                        ? Border.all(color: const Color(0xFF00FF66), width: 1.6)
+                                        : null,
+                                  ),
+                                  alignment: Alignment.center,
+                                  child: Text(
+                                    'LOGIN',
+                                    style: TextStyle(
+                                      color: _isLoginTab ? const Color(0xFF00FF66) : Colors.white60,
+                                      fontWeight: FontWeight.bold,
+                                      letterSpacing: 1.5,
+                                      fontSize: 12.5,
+                                    ),
+                                  ),
+                                ),
+                              ),
+                            ),
+                            Expanded(
+                              child: GestureDetector(
+                                onTap: () => setState(() => _isLoginTab = false),
+                                child: Container(
+                                  decoration: BoxDecoration(
+                                    borderRadius: BorderRadius.circular(24),
+                                    border: !_isLoginTab
+                                        ? Border.all(color: const Color(0xFF00FF66), width: 1.6)
+                                        : null,
+                                  ),
+                                  alignment: Alignment.center,
+                                  child: Text(
+                                    'SIGN UP',
+                                    style: TextStyle(
+                                      color: !_isLoginTab ? const Color(0xFF00FF66) : Colors.white60,
+                                      fontWeight: FontWeight.bold,
+                                      letterSpacing: 1.5,
+                                      fontSize: 12.5,
+                                    ),
+                                  ),
+                                ),
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                      const SizedBox(height: 20),                                                                                                 
+                      
+                      // Input Fields Outer Box
+                      Container(
+                        padding: const EdgeInsets.all(14),
+                        decoration: BoxDecoration(
+                          color: Colors.black.withOpacity(0.6),
+                          borderRadius: BorderRadius.circular(16),
+                          border: Border.all(color: const Color(0xFF00FF66).withOpacity(0.35)),
+                        ),
+                        child: Column(
+                          children: [
+                            // Matrix ID / Username Input
+                            Container(
+                              padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 4),
+                              decoration: BoxDecoration(
+                                color: const Color(0xFF031A0B),
+                                borderRadius: BorderRadius.circular(12),
+                                border: Border.all(color: const Color(0xFF00FF66).withOpacity(0.5)),
+                              ),
+                              child: TextField(
+                                controller: _idController,
+                                style: const TextStyle(color: Colors.white, fontSize: 13, fontFamily: 'monospace'),
+                                decoration: InputDecoration(
+                                  icon: const Icon(Icons.person_outline, color: Color(0xFF00FF66), size: 20),
+                                  hintText: 'Matrix ID / Email / Username',
+                                  hintStyle: TextStyle(color: Colors.white.withOpacity(0.4), fontSize: 12),
+                                  border: InputBorder.none,
+                                ),
+                              ),
+                            ),
+                            const SizedBox(height: 12),
+
+                            // Password Input
+                            Container(
+                              padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 4),
+                              decoration: BoxDecoration(
+                                color: const Color(0xFF031A0B),
+                                borderRadius: BorderRadius.circular(12),
+                                border: Border.all(color: const Color(0xFF00FF66).withOpacity(0.5)),
+                              ),
+                              child: TextField(
+                                controller: _passwordController,
+                                obscureText: _obscurePassword,
+                                style: const TextStyle(color: Colors.white, fontSize: 13, fontFamily: 'monospace'),
+                                decoration: InputDecoration(
+                                  icon: const Icon(Icons.lock_outline, color: Color(0xFF00FF66), size: 20),
+                                  suffixIcon: IconButton(
+                                    icon: Icon(
+                                      _obscurePassword ? Icons.visibility_off_outlined : Icons.visibility_outlined,
+                                      color: const Color(0xFF00FF66),
+                                      size: 19,
+                                    ),
+                                    onPressed: () => setState(() => _obscurePassword = !_obscurePassword),
+                                  ),
+                                  hintText: 'Password',
+                                  hintStyle: TextStyle(color: Colors.white.withOpacity(0.4), fontSize: 12),
+                                  border: InputBorder.none,
+                                ),
+                              ),
+                            ),
+                            const SizedBox(height: 16),
+
+                            // Action Button: LOGIN WITH MATRIX ID
+                            SizedBox(
+                              width: double.infinity,
+                              height: 48,
+                              child: ElevatedButton(
+                                onPressed: _loading ? null : _handleMatrixLogin,
+                                style: ElevatedButton.styleFrom(
+                                  backgroundColor: const Color(0xFF00FF66),
+                                  foregroundColor: Colors.black,
+                                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+                                  elevation: 8,
+                                ),
+                                child: _loading
+                                    ? const SizedBox(
+                                        width: 22,
+                                        height: 22,
+                                        child: CircularProgressIndicator(color: Colors.black, strokeWidth: 2.2),
+                                      )
+                                    : const Row(
+                                        mainAxisAlignment: MainAxisAlignment.center,
+                                        children: [
+                                          Icon(Icons.login, size: 19, color: Colors.black),
+                                          SizedBox(width: 8),
+                                          Text(
+                                            'LOGIN WITH MATRIX ID',
+                                            style: TextStyle(
+                                              fontWeight: FontWeight.w900,
+                                              letterSpacing: 1.5,
+                                              fontSize: 12.5,
+                                            ),
+                                          ),
+                                        ],
+                                      ),
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                      const SizedBox(height: 18),
+
+                      // OR Divider
+                      Row(
+                        children: [
+                          Expanded(child: Divider(color: const Color(0xFF00FF66).withOpacity(0.3))),
+                          Padding(
+                            padding: const EdgeInsets.symmetric(horizontal: 10),
+                            child: Text(
+                              'OR',
+                              style: TextStyle(color: const Color(0xFF00FF66).withOpacity(0.7), fontSize: 11, fontWeight: FontWeight.bold),
+                            ),
+                          ),
+                          Expanded(child: Divider(color: const Color(0xFF00FF66).withOpacity(0.3))),
+                        ],
+                      ),
+                      const SizedBox(height: 18),
+
+                      // Sign in with Google Button
                       SizedBox(
                         width: double.infinity,
-                        height: 55,
+                        height: 48,
                         child: ElevatedButton(
                           onPressed: _loading ? null : _signInWithGoogle,
                           style: ElevatedButton.styleFrom(
-                            backgroundColor: kGreen,
-                            foregroundColor: Colors.black,
-                            shape: RoundedRectangleBorder(
-                              borderRadius: BorderRadius.circular(8),
-                            ),
+                            backgroundColor: Colors.white,
+                            foregroundColor: Colors.black87,
+                            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(24)),
+                            elevation: 4,
                           ),
-                          child: _loading
-                              ? const SizedBox(
-                                  width: 24,
-                                  height: 24,
-                                  child: CircularProgressIndicator(
-                                    color: Colors.black,
-                                    strokeWidth: 2.5,
-                                  ),
-                                )
-                              : const Row(
-                                  mainAxisAlignment: MainAxisAlignment.center,
-                                  children: [
-                                    Icon(Icons.login, size: 22),
-                                    SizedBox(width: 10),
-                                    Text(
-                                      'SIGN IN WITH GOOGLE',
-                                      style: TextStyle(
-                                        fontSize: 13,
-                                        fontWeight: FontWeight.bold,
-                                        letterSpacing: 1.5,
-                                      ),
-                                    ),
-                                  ],
+                          child: Row(
+                            mainAxisAlignment: MainAxisAlignment.center,
+                            children: [
+                              Image.network(
+                                'https://developers.google.com/identity/images/g-logo.png',
+                                height: 20,
+                                errorBuilder: (c, e, s) => const Icon(Icons.g_mobiledata, color: Colors.red, size: 24),
+                              ),
+                              const SizedBox(width: 10),
+                              const Text(
+                                'Sign in with Google',
+                                style: TextStyle(
+                                  fontSize: 14,
+                                  fontWeight: FontWeight.w700,
                                 ),
+                              ),
+                            ],
+                          ),
                         ),
                       ),
+                      const SizedBox(height: 16),
+
+                      // Forgot Password Link
+                      TextButton(
+                        onPressed: () {},
+                        child: Text(
+                          'Forgot Password?',
+                          style: TextStyle(color: const Color(0xFF00FF66).withOpacity(0.85), fontSize: 12),
+                        ),
+                      ),
+
+                      // Footer Switch
+                      Row(
+                        mainAxisAlignment: MainAxisAlignment.center,
+                        children: [
+                          Text("Don't have an account? ", style: TextStyle(color: Colors.white.withOpacity(0.6), fontSize: 12)),
+                          GestureDetector(
+                            onTap: () => setState(() => _isLoginTab = false),
+                            child: const Row(
+                              children: [
+                                Text(
+                                  'Sign Up ',
+                                  style: TextStyle(color: Color(0xFF00FF66), fontSize: 12, fontWeight: FontWeight.bold),
+                                ),
+                                Icon(Icons.arrow_forward, color: Color(0xFF00FF66), size: 14),
+                              ],
+                            ),
+                          ),
+                        ],
+                      ),
+
+                      // Error Box
                       if (_error.isNotEmpty) ...[
-                        const SizedBox(height: 20),
+                        const SizedBox(height: 14),
                         Container(
-                          padding: const EdgeInsets.all(10),
+                          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
                           decoration: BoxDecoration(
-                            color: Colors.red.withOpacity(0.1),
-                            border: Border.all(color: Colors.red),
-                            borderRadius: BorderRadius.circular(6),
+                            color: Colors.red.withOpacity(0.12),
+                            border: Border.all(color: Colors.redAccent),
+                            borderRadius: BorderRadius.circular(8),
                           ),
                           child: Text(
                             _error,
-                            style: const TextStyle(color: Colors.redAccent, fontSize: 12),
+                            style: const TextStyle(color: Colors.redAccent, fontSize: 11),
                             textAlign: TextAlign.center,
                           ),
                         ),
@@ -595,6 +926,7 @@ class _LoginScreenState extends State<LoginScreen> {
     );
   }
 }
+          
 class MainNavigationHolder extends StatefulWidget {
   const MainNavigationHolder({super.key});
   @override
