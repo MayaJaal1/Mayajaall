@@ -674,7 +674,92 @@ class _HomeScreenState extends State<HomeScreen> with SingleTickerProviderStateM
   final TextEditingController _linkController = TextEditingController();
   late AnimationController _pulseController;
   late Animation<double> _pulseAnimation;
-
+    void _showNotificationsSheet(BuildContext context) {
+    showModalBottomSheet(
+      context: context,
+      backgroundColor: const Color(0xFF111714),
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
+      ),
+      builder: (ctx) {
+        return FutureBuilder<List<Map<String, dynamic>>>(
+          future: Supabase.instance.client
+              .from('notifications')
+              .select()
+              .order('created_at', ascending: false),
+          builder: (context, snapshot) {
+            if (snapshot.connectionState == ConnectionState.waiting) {
+              return const Center(
+                child: Padding(
+                  padding: EdgeInsets.all(40.0),
+                  child: CircularProgressIndicator(color: kGreen),
+                ),
+              );
+            }
+            final list = snapshot.data ?? [];
+            if (list.isEmpty) {
+              return const Center(
+                child: Padding(
+                  padding: EdgeInsets.all(40.0),
+                  child: Text(
+                    'Koi naya notification nahi hai',
+                    style: TextStyle(color: Colors.white70, fontSize: 15),
+                  ),
+                ),
+              );
+            }
+            return Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Padding(
+                  padding: const EdgeInsets.all(16.0),
+                  child: Row(
+                    children: const [
+                      Icon(Icons.notifications_active, color: kGreen),
+                      SizedBox(width: 8),
+                      Text(
+                        'Notifications',
+                        style: TextStyle(
+                          color: kGreen,
+                          fontSize: 18,
+                          fontWeight: FontWeight.bold,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+                const Divider(color: Colors.white24, height: 1),
+                Expanded(
+                  child: ListView.builder(
+                    itemCount: list.length,
+                    itemBuilder: (c, i) {
+                      final item = list[i];
+                      return ListTile(
+                        contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
+                        title: Text(
+                          item['title'] ?? '',
+                          style: const TextStyle(
+                            color: Colors.white,
+                            fontWeight: FontWeight.bold,
+                            fontSize: 15,
+                          ),
+                        ),
+                        subtitle: Text(
+                          item['message'] ?? '',
+                          style: const TextStyle(color: Colors.white70, fontSize: 13),
+                        ),
+                      );
+                    },
+                  ),
+                ),
+              ],
+            );
+          },
+        );
+      },
+    );
+    }
+  
   @override
   void initState() {
     super.initState();
@@ -798,7 +883,7 @@ class _HomeScreenState extends State<HomeScreen> with SingleTickerProviderStateM
                       children: [
                         IconButton(
                           icon: const Icon(Icons.notifications_none, color: kGreen, size: 24),
-                          onPressed: () {},
+                          onPressed: () => _showNotificationsSheet(context),
                         ),
                         Positioned(
                           right: 11,
