@@ -459,7 +459,6 @@ class _LoginScreenState extends State<LoginScreen> {
       await Supabase.instance.client.auth.signInWithIdToken(
         provider: OAuthProvider.google,
         idToken: googleAuth.idToken!,
-        accessToken: googleAuth.accessToken,
       );
     } catch (e) {
       setState(() => _error = 'Error: $e');
