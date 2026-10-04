@@ -790,10 +790,11 @@ class _HomeScreenState extends State<HomeScreen> with SingleTickerProviderStateM
                       ),
                     ),
                     IconButton(
-                      IconButton(
-  icon: const Icon(Icons.search, color: kGreen, size: 24),
-  onPressed: () => showSearch(context: context, delegate: UserSearchDelegate()),
-),
+                      icon: const Icon(Icons.search, color: kGreen, size: 24),
+                      onPressed: () {
+                        showSearch(context: context, delegate: UserSearchDelegate());
+                      },
+                    ),
                     Stack(
                       children: [
                         IconButton(
