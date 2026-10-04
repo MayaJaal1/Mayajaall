@@ -102,6 +102,7 @@ Future<void> main() async {
   languageNotifier.value = lang;
   runApp(const MyApp());
 }
+
 class MyApp extends StatefulWidget {
   const MyApp({super.key});
   @override
@@ -215,6 +216,7 @@ class _MyAppState extends State<MyApp> {
     );
   }
 }
+
 class MatrixRain extends StatefulWidget {
   final double opacity;
   const MatrixRain({super.key, this.opacity = 0.7});
@@ -582,6 +584,7 @@ class _LoginScreenState extends State<LoginScreen> {
     );
   }
 }
+
 class MainNavigationHolder extends StatefulWidget {
   const MainNavigationHolder({super.key});
   @override
@@ -651,7 +654,6 @@ class _MainNavigationHolderState extends State<MainNavigationHolder> {
     );
   }
 }
-
 class HomeScreen extends StatefulWidget {
   const HomeScreen({super.key});
   @override
@@ -730,7 +732,8 @@ class _HomeScreenState extends State<HomeScreen> with SingleTickerProviderStateM
       ),
     );
   }
-    @override
+
+  @override
   Widget build(BuildContext context) {
     return Scaffold(
       backgroundColor: Colors.black,
@@ -802,7 +805,7 @@ class _HomeScreenState extends State<HomeScreen> with SingleTickerProviderStateM
                   ],
                 ),
               ),
-              Container(
+                            Container(
                 width: double.infinity,
                 padding: const EdgeInsets.symmetric(vertical: 20),
                 child: Stack(
@@ -888,7 +891,7 @@ class _HomeScreenState extends State<HomeScreen> with SingleTickerProviderStateM
                   ],
                 ),
               ),
-                            Padding(
+              Padding(
                 padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
                 child: Container(
                   decoration: BoxDecoration(
@@ -1641,7 +1644,8 @@ class _StreamPreviewScreenState extends State<StreamPreviewScreen> with SingleTi
   void _shareStreamDirect() {
     Share.share('🚀 Watch this stream on MayaJaal:\n${widget.targetUrl}');
   }
-    Future<void> _saveWatchRecord() async {
+
+  Future<void> _saveWatchRecord() async {
     final prefs = await SharedPreferences.getInstance();
     final user = Supabase.instance.client.auth.currentUser;
     final localJson = prefs.getString('watch_history_v2');
@@ -1697,8 +1701,7 @@ class _StreamPreviewScreenState extends State<StreamPreviewScreen> with SingleTi
       ),
     );
   }
-
-  @override
+    @override
   Widget build(BuildContext context) {
     return Scaffold(
       backgroundColor: Colors.black,
@@ -2114,19 +2117,34 @@ class _NativeVideoPlayerScreenState extends State<NativeVideoPlayerScreen> {
       _isUnliked = prefs.getBool('unliked_${widget.videoId}') ?? false;
       _isSaved = prefs.getBool('saved_${widget.videoId}') ?? false;
 
-      final res = await http.get(Uri.parse('$kBackendBaseUrl/api/stats/${widget.videoId}')).timeout(const Duration(seconds: 4));
-      if (res.statusCode == 200) {
-        final data = jsonDecode(res.body);
+      final int? vId = int.tryParse(widget.videoId);
+      if (vId != null) {
+        await SupabaseService.recordView(vId);
+        final liveLikes = await SupabaseService.getLikeCount(vId);
+        final liveViews = await SupabaseService.getViewCount(vId);
+        final liveShares = await SupabaseService.getShareCount(vId);
         if (mounted) {
           setState(() {
-            _viewsCount = (data['views'] ?? 0) + 1;
-            _likesCount = data['likes'] ?? 0;
-            _unlikesCount = data['unlikes'] ?? 0;
-            _sharesCount = data['shares'] ?? 0;
+            _viewsCount = liveViews;
+            _likesCount = liveLikes;
+            _sharesCount = liveShares;
           });
         }
+      } else {
+        final res = await http.get(Uri.parse('$kBackendBaseUrl/api/stats/${widget.videoId}')).timeout(const Duration(seconds: 4));
+        if (res.statusCode == 200) {
+          final data = jsonDecode(res.body);
+          if (mounted) {
+            setState(() {
+              _viewsCount = (data['views'] ?? 0) + 1;
+              _likesCount = data['likes'] ?? 0;
+              _unlikesCount = data['unlikes'] ?? 0;
+              _sharesCount = data['shares'] ?? 0;
+            });
+          }
+        }
+        await _sendStatUpdate('view');
       }
-      await _sendStatUpdate('view');
     } catch (_) {}
   }
 
@@ -2241,9 +2259,14 @@ class _NativeVideoPlayerScreenState extends State<NativeVideoPlayerScreen> {
     return '$h$m:$s';
   }
 
-  void _shareVideoLink() {
+  Future<void> _shareVideoLink() async {
     setState(() => _sharesCount++);
-    _sendStatUpdate('share');
+    final int? vId = int.tryParse(widget.videoId);
+    if (vId != null) {
+      await SupabaseService.recordShare(vId);
+    } else {
+      _sendStatUpdate('share');
+    }
     Share.share('🎬 Watch this video on MayaJaal:\n${widget.videoUrl}');
   }
 
@@ -2307,18 +2330,19 @@ class _NativeVideoPlayerScreenState extends State<NativeVideoPlayerScreen> {
       }
     }
   }
-    Future<void> _toggleLike() async {
+
+  Future<void> _toggleLike() async {
     final prefs = await SharedPreferences.getInstance();
+    final int? vId = int.tryParse(widget.videoId);
+
     setState(() {
       if (_isLiked) {
         _isLiked = false;
         _likesCount = math.max(0, _likesCount - 1);
-        _sendStatUpdate('unlike_dec');
         prefs.setBool('liked_${widget.videoId}', false);
       } else {
         _isLiked = true;
         _likesCount++;
-        _sendStatUpdate('like');
         prefs.setBool('liked_${widget.videoId}', true);
         if (_isUnliked) {
           _isUnliked = false;
@@ -2327,6 +2351,16 @@ class _NativeVideoPlayerScreenState extends State<NativeVideoPlayerScreen> {
         }
       }
     });
+
+    if (vId != null) {
+      if (!_isLiked) {
+        await SupabaseService.unlikeVideo(vId);
+      } else {
+        await SupabaseService.likeVideo(vId);
+      }
+    } else {
+      _sendStatUpdate(_isLiked ? 'like' : 'unlike_dec');
+    }
   }
 
   Future<void> _toggleUnlike() async {
@@ -2363,8 +2397,7 @@ class _NativeVideoPlayerScreenState extends State<NativeVideoPlayerScreen> {
       ),
     );
   }
-
-  void _showQualityDialog() {
+    void _showQualityDialog() {
     showDialog(
       context: context,
       builder: (c) => AlertDialog(
@@ -2460,7 +2493,8 @@ class _NativeVideoPlayerScreenState extends State<NativeVideoPlayerScreen> {
       ),
     );
   }
-    @override
+
+  @override
   Widget build(BuildContext context) {
     return Scaffold(
       backgroundColor: Colors.black,
@@ -2530,8 +2564,7 @@ class _NativeVideoPlayerScreenState extends State<NativeVideoPlayerScreen> {
                   ],
                 ),
               ),
-
-            // VIDEO VIEW
+                        // VIDEO VIEW
             Expanded(
               flex: _isFullscreen ? 1 : 0,
               child: Padding(
@@ -2687,7 +2720,7 @@ class _NativeVideoPlayerScreenState extends State<NativeVideoPlayerScreen> {
                 ),
               ),
             ),
-                        if (!_isFullscreen)
+                                    if (!_isFullscreen)
               Expanded(
                 child: SingleChildScrollView(
                   padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
@@ -2839,7 +2872,7 @@ class _NativeVideoPlayerScreenState extends State<NativeVideoPlayerScreen> {
                           ],
                         ),
                       ),
-                                            const SizedBox(height: 12),
+                      const SizedBox(height: 12),
                       Container(
                         padding: const EdgeInsets.all(12),
                         decoration: BoxDecoration(
