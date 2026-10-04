@@ -2371,7 +2371,7 @@ class _NativeVideoPlayerScreenState extends State<NativeVideoPlayerScreen> {
     return '$h$m:$s';
   }
 
-  Future<void> _shareVideoLink() async {
+    Future<void> _shareVideoLink() async {
     setState(() => _sharesCount++);
     final int? vId = int.tryParse(widget.videoId);
     if (vId != null) {
@@ -2379,9 +2379,15 @@ class _NativeVideoPlayerScreenState extends State<NativeVideoPlayerScreen> {
     } else {
       _sendStatUpdate('share');
     }
+    try {
+      await Supabase.instance.client.from('notifications').insert({
+        'title': '🚀 Video Shared!',
+        'message': 'Someone shared: ${widget.title}',
+      });
+    } catch (_) {}
     Share.share('🎬 Watch this video on MayaJaal:\n${widget.videoUrl}');
   }
-
+  
   Future<void> _startInAppDownload() async {
     if (_isDownloading) return;
 
@@ -2464,11 +2470,17 @@ class _NativeVideoPlayerScreenState extends State<NativeVideoPlayerScreen> {
       }
     });
 
-    if (vId != null) {
+        if (vId != null) {
       if (!_isLiked) {
         await _supabaseService.unlikeVideo(vId);
       } else {
         await _supabaseService.likeVideo(vId);
+        try {
+          await Supabase.instance.client.from('notifications').insert({
+            'title': '❤️ New Like!',
+            'message': 'Someone liked your video: ${widget.title}',
+          });
+        } catch (_) {}
       }
     } else {
       _sendStatUpdate(_isLiked ? 'like' : 'unlike_dec');
@@ -3198,6 +3210,12 @@ class SupabaseService {
           'subscriber_id': user.id,
           'channel_id': channelId,
         });
+                try {
+          await client.from('notifications').insert({
+            'title': '🔔 New Subscriber!',
+            'message': 'Someone subscribed to your channel.',
+          });
+        } catch (_) {}
         return true;
       }
     } catch (_) {
