@@ -3055,3 +3055,79 @@ class SupabaseService {
     }
   }
 }
+class UserSearchDelegate extends SearchDelegate {
+  final SupabaseService service = SupabaseService();
+
+  @override
+  ThemeData appBarTheme(BuildContext context) {
+    return ThemeData(
+      appBarTheme: const AppBarTheme(backgroundColor: Colors.black),
+      inputDecorationTheme: const InputDecorationTheme(
+        hintStyle: TextStyle(color: Colors.white54),
+        border: InputBorder.none,
+      ),
+      textTheme: const TextTheme(
+        titleLarge: TextStyle(color: Colors.white, fontSize: 16),
+      ),
+    );
+  }
+
+  @override
+  List<Widget>? buildActions(BuildContext context) => [
+    IconButton(icon: const Icon(Icons.clear, color: kGreen), onPressed: () => query = ''),
+  ];
+
+  @override
+  Widget? buildLeading(BuildContext context) => IconButton(
+    icon: const Icon(Icons.arrow_back, color: kGreen),
+    onPressed: () => close(context, null),
+  );
+
+  @override
+  Widget buildResults(BuildContext context) => _buildSearchResults();
+
+  @override
+  Widget buildSuggestions(BuildContext context) => _buildSearchResults();
+
+  Widget _buildSearchResults() {
+    return Container(
+      color: Colors.black,
+      child: FutureBuilder<List<Map<String, dynamic>>>(
+        future: service.searchUsers(query),
+        builder: (context, snapshot) {
+          if (snapshot.connectionState == ConnectionState.waiting) {
+            return const Center(child: CircularProgressIndicator(color: kGreen));
+          }
+          final users = snapshot.data ?? [];
+          if (users.isEmpty) {
+            return const Center(
+              child: Text('No users found', style: TextStyle(color: Colors.white54)),
+            );
+          }
+          return ListView.builder(
+            itemCount: users.length,
+            itemBuilder: (context, i) {
+              final u = users[i];
+              return ListTile(
+                leading: const CircleAvatar(
+                  backgroundColor: kGreen,
+                  child: Icon(Icons.person, color: Colors.black),
+                ),
+                title: Text(u['display_name'] ?? u['username'] ?? '', style: const TextStyle(color: Colors.white)),
+                subtitle: Text('@${u['username']}', style: const TextStyle(color: kGreen)),
+                onTap: () {
+                  Navigator.push(
+                    context,
+                    MaterialPageRoute(
+                      builder: (_) => UserProfileScreen(channelProfile: u),
+                    ),
+                  );
+                },
+              );
+            },
+          );
+        },
+      ),
+    );
+  }
+}
