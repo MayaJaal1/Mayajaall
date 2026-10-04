@@ -685,7 +685,7 @@ class _HomeScreenState extends State<HomeScreen> with SingleTickerProviderStateM
         return FutureBuilder<List<Map<String, dynamic>>>(
           future: Supabase.instance.client
               .from('notifications')
-              .select()
+              .select('*')
               .order('created_at', ascending: false),
           builder: (context, snapshot) {
             if (snapshot.connectionState == ConnectionState.waiting) {
@@ -693,6 +693,18 @@ class _HomeScreenState extends State<HomeScreen> with SingleTickerProviderStateM
                 child: Padding(
                   padding: EdgeInsets.all(40.0),
                   child: CircularProgressIndicator(color: kGreen),
+                ),
+              );
+            }
+            if (snapshot.hasError) {
+              return Center(
+                child: Padding(
+                  padding: const EdgeInsets.all(20.0),
+                  child: Text(
+                    'Error: ${snapshot.error}',
+                    style: const TextStyle(color: Colors.redAccent, fontSize: 13),
+                    textAlign: TextAlign.center,
+                  ),
                 ),
               );
             }
@@ -737,7 +749,7 @@ class _HomeScreenState extends State<HomeScreen> with SingleTickerProviderStateM
                       return ListTile(
                         contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
                         title: Text(
-                          item['title'] ?? '',
+                          item['title']?.toString() ?? '',
                           style: const TextStyle(
                             color: Colors.white,
                             fontWeight: FontWeight.bold,
@@ -745,7 +757,7 @@ class _HomeScreenState extends State<HomeScreen> with SingleTickerProviderStateM
                           ),
                         ),
                         subtitle: Text(
-                          item['message'] ?? '',
+                          item['message']?.toString() ?? '',
                           style: const TextStyle(color: Colors.white70, fontSize: 13),
                         ),
                       );
