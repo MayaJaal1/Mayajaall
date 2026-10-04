@@ -15,7 +15,7 @@ import 'package:share_plus/share_plus.dart';
 import 'package:http/http.dart' as http;
 
 const String supabaseUrl = 'https://inxlnctaixbkfblwlmhr.supabase.co';
-const String supabaseAnonKey = 'sb_publishable_6b9xe3mDBduO-soZTk3t2A_W1sQpD5K';
+const String supabaseAnonKey = 'sb_publishable_MtWmh5_zEVtBhHBLwr5DvQ_dabhbGge';
 const String webClientId = '985001671962-rok8qnng0rumjsd8mgr8uhr92o5vhs4n.apps.googleusercontent.com';
 
 const int kAppCurrentVersionCode = 2;
