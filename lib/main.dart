@@ -3054,7 +3054,75 @@ class SupabaseService {
       return 0;
     }
   }
+
+  Future<List<Map<String, dynamic>>> searchUsers(String query) async {
+    if (query.trim().isEmpty) return [];
+    try {
+      final res = await client
+          .from('profiles')
+          .select('id, username, display_name, avatar_url')
+          .ilike('username', '%$query%')
+          .limit(15);
+      return List<Map<String, dynamic>>.from(res);
+    } catch (_) {
+      return [];
+    }
+  }
+
+  Future<bool> isSubscribed(String channelId) async {
+    final user = client.auth.currentUser;
+    if (user == null) return false;
+    try {
+      final res = await client
+          .from('subscriptions')
+          .select('id')
+          .eq('subscriber_id', user.id)
+          .eq('channel_id', channelId)
+          .maybeSingle();
+      return res != null;
+    } catch (_) {
+      return false;
+    }
+  }
+
+  Future<bool> toggleSubscription(String channelId) async {
+    final user = client.auth.currentUser;
+    if (user == null) return false;
+    final alreadySubscribed = await isSubscribed(channelId);
+    try {
+      if (alreadySubscribed) {
+        await client
+            .from('subscriptions')
+            .delete()
+            .eq('subscriber_id', user.id)
+            .eq('channel_id', channelId);
+        return false;
+      } else {
+        await client.from('subscriptions').insert({
+          'subscriber_id': user.id,
+          'channel_id': channelId,
+        });
+        return true;
+      }
+    } catch (_) {
+      return alreadySubscribed;
+    }
+  }
+
+  Future<List<Map<String, dynamic>>> getUserUploads(String targetUserId) async {
+    try {
+      final res = await client
+          .from('videos')
+          .select('*')
+          .eq('uploader_id', targetUserId)
+          .order('id', ascending: false);
+      return List<Map<String, dynamic>>.from(res);
+    } catch (_) {
+      return [];
+    }
+  }
 }
+
 class UserSearchDelegate extends SearchDelegate {
   final SupabaseService service = SupabaseService();
 
@@ -3128,6 +3196,113 @@ class UserSearchDelegate extends SearchDelegate {
           );
         },
       ),
+    );
+  }
+}
+
+class UserProfileScreen extends StatefulWidget {
+  final Map<String, dynamic> channelProfile;
+  const UserProfileScreen({super.key, required this.channelProfile});
+
+  @override
+  State<UserProfileScreen> createState() => _UserProfileScreenState();
+}
+
+class _UserProfileScreenState extends State<UserProfileScreen> {
+  final SupabaseService _service = SupabaseService();
+  bool _isSubscribed = false;
+  List<Map<String, dynamic>> _videos = [];
+  bool _loading = true;
+
+  @override
+  void initState() {
+    super.initState();
+    _loadProfileData();
+  }
+
+  Future<void> _loadProfileData() async {
+    final channelId = widget.channelProfile['id']?.toString() ?? '';
+    final subStatus = await _service.isSubscribed(channelId);
+    final uploads = await _service.getUserUploads(channelId);
+
+    if (mounted) {
+      setState(() {
+        _isSubscribed = subStatus;
+        _videos = uploads;
+        _loading = false;
+      });
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final currentUserId = Supabase.instance.client.auth.currentUser?.id;
+    final isOwnProfile = currentUserId == widget.channelProfile['id']?.toString();
+
+    return Scaffold(
+      backgroundColor: Colors.black,
+      appBar: AppBar(
+        title: Text('@${widget.channelProfile['username'] ?? 'Profile'}'),
+      ),
+      body: _loading
+          ? const Center(child: CircularProgressIndicator(color: kGreen))
+          : Column(
+              children: [
+                const SizedBox(height: 20),
+                const CircleAvatar(
+                  radius: 38,
+                  backgroundColor: kGreen,
+                  child: Icon(Icons.person, size: 45, color: Colors.black),
+                ),
+                const SizedBox(height: 10),
+                Text(
+                  widget.channelProfile['display_name'] ?? widget.channelProfile['username'] ?? '',
+                  style: const TextStyle(color: Colors.white, fontSize: 18, fontWeight: FontWeight.bold),
+                ),
+                Text(
+                  '@${widget.channelProfile['username']}',
+                  style: const TextStyle(color: kGreen, fontSize: 13),
+                ),
+                const SizedBox(height: 14),
+                if (!isOwnProfile)
+                  ElevatedButton(
+                    onPressed: () async {
+                      final status = await _service.toggleSubscription(widget.channelProfile['id']?.toString() ?? '');
+                      setState(() => _isSubscribed = status);
+                    },
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: _isSubscribed ? Colors.grey[850] : kGreen,
+                      foregroundColor: _isSubscribed ? Colors.white : Colors.black,
+                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+                    ),
+                    child: Text(_isSubscribed ? 'SUBSCRIBED' : 'SUBSCRIBE'),
+                  ),
+                const Divider(color: Colors.white24, height: 30),
+                Expanded(
+                  child: _videos.isEmpty
+                      ? const Center(child: Text('No uploads yet.', style: TextStyle(color: Colors.white54)))
+                      : ListView.builder(
+                          itemCount: _videos.length,
+                          itemBuilder: (context, i) {
+                            final vid = _videos[i];
+                            return ListTile(
+                              leading: const Icon(Icons.play_circle_fill, color: kGreen),
+                              title: Text(vid['title'] ?? 'Video', style: const TextStyle(color: Colors.white)),
+                              subtitle: Text('${vid['views'] ?? 0} views', style: const TextStyle(color: Colors.white54)),
+                              onTap: () {
+                                Navigator.push(
+                                  context,
+                                  MaterialPageRoute(
+                                    builder: (_) => StreamPreviewScreen(targetUrl: vid['video_url'] ?? ''),
+                                  ),
+                                );
+                              },
+                            );
+                          },
+                        ),
+                ),
+              ],
+            ),
     );
   }
 }
