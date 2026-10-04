@@ -14,10 +14,14 @@ import 'package:permission_handler/permission_handler.dart';
 import 'package:video_player/video_player.dart';
 import 'package:share_plus/share_plus.dart';
 import 'package:http/http.dart' as http;
+import 'package:onesignal_flutter/onesignal_flutter.dart';
 
 const String supabaseUrl = 'https://inxlnctaixbkfblwlmhr.supabase.co';
 const String supabaseAnonKey = 'sb_publishable_MtWmh5_zEVtBhHBLwr5DvQ_dabhbGge';
 const String webClientId = '985001671962-rok8qnng0rumjsd8mgr8uhr92o5vhs4n.apps.googleusercontent.com';
+
+// 🔔 OneSignal App ID
+const String oneSignalAppId = 'YOUR_ONESIGNAL_APP_ID_HERE';
 
 const int kAppCurrentVersionCode = 2;
 const String kBackendBaseUrl = 'https://mayajaal.online';
@@ -94,7 +98,18 @@ Future<void> main() async {
     systemNavigationBarColor: Colors.black,
     systemNavigationBarIconBrightness: Brightness.light,
   ));
+
   await Supabase.initialize(url: supabaseUrl, anonKey: supabaseAnonKey);
+
+  // 🔔 OneSignal Notification Initialization
+  try {
+    OneSignal.Debug.setLogLevel(OSLogLevel.verbose);
+    OneSignal.initialize(oneSignalAppId);
+    OneSignal.Notifications.requestPermission(true);
+  } catch (e) {
+    debugPrint("OneSignal Init Error: $e");
+  }
+
   final prefs = await SharedPreferences.getInstance();
   final isDark = prefs.getBool('dark_theme') ?? true;
   final lang = prefs.getString('language') ?? 'English';
@@ -169,8 +184,7 @@ class _MyAppState extends State<MyApp> {
     _linkSubscription?.cancel();
     super.dispose();
   }
-
-  ThemeData _buildPureDarkTheme() {
+    ThemeData _buildPureDarkTheme() {
     return ThemeData(
       brightness: Brightness.dark,
       scaffoldBackgroundColor: Colors.black,
@@ -584,7 +598,6 @@ class _LoginScreenState extends State<LoginScreen> {
     );
   }
 }
-
 class MainNavigationHolder extends StatefulWidget {
   const MainNavigationHolder({super.key});
   @override
@@ -1476,7 +1489,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
         ),
         title: Text(tr('language'), style: const TextStyle(color: kGreen)),
         content: Column(
-          mainAxisSize: MainAxisSize.min,
+          mainAxisSize: dynamic,
           children: _languages.map((l) {
             return RadioListTile<String>(
               title: Text(l, style: const TextStyle(color: kGreen)),
@@ -2074,6 +2087,9 @@ class NativeVideoPlayerScreen extends StatefulWidget {
 }
 
 class _NativeVideoPlayerScreenState extends State<NativeVideoPlayerScreen> {
+  // 🛠️ FIX FOR SCREENSHOT ERROR: Creating SupabaseService instance
+  final SupabaseService _supabaseService = SupabaseService();
+
   late VideoPlayerController _controller;
   bool _isInitialized = false;
   bool _hasError = false;
@@ -2119,10 +2135,10 @@ class _NativeVideoPlayerScreenState extends State<NativeVideoPlayerScreen> {
 
       final int? vId = int.tryParse(widget.videoId);
       if (vId != null) {
-        await SupabaseService.recordView(vId);
-        final liveLikes = await SupabaseService.getLikeCount(vId);
-        final liveViews = await SupabaseService.getViewCount(vId);
-        final liveShares = await SupabaseService.getShareCount(vId);
+        await _supabaseService.recordView(vId);
+        final liveLikes = await _supabaseService.getLikeCount(vId);
+        final liveViews = await _supabaseService.getViewCount(vId);
+        final liveShares = await _supabaseService.getShareCount(vId);
         if (mounted) {
           setState(() {
             _viewsCount = liveViews;
@@ -2263,7 +2279,7 @@ class _NativeVideoPlayerScreenState extends State<NativeVideoPlayerScreen> {
     setState(() => _sharesCount++);
     final int? vId = int.tryParse(widget.videoId);
     if (vId != null) {
-      await SupabaseService.recordShare(vId);
+      await _supabaseService.recordShare(vId);
     } else {
       _sendStatUpdate('share');
     }
@@ -2354,9 +2370,9 @@ class _NativeVideoPlayerScreenState extends State<NativeVideoPlayerScreen> {
 
     if (vId != null) {
       if (!_isLiked) {
-        await SupabaseService.unlikeVideo(vId);
+        await _supabaseService.unlikeVideo(vId);
       } else {
-        await SupabaseService.likeVideo(vId);
+        await _supabaseService.likeVideo(vId);
       }
     } else {
       _sendStatUpdate(_isLiked ? 'like' : 'unlike_dec');
