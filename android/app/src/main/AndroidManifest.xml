@@ -41,19 +41,29 @@
                 <category android:name="android.intent.category.LAUNCHER"/>
             </intent-filter>
 
-            <!-- 🌟 Auto-Verify: www.mayajaal.online aur mayajaal.online dono ke liye -->
+            <!-- 🌟 Auto-Verify: Sirf video/stream links app mein khulenge.
+                 API key pages (jaise /index.html) browser mein khulenge. -->
             <intent-filter android:autoVerify="true">
                 <action android:name="android.intent.action.VIEW" />
                 <category android:name="android.intent.category.DEFAULT" />
                 <category android:name="android.intent.category.BROWSABLE" />
 
-                <!-- With www -->
-                <data android:scheme="https"
-                      android:host="www.mayajaal.online" />
+                <!-- ✅ Video / Stream / Terabox links app mein khulenge (mayajaal.online) -->
+                <data android:scheme="https" android:host="mayajaal.online" android:pathPrefix="/v/" />
+                <data android:scheme="https" android:host="mayajaal.online" android:pathPrefix="/stream/" />
+                <data android:scheme="https" android:host="mayajaal.online" android:pathPrefix="/api/v/" />
+                <data android:scheme="https" android:host="mayajaal.online" android:pathPrefix="/tb/" />
+                <data android:scheme="https" android:host="mayajaal.online" android:pathPrefix="/s/" />
 
-                <!-- Without www -->
-                <data android:scheme="https"
-                      android:host="mayajaal.online" />
+                <!-- ✅ www wala bhi (mayajaal.online) -->
+                <data android:scheme="https" android:host="www.mayajaal.online" android:pathPrefix="/v/" />
+                <data android:scheme="https" android:host="www.mayajaal.online" android:pathPrefix="/stream/" />
+                <data android:scheme="https" android:host="www.mayajaal.online" android:pathPrefix="/api/v/" />
+                <data android:scheme="https" android:host="www.mayajaal.online" android:pathPrefix="/tb/" />
+                <data android:scheme="https" android:host="www.mayajaal.online" android:pathPrefix="/s/" />
+
+                <!-- ✅ Short links (m.mayajaal.online) - saare short links app mein khulenge -->
+                <data android:scheme="https" android:host="m.mayajaal.online" />
             </intent-filter>
 
             <!-- Custom Scheme fallback -->
