@@ -5,7 +5,6 @@ on:
     branches: [ main ]
   workflow_dispatch:
 
-# 🌟 GITHUB RELEASES WRITE PERMISSION (403 ERROR FIX)
 permissions:
   contents: write
 
@@ -34,9 +33,10 @@ jobs:
           mkdir -p android/app
           cp mayajaal-release.jks android/app/mayajaal-release.jks
 
+      # 🌟 UPDATED: Folder structure changed to com/mayajaal/online
       - name: Create Android Folder Structure
         run: |
-          mkdir -p android/app/src/main/kotlin/com/example/mayajaall
+          mkdir -p android/app/src/main/kotlin/com/mayajaal/online
           mkdir -p android/app/src/main/res/drawable
           mkdir -p android/app/src/main/res/drawable-v21
           mkdir -p android/app/src/main/res/mipmap-hdpi
@@ -47,10 +47,11 @@ jobs:
           mkdir -p android/app/src/main/res/values
           mkdir -p android/app/src/main/res/values-night
 
+      # 🌟 UPDATED: Package name changed here
       - name: Create MainActivity.kt
         run: |
-          cat > android/app/src/main/kotlin/com/example/mayajaall/MainActivity.kt << 'EOF'
-          package com.example.mayajaall
+          cat > android/app/src/main/kotlin/com/mayajaal/online/MainActivity.kt << 'EOF'
+          package com.mayajaal.online
 
           import io.flutter.embedding.android.FlutterActivity
 
@@ -83,8 +84,7 @@ jobs:
           </resources>
           EOF
 
-      # 🌟 UPDATED WITH ALL ANDROID 13+ PERMISSIONS & WAKE_LOCK
-      # 🌟 YAHAN PATH PREFIX HATA DIYA GAYA HAI TAAKI SAARE LINKS APP MEIN KHULEIN
+      # 🌟 UPDATED: App Name changed to MaayaJaal & PathPrefix removed
       - name: Create AndroidManifest.xml
         run: |
           cat > android/app/src/main/AndroidManifest.xml << 'EOF'
@@ -105,7 +105,7 @@ jobs:
               <uses-permission android:name="android.permission.WAKE_LOCK"/>
 
               <application
-                  android:label="MayaJaal"
+                  android:label="MaayaJaal"
                   android:name="${applicationName}"
                   android:icon="@mipmap/ic_launcher"
                   android:hardwareAccelerated="true"
@@ -127,14 +127,11 @@ jobs:
                           <category android:name="android.intent.category.LAUNCHER"/>
                       </intent-filter>
 
-                      <!-- 🌟 UPDATED: pathPrefix hata diya gaya hai, ab saare links app mein khulenge -->
                       <intent-filter android:autoVerify="true">
                           <action android:name="android.intent.action.VIEW" />
                           <category android:name="android.intent.category.DEFAULT" />
                           <category android:name="android.intent.category.BROWSABLE" />
-                          <!-- With www -->
                           <data android:scheme="https" android:host="www.mayajaal.online" />
-                          <!-- Without www -->
                           <data android:scheme="https" android:host="mayajaal.online" />
                       </intent-filter>
 
@@ -152,6 +149,7 @@ jobs:
           </manifest>
           EOF
 
+      # 🌟 UPDATED: applicationId and namespace changed
       - name: Create build.gradle (app)
         run: |
           cat > android/app/build.gradle << 'EOF'
@@ -172,7 +170,7 @@ jobs:
           apply from: "$flutterRoot/packages/flutter_tools/gradle/flutter.gradle"
 
           android {
-              namespace 'com.example.mayajaall'
+              namespace 'com.mayajaal.online'
               compileSdkVersion 34
               ndkVersion flutter.ndkVersion
               compileOptions {
@@ -182,7 +180,7 @@ jobs:
               kotlinOptions { jvmTarget = '17' }
               sourceSets { main.java.srcDirs += 'src/main/kotlin' }
               defaultConfig {
-                  applicationId "com.example.mayajaall"
+                  applicationId "com.mayajaal.online"
                   minSdkVersion 21
                   targetSdkVersion 34
                   versionCode flutterVersionCode.toInteger()
@@ -261,13 +259,12 @@ jobs:
           name: release-apk
           path: build/app/outputs/flutter-apk/app-release.apk
 
-      # 🌟 AUTOMATIC DIRECT RELEASE UPDATE (Updates GitHub Latest Download Link)
       - name: Release APK to GitHub Releases
         uses: softprops/action-gh-release@v2
         if: startsWith(github.ref, 'refs/heads/main')
         with:
           tag_name: latest
-          name: "MayaJaal Latest Release"
+          name: "MaayaJaal Latest Release"
           draft: false
           prerelease: false
           files: build/app/outputs/flutter-apk/app-release.apk
