@@ -2384,7 +2384,7 @@ class _StreamPreviewScreenState extends State<StreamPreviewScreen> with SingleTi
     _pulseController.dispose();
     super.dispose();
   }
-  Future<void> _fetchStreamMetadata() async {
+    Future<void> _fetchStreamMetadata() async {
     try {
       final uri = Uri.parse(widget.targetUrl);
       _rawId = uri.pathSegments.isNotEmpty ? uri.pathSegments.last : 'stream';
@@ -2399,6 +2399,7 @@ class _StreamPreviewScreenState extends State<StreamPreviewScreen> with SingleTi
         return;
       }
 
+      // 1. Pehle stream-info check karein
       final res = await http.get(Uri.parse('$kBackendBaseUrl/api/stream-info/$_rawId')).timeout(const Duration(seconds: 8));
       if (res.statusCode == 200) {
         final data = jsonDecode(res.body);
@@ -2414,19 +2415,35 @@ class _StreamPreviewScreenState extends State<StreamPreviewScreen> with SingleTi
         }
       }
 
+      // 2. Agar fail ho toh /api/v/ endpoint try karein jo JSON data return karta hai
+      final res2 = await http.get(Uri.parse('$kBackendBaseUrl/api/v/$_rawId')).timeout(const Duration(seconds: 8));
+      if (res2.statusCode == 200) {
+        final data = jsonDecode(res2.body);
+        if (data['url'] != null || data['video_url'] != null) {
+          setState(() {
+            _streamUrl = data['url'] ?? data['video_url'];
+            _videoTitle = data['title'] ?? data['file_name'] ?? _rawId;
+            _loading = false;
+          });
+          _startCountdown();
+          return;
+        }
+      }
+
+      // 3. Last fallback: targetUrl hi use karein
       setState(() {
-        _streamUrl = '$kBackendBaseUrl/stream/$_rawId';
+        _streamUrl = widget.targetUrl;
         _loading = false;
       });
       _startCountdown();
     } catch (e) {
       setState(() {
-        _streamUrl = '$kBackendBaseUrl/stream/$_rawId';
+        _streamUrl = widget.targetUrl;
         _loading = false;
       });
       _startCountdown();
     }
-  }
+    }
   
   void _shareStreamDirect() {
     Share.share('🚀 Watch this stream on MayaJaal:\n${widget.targetUrl}');
