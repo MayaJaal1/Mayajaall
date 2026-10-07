@@ -240,29 +240,37 @@ jobs:
           apply from: "$flutterSdkPath/packages/flutter_tools/gradle/app_plugin_loader.gradle"
           EOF
 
+      # 🌟 YEH STEP SHA1 aur SHA256 DIKHAYEGA
+      - name: Get SHA1 and SHA256 Fingerprints
+        run: |
+          echo "=========================================="
+          echo "SHA FINGERPRINTS (YEH COPY KAREIN):"
+          echo "=========================================="
+          keytool -list -v -keystore android/app/mayajaal-release.jks \
+            -alias mayajaal \
+            -storepass MayajaalRelease2024 \
+            -keypass MayajaalRelease2024 | grep -iE "sha1|sha-1|sha256|sha-256"
+          echo "=========================================="
+
       - name: Get Dependencies
         run: flutter pub get
 
       - name: Generate Launcher Icons
         run: flutter pub run flutter_launcher_icons
 
-      # 🌟 UPDATED: Step name changed
       - name: Build MaayaJaal Release APK
         run: flutter build apk --release
 
-      # 🌟 ADDED: Rename APK file to MaayaJaal.apk
       - name: Rename APK
         run: |
           mv build/app/outputs/flutter-apk/app-release.apk build/app/outputs/flutter-apk/MaayaJaal.apk
 
-      # 🌟 UPDATED: Artifact name and path changed
       - name: Upload APK Artifact
         uses: actions/upload-artifact@v4
         with:
           name: MaayaJaal-APK
           path: build/app/outputs/flutter-apk/MaayaJaal.apk
 
-      # 🌟 UPDATED: Release name and file path changed
       - name: Release APK to GitHub Releases
         uses: softprops/action-gh-release@v2
         if: startsWith(github.ref, 'refs/heads/main')
