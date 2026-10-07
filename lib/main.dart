@@ -2974,7 +2974,7 @@ class _NativeVideoPlayerScreenState extends State<NativeVideoPlayerScreen> {
   Future<void> _initFastVideo() async {
     final Map<String, String> headers = {
       'User-Agent':
-          'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36',
+          'MayaJaalApp/1.0',
       'Referer': 'https://mayajaal.online/',
     };
 
