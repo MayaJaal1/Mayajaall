@@ -49,19 +49,11 @@
 
                 <!-- With www -->
                 <data android:scheme="https"
-                      android:host="www.mayajaal.online"
-                      android:pathPrefix="/tb" />
-                <data android:scheme="https"
-                      android:host="www.mayajaal.online"
-                      android:pathPrefix="/stream" />
+                      android:host="www.mayajaal.online" />
 
                 <!-- Without www -->
                 <data android:scheme="https"
-                      android:host="mayajaal.online"
-                      android:pathPrefix="/tb" />
-                <data android:scheme="https"
-                      android:host="mayajaal.online"
-                      android:pathPrefix="/stream" />
+                      android:host="mayajaal.online" />
             </intent-filter>
 
             <!-- Custom Scheme fallback -->
