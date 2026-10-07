@@ -2430,13 +2430,13 @@ class _StreamPreviewScreenState extends State<StreamPreviewScreen> with SingleTi
       }
 
       setState(() {
-        _streamUrl = '$kBackendBaseUrl/stream/$_rawId';
+        _streamUrl = widget.targetUrl;
         _loading = false;
       });
       _startCountdown();
     } catch (e) {
       setState(() {
-        _streamUrl = '$kBackendBaseUrl/stream/$_rawId';
+        _streamUrl = widget.targetUrl;
         _loading = false;
       });
       _startCountdown();
