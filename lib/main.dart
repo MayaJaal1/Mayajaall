@@ -267,7 +267,7 @@ class _MatrixRainState extends State<MatrixRain> {
     });
   }
 
-    @override
+  @override
   void dispose() {
     _timer.cancel();
     super.dispose();
@@ -431,7 +431,6 @@ class AuthGate extends StatelessWidget {
     );
   }
 }
-
 class LoginScreen extends StatefulWidget {
   final String? pendingTargetUrl;
   const LoginScreen({super.key, this.pendingTargetUrl});
@@ -801,8 +800,7 @@ void _openForgotPasswordDialog() {
     ),
   );
 }
-
-@override
+  @override
 Widget build(BuildContext context) {
   return Scaffold(
     backgroundColor: Colors.black,
@@ -1282,7 +1280,6 @@ Widget build(BuildContext context) {
     );
   }
 }
-
 class MainNavigationHolder extends StatefulWidget {
   const MainNavigationHolder({super.key});
   @override
@@ -1352,7 +1349,6 @@ class _MainNavigationHolderState extends State<MainNavigationHolder> {
     );
   }
 }
-
 class HomeScreen extends StatefulWidget {
   const HomeScreen({super.key});
   @override
@@ -1529,8 +1525,7 @@ class _HomeScreenState extends State<HomeScreen> with SingleTickerProviderStateM
       ),
     );
   }
-
-    @override
+      @override
   Widget build(BuildContext context) {
     return Scaffold(
       backgroundColor: Colors.black,
@@ -1848,7 +1843,6 @@ class _HomeScreenState extends State<HomeScreen> with SingleTickerProviderStateM
     );
   }
 }
-
 class ChannelScreen extends StatelessWidget {
   const ChannelScreen({super.key});
 
@@ -2328,7 +2322,6 @@ class _SettingsScreenState extends State<SettingsScreen> {
     );
   }
 }
-
 class StreamPreviewScreen extends StatefulWidget {
   final String targetUrl;
   const StreamPreviewScreen({super.key, required this.targetUrl});
@@ -2505,8 +2498,7 @@ class _StreamPreviewScreenState extends State<StreamPreviewScreen> with SingleTi
       ),
     );
   }
-
-  @override
+    @override
 Widget build(BuildContext context) {
   return Scaffold(
     backgroundColor: Colors.black,
@@ -2860,7 +2852,6 @@ Widget build(BuildContext context) {
     );
   }
 }
-
 class NativeVideoPlayerScreen extends StatefulWidget {
   final String videoUrl;
   final String title;
@@ -3072,8 +3063,7 @@ class _NativeVideoPlayerScreenState extends State<NativeVideoPlayerScreen> {
     final h = d.inHours > 0 ? '${d.inHours}:' : '';
     return '$h$m:$s';
   }
-
-  Future<void> _shareVideoLink() async {
+    Future<void> _shareVideoLink() async {
   setState(() => _sharesCount++);
   final int? vId = int.tryParse(widget.videoId);
   if (vId != null) {
@@ -3326,8 +3316,7 @@ Widget _buildSmartScaledVideo() {
     ),
   );
 }
-
-@override
+  @override
 Widget build(BuildContext context) {
   return Scaffold(
     backgroundColor: Colors.black,
@@ -3605,8 +3594,7 @@ Widget build(BuildContext context) {
               ),
             ),
           ),
-
-                      if (!_isFullscreen)
+                                if (!_isFullscreen)
               Expanded(
                 child: SingleChildScrollView(
                   padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
@@ -3951,7 +3939,6 @@ Widget build(BuildContext context) {
     );
   }
 }
-
 class SupabaseService {
   final SupabaseClient client = Supabase.instance.client;
 
@@ -4082,7 +4069,6 @@ class SupabaseService {
     }
   }
 }
-
 class UserSearchDelegate extends SearchDelegate {
   final SupabaseService service = SupabaseService();
 
@@ -4163,7 +4149,6 @@ class UserSearchDelegate extends SearchDelegate {
     );
   }
 }
-
 class UserProfileScreen extends StatefulWidget {
   final Map<String, dynamic> channelProfile;
   const UserProfileScreen({super.key, required this.channelProfile});
@@ -4283,4 +4268,3 @@ class _UserProfileScreenState extends State<UserProfileScreen> {
     );
   }
 }
-  
