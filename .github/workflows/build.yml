@@ -1,4 +1,4 @@
-name: Build Release APK
+name: Build MaayaJaal APK
 
 on:
   push:
@@ -33,7 +33,6 @@ jobs:
           mkdir -p android/app
           cp mayajaal-release.jks android/app/mayajaal-release.jks
 
-      # 🌟 UPDATED: Folder structure changed to com/mayajaal/online
       - name: Create Android Folder Structure
         run: |
           mkdir -p android/app/src/main/kotlin/com/mayajaal/online
@@ -47,7 +46,6 @@ jobs:
           mkdir -p android/app/src/main/res/values
           mkdir -p android/app/src/main/res/values-night
 
-      # 🌟 UPDATED: Package name changed here
       - name: Create MainActivity.kt
         run: |
           cat > android/app/src/main/kotlin/com/mayajaal/online/MainActivity.kt << 'EOF'
@@ -84,7 +82,6 @@ jobs:
           </resources>
           EOF
 
-      # 🌟 UPDATED: App Name changed to MaayaJaal & PathPrefix removed
       - name: Create AndroidManifest.xml
         run: |
           cat > android/app/src/main/AndroidManifest.xml << 'EOF'
@@ -149,7 +146,6 @@ jobs:
           </manifest>
           EOF
 
-      # 🌟 UPDATED: applicationId and namespace changed
       - name: Create build.gradle (app)
         run: |
           cat > android/app/build.gradle << 'EOF'
@@ -250,15 +246,23 @@ jobs:
       - name: Generate Launcher Icons
         run: flutter pub run flutter_launcher_icons
 
-      - name: Build Release APK
+      # 🌟 UPDATED: Step name changed
+      - name: Build MaayaJaal Release APK
         run: flutter build apk --release
 
+      # 🌟 ADDED: Rename APK file to MaayaJaal.apk
+      - name: Rename APK
+        run: |
+          mv build/app/outputs/flutter-apk/app-release.apk build/app/outputs/flutter-apk/MaayaJaal.apk
+
+      # 🌟 UPDATED: Artifact name and path changed
       - name: Upload APK Artifact
         uses: actions/upload-artifact@v4
         with:
-          name: release-apk
-          path: build/app/outputs/flutter-apk/app-release.apk
+          name: MaayaJaal-APK
+          path: build/app/outputs/flutter-apk/MaayaJaal.apk
 
+      # 🌟 UPDATED: Release name and file path changed
       - name: Release APK to GitHub Releases
         uses: softprops/action-gh-release@v2
         if: startsWith(github.ref, 'refs/heads/main')
@@ -267,6 +271,6 @@ jobs:
           name: "MaayaJaal Latest Release"
           draft: false
           prerelease: false
-          files: build/app/outputs/flutter-apk/app-release.apk
+          files: build/app/outputs/flutter-apk/MaayaJaal.apk
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
