@@ -2384,7 +2384,6 @@ class _StreamPreviewScreenState extends State<StreamPreviewScreen> with SingleTi
     _pulseController.dispose();
     super.dispose();
   }
-
   Future<void> _fetchStreamMetadata() async {
     try {
       final uri = Uri.parse(widget.targetUrl);
@@ -2415,34 +2414,20 @@ class _StreamPreviewScreenState extends State<StreamPreviewScreen> with SingleTi
         }
       }
 
-      final res2 = await http.get(Uri.parse('$kBackendBaseUrl/api/v/$_rawId')).timeout(const Duration(seconds: 8));
-      if (res2.statusCode == 200) {
-        final data = jsonDecode(res2.body);
-        if (data['url'] != null || data['video_url'] != null) {
-          setState(() {
-            _streamUrl = data['url'] ?? data['video_url'];
-            _videoTitle = data['title'] ?? data['file_name'] ?? _rawId;
-            _loading = false;
-          });
-          _startCountdown();
-          return;
-        }
-      }
-
       setState(() {
-        _streamUrl = widget.targetUrl;
+        _streamUrl = '$kBackendBaseUrl/stream/$_rawId';
         _loading = false;
       });
       _startCountdown();
     } catch (e) {
       setState(() {
-        _streamUrl = widget.targetUrl;
+        _streamUrl = '$kBackendBaseUrl/stream/$_rawId';
         _loading = false;
       });
       _startCountdown();
     }
   }
-
+  
   void _shareStreamDirect() {
     Share.share('🚀 Watch this stream on MayaJaal:\n${widget.targetUrl}');
   }
