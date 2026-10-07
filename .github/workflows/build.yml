@@ -84,6 +84,7 @@ jobs:
           EOF
 
       # 🌟 UPDATED WITH ALL ANDROID 13+ PERMISSIONS & WAKE_LOCK
+      # 🌟 YAHAN PATH PREFIX HATA DIYA GAYA HAI TAAKI SAARE LINKS APP MEIN KHULEIN
       - name: Create AndroidManifest.xml
         run: |
           cat > android/app/src/main/AndroidManifest.xml << 'EOF'
@@ -126,14 +127,15 @@ jobs:
                           <category android:name="android.intent.category.LAUNCHER"/>
                       </intent-filter>
 
+                      <!-- 🌟 UPDATED: pathPrefix hata diya gaya hai, ab saare links app mein khulenge -->
                       <intent-filter android:autoVerify="true">
                           <action android:name="android.intent.action.VIEW" />
                           <category android:name="android.intent.category.DEFAULT" />
                           <category android:name="android.intent.category.BROWSABLE" />
-                          <data android:scheme="https" android:host="www.mayajaal.online" android:pathPrefix="/tb" />
-                          <data android:scheme="https" android:host="www.mayajaal.online" android:pathPrefix="/v" />
-                          <data android:scheme="https" android:host="mayajaal.online" android:pathPrefix="/tb" />
-                          <data android:scheme="https" android:host="mayajaal.online" android:pathPrefix="/v" />
+                          <!-- With www -->
+                          <data android:scheme="https" android:host="www.mayajaal.online" />
+                          <!-- Without www -->
+                          <data android:scheme="https" android:host="mayajaal.online" />
                       </intent-filter>
 
                       <intent-filter>
@@ -271,4 +273,3 @@ jobs:
           files: build/app/outputs/flutter-apk/app-release.apk
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-          
