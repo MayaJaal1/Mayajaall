@@ -53,7 +53,7 @@
                       android:pathPrefix="/tb" />
                 <data android:scheme="https"
                       android:host="www.mayajaal.online"
-                      android:pathPrefix="/v" />
+                      android:pathPrefix="/stream" />
 
                 <!-- Without www -->
                 <data android:scheme="https"
@@ -61,7 +61,7 @@
                       android:pathPrefix="/tb" />
                 <data android:scheme="https"
                       android:host="mayajaal.online"
-                      android:pathPrefix="/v" />
+                      android:pathPrefix="/stream" />
             </intent-filter>
 
             <!-- Custom Scheme fallback -->
