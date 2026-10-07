@@ -19,7 +19,7 @@ dependencies:
   permission_handler: ^11.3.0
 
   # 🌟 Naye Features ke liye zaroori packages
-  video_player: ^2.8.6
+  video_player: ^2.8.2
   chewie: ^1.8.1
   http: ^1.2.1
   share_plus: ^9.0.0
