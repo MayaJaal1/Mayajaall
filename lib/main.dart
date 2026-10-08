@@ -97,6 +97,7 @@ Future<void> main() async {
     systemNavigationBarIconBrightness: Brightness.light,
   ));
 
+  await Firebase.initializeApp();
   await Supabase.initialize(url: supabaseUrl, anonKey: supabaseAnonKey);
 
   // 🔔 OneSignal Notification Initialization
