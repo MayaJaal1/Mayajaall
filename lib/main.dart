@@ -15,12 +15,12 @@ import 'package:share_plus/share_plus.dart';
 import 'package:http/http.dart' as http;
 import 'package:onesignal_flutter/onesignal_flutter.dart';
 import 'package:firebase_core/firebase_core.dart';
-import 'package:cloud_firestore/cloud_firestore.dart'; // 👈 Yeh line add karni hai
+import 'package:cloud_firestore/cloud_firestore.dart';
+
 const String supabaseUrl = 'https://rbdfqmmjgfwikaoxdexu.supabase.co';
 const String supabaseAnonKey = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InJiZGZxbW1qZ2Z3aWthb3hkZXh1Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3OTEwOTkxNzMsImV4cCI6MjEwNjY3NTE3M30.qB_DrMLR33BcUJtu5IlyBuw0gXlcw9dXk3SX_uIknP0';
 const String webClientId = '985001671962-rok8qnng0rumjsd8mgr8uhr92o5vhs4n.apps.googleusercontent.com';
 
-// 🔔 OneSignal App ID
 const String oneSignalAppId = '06b99c2b-b3b4-413b-b6cc-480a624f4e25';
 const int kAppCurrentVersionCode = 2;
 const String kBackendBaseUrl = 'https://mayajaal.online';
@@ -101,7 +101,6 @@ Future<void> main() async {
   await Firebase.initializeApp();
   await Supabase.initialize(url: supabaseUrl, anonKey: supabaseAnonKey);
 
-  // 🔔 OneSignal Notification Initialization
   try {
     OneSignal.Debug.setLogLevel(OSLogLevel.verbose);
     OneSignal.initialize(oneSignalAppId);
@@ -231,7 +230,6 @@ class _MyAppState extends State<MyApp> {
     );
   }
 }
-
 class MatrixRain extends StatefulWidget {
   final double opacity;
   const MatrixRain({super.key, this.opacity = 0.7});
@@ -448,23 +446,19 @@ class _LoginScreenState extends State<LoginScreen> with SingleTickerProviderStat
   String _error = '';
   String _successMsg = '';
 
-  // Controllers for Login
   final TextEditingController _loginIdController = TextEditingController();
   final TextEditingController _loginPasswordController = TextEditingController();
 
-  // Controllers for Sign Up
   final TextEditingController _signupMatrixIdController = TextEditingController();
   final TextEditingController _signupPhoneController = TextEditingController();
   final TextEditingController _signupPasswordController = TextEditingController();
   final TextEditingController _signupOtpController = TextEditingController();
   bool _otpSentForSignup = false;
 
-  // Controllers for Forgot Password
   final TextEditingController _resetPhoneController = TextEditingController();
   final TextEditingController _resetOtpController = TextEditingController();
   final TextEditingController _newPasswordController = TextEditingController();
 
-  // Magic Login Glow & Scale Animation
   late AnimationController _magicController;
   late Animation<double> _glowAnimation;
   late Animation<double> _scaleAnimation;
@@ -520,7 +514,6 @@ class _LoginScreenState extends State<LoginScreen> with SingleTickerProviderStat
     return clean;
   }
 
-  // --- 1. SIGN UP: Send OTP ---
   Future<void> _sendSignupOtp() async {
     final matrixId = _signupMatrixIdController.text.trim().toLowerCase().replaceAll('@', '');
     final phone = _formatPhone(_signupPhoneController.text.trim());
@@ -538,9 +531,7 @@ class _LoginScreenState extends State<LoginScreen> with SingleTickerProviderStat
     });
 
     try {
-      await Supabase.instance.client.auth.signInWithOtp(
-        phone: phone,
-      );
+      await Supabase.instance.client.auth.signInWithOtp(phone: phone);
       setState(() {
         _otpSentForSignup = true;
         _successMsg = 'OTP aapke phone number par bhej diya gaya hai!';
@@ -552,424 +543,416 @@ class _LoginScreenState extends State<LoginScreen> with SingleTickerProviderStat
     }
   }
 
-  // --- 2. SIGN UP: Verify OTP & Create Matrix User ---
-Future<void> _verifySignupOtpAndRegister() async {
-  final matrixId = _signupMatrixIdController.text.trim().toLowerCase().replaceAll('@', '');
-  final phone = _formatPhone(_signupPhoneController.text.trim());
-  final pass = _signupPasswordController.text.trim();
-  final otp = _signupOtpController.text.trim();
+  Future<void> _verifySignupOtpAndRegister() async {
+    final matrixId = _signupMatrixIdController.text.trim().toLowerCase().replaceAll('@', '');
+    final phone = _formatPhone(_signupPhoneController.text.trim());
+    final pass = _signupPasswordController.text.trim();
+    final otp = _signupOtpController.text.trim();
 
-  if (otp.length < 4) {
-    setState(() => _error = 'Kripya sahi OTP dalein');
-    return;
-  }
-
-  setState(() {
-    _loading = true;
-    _error = '';
-  });
-
-  try {
-    final res = await Supabase.instance.client.auth.verifyOTP(
-      phone: phone,
-      token: otp,
-      type: OtpType.sms,
-    );
-
-    if (res.user != null) {
-      await Supabase.instance.client.from('profiles').upsert({
-        'id': res.user!.id,
-        'username': matrixId,
-        'display_name': '@$matrixId',
-      });
-      await Supabase.instance.client.auth.updateUser(
-        UserAttributes(password: pass),
-      );
-
-      await Supabase.instance.client.auth.signOut();
-      setState(() {
-        _isLoginTab = true;
-        _otpSentForSignup = false;
-        _loginIdController.text = matrixId;
-        _loginPasswordController.text = pass;
-        _successMsg = 'Matrix ID ban chuki hai! Ab seedha Login karein.';
-      });
-    }
-  } catch (e) {
-    setState(() => _error = 'Signup failed: ${e.toString()}');
-  } finally {
-    if (mounted) setState(() => _loading = false);
-  }
-}
-
-// --- 3. LOGIN WITH MATRIX ID / PHONE ---
-Future<void> _handleMatrixLogin() async {
-  final rawInput = _loginIdController.text.trim().toLowerCase().replaceAll('@', '');
-  final password = _loginPasswordController.text.trim();
-
-  if (rawInput.isEmpty || password.isEmpty) {
-    setState(() => _error = 'Matrix ID / Phone aur Password dalein');
-    return;
-  }
-
-  setState(() {
-    _loading = true;
-    _error = '';
-    _successMsg = '';
-  });
-
-  try {
-    String finalEmailOrPhone = rawInput;
-
-    if (!rawInput.contains('@') && !RegExp(r'^[0-9+]+$').hasMatch(rawInput)) {
-      finalEmailOrPhone = '$rawInput@mayajaal.online';
-    }
-
-    if (RegExp(r'^[0-9+]{10,}$').hasMatch(rawInput)) {
-      await Supabase.instance.client.auth.signInWithPassword(
-        phone: _formatPhone(rawInput),
-        password: password,
-      );
-    } else {
-      await Supabase.instance.client.auth.signInWithPassword(
-        email: finalEmailOrPhone,
-        password: password,
-      );
-    }
-
-    await _triggerMagicUnlock();
-  } catch (e) {
-    setState(() => _error = 'Login Failed: Invalid Matrix ID or Password');
-  } finally {
-    if (mounted) setState(() => _loading = false);
-  }
-}
-
-// --- 4. GOOGLE SIGN IN ---
-Future<void> _signInWithGoogle() async {
-  setState(() {
-    _loading = true;
-    _error = '';
-  });
-  try {
-    final GoogleSignIn googleSignIn = GoogleSignIn(serverClientId: webClientId);
-    final googleUser = await googleSignIn.signIn();
-    if (googleUser == null) {
-      setState(() => _loading = false);
+    if (otp.length < 4) {
+      setState(() => _error = 'Kripya sahi OTP dalein');
       return;
     }
-    final googleAuth = await googleUser.authentication;
-    if (googleAuth.idToken == null) throw 'No ID Token found.';
-    await Supabase.instance.client.auth.signInWithIdToken(
-      provider: OAuthProvider.google,
-      idToken: googleAuth.idToken!,
-    );
-    await _triggerMagicUnlock();
-  } catch (e) {
-    setState(() => _error = 'Google Error: $e');
-  } finally {
-    if (mounted) setState(() => _loading = false);
-  }
-}
 
-// --- 5. FORGOT PASSWORD POPUP MODAL ---
-void _openForgotPasswordDialog() {
-  bool otpSent = false;
-  bool dialogLoading = false;
-  String dialogMsg = '';
+    setState(() {
+      _loading = true;
+      _error = '';
+    });
 
-  showModalBottomSheet(
-    context: context,
-    isScrollControlled: true,
-    backgroundColor: const Color(0xFF011406),
-    shape: const RoundedRectangleBorder(
-      borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
-      side: BorderSide(color: Color(0xFF00FF66), width: 1.5),
-    ),
-    builder: (ctx) => StatefulBuilder(
-      builder: (ctx, setDialogState) {
-        return Padding(
-          padding: EdgeInsets.only(
-            left: 20,
-            right: 20,
-            top: 20,
-            bottom: MediaQuery.of(ctx).viewInsets.bottom + 20,
-          ),
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              Container(width: 40, height: 4, decoration: BoxDecoration(color: Colors.white24, borderRadius: BorderRadius.circular(2))),
-              const SizedBox(height: 16),
-              const Text(
-                'RESET MATRIX PASSWORD',
-                style: TextStyle(color: Color(0xFF00FF66), fontSize: 16, fontWeight: FontWeight.bold, letterSpacing: 1.5),
-              ),
-              const SizedBox(height: 14),
-              if (!otpSent) ...[
-                TextField(
-                  controller: _resetPhoneController,
-                  keyboardType: TextInputType.phone,
-                  style: const TextStyle(color: Colors.white),
-                  decoration: InputDecoration(
-                    hintText: 'Enter Registered Phone Number (+91)',
-                    hintStyle: TextStyle(color: Colors.white.withOpacity(0.4), fontSize: 13),
-                    prefixIcon: const Icon(Icons.phone_android, color: Color(0xFF00FF66)),
-                    filled: true,
-                    fillColor: Colors.black,
-                    border: OutlineInputBorder(borderRadius: BorderRadius.circular(12), borderSide: const BorderSide(color: Color(0xFF00FF66))),
-                  ),
-                ),
-                const SizedBox(height: 14),
-                ElevatedButton(
-                  onPressed: dialogLoading ? null : () async {
-                    setDialogState(() => dialogLoading = true);
-                    try {
-                      await Supabase.instance.client.auth.signInWithOtp(phone: _formatPhone(_resetPhoneController.text.trim()));
-                      setDialogState(() {
-                        otpSent = true;
-                        dialogMsg = 'OTP Sent to ${_resetPhoneController.text.trim()}';
-                      });
-                    } catch (e) {
-                      setDialogState(() => dialogMsg = 'Error: $e');
-                    } finally {
-                      setDialogState(() => dialogLoading = false);
-                    }
-                  },
-                  style: ElevatedButton.styleFrom(backgroundColor: const Color(0xFF00FF66), foregroundColor: Colors.black),
-                  child: dialogLoading ? const CircularProgressIndicator(color: Colors.black) : const Text('SEND RESET OTP'),
-                ),
-              ] else ...[
-                TextField(
-                  controller: _resetOtpController,
-                  keyboardType: TextInputType.number,
-                  style: const TextStyle(color: Colors.white),
-                  decoration: InputDecoration(
-                    hintText: 'Enter 6-Digit OTP',
-                    hintStyle: TextStyle(color: Colors.white.withOpacity(0.4), fontSize: 13),
-                    prefixIcon: const Icon(Icons.lock_clock, color: Color(0xFF00FF66)),
-                    filled: true,
-                    fillColor: Colors.black,
-                    border: OutlineInputBorder(borderRadius: BorderRadius.circular(12), borderSide: const BorderSide(color: Color(0xFF00FF66))),
-                  ),
-                ),
-                const SizedBox(height: 10),
-                TextField(
-                  controller: _newPasswordController,
-                  obscureText: true,
-                  style: const TextStyle(color: Colors.white),
-                  decoration: InputDecoration(
-                    hintText: 'Enter New Password',
-                    hintStyle: TextStyle(color: Colors.white.withOpacity(0.4), fontSize: 13),
-                    prefixIcon: const Icon(Icons.vpn_key, color: Color(0xFF00FF66)),
-                    filled: true,
-                    fillColor: Colors.black,
-                    border: OutlineInputBorder(borderRadius: BorderRadius.circular(12), borderSide: const BorderSide(color: Color(0xFF00FF66))),
-                  ),
-                ),
-                const SizedBox(height: 14),
-                ElevatedButton(
-                  onPressed: dialogLoading ? null : () async {
-                    setDialogState(() => dialogLoading = true);
-                    try {
-                      await Supabase.instance.client.auth.verifyOTP(
-                        phone: _formatPhone(_resetPhoneController.text.trim()),
-                        token: _resetOtpController.text.trim(),
-                        type: OtpType.sms,
-                      );
-                      await Supabase.instance.client.auth.updateUser(
-                        UserAttributes(password: _newPasswordController.text.trim()),
-                      );
-                      Navigator.pop(ctx);
-                      setState(() => _successMsg = 'Password successfully changed! Please login.');
-                    } catch (e) {
-                      setDialogState(() => dialogMsg = 'Reset failed: $e');
-                    } finally {
-                      setDialogState(() => dialogLoading = false);
-                    }
-                  },
-                  style: ElevatedButton.styleFrom(backgroundColor: const Color(0xFF00FF66), foregroundColor: Colors.black),
-                  child: dialogLoading ? const CircularProgressIndicator(color: Colors.black) : const Text('UPDATE PASSWORD'),
-                ),
-              ],
-              if (dialogMsg.isNotEmpty) ...[
-                const SizedBox(height: 8),
-                Text(dialogMsg, style: const TextStyle(color: Colors.yellowAccent, fontSize: 11)),
-              ]
-            ],
-          ),
+    try {
+      final res = await Supabase.instance.client.auth.verifyOTP(
+        phone: phone,
+        token: otp,
+        type: OtpType.sms,
+      );
+
+      if (res.user != null) {
+        await Supabase.instance.client.from('profiles').upsert({
+          'id': res.user!.id,
+          'username': matrixId,
+          'display_name': '@$matrixId',
+        });
+        await Supabase.instance.client.auth.updateUser(
+          UserAttributes(password: pass),
         );
-      },
-    ),
-  );
-}
-  @override
-Widget build(BuildContext context) {
-  return Scaffold(
-    backgroundColor: Colors.black,
-    body: Stack(
-      children: [
-        const MatrixRain(opacity: 0.55),
-        SafeArea(
-          child: Center(
-            child: SingleChildScrollView(
-              padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 20),
-              child: AnimatedBuilder(
-                animation: _magicController,
-                builder: (context, child) {
-                  return Transform.scale(
-                    scale: _scaleAnimation.value,
-                    child: Container(
-                      padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 24),
-                      decoration: BoxDecoration(
-                        color: const Color(0xFF021206).withOpacity(0.85),
-                        borderRadius: BorderRadius.circular(22),
-                        border: Border.all(
-                          color: _showMagicUnlock
-                              ? const Color(0xFF00FF66)
-                              : const Color(0xFF00FF66).withOpacity(0.4),
-                          width: _showMagicUnlock ? 2.2 : 1.2,
-                        ),
-                        boxShadow: [
-                          BoxShadow(
-                            color: const Color(0xFF00FF66)
-                                .withOpacity(_showMagicUnlock ? 0.45 : 0.15),
-                            blurRadius: _glowAnimation.value + 15,
-                            spreadRadius: _showMagicUnlock ? 4 : 0,
-                          ),
-                        ],
-                      ),
-                      child: child,
-                    ),
-                  );
-                },
-                child: Column(
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    // Matrix App Logo
-                    Container(
-                      width: 78,
-                      height: 78,
-                      padding: const EdgeInsets.all(4),
-                      decoration: BoxDecoration(
-                        color: Colors.black,
-                        borderRadius: BorderRadius.circular(22),
-                        border: Border.all(color: const Color(0xFF00FF66), width: 1.8),
-                        boxShadow: [
-                          BoxShadow(
-                            color: const Color(0xFF00FF66).withOpacity(0.55),
-                            blurRadius: 18,
-                            spreadRadius: 2,
-                          ),
-                        ],
-                      ),
-                      child: ClipRRect(
-                        borderRadius: BorderRadius.circular(18),
-                        child: Image.asset(
-                          'assets/icon/logo.png',
-                          fit: BoxFit.cover,
-                          errorBuilder: (context, error, stackTrace) => const Icon(
-                            Icons.change_history,
-                            size: 42,
-                            color: Color(0xFF00FF66),
-                          ),
-                        ),
-                      ),
-                    ),
-                    const SizedBox(height: 16),
-                    const Text(
-                      'MAYA JAAL',
-                      style: TextStyle(
-                        fontSize: 28,
-                        fontWeight: FontWeight.w900,
-                        color: Color(0xFF00FF66),
-                        fontFamily: 'monospace',
-                        letterSpacing: 6,
-                        shadows: [Shadow(color: Color(0xFF00FF66), blurRadius: 16)],
-                      ),
-                    ),
-                    const SizedBox(height: 6),
-                    Text(
-                      '> Enter the real world behind\n   the digital veil _',
-                      textAlign: TextAlign.center,
-                      style: TextStyle(
-                        fontSize: 11.5,
-                        color: const Color(0xFF00FF66).withOpacity(0.85),
-                        fontFamily: 'monospace',
-                        letterSpacing: 1.5,
-                        height: 1.3,
-                      ),
-                    ),
-                    const SizedBox(height: 20),
 
-                    // Pill Switch: LOGIN vs SIGN UP
-                    Container(
-                      height: 44,
-                      decoration: BoxDecoration(
-                        color: Colors.black,
-                        borderRadius: BorderRadius.circular(24),
-                        border: Border.all(color: const Color(0xFF00FF66).withOpacity(0.6)),
-                      ),
-                      child: Row(
-                        children: [
-                          Expanded(
-                            child: GestureDetector(
-                              onTap: () => setState(() {
-                                _isLoginTab = true;
-                                _error = '';
-                              }),
-                              child: Container(
-                                decoration: BoxDecoration(
-                                  color: _isLoginTab ? const Color(0xFF01240B) : Colors.transparent,
-                                  borderRadius: BorderRadius.circular(24),
-                                  border: _isLoginTab
-                                      ? Border.all(color: const Color(0xFF00FF66), width: 1.6)
-                                      : null,
-                                ),
-                                alignment: Alignment.center,
-                                child: Text(
-                                  'LOGIN',
-                                  style: TextStyle(
-                                    color: _isLoginTab ? const Color(0xFF00FF66) : Colors.white60,
-                                    fontWeight: FontWeight.bold,
-                                    letterSpacing: 1.5,
-                                    fontSize: 12.5,
-                                  ),
-                                ),
-                              ),
-                            ),
-                          ),
-                          Expanded(
-                            child: GestureDetector(
-                              onTap: () => setState(() {
-                                _isLoginTab = false;
-                                _error = '';
-                              }),
-                              child: Container(
-                                decoration: BoxDecoration(
-                                  color: !_isLoginTab ? const Color(0xFF01240B) : Colors.transparent,
-                                  borderRadius: BorderRadius.circular(24),
-                                  border: !_isLoginTab
-                                      ? Border.all(color: const Color(0xFF00FF66), width: 1.6)
-                                      : null,
-                                ),
-                                alignment: Alignment.center,
-                                child: Text(
-                                  'SIGN UP',
-                                  style: TextStyle(
-                                    color: !_isLoginTab ? const Color(0xFF00FF66) : Colors.white60,
-                                    fontWeight: FontWeight.bold,
-                                    letterSpacing: 1.5,
-                                    fontSize: 12.5,
-                                  ),
-                                ),
-                              ),
-                            ),
-                          ),
-                        ],
-                      ),
+        await Supabase.instance.client.auth.signOut();
+        setState(() {
+          _isLoginTab = true;
+          _otpSentForSignup = false;
+          _loginIdController.text = matrixId;
+          _loginPasswordController.text = pass;
+          _successMsg = 'Matrix ID ban chuki hai! Ab seedha Login karein.';
+        });
+      }
+    } catch (e) {
+      setState(() => _error = 'Signup failed: ${e.toString()}');
+    } finally {
+      if (mounted) setState(() => _loading = false);
+    }
+  }
+
+  Future<void> _handleMatrixLogin() async {
+    final rawInput = _loginIdController.text.trim().toLowerCase().replaceAll('@', '');
+    final password = _loginPasswordController.text.trim();
+
+    if (rawInput.isEmpty || password.isEmpty) {
+      setState(() => _error = 'Matrix ID / Phone aur Password dalein');
+      return;
+    }
+
+    setState(() {
+      _loading = true;
+      _error = '';
+      _successMsg = '';
+    });
+
+    try {
+      String finalEmailOrPhone = rawInput;
+
+      if (!rawInput.contains('@') && !RegExp(r'^[0-9+]+$').hasMatch(rawInput)) {
+        finalEmailOrPhone = '$rawInput@mayajaal.online';
+      }
+
+      if (RegExp(r'^[0-9+]{10,}$').hasMatch(rawInput)) {
+        await Supabase.instance.client.auth.signInWithPassword(
+          phone: _formatPhone(rawInput),
+          password: password,
+        );
+      } else {
+        await Supabase.instance.client.auth.signInWithPassword(
+          email: finalEmailOrPhone,
+          password: password,
+        );
+      }
+
+      await _triggerMagicUnlock();
+    } catch (e) {
+      setState(() => _error = 'Login Failed: Invalid Matrix ID or Password');
+    } finally {
+      if (mounted) setState(() => _loading = false);
+    }
+  }
+
+  Future<void> _signInWithGoogle() async {
+    setState(() {
+      _loading = true;
+      _error = '';
+    });
+    try {
+      final GoogleSignIn googleSignIn = GoogleSignIn(serverClientId: webClientId);
+      final googleUser = await googleSignIn.signIn();
+      if (googleUser == null) {
+        setState(() => _loading = false);
+        return;
+      }
+      final googleAuth = await googleUser.authentication;
+      if (googleAuth.idToken == null) throw 'No ID Token found.';
+      await Supabase.instance.client.auth.signInWithIdToken(
+        provider: OAuthProvider.google,
+        idToken: googleAuth.idToken!,
+      );
+      await _triggerMagicUnlock();
+    } catch (e) {
+      setState(() => _error = 'Google Error: $e');
+    } finally {
+      if (mounted) setState(() => _loading = false);
+    }
+  }
+
+  void _openForgotPasswordDialog() {
+    bool otpSent = false;
+    bool dialogLoading = false;
+    String dialogMsg = '';
+
+    showModalBottomSheet(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: const Color(0xFF011406),
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
+        side: BorderSide(color: Color(0xFF00FF66), width: 1.5),
+      ),
+      builder: (ctx) => StatefulBuilder(
+        builder: (ctx, setDialogState) {
+          return Padding(
+            padding: EdgeInsets.only(
+              left: 20,
+              right: 20,
+              top: 20,
+              bottom: MediaQuery.of(ctx).viewInsets.bottom + 20,
+            ),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Container(width: 40, height: 4, decoration: BoxDecoration(color: Colors.white24, borderRadius: BorderRadius.circular(2))),
+                const SizedBox(height: 16),
+                const Text(
+                  'RESET MATRIX PASSWORD',
+                  style: TextStyle(color: Color(0xFF00FF66), fontSize: 16, fontWeight: FontWeight.bold, letterSpacing: 1.5),
+                ),
+                const SizedBox(height: 14),
+                if (!otpSent) ...[
+                  TextField(
+                    controller: _resetPhoneController,
+                    keyboardType: TextInputType.phone,
+                    style: const TextStyle(color: Colors.white),
+                    decoration: InputDecoration(
+                      hintText: 'Enter Registered Phone Number (+91)',
+                      hintStyle: TextStyle(color: Colors.white.withOpacity(0.4), fontSize: 13),
+                      prefixIcon: const Icon(Icons.phone_android, color: Color(0xFF00FF66)),
+                      filled: true,
+                      fillColor: Colors.black,
+                      border: OutlineInputBorder(borderRadius: BorderRadius.circular(12), borderSide: const BorderSide(color: Color(0xFF00FF66))),
                     ),
-                    const SizedBox(height: 18),
-                                          // --- DYNAMIC FORM AREA: LOGIN OR SIGNUP ---
+                  ),
+                  const SizedBox(height: 14),
+                  ElevatedButton(
+                    onPressed: dialogLoading ? null : () async {
+                      setDialogState(() => dialogLoading = true);
+                      try {
+                        await Supabase.instance.client.auth.signInWithOtp(phone: _formatPhone(_resetPhoneController.text.trim()));
+                        setDialogState(() {
+                          otpSent = true;
+                          dialogMsg = 'OTP Sent to ${_resetPhoneController.text.trim()}';
+                        });
+                      } catch (e) {
+                        setDialogState(() => dialogMsg = 'Error: $e');
+                      } finally {
+                        setDialogState(() => dialogLoading = false);
+                      }
+                    },
+                    style: ElevatedButton.styleFrom(backgroundColor: const Color(0xFF00FF66), foregroundColor: Colors.black),
+                    child: dialogLoading ? const CircularProgressIndicator(color: Colors.black) : const Text('SEND RESET OTP'),
+                  ),
+                ] else ...[
+                  TextField(
+                    controller: _resetOtpController,
+                    keyboardType: TextInputType.number,
+                    style: const TextStyle(color: Colors.white),
+                    decoration: InputDecoration(
+                      hintText: 'Enter 6-Digit OTP',
+                      hintStyle: TextStyle(color: Colors.white.withOpacity(0.4), fontSize: 13),
+                      prefixIcon: const Icon(Icons.lock_clock, color: Color(0xFF00FF66)),
+                      filled: true,
+                      fillColor: Colors.black,
+                      border: OutlineInputBorder(borderRadius: BorderRadius.circular(12), borderSide: const BorderSide(color: Color(0xFF00FF66))),
+                    ),
+                  ),
+                  const SizedBox(height: 10),
+                  TextField(
+                    controller: _newPasswordController,
+                    obscureText: true,
+                    style: const TextStyle(color: Colors.white),
+                    decoration: InputDecoration(
+                      hintText: 'Enter New Password',
+                      hintStyle: TextStyle(color: Colors.white.withOpacity(0.4), fontSize: 13),
+                      prefixIcon: const Icon(Icons.vpn_key, color: Color(0xFF00FF66)),
+                      filled: true,
+                      fillColor: Colors.black,
+                      border: OutlineInputBorder(borderRadius: BorderRadius.circular(12), borderSide: const BorderSide(color: Color(0xFF00FF66))),
+                    ),
+                  ),
+                  const SizedBox(height: 14),
+                  ElevatedButton(
+                    onPressed: dialogLoading ? null : () async {
+                      setDialogState(() => dialogLoading = true);
+                      try {
+                        await Supabase.instance.client.auth.verifyOTP(
+                          phone: _formatPhone(_resetPhoneController.text.trim()),
+                          token: _resetOtpController.text.trim(),
+                          type: OtpType.sms,
+                        );
+                        await Supabase.instance.client.auth.updateUser(
+                          UserAttributes(password: _newPasswordController.text.trim()),
+                        );
+                        Navigator.pop(ctx);
+                        setState(() => _successMsg = 'Password successfully changed! Please login.');
+                      } catch (e) {
+                        setDialogState(() => dialogMsg = 'Reset failed: $e');
+                      } finally {
+                        setDialogState(() => dialogLoading = false);
+                      }
+                    },
+                    style: ElevatedButton.styleFrom(backgroundColor: const Color(0xFF00FF66), foregroundColor: Colors.black),
+                    child: dialogLoading ? const CircularProgressIndicator(color: Colors.black) : const Text('UPDATE PASSWORD'),
+                  ),
+                ],
+                if (dialogMsg.isNotEmpty) ...[
+                  const SizedBox(height: 8),
+                  Text(dialogMsg, style: const TextStyle(color: Colors.yellowAccent, fontSize: 11)),
+                ]
+              ],
+            ),
+          );
+        },
+      ),
+    );
+  }
+    @override
+  Widget build(BuildContext context) {
+    return Scaffold(
+      backgroundColor: Colors.black,
+      body: Stack(
+        children: [
+          const MatrixRain(opacity: 0.55),
+          SafeArea(
+            child: Center(
+              child: SingleChildScrollView(
+                padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 20),
+                child: AnimatedBuilder(
+                  animation: _magicController,
+                  builder: (context, child) {
+                    return Transform.scale(
+                      scale: _scaleAnimation.value,
+                      child: Container(
+                        padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 24),
+                        decoration: BoxDecoration(
+                          color: const Color(0xFF021206).withOpacity(0.85),
+                          borderRadius: BorderRadius.circular(22),
+                          border: Border.all(
+                            color: _showMagicUnlock
+                                ? const Color(0xFF00FF66)
+                                : const Color(0xFF00FF66).withOpacity(0.4),
+                            width: _showMagicUnlock ? 2.2 : 1.2,
+                          ),
+                          boxShadow: [
+                            BoxShadow(
+                              color: const Color(0xFF00FF66)
+                                  .withOpacity(_showMagicUnlock ? 0.45 : 0.15),
+                              blurRadius: _glowAnimation.value + 15,
+                              spreadRadius: _showMagicUnlock ? 4 : 0,
+                            ),
+                          ],
+                        ),
+                        child: child,
+                      ),
+                    );
+                  },
+                  child: Column(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Container(
+                        width: 78,
+                        height: 78,
+                        padding: const EdgeInsets.all(4),
+                        decoration: BoxDecoration(
+                          color: Colors.black,
+                          borderRadius: BorderRadius.circular(22),
+                          border: Border.all(color: const Color(0xFF00FF66), width: 1.8),
+                          boxShadow: [
+                            BoxShadow(
+                              color: const Color(0xFF00FF66).withOpacity(0.55),
+                              blurRadius: 18,
+                              spreadRadius: 2,
+                            ),
+                          ],
+                        ),
+                        child: ClipRRect(
+                          borderRadius: BorderRadius.circular(18),
+                          child: Image.asset(
+                            'assets/icon/logo.png',
+                            fit: BoxFit.cover,
+                            errorBuilder: (context, error, stackTrace) => const Icon(
+                              Icons.change_history,
+                              size: 42,
+                              color: Color(0xFF00FF66),
+                            ),
+                          ),
+                        ),
+                      ),
+                      const SizedBox(height: 16),
+                      const Text(
+                        'MAYA JAAL',
+                        style: TextStyle(
+                          fontSize: 28,
+                          fontWeight: FontWeight.w900,
+                          color: Color(0xFF00FF66),
+                          fontFamily: 'monospace',
+                          letterSpacing: 6,
+                          shadows: [Shadow(color: Color(0xFF00FF66), blurRadius: 16)],
+                        ),
+                      ),
+                      const SizedBox(height: 6),
+                      Text(
+                        '> Enter the real world behind\n   the digital veil _',
+                        textAlign: TextAlign.center,
+                        style: TextStyle(
+                          fontSize: 11.5,
+                          color: const Color(0xFF00FF66).withOpacity(0.85),
+                          fontFamily: 'monospace',
+                          letterSpacing: 1.5,
+                          height: 1.3,
+                        ),
+                      ),
+                      const SizedBox(height: 20),
+                      Container(
+                        height: 44,
+                        decoration: BoxDecoration(
+                          color: Colors.black,
+                          borderRadius: BorderRadius.circular(24),
+                          border: Border.all(color: const Color(0xFF00FF66).withOpacity(0.6)),
+                        ),
+                        child: Row(
+                          children: [
+                            Expanded(
+                              child: GestureDetector(
+                                onTap: () => setState(() {
+                                  _isLoginTab = true;
+                                  _error = '';
+                                }),
+                                child: Container(
+                                  decoration: BoxDecoration(
+                                    color: _isLoginTab ? const Color(0xFF01240B) : Colors.transparent,
+                                    borderRadius: BorderRadius.circular(24),
+                                    border: _isLoginTab
+                                        ? Border.all(color: const Color(0xFF00FF66), width: 1.6)
+                                        : null,
+                                  ),
+                                  alignment: Alignment.center,
+                                  child: Text(
+                                    'LOGIN',
+                                    style: TextStyle(
+                                      color: _isLoginTab ? const Color(0xFF00FF66) : Colors.white60,
+                                      fontWeight: FontWeight.bold,
+                                      letterSpacing: 1.5,
+                                      fontSize: 12.5,
+                                    ),
+                                  ),
+                                ),
+                              ),
+                            ),
+                            Expanded(
+                              child: GestureDetector(
+                                onTap: () => setState(() {
+                                  _isLoginTab = false;
+                                  _error = '';
+                                }),
+                                child: Container(
+                                  decoration: BoxDecoration(
+                                    color: !_isLoginTab ? const Color(0xFF01240B) : Colors.transparent,
+                                    borderRadius: BorderRadius.circular(24),
+                                    border: !_isLoginTab
+                                        ? Border.all(color: const Color(0xFF00FF66), width: 1.6)
+                                        : null,
+                                  ),
+                                  alignment: Alignment.center,
+                                  child: Text(
+                                    'SIGN UP',
+                                    style: TextStyle(
+                                      color: !_isLoginTab ? const Color(0xFF00FF66) : Colors.white60,
+                                      fontWeight: FontWeight.bold,
+                                      letterSpacing: 1.5,
+                                      fontSize: 12.5,
+                                    ),
+                                  ),
+                                ),
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                      const SizedBox(height: 18),
                       Container(
                         padding: const EdgeInsets.all(14),
                         decoration: BoxDecoration(
@@ -978,7 +961,6 @@ Widget build(BuildContext context) {
                           border: Border.all(color: const Color(0xFF00FF66).withOpacity(0.35)),
                         ),
                         child: _isLoginTab
-                            // === LOGIN FIELDS ===
                             ? Column(
                                 children: [
                                   Container(
@@ -1053,10 +1035,8 @@ Widget build(BuildContext context) {
                                   ),
                                 ],
                               )
-                            // === SIGN UP FIELDS ===
                             : Column(
                                 children: [
-                                  // Unique Matrix ID
                                   Container(
                                     padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 4),
                                     decoration: BoxDecoration(
@@ -1079,8 +1059,6 @@ Widget build(BuildContext context) {
                                     ),
                                   ),
                                   const SizedBox(height: 10),
-
-                                  // Mobile Phone Number
                                   Container(
                                     padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 4),
                                     decoration: BoxDecoration(
@@ -1102,8 +1080,6 @@ Widget build(BuildContext context) {
                                     ),
                                   ),
                                   const SizedBox(height: 10),
-
-                                  // New Password
                                   Container(
                                     padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 4),
                                     decoration: BoxDecoration(
@@ -1123,8 +1099,6 @@ Widget build(BuildContext context) {
                                       ),
                                     ),
                                   ),
-
-                                  // OTP Input (shows after send OTP)
                                   if (_otpSentForSignup) ...[
                                     const SizedBox(height: 10),
                                     Container(
@@ -1148,8 +1122,6 @@ Widget build(BuildContext context) {
                                     ),
                                   ],
                                   const SizedBox(height: 16),
-
-                                  // Send OTP / Verify & Register
                                   SizedBox(
                                     width: double.infinity,
                                     height: 48,
@@ -1174,8 +1146,6 @@ Widget build(BuildContext context) {
                               ),
                       ),
                       const SizedBox(height: 16),
-
-                      // OR Divider
                       Row(
                         children: [
                           Expanded(child: Divider(color: const Color(0xFF00FF66).withOpacity(0.3))),
@@ -1187,8 +1157,6 @@ Widget build(BuildContext context) {
                         ],
                       ),
                       const SizedBox(height: 16),
-
-                      // Sign in with Google
                       SizedBox(
                         width: double.infinity,
                         height: 48,
@@ -1214,8 +1182,6 @@ Widget build(BuildContext context) {
                         ),
                       ),
                       const SizedBox(height: 14),
-
-                      // Forgot Password Link
                       TextButton(
                         onPressed: _openForgotPasswordDialog,
                         child: Text(
@@ -1223,8 +1189,6 @@ Widget build(BuildContext context) {
                           style: TextStyle(color: const Color(0xFF00FF66).withOpacity(0.9), fontSize: 12.5, fontWeight: FontWeight.w600),
                         ),
                       ),
-
-                      // Bottom switch text
                       Row(
                         mainAxisAlignment: MainAxisAlignment.center,
                         children: [
@@ -1245,8 +1209,6 @@ Widget build(BuildContext context) {
                           ),
                         ],
                       ),
-
-                      // Success / Error Notifications
                       if (_successMsg.isNotEmpty) ...[
                         const SizedBox(height: 12),
                         Container(
@@ -1351,6 +1313,7 @@ class _MainNavigationHolderState extends State<MainNavigationHolder> {
     );
   }
 }
+
 class HomeScreen extends StatefulWidget {
   const HomeScreen({super.key});
   @override
@@ -1415,9 +1378,9 @@ class _HomeScreenState extends State<HomeScreen> with SingleTickerProviderStateM
                   padding: const EdgeInsets.all(16.0),
                   child: Row(
                     children: [
-                      Icon(Icons.notifications_active, color: kGreen),
-                      SizedBox(width: 8),
-                      Text(
+                      const Icon(Icons.notifications_active, color: kGreen),
+                      const SizedBox(width: 8),
+                      const Text(
                         'Notifications',
                         style: TextStyle(
                           color: kGreen,
@@ -1527,7 +1490,8 @@ class _HomeScreenState extends State<HomeScreen> with SingleTickerProviderStateM
       ),
     );
   }
-      @override
+
+  @override
   Widget build(BuildContext context) {
     return Scaffold(
       backgroundColor: Colors.black,
@@ -2120,7 +2084,7 @@ class MoreScreen extends StatelessWidget {
             ),
           ),
           ListTile(
-            leading: const Icon(Icons.account_balance_wallet, color: kGreen),
+            leading: constIcon(Icons.account_balance_wallet, color: kGreen),
             title: const Text('Earnings Dashboard', style: TextStyle(color: Colors.white)),
             subtitle: const Text('View your earnings and links', style: TextStyle(color: kGreen, fontSize: 12)),
             trailing: const Icon(Icons.arrow_forward_ios, size: 14, color: kGreen),
@@ -2332,6 +2296,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
     );
   }
 }
+
 class StreamPreviewScreen extends StatefulWidget {
   final String targetUrl;
   const StreamPreviewScreen({super.key, required this.targetUrl});
@@ -2387,7 +2352,8 @@ class _StreamPreviewScreenState extends State<StreamPreviewScreen> with SingleTi
     _pulseController.dispose();
     super.dispose();
   }
-    Future<void> _fetchStreamMetadata() async {
+
+  Future<void> _fetchStreamMetadata() async {
     try {
       final uri = Uri.parse(widget.targetUrl);
       _rawId = uri.pathSegments.isNotEmpty ? uri.pathSegments.last : 'stream';
@@ -2402,7 +2368,6 @@ class _StreamPreviewScreenState extends State<StreamPreviewScreen> with SingleTi
         return;
       }
 
-      // 1. Pehle stream-info check karein
       final res = await http.get(Uri.parse('$kBackendBaseUrl/api/stream-info/$_rawId')).timeout(const Duration(seconds: 8));
       if (res.statusCode == 200) {
         final data = jsonDecode(res.body);
@@ -2418,7 +2383,6 @@ class _StreamPreviewScreenState extends State<StreamPreviewScreen> with SingleTi
         }
       }
 
-      // 2. Agar fail ho toh /api/v/ endpoint try karein jo JSON data return karta hai
       final res2 = await http.get(Uri.parse('$kBackendBaseUrl/api/v/$_rawId')).timeout(const Duration(seconds: 8));
       if (res2.statusCode == 200) {
         final data = jsonDecode(res2.body);
@@ -2433,7 +2397,6 @@ class _StreamPreviewScreenState extends State<StreamPreviewScreen> with SingleTi
         }
       }
 
-      // 3. Last fallback: targetUrl hi use karein
       setState(() {
         _streamUrl = widget.targetUrl;
         _loading = false;
@@ -2446,7 +2409,7 @@ class _StreamPreviewScreenState extends State<StreamPreviewScreen> with SingleTi
       });
       _startCountdown();
     }
-    }
+  }
   
   void _shareStreamDirect() {
     Share.share('🚀 Watch this stream on MayaJaal:\n${widget.targetUrl}');
@@ -2508,194 +2471,195 @@ class _StreamPreviewScreenState extends State<StreamPreviewScreen> with SingleTi
       ),
     );
   }
-    @override
-Widget build(BuildContext context) {
-  return Scaffold(
-    backgroundColor: Colors.black,
-    body: SafeArea(
-      child: SingleChildScrollView(
-        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
-        child: Column(
-          children: [
-            Row(
-              children: [
-                IconButton(
-                  icon: const Icon(Icons.arrow_back_ios_new, color: kGreen, size: 22),
-                  onPressed: () => Navigator.pop(context),
-                ),
-                Expanded(
-                  child: Column(
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      const Text(
-                        'NODE VERIFICATION',
-                        style: TextStyle(
-                          color: kGreen,
-                          fontSize: 19,
-                          fontWeight: FontWeight.w900,
-                          letterSpacing: 2,
-                          shadows: [Shadow(color: kGreen, blurRadius: 12)],
-                        ),
-                      ),
-                      Text(
-                        'MATRIX NEURAL STREAM',
-                        style: TextStyle(
-                          color: kGreen.withOpacity(0.7),
-                          fontSize: 9,
-                          letterSpacing: 2.5,
-                          fontWeight: FontWeight.w600,
-                        ),
-                      ),
-                    ],
+
+  @override
+  Widget build(BuildContext context) {
+    return Scaffold(
+      backgroundColor: Colors.black,
+      body: SafeArea(
+        child: SingleChildScrollView(
+          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
+          child: Column(
+            children: [
+              Row(
+                children: [
+                  IconButton(
+                    icon: const Icon(Icons.arrow_back_ios_new, color: kGreen, size: 22),
+                    onPressed: () => Navigator.pop(context),
                   ),
-                ),
-                Container(
-                  padding: const EdgeInsets.all(7),
-                  decoration: BoxDecoration(
-                    shape: BoxShape.circle,
-                    border: Border.all(color: kGreen.withOpacity(0.6)),
+                  Expanded(
+                    child: Column(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        const Text(
+                          'NODE VERIFICATION',
+                          style: TextStyle(
+                            color: kGreen,
+                            fontSize: 19,
+                            fontWeight: FontWeight.w900,
+                            letterSpacing: 2,
+                            shadows: [Shadow(color: kGreen, blurRadius: 12)],
+                          ),
+                        ),
+                        Text(
+                          'MATRIX NEURAL STREAM',
+                          style: TextStyle(
+                            color: kGreen.withOpacity(0.7),
+                            fontSize: 9,
+                            letterSpacing: 2.5,
+                            fontWeight: FontWeight.w600,
+                          ),
+                        ),
+                      ],
+                    ),
                   ),
-                  child: const Icon(Icons.verified_user_rounded, color: kGreen, size: 18),
-                ),
-              ],
-            ),
-            const SizedBox(height: 15),
-            Container(
-              width: double.infinity,
-              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 20),
-              decoration: BoxDecoration(
-                color: const Color(0xFF011206),
-                borderRadius: BorderRadius.circular(24),
-                border: Border.all(color: kGreen.withOpacity(0.65), width: 1.5),
-                boxShadow: [
-                  BoxShadow(color: kGreen.withOpacity(0.2), blurRadius: 30),
+                  Container(
+                    padding: const EdgeInsets.all(7),
+                    decoration: BoxDecoration(
+                      shape: BoxShape.circle,
+                      border: Border.all(color: kGreen.withOpacity(0.6)),
+                    ),
+                    child: const Icon(Icons.verified_user_rounded, color: kGreen, size: 18),
+                  ),
                 ],
               ),
-              child: Column(
-                children: [
-                  Container(
-                    width: 85,
-                    height: 85,
-                    decoration: BoxDecoration(
-                      borderRadius: BorderRadius.circular(20),
-                      border: Border.all(color: kGreen, width: 2),
-                      boxShadow: [
-                        BoxShadow(color: kGreen.withOpacity(0.55), blurRadius: 20),
-                      ],
-                    ),
-                    child: ClipRRect(
-                      borderRadius: BorderRadius.circular(18),
-                      child: Image.asset(
-                        'assets/icon/logo.png',
-                        fit: BoxFit.cover,
-                        errorBuilder: (context, error, stackTrace) => Container(
-                          color: Colors.black,
-                          child: const Icon(Icons.movie_filter, size: 45, color: kGreen),
+              const SizedBox(height: 15),
+              Container(
+                width: double.infinity,
+                padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 20),
+                decoration: BoxDecoration(
+                  color: const Color(0xFF011206),
+                  borderRadius: BorderRadius.circular(24),
+                  border: Border.all(color: kGreen.withOpacity(0.65), width: 1.5),
+                  boxShadow: [
+                    BoxShadow(color: kGreen.withOpacity(0.2), blurRadius: 30),
+                  ],
+                ),
+                child: Column(
+                  children: [
+                    Container(
+                      width: 85,
+                      height: 85,
+                      decoration: BoxDecoration(
+                        borderRadius: BorderRadius.circular(20),
+                        border: Border.all(color: kGreen, width: 2),
+                        boxShadow: [
+                          BoxShadow(color: kGreen.withOpacity(0.55), blurRadius: 20),
+                        ],
+                      ),
+                      child: ClipRRect(
+                        borderRadius: BorderRadius.circular(18),
+                        child: Image.asset(
+                          'assets/icon/logo.png',
+                          fit: BoxFit.cover,
+                          errorBuilder: (context, error, stackTrace) => Container(
+                            color: Colors.black,
+                            child: const Icon(Icons.movie_filter, size: 45, color: kGreen),
+                          ),
                         ),
                       ),
                     ),
-                  ),
-                  const SizedBox(height: 18),
-                  const Text(
-                    'STREAM READY FOR DECRYPTION',
-                    style: TextStyle(
-                      color: kGreen,
-                      fontSize: 14.5,
-                      fontWeight: FontWeight.w900,
-                      letterSpacing: 1.5,
+                    const SizedBox(height: 18),
+                    const Text(
+                      'STREAM READY FOR DECRYPTION',
+                      style: TextStyle(
+                        color: kGreen,
+                        fontSize: 14.5,
+                        fontWeight: FontWeight.w900,
+                        letterSpacing: 1.5,
+                      ),
                     ),
-                  ),
-                  const SizedBox(height: 6),
-                  Text(
-                    'NODE VERIFIED   •   SECURE   •   STABLE',
-                    style: TextStyle(
-                      color: kGreen.withOpacity(0.7),
-                      fontSize: 9.5,
-                      fontWeight: FontWeight.w700,
-                      letterSpacing: 1.5,
+                    const SizedBox(height: 6),
+                    Text(
+                      'NODE VERIFIED   •   SECURE   •   STABLE',
+                      style: TextStyle(
+                        color: kGreen.withOpacity(0.7),
+                        fontSize: 9.5,
+                        fontWeight: FontWeight.w700,
+                        letterSpacing: 1.5,
+                      ),
                     ),
-                  ),
-                  const SizedBox(height: 18),
-                  Container(
-                    padding: const EdgeInsets.all(14),
-                    decoration: BoxDecoration(
-                      color: const Color(0xFF031A0B),
-                      borderRadius: BorderRadius.circular(16),
-                      border: Border.all(color: kGreen.withOpacity(0.35)),
+                    const SizedBox(height: 18),
+                    Container(
+                      padding: const EdgeInsets.all(14),
+                      decoration: BoxDecoration(
+                        color: const Color(0xFF031A0B),
+                        borderRadius: BorderRadius.circular(16),
+                        border: Border.all(color: kGreen.withOpacity(0.35)),
+                      ),
+                      child: Column(
+                        children: [
+                          Row(
+                            children: [
+                              Container(
+                                padding: const EdgeInsets.all(10),
+                                decoration: BoxDecoration(
+                                  shape: BoxShape.circle,
+                                  color: Colors.black,
+                                  border: Border.all(color: kGreen.withOpacity(0.5)),
+                                ),
+                                child: const Icon(Icons.video_collection_outlined, color: kGreen, size: 20),
+                              ),
+                              const SizedBox(width: 14),
+                              Expanded(
+                                child: Column(
+                                  crossAxisAlignment: CrossAxisAlignment.start,
+                                  children: [
+                                    Text(
+                                      'FILE NAME',
+                                      style: TextStyle(color: Colors.white.withOpacity(0.5), fontSize: 9.5, letterSpacing: 1),
+                                    ),
+                                    const SizedBox(height: 2),
+                                    Text(
+                                      _videoTitle,
+                                      style: const TextStyle(color: Colors.white, fontSize: 13.5, fontWeight: FontWeight.bold),
+                                      maxLines: 1,
+                                      overflow: TextOverflow.ellipsis,
+                                    ),
+                                  ],
+                                ),
+                              ),
+                            ],
+                          ),
+                          Padding(
+                            padding: const EdgeInsets.symmetric(vertical: 8),
+                            child: Divider(color: kGreen.withOpacity(0.15)),
+                          ),
+                          Row(
+                            children: [
+                              Container(
+                                padding: const EdgeInsets.all(10),
+                                decoration: BoxDecoration(
+                                  shape: BoxShape.circle,
+                                  color: Colors.black,
+                                  border: Border.all(color: kGreen.withOpacity(0.5)),
+                                ),
+                                child: const Icon(Icons.person_outline, color: kGreen, size: 20),
+                              ),
+                              const SizedBox(width: 14),
+                              Expanded(
+                                child: Column(
+                                  crossAxisAlignment: CrossAxisAlignment.start,
+                                  children: [
+                                    Text(
+                                      'UPLOADER',
+                                      style: TextStyle(color: Colors.white.withOpacity(0.5), fontSize: 9.5, letterSpacing: 1),
+                                    ),
+                                    const SizedBox(height: 2),
+                                    Text(
+                                      _uploaderName,
+                                      style: const TextStyle(color: kGreen, fontSize: 13.5, fontWeight: FontWeight.bold),
+                                    ),
+                                  ],
+                                ),
+                              ),
+                            ],
+                          ),
+                        ],
+                      ),
                     ),
-                    child: Column(
-                      children: [
-                        Row(
-                          children: [
-                            Container(
-                              padding: const EdgeInsets.all(10),
-                              decoration: BoxDecoration(
-                                shape: BoxShape.circle,
-                                color: Colors.black,
-                                border: Border.all(color: kGreen.withOpacity(0.5)),
-                              ),
-                              child: const Icon(Icons.video_collection_outlined, color: kGreen, size: 20),
-                            ),
-                            const SizedBox(width: 14),
-                            Expanded(
-                              child: Column(
-                                crossAxisAlignment: CrossAxisAlignment.start,
-                                children: [
-                                  Text(
-                                    'FILE NAME',
-                                    style: TextStyle(color: Colors.white.withOpacity(0.5), fontSize: 9.5, letterSpacing: 1),
-                                  ),
-                                  const SizedBox(height: 2),
-                                  Text(
-                                    _videoTitle,
-                                    style: const TextStyle(color: Colors.white, fontSize: 13.5, fontWeight: FontWeight.bold),
-                                    maxLines: 1,
-                                    overflow: TextOverflow.ellipsis,
-                                  ),
-                                ],
-                              ),
-                            ),
-                          ],
-                        ),
-                        Padding(
-                          padding: const EdgeInsets.symmetric(vertical: 8),
-                          child: Divider(color: kGreen.withOpacity(0.15)),
-                        ),
-                        Row(
-                          children: [
-                            Container(
-                              padding: const EdgeInsets.all(10),
-                              decoration: BoxDecoration(
-                                shape: BoxShape.circle,
-                                color: Colors.black,
-                                border: Border.all(color: kGreen.withOpacity(0.5)),
-                              ),
-                              child: const Icon(Icons.person_outline, color: kGreen, size: 20),
-                            ),
-                            const SizedBox(width: 14),
-                            Expanded(
-                              child: Column(
-                                crossAxisAlignment: CrossAxisAlignment.start,
-                                children: [
-                                  Text(
-                                    'UPLOADER',
-                                    style: TextStyle(color: Colors.white.withOpacity(0.5), fontSize: 9.5, letterSpacing: 1),
-                                  ),
-                                  const SizedBox(height: 2),
-                                  Text(
-                                    _uploaderName,
-                                    style: const TextStyle(color: kGreen, fontSize: 13.5, fontWeight: FontWeight.bold),
-                                  ),
-                                ],
-                              ),
-                            ),
-                          ],
-                        ),
-                      ],
-                    ),
-                  ),
-                  const SizedBox(height: 16),
-                                      Container(
+                    const SizedBox(height: 16),
+                    Container(
                       width: double.infinity,
                       padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
                       decoration: BoxDecoration(
@@ -2913,10 +2877,7 @@ class _NativeVideoPlayerScreenState extends State<NativeVideoPlayerScreen> {
   bool _isLiked = false;
   bool _isUnliked = false;
   bool _isSaved = false;
-class _NativeVideoPlayerScreenState extends State<NativeVideoPlayerScreen> {
-  final SupabaseService _supabaseService = SupabaseService();
 
-  // 🕒 Yeh poora function yahan paste kar dein:
   void _startViewTrackingTimer() {
     Future.delayed(const Duration(seconds: 10), () async {
       if (!mounted || !_controller.value.isPlaying) return;
@@ -2977,7 +2938,7 @@ class _NativeVideoPlayerScreenState extends State<NativeVideoPlayerScreen> {
     super.initState();
     _fetchRealStatsAndRegisterView();
     _initFastVideo();
- _startViewTrackingTimer();
+    _startViewTrackingTimer();
   }
 
   Future<void> _fetchRealStatsAndRegisterView() async {
@@ -3035,8 +2996,7 @@ class _NativeVideoPlayerScreenState extends State<NativeVideoPlayerScreen> {
 
   Future<void> _initFastVideo() async {
     final Map<String, String> headers = {
-      'User-Agent':
-          'MayaJaalApp/1.0',
+      'User-Agent': 'MayaJaalApp/1.0',
       'Referer': 'https://mayajaal.online/',
     };
 
@@ -3132,329 +3092,329 @@ class _NativeVideoPlayerScreenState extends State<NativeVideoPlayerScreen> {
     final h = d.inHours > 0 ? '${d.inHours}:' : '';
     return '$h$m:$s';
   }
-    Future<void> _shareVideoLink() async {
-  setState(() => _sharesCount++);
-  final int? vId = int.tryParse(widget.videoId);
-  if (vId != null) {
-    await _supabaseService.recordShare(vId);
-  } else {
-    _sendStatUpdate('share');
+  Future<void> _shareVideoLink() async {
+    setState(() => _sharesCount++);
+    final int? vId = int.tryParse(widget.videoId);
+    if (vId != null) {
+      await _supabaseService.recordShare(vId);
+    } else {
+      _sendStatUpdate('share');
+    }
+    try {
+      await Supabase.instance.client.from('notifications').insert({
+        'title': '🚀 Video Shared!',
+        'message': 'Someone shared: ${widget.title}',
+      });
+    } catch (_) {}
+    Share.share('🎬 Watch this video on MayaJaal:\n${widget.videoUrl}');
   }
-  try {
-    await Supabase.instance.client.from('notifications').insert({
-      'title': '🚀 Video Shared!',
-      'message': 'Someone shared: ${widget.title}',
+
+  Future<void> _startInAppDownload() async {
+    if (_isDownloading) return;
+
+    setState(() {
+      _isDownloading = true;
+      _downloadProgress = 0.0;
     });
-  } catch (_) {}
-  Share.share('🎬 Watch this video on MayaJaal:\n${widget.videoUrl}');
-}
 
-Future<void> _startInAppDownload() async {
-  if (_isDownloading) return;
+    try {
+      final client = HttpClient();
+      final request = await client.getUrl(Uri.parse(widget.videoUrl));
+      final response = await request.close();
 
-  setState(() {
-    _isDownloading = true;
-    _downloadProgress = 0.0;
-  });
+      final totalBytes = response.contentLength;
+      int receivedBytes = 0;
 
-  try {
-    final client = HttpClient();
-    final request = await client.getUrl(Uri.parse(widget.videoUrl));
-    final response = await request.close();
-
-    final totalBytes = response.contentLength;
-    int receivedBytes = 0;
-
-    Directory baseDir = Directory('/storage/emulated/0/Download');
-    if (!baseDir.existsSync()) {
-      baseDir = Directory('/storage/emulated/0/Movies');
-    }
-    if (!baseDir.existsSync()) {
-      baseDir = Directory.systemTemp;
-    }
-
-    final safeName = widget.title.replaceAll(RegExp(r'[^a-zA-Z0-9._-]'), '_');
-    final savePath =
-        '${baseDir.path}/${safeName}_${DateTime.now().millisecondsSinceEpoch}.mp4';
-    final file = File(savePath);
-    final sink = file.openWrite();
-
-    await response.listen((List<int> chunk) {
-      sink.add(chunk);
-      receivedBytes += chunk.length;
-      if (totalBytes > 0 && mounted) {
-        setState(() {
-          _downloadProgress = receivedBytes / totalBytes;
-        });
+      Directory baseDir = Directory('/storage/emulated/0/Download');
+      if (!baseDir.existsSync()) {
+        baseDir = Directory('/storage/emulated/0/Movies');
       }
-    }).asFuture();
+      if (!baseDir.existsSync()) {
+        baseDir = Directory.systemTemp;
+      }
 
-    await sink.flush();
-    await sink.close();
+      final safeName = widget.title.replaceAll(RegExp(r'[^a-zA-Z0-9._-]'), '_');
+      final savePath =
+          '${baseDir.path}/${safeName}_${DateTime.now().millisecondsSinceEpoch}.mp4';
+      final file = File(savePath);
+      final sink = file.openWrite();
 
-    if (mounted) {
-      setState(() => _isDownloading = false);
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          backgroundColor: kCardBg,
-          content: Text('✅ Video saved to:\n$savePath',
-              style: const TextStyle(color: kGreen, fontSize: 11)),
-        ),
-      );
-    }
-  } catch (e) {
-    if (mounted) {
-      setState(() => _isDownloading = false);
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('Download status: $e')),
-      );
-    }
-  }
-}
+      await response.listen((List<int> chunk) {
+        sink.add(chunk);
+        receivedBytes += chunk.length;
+        if (totalBytes > 0 && mounted) {
+          setState(() {
+            _downloadProgress = receivedBytes / totalBytes;
+          });
+        }
+      }).asFuture();
 
-Future<void> _toggleLike() async {
-  final prefs = await SharedPreferences.getInstance();
-  final int? vId = int.tryParse(widget.videoId);
+      await sink.flush();
+      await sink.close();
 
-  setState(() {
-    if (_isLiked) {
-      _isLiked = false;
-      _likesCount = math.max(0, _likesCount - 1);
-      prefs.setBool('liked_${widget.videoId}', false);
-    } else {
-      _isLiked = true;
-      _likesCount++;
-      prefs.setBool('liked_${widget.videoId}', true);
-      if (_isUnliked) {
-        _isUnliked = false;
-        _unlikesCount = math.max(0, _unlikesCount - 1);
-        prefs.setBool('unliked_${widget.videoId}', false);
+      if (mounted) {
+        setState(() => _isDownloading = false);
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            backgroundColor: kCardBg,
+            content: Text('✅ Video saved to:\n$savePath',
+                style: const TextStyle(color: kGreen, fontSize: 11)),
+          ),
+        );
+      }
+    } catch (e) {
+      if (mounted) {
+        setState(() => _isDownloading = false);
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Download status: $e')),
+        );
       }
     }
-  });
-
-  if (vId != null) {
-    if (!_isLiked) {
-      await _supabaseService.unlikeVideo(vId);
-    } else {
-      await _supabaseService.likeVideo(vId);
-      try {
-        await Supabase.instance.client.from('notifications').insert({
-          'title': '❤️ New Like!',
-          'message': 'Someone liked your video: ${widget.title}',
-        });
-      } catch (_) {}
-    }
-  } else {
-    _sendStatUpdate(_isLiked ? 'like' : 'unlike_dec');
   }
-}
 
-Future<void> _toggleUnlike() async {
-  final prefs = await SharedPreferences.getInstance();
-  setState(() {
-    if (_isUnliked) {
-      _isUnliked = false;
-      _unlikesCount = math.max(0, _unlikesCount - 1);
-      prefs.setBool('unliked_${widget.videoId}', false);
-    } else {
-      _isUnliked = true;
-      _unlikesCount++;
-      _sendStatUpdate('unlike');
-      prefs.setBool('unliked_${widget.videoId}', true);
+  Future<void> _toggleLike() async {
+    final prefs = await SharedPreferences.getInstance();
+    final int? vId = int.tryParse(widget.videoId);
+
+    setState(() {
       if (_isLiked) {
         _isLiked = false;
         _likesCount = math.max(0, _likesCount - 1);
         prefs.setBool('liked_${widget.videoId}', false);
+      } else {
+        _isLiked = true;
+        _likesCount++;
+        prefs.setBool('liked_${widget.videoId}', true);
+        if (_isUnliked) {
+          _isUnliked = false;
+          _unlikesCount = math.max(0, _unlikesCount - 1);
+          prefs.setBool('unliked_${widget.videoId}', false);
+        }
       }
+    });
+
+    if (vId != null) {
+      if (!_isLiked) {
+        await _supabaseService.unlikeVideo(vId);
+      } else {
+        await _supabaseService.likeVideo(vId);
+        try {
+          await Supabase.instance.client.from('notifications').insert({
+            'title': '❤️ New Like!',
+            'message': 'Someone liked your video: ${widget.title}',
+          });
+        } catch (_) {}
+      }
+    } else {
+      _sendStatUpdate(_isLiked ? 'like' : 'unlike_dec');
     }
-  });
-}
+  }
 
-Future<void> _toggleSave() async {
-  final prefs = await SharedPreferences.getInstance();
-  setState(() {
-    _isSaved = !_isSaved;
-    prefs.setBool('saved_${widget.videoId}', _isSaved);
-  });
-  ScaffoldMessenger.of(context).showSnackBar(
-    SnackBar(
-      content: Text(_isSaved ? 'Video Saved to Favorites' : 'Removed from Favorites'),
-      duration: const Duration(seconds: 1),
-    ),
-  );
-}
+  Future<void> _toggleUnlike() async {
+    final prefs = await SharedPreferences.getInstance();
+    setState(() {
+      if (_isUnliked) {
+        _isUnliked = false;
+        _unlikesCount = math.max(0, _unlikesCount - 1);
+        prefs.setBool('unliked_${widget.videoId}', false);
+      } else {
+        _isUnliked = true;
+        _unlikesCount++;
+        _sendStatUpdate('unlike');
+        prefs.setBool('unliked_${widget.videoId}', true);
+        if (_isLiked) {
+          _isLiked = false;
+          _likesCount = math.max(0, _likesCount - 1);
+          prefs.setBool('liked_${widget.videoId}', false);
+        }
+      }
+    });
+  }
 
-void _showQualityDialog() {
-  showDialog(
-    context: context,
-    builder: (c) => AlertDialog(
-      backgroundColor: const Color(0xFF031408),
-      shape: RoundedRectangleBorder(
-        borderRadius: BorderRadius.circular(16),
-        side: const BorderSide(color: kGreen, width: 1.5),
+  Future<void> _toggleSave() async {
+    final prefs = await SharedPreferences.getInstance();
+    setState(() {
+      _isSaved = !_isSaved;
+      prefs.setBool('saved_${widget.videoId}', _isSaved);
+    });
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text(_isSaved ? 'Video Saved to Favorites' : 'Removed from Favorites'),
+        duration: const Duration(seconds: 1),
       ),
-      title: const Row(
-        children: [
-          Icon(Icons.hd, color: kGreen, size: 24),
-          SizedBox(width: 8),
-          Text('SELECT QUALITY',
-              style: TextStyle(color: kGreen, fontSize: 15, fontWeight: FontWeight.bold)),
-        ],
-      ),
-      content: Column(
-        mainAxisSize: MainAxisSize.min,
-        children: _qualities.map((q) {
-          return RadioListTile<String>(
-            value: q,
-            groupValue: _selectedQuality,
-            activeColor: kGreen,
-            title: Text(q,
-                style: const TextStyle(
-                    color: Colors.white, fontSize: 13, fontWeight: FontWeight.w600)),
-            onChanged: (val) {
-              if (val != null) {
-                setState(() => _selectedQuality = val);
-                Navigator.pop(c);
-                ScaffoldMessenger.of(context).showSnackBar(
-                  SnackBar(
-                    backgroundColor: const Color(0xFF031408),
-                    content: Text('Switched stream quality to $val',
-                        style: const TextStyle(color: kGreen)),
-                    duration: const Duration(seconds: 1),
-                  ),
-                );
-              }
-            },
-          );
-        }).toList(),
-      ),
-    ),
-  );
-}
+    );
+  }
 
-void _showSpeedDialog() {
-  showDialog(
-    context: context,
-    builder: (c) => AlertDialog(
-      backgroundColor: const Color(0xFF031408),
-      shape: RoundedRectangleBorder(
-        borderRadius: BorderRadius.circular(16),
-        side: const BorderSide(color: kGreen, width: 1.5),
-      ),
-      title: const Text('PLAYBACK SPEED', style: TextStyle(color: kGreen, fontSize: 14)),
-      content: Column(
-        mainAxisSize: MainAxisSize.min,
-        children: _speeds.map((s) {
-          return RadioListTile<double>(
-            value: s,
-            groupValue: _playbackSpeed,
-            activeColor: kGreen,
-            title: Text('${s}x', style: const TextStyle(color: Colors.white, fontSize: 13)),
-            onChanged: (val) {
-              if (val != null) {
-                setState(() => _playbackSpeed = val);
-                _controller.setPlaybackSpeed(val);
-                Navigator.pop(c);
-              }
-            },
-          );
-        }).toList(),
-      ),
-    ),
-  );
-}
-
-Widget _buildSmartScaledVideo() {
-  if (_isFullscreen) {
-    return SizedBox.expand(
-      child: FittedBox(
-        fit: BoxFit.cover,
-        child: SizedBox(
-          width: _controller.value.size.width,
-          height: _controller.value.size.height,
-          child: VideoPlayer(_controller),
+  void _showQualityDialog() {
+    showDialog(
+      context: context,
+      builder: (c) => AlertDialog(
+        backgroundColor: const Color(0xFF031408),
+        shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.circular(16),
+          side: const BorderSide(color: kGreen, width: 1.5),
+        ),
+        title: const Row(
+          children: [
+            Icon(Icons.hd, color: kGreen, size: 24),
+            SizedBox(width: 8),
+            Text('SELECT QUALITY',
+                style: TextStyle(color: kGreen, fontSize: 15, fontWeight: FontWeight.bold)),
+          ],
+        ),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: _qualities.map((q) {
+            return RadioListTile<String>(
+              value: q,
+              groupValue: _selectedQuality,
+              activeColor: kGreen,
+              title: Text(q,
+                  style: const TextStyle(
+                      color: Colors.white, fontSize: 13, fontWeight: FontWeight.w600)),
+              onChanged: (val) {
+                if (val != null) {
+                  setState(() => _selectedQuality = val);
+                  Navigator.pop(c);
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    SnackBar(
+                      backgroundColor: const Color(0xFF031408),
+                      content: Text('Switched stream quality to $val',
+                          style: const TextStyle(color: kGreen)),
+                      duration: const Duration(seconds: 1),
+                    ),
+                  );
+                }
+              },
+            );
+          }).toList(),
         ),
       ),
     );
   }
-  return Center(
-    child: AspectRatio(
-      aspectRatio: _controller.value.aspectRatio,
-      child: VideoPlayer(_controller),
-    ),
-  );
-}
-  @override
-Widget build(BuildContext context) {
-  return Scaffold(
-    backgroundColor: Colors.black,
-    body: SafeArea(
-      child: Column(
-        children: [
-          if (!_isFullscreen)
-            Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-              child: Row(
-                children: [
-                  IconButton(
-                    icon: const Icon(Icons.arrow_back_ios_new, color: kGreen, size: 22),
-                    onPressed: () => Navigator.pop(context),
-                  ),
-                  Expanded(
-                    child: Column(
-                      mainAxisSize: MainAxisSize.min,
-                      children: [
-                        Row(
-                          mainAxisAlignment: MainAxisAlignment.center,
-                          children: [
-                            Container(
-                              width: 22,
-                              height: 22,
-                              decoration: BoxDecoration(
-                                shape: BoxShape.circle,
-                                border: Border.all(color: kGreen, width: 1.5),
-                              ),
-                              child: const Center(
-                                child: Icon(Icons.change_history, color: kGreen, size: 14),
-                              ),
-                            ),
-                            const SizedBox(width: 8),
-                            const Text(
-                              'MAYA JAAL',
-                              style: TextStyle(
-                                color: kGreen,
-                                fontSize: 19,
-                                fontWeight: FontWeight.w900,
-                                letterSpacing: 2,
-                                shadows: [Shadow(color: kGreen, blurRadius: 10)],
-                              ),
-                            ),
-                          ],
-                        ),
-                        Text(
-                          '— STREAM BEYOND LIMITS —',
-                          style: TextStyle(
-                            color: kGreen.withOpacity(0.8),
-                            fontSize: 8.5,
-                            letterSpacing: 2,
-                            fontWeight: FontWeight.bold,
-                          ),
-                        ),
-                      ],
+
+  void _showSpeedDialog() {
+    showDialog(
+      context: context,
+      builder: (c) => AlertDialog(
+        backgroundColor: const Color(0xFF031408),
+        shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.circular(16),
+          side: const BorderSide(color: kGreen, width: 1.5),
+        ),
+        title: const Text('PLAYBACK SPEED', style: TextStyle(color: kGreen, fontSize: 14)),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: _speeds.map((s) {
+            return RadioListTile<double>(
+              value: s,
+              groupValue: _playbackSpeed,
+              activeColor: kGreen,
+              title: Text('${s}x', style: const TextStyle(color: Colors.white, fontSize: 13)),
+              onChanged: (val) {
+                if (val != null) {
+                  setState(() => _playbackSpeed = val);
+                  _controller.setPlaybackSpeed(val);
+                  Navigator.pop(c);
+                }
+              },
+            );
+          }).toList(),
+        ),
+      ),
+    );
+  }
+
+  Widget _buildSmartScaledVideo() {
+    if (_isFullscreen) {
+      return SizedBox.expand(
+        child: FittedBox(
+          fit: BoxFit.cover,
+          child: SizedBox(
+            width: _controller.value.size.width,
+            height: _controller.value.size.height,
+            child: VideoPlayer(_controller),
+          ),
+        ),
+      );
+    }
+    return Center(
+      child: AspectRatio(
+        aspectRatio: _controller.value.aspectRatio,
+        child: VideoPlayer(_controller),
+      ),
+    );
+  }
+    @override
+  Widget build(BuildContext context) {
+    return Scaffold(
+      backgroundColor: Colors.black,
+      body: SafeArea(
+        child: Column(
+          children: [
+            if (!_isFullscreen)
+              Padding(
+                padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+                child: Row(
+                  children: [
+                    IconButton(
+                      icon: const Icon(Icons.arrow_back_ios_new, color: kGreen, size: 22),
+                      onPressed: () => Navigator.pop(context),
                     ),
-                  ),
-                  IconButton(
-                    icon: const Icon(Icons.search, color: kGreen, size: 22),
-                    onPressed: () {},
-                  ),
-                  IconButton(
-                    icon: const Icon(Icons.share, color: kGreen, size: 22),
-                    onPressed: _shareVideoLink,
-                  ),
-                ],
+                    Expanded(
+                      child: Column(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          Row(
+                            mainAxisAlignment: MainAxisAlignment.center,
+                            children: [
+                              Container(
+                                width: 22,
+                                height: 22,
+                                decoration: BoxDecoration(
+                                  shape: BoxShape.circle,
+                                  border: Border.all(color: kGreen, width: 1.5),
+                                ),
+                                child: const Center(
+                                  child: Icon(Icons.change_history, color: kGreen, size: 14),
+                                ),
+                              ),
+                              const SizedBox(width: 8),
+                              const Text(
+                                'MAYA JAAL',
+                                style: TextStyle(
+                                  color: kGreen,
+                                  fontSize: 19,
+                                  fontWeight: FontWeight.w900,
+                                  letterSpacing: 2,
+                                  shadows: [Shadow(color: kGreen, blurRadius: 10)],
+                                ),
+                              ),
+                            ],
+                          ),
+                          Text(
+                            '— STREAM BEYOND LIMITS —',
+                            style: TextStyle(
+                              color: kGreen.withOpacity(0.8),
+                              fontSize: 8.5,
+                              letterSpacing: 2,
+                              fontWeight: FontWeight.bold,
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                    IconButton(
+                      icon: const Icon(Icons.search, color: kGreen, size: 22),
+                      onPressed: () {},
+                    ),
+                    IconButton(
+                      icon: const Icon(Icons.share, color: kGreen, size: 22),
+                      onPressed: _shareVideoLink,
+                    ),
+                  ],
+                ),
               ),
-            ),
 
           // VIDEO VIEW
           Expanded(
@@ -3663,289 +3623,288 @@ Widget build(BuildContext context) {
               ),
             ),
           ),
-                                if (!_isFullscreen)
-              Expanded(
-                child: SingleChildScrollView(
-                  padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
-                  child: Column(
-                    children: [
-                      Container(
-                        padding: const EdgeInsets.all(12),
-                        decoration: BoxDecoration(
-                          color: const Color(0xFF031408),
-                          borderRadius: BorderRadius.circular(16),
-                          border: Border.all(color: kGreen.withOpacity(0.55)),
-                        ),
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            Row(
-                              children: [
-                                const Icon(Icons.play_circle_fill, color: kGreen, size: 26),
-                                const SizedBox(width: 8),
-                                Expanded(
-                                  child: Text(
-                                    widget.title,
-                                    style: const TextStyle(
-                                        color: Colors.white,
-                                        fontSize: 14,
-                                        fontWeight: FontWeight.bold),
-                                    maxLines: 1,
-                                    overflow: TextOverflow.ellipsis,
-                                  ),
+          if (!_isFullscreen)
+            Expanded(
+              child: SingleChildScrollView(
+                padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+                child: Column(
+                  children: [
+                    Container(
+                      padding: const EdgeInsets.all(12),
+                      decoration: BoxDecoration(
+                        color: const Color(0xFF031408),
+                        borderRadius: BorderRadius.circular(16),
+                        border: Border.all(color: kGreen.withOpacity(0.55)),
+                      ),
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Row(
+                            children: [
+                              const Icon(Icons.play_circle_fill, color: kGreen, size: 26),
+                              const SizedBox(width: 8),
+                              Expanded(
+                                child: Text(
+                                  widget.title,
+                                  style: const TextStyle(
+                                      color: Colors.white,
+                                      fontSize: 14,
+                                      fontWeight: FontWeight.bold),
+                                  maxLines: 1,
+                                  overflow: TextOverflow.ellipsis,
                                 ),
-                                Container(
-                                  padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 3),
-                                  decoration: BoxDecoration(
-                                    borderRadius: BorderRadius.circular(6),
-                                    border: Border.all(color: kGreen),
-                                  ),
-                                  child: const Text('HD',
-                                      style: TextStyle(
-                                          color: kGreen,
-                                          fontSize: 10,
-                                          fontWeight: FontWeight.bold)),
+                              ),
+                              Container(
+                                padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 3),
+                                decoration: BoxDecoration(
+                                  borderRadius: BorderRadius.circular(6),
+                                  border: Border.all(color: kGreen),
                                 ),
-                              ],
-                            ),
-                            const SizedBox(height: 8),
-                            Row(
-                              children: [
-                                const Icon(Icons.account_circle, color: kGreen, size: 14),
-                                const SizedBox(width: 4),
-                                Text('Uploaded by: ${widget.uploader}',
-                                    style: const TextStyle(color: kGreen, fontSize: 10)),
-                                const SizedBox(width: 8),
-                                Text('|   📅 Sep 24, 2026',
+                                child: const Text('HD',
                                     style: TextStyle(
-                                        color: Colors.white.withOpacity(0.6), fontSize: 10)),
-                                const SizedBox(width: 8),
-                                Text('|   👁 $_viewsCount views',
-                                    style: TextStyle(
-                                        color: Colors.white.withOpacity(0.6), fontSize: 10)),
-                              ],
-                            ),
-                            const SizedBox(height: 12),
-                            Row(
-                              children: [
-                                Expanded(
-                                  child: InkWell(
-                                    onTap: _toggleLike,
-                                    child: Container(
-                                      padding: const EdgeInsets.symmetric(vertical: 8),
-                                      decoration: BoxDecoration(
-                                        color: Colors.black,
-                                        borderRadius: BorderRadius.circular(8),
-                                        border: Border.all(
-                                            color: _isLiked ? kGreen : kGreen.withOpacity(0.4)),
-                                      ),
-                                      child: Column(
-                                        children: [
-                                          Row(
-                                            mainAxisAlignment: MainAxisAlignment.center,
-                                            children: [
-                                              Icon(
-                                                  _isLiked
-                                                      ? Icons.thumb_up
-                                                      : Icons.thumb_up_alt_outlined,
-                                                  color: kGreen,
-                                                  size: 14),
-                                              const SizedBox(width: 4),
-                                              Text('$_likesCount',
-                                                  style: const TextStyle(
-                                                      color: Colors.white,
-                                                      fontSize: 11,
-                                                      fontWeight: FontWeight.bold)),
-                                            ],
-                                          ),
-                                          const Text('Like',
-                                              style: TextStyle(
-                                                  color: Colors.white54, fontSize: 9)),
-                                        ],
-                                      ),
-                                    ),
-                                  ),
-                                ),
-                                const SizedBox(width: 6),
-                                Expanded(
-                                  child: InkWell(
-                                    onTap: _toggleUnlike,
-                                    child: Container(
-                                      padding: const EdgeInsets.symmetric(vertical: 8),
-                                      decoration: BoxDecoration(
-                                        color: Colors.black,
-                                        borderRadius: BorderRadius.circular(8),
-                                        border: Border.all(
-                                            color: _isUnliked
-                                                ? Colors.redAccent
-                                                : kGreen.withOpacity(0.4)),
-                                      ),
-                                      child: Column(
-                                        children: [
-                                          Row(
-                                            mainAxisAlignment: MainAxisAlignment.center,
-                                            children: [
-                                              Icon(
-                                                  _isUnliked
-                                                      ? Icons.thumb_down
-                                                      : Icons.thumb_down_alt_outlined,
-                                                  color: Colors.redAccent,
-                                                  size: 14),
-                                              const SizedBox(width: 4),
-                                              Text('$_unlikesCount',
-                                                  style: const TextStyle(
-                                                      color: Colors.white,
-                                                      fontSize: 11,
-                                                      fontWeight: FontWeight.bold)),
-                                            ],
-                                          ),
-                                          const Text('Dislike',
-                                              style: TextStyle(
-                                                  color: Colors.white54, fontSize: 9)),
-                                        ],
-                                      ),
-                                    ),
-                                  ),
-                                ),
-                                const SizedBox(width: 6),
-                                Expanded(
-                                  child: InkWell(
-                                    onTap: _toggleSave,
-                                    child: Container(
-                                      padding: const EdgeInsets.symmetric(vertical: 8),
-                                      decoration: BoxDecoration(
-                                        color: Colors.black,
-                                        borderRadius: BorderRadius.circular(8),
-                                        border: Border.all(
-                                            color: _isSaved ? kGreen : kGreen.withOpacity(0.4)),
-                                      ),
-                                      child: Column(
-                                        children: [
-                                          Icon(
-                                              _isSaved
-                                                  ? Icons.bookmark
-                                                  : Icons.bookmark_border,
-                                              color: _isSaved ? kGreen : Colors.white,
-                                              size: 14),
-                                          const Text('Save',
-                                              style: TextStyle(
-                                                  color: Colors.white54, fontSize: 9)),
-                                        ],
-                                      ),
-                                    ),
-                                  ),
-                                ),
-                                const SizedBox(width: 8),
-                                InkWell(
-                                  onTap: _startInAppDownload,
+                                        color: kGreen,
+                                        fontSize: 10,
+                                        fontWeight: FontWeight.bold)),
+                              ),
+                            ],
+                          ),
+                          const SizedBox(height: 8),
+                          Row(
+                            children: [
+                              const Icon(Icons.account_circle, color: kGreen, size: 14),
+                              const SizedBox(width: 4),
+                              Text('Uploaded by: ${widget.uploader}',
+                                  style: const TextStyle(color: kGreen, fontSize: 10)),
+                              const SizedBox(width: 8),
+                              Text('|   📅 Sep 24, 2026',
+                                  style: TextStyle(
+                                      color: Colors.white.withOpacity(0.6), fontSize: 10)),
+                              const SizedBox(width: 8),
+                              Text('|   👁 $_viewsCount views',
+                                  style: TextStyle(
+                                      color: Colors.white.withOpacity(0.6), fontSize: 10)),
+                            ],
+                          ),
+                          const SizedBox(height: 12),
+                          Row(
+                            children: [
+                              Expanded(
+                                child: InkWell(
+                                  onTap: _toggleLike,
                                   child: Container(
-                                    padding: const EdgeInsets.symmetric(
-                                        horizontal: 14, vertical: 12),
+                                    padding: const EdgeInsets.symmetric(vertical: 8),
                                     decoration: BoxDecoration(
-                                      color: kGreen,
-                                      borderRadius: BorderRadius.circular(10),
+                                      color: Colors.black,
+                                      borderRadius: BorderRadius.circular(8),
+                                      border: Border.all(
+                                          color: _isLiked ? kGreen : kGreen.withOpacity(0.4)),
                                     ),
-                                    child: Row(
+                                    child: Column(
                                       children: [
-                                        const Icon(Icons.download,
-                                            color: Colors.black, size: 18),
-                                        const SizedBox(width: 4),
-                                        Text(
-                                          _isDownloading
-                                              ? '${(_downloadProgress * 100).toInt()}%'
-                                              : 'Download',
-                                          style: const TextStyle(
-                                              color: Colors.black,
-                                              fontSize: 11,
-                                              fontWeight: FontWeight.bold),
+                                        Row(
+                                          mainAxisAlignment: MainAxisAlignment.center,
+                                          children: [
+                                            Icon(
+                                                _isLiked
+                                                    ? Icons.thumb_up
+                                                    : Icons.thumb_up_alt_outlined,
+                                                color: kGreen,
+                                                size: 14),
+                                            const SizedBox(width: 4),
+                                            Text('$_likesCount',
+                                                style: const TextStyle(
+                                                    color: Colors.white,
+                                                     fontSize: 11,
+                                                    fontWeight: FontWeight.bold)),
+                                          ],
                                         ),
+                                        const Text('Like',
+                                            style: TextStyle(
+                                                color: Colors.white54, fontSize: 9)),
                                       ],
                                     ),
                                   ),
                                 ),
-                              ],
-                            ),
-                          ],
-                        ),
-                      ),
-                      const SizedBox(height: 12),
-                      Container(
-                        padding: const EdgeInsets.all(12),
-                        decoration: BoxDecoration(
-                          color: const Color(0xFF031408),
-                          borderRadius: BorderRadius.circular(16),
-                          border: Border.all(color: kGreen.withOpacity(0.4)),
-                        ),
-                        child: Row(
-                          children: [
-                            Container(
-                              padding: const EdgeInsets.symmetric(horizontal: 5, vertical: 2),
-                              decoration: BoxDecoration(
-                                  color: kGreen, borderRadius: BorderRadius.circular(3)),
-                              child: const Text('AD',
-                                  style: TextStyle(
-                                      color: Colors.black,
-                                      fontSize: 9,
-                                      fontWeight: FontWeight.bold)),
-                            ),
-                            const SizedBox(width: 10),
-                            Expanded(
-                              child: Column(
-                                crossAxisAlignment: CrossAxisAlignment.start,
-                                children: [
-                                  const Text('YOUR AD HERE',
-                                      style: TextStyle(
-                                          color: Colors.white,
-                                          fontSize: 13,
-                                          fontWeight: FontWeight.bold)),
-                                  Text('Grow Your Brand with Us',
-                                      style: TextStyle(
-                                          color: Colors.white.withOpacity(0.6),
-                                          fontSize: 10)),
-                                ],
                               ),
-                            ),
-                            const Icon(Icons.campaign_outlined, color: kGreen, size: 28),
-                          ],
-                        ),
-                      ),
-                      const SizedBox(height: 14),
-                      const Row(
-                        children: [
-                          Icon(Icons.play_circle_outline, color: kGreen, size: 18),
-                          SizedBox(width: 6),
-                          Text('Related Videos',
-                              style: TextStyle(
-                                  color: Colors.white,
-                                  fontSize: 13,
-                                  fontWeight: FontWeight.bold)),
-                          Spacer(),
-                          Text('More Videos >',
-                              style: TextStyle(
-                                  color: kGreen, fontSize: 11, fontWeight: FontWeight.bold)),
+                              const SizedBox(width: 6),
+                              Expanded(
+                                child: InkWell(
+                                  onTap: _toggleUnlike,
+                                  child: Container(
+                                    padding: const EdgeInsets.symmetric(vertical: 8),
+                                    decoration: BoxDecoration(
+                                      color: Colors.black,
+                                      borderRadius: BorderRadius.circular(8),
+                                      border: Border.all(
+                                          color: _isUnliked
+                                              ? Colors.redAccent
+                                              : kGreen.withOpacity(0.4)),
+                                    ),
+                                    child: Column(
+                                      children: [
+                                        Row(
+                                          mainAxisAlignment: MainAxisAlignment.center,
+                                          children: [
+                                            Icon(
+                                                _isUnliked
+                                                    ? Icons.thumb_down
+                                                    : Icons.thumb_down_alt_outlined,
+                                                color: Colors.redAccent,
+                                                size: 14),
+                                            const SizedBox(width: 4),
+                                            Text('$_unlikesCount',
+                                                style: const TextStyle(
+                                                    color: Colors.white,
+                                                    fontSize: 11,
+                                                    fontWeight: FontWeight.bold)),
+                                          ],
+                                        ),
+                                        const Text('Dislike',
+                                            style: TextStyle(
+                                                color: Colors.white54, fontSize: 9)),
+                                      ],
+                                    ),
+                                  ),
+                                ),
+                              ),
+                              const SizedBox(width: 6),
+                              Expanded(
+                                child: InkWell(
+                                  onTap: _toggleSave,
+                                  child: Container(
+                                    padding: const EdgeInsets.symmetric(vertical: 8),
+                                    decoration: BoxDecoration(
+                                      color: Colors.black,
+                                      borderRadius: BorderRadius.circular(8),
+                                      border: Border.all(
+                                          color: _isSaved ? kGreen : kGreen.withOpacity(0.4)),
+                                    ),
+                                    child: Column(
+                                      children: [
+                                        Icon(
+                                            _isSaved
+                                                ? Icons.bookmark
+                                                : Icons.bookmark_border,
+                                            color: _isSaved ? kGreen : Colors.white,
+                                            size: 14),
+                                        const Text('Save',
+                                            style: TextStyle(
+                                                color: Colors.white54, fontSize: 9)),
+                                      ],
+                                    ),
+                                  ),
+                                ),
+                              ),
+                              const SizedBox(width: 8),
+                              InkWell(
+                                onTap: _startInAppDownload,
+                                child: Container(
+                                  padding: const EdgeInsets.symmetric(
+                                      horizontal: 14, vertical: 12),
+                                  decoration: BoxDecoration(
+                                    color: kGreen,
+                                    borderRadius: BorderRadius.circular(10),
+                                  ),
+                                  child: Row(
+                                    children: [
+                                      const Icon(Icons.download,
+                                          color: Colors.black, size: 18),
+                                      const SizedBox(width: 4),
+                                      Text(
+                                        _isDownloading
+                                            ? '${(_downloadProgress * 100).toInt()}%'
+                                            : 'Download',
+                                        style: const TextStyle(
+                                            color: Colors.black,
+                                            fontSize: 11,
+                                            fontWeight: FontWeight.bold),
+                                      ),
+                                    ],
+                                  ),
+                                ),
+                              ),
+                            ],
+                          ),
                         ],
                       ),
-                      const SizedBox(height: 10),
-                      SizedBox(
-                        height: 130,
-                        child: ListView(
-                          scrollDirection: Axis.horizontal,
-                          children: [
-                            _buildRelatedCard('Jaisalmer Tour Part 1', '@travel123', '05:42'),
-                            const SizedBox(width: 10),
-                            _buildRelatedCard('Jaisalmer Desert Ride', '@travel123', '08:15'),
-                            const SizedBox(width: 10),
-                            _buildRelatedCard('Jaisalmer Fort View', '@travel123', '06:30'),
-                          ],
-                        ),
+                    ),
+                    const SizedBox(height: 12),
+                    Container(
+                      padding: const EdgeInsets.all(12),
+                      decoration: BoxDecoration(
+                        color: const Color(0xFF031408),
+                        borderRadius: BorderRadius.circular(16),
+                        border: Border.all(color: kGreen.withOpacity(0.4)),
                       ),
-                      const SizedBox(height: 16),
-                    ],
-                  ),
+                      child: Row(
+                        children: [
+                          Container(
+                            padding: const EdgeInsets.symmetric(horizontal: 5, vertical: 2),
+                            decoration: BoxDecoration(
+                                color: kGreen, borderRadius: BorderRadius.circular(3)),
+                            child: const Text('AD',
+                                style: TextStyle(
+                                    color: Colors.black,
+                                    fontSize: 9,
+                                    fontWeight: FontWeight.bold)),
+                          ),
+                          const SizedBox(width: 10),
+                          Expanded(
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                const Text('YOUR AD HERE',
+                                    style: TextStyle(
+                                        color: Colors.white,
+                                        fontSize: 13,
+                                        fontWeight: FontWeight.bold)),
+                                Text('Grow Your Brand with Us',
+                                    style: TextStyle(
+                                        color: Colors.white.withOpacity(0.6),
+                                        fontSize: 10)),
+                              ],
+                            ),
+                          ),
+                          const Icon(Icons.campaign_outlined, color: kGreen, size: 28),
+                        ],
+                      ),
+                    ),
+                    const SizedBox(height: 14),
+                    const Row(
+                      children: [
+                        Icon(Icons.play_circle_outline, color: kGreen, size: 18),
+                        SizedBox(width: 6),
+                        Text('Related Videos',
+                            style: TextStyle(
+                                color: Colors.white,
+                                fontSize: 13,
+                                fontWeight: FontWeight.bold)),
+                        Spacer(),
+                        Text('More Videos >',
+                            style: TextStyle(
+                                color: kGreen, fontSize: 11, fontWeight: FontWeight.bold)),
+                      ],
+                    ),
+                    const SizedBox(height: 10),
+                    SizedBox(
+                      height: 130,
+                      child: ListView(
+                        scrollDirection: Axis.horizontal,
+                        children: [
+                          _buildRelatedCard('Jaisalmer Tour Part 1', '@travel123', '05:42'),
+                          const SizedBox(width: 10),
+                          _buildRelatedCard('Jaisalmer Desert Ride', '@travel123', '08:15'),
+                          const SizedBox(width: 10),
+                          _buildRelatedCard('Jaisalmer Fort View', '@travel123', '06:30'),
+                        ],
+                      ),
+                    ),
+                    const SizedBox(height: 16),
+                  ],
                 ),
               ),
-          ],
-        ),
+            ),
+        ],
       ),
     );
   }
@@ -4006,7 +3965,7 @@ Widget build(BuildContext context) {
         ],
       ),
     );
-  }
+  } 
 }
 class SupabaseService {
   final SupabaseClient client = Supabase.instance.client;
@@ -4138,6 +4097,7 @@ class SupabaseService {
     }
   }
 }
+
 class UserSearchDelegate extends SearchDelegate {
   final SupabaseService service = SupabaseService();
 
@@ -4337,7 +4297,7 @@ class _UserProfileScreenState extends State<UserProfileScreen> {
     );
   }
 }
-  
+
 class EarningsScreen extends StatelessWidget {
   const EarningsScreen({super.key});
 
