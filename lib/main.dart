@@ -230,6 +230,7 @@ class _MyAppState extends State<MyApp> {
     );
   }
 }
+
 class MatrixRain extends StatefulWidget {
   final double opacity;
   const MatrixRain({super.key, this.opacity = 0.7});
@@ -520,7 +521,7 @@ class _LoginScreenState extends State<LoginScreen> with SingleTickerProviderStat
     final pass = _signupPasswordController.text.trim();
 
     if (matrixId.isEmpty || phone.length < 10 || pass.length < 6) {
-      setState(() => _error = 'Sabhi details bharein! Password kam se kam 6 akshar ka ho.');
+      setState(() => _error = 'Sabhi details bharein! Password kam से kam 6 akshar ka ho.');
       return;
     }
 
@@ -542,8 +543,7 @@ class _LoginScreenState extends State<LoginScreen> with SingleTickerProviderStat
       if (mounted) setState(() => _loading = false);
     }
   }
-
-  Future<void> _verifySignupOtpAndRegister() async {
+    Future<void> _verifySignupOtpAndRegister() async {
     final matrixId = _signupMatrixIdController.text.trim().toLowerCase().replaceAll('@', '');
     final phone = _formatPhone(_signupPhoneController.text.trim());
     final pass = _signupPasswordController.text.trim();
@@ -633,8 +633,7 @@ class _LoginScreenState extends State<LoginScreen> with SingleTickerProviderStat
       if (mounted) setState(() => _loading = false);
     }
   }
-
-  Future<void> _signInWithGoogle() async {
+    Future<void> _signInWithGoogle() async {
     setState(() {
       _loading = true;
       _error = '';
@@ -952,8 +951,7 @@ class _LoginScreenState extends State<LoginScreen> with SingleTickerProviderStat
                           ],
                         ),
                       ),
-                      const SizedBox(height: 18),
-                      Container(
+                                            Container(
                         padding: const EdgeInsets.all(14),
                         decoration: BoxDecoration(
                           color: Colors.black.withOpacity(0.6),
@@ -1145,7 +1143,7 @@ class _LoginScreenState extends State<LoginScreen> with SingleTickerProviderStat
                                 ],
                               ),
                       ),
-                      const SizedBox(height: 16),
+                                            const SizedBox(height: 16),
                       Row(
                         children: [
                           Expanded(child: Divider(color: const Color(0xFF00FF66).withOpacity(0.3))),
@@ -1313,7 +1311,6 @@ class _MainNavigationHolderState extends State<MainNavigationHolder> {
     );
   }
 }
-
 class HomeScreen extends StatefulWidget {
   const HomeScreen({super.key});
   @override
@@ -1422,8 +1419,7 @@ class _HomeScreenState extends State<HomeScreen> with SingleTickerProviderStateM
       },
     );
   }
-
-  @override
+    @override
   void initState() {
     super.initState();
     _pulseController = AnimationController(
@@ -1490,8 +1486,7 @@ class _HomeScreenState extends State<HomeScreen> with SingleTickerProviderStateM
       ),
     );
   }
-
-  @override
+    @override
   Widget build(BuildContext context) {
     return Scaffold(
       backgroundColor: Colors.black,
@@ -1827,7 +1822,7 @@ class ChannelScreen extends StatelessWidget {
               borderRadius: BorderRadius.circular(12),
               border: Border.all(color: kGreen.withOpacity(0.4)),
             ),
-            child:ListTile(
+            child: const ListTile(
               leading: Icon(Icons.bolt, color: kGreen, size: 32),
               title: Text('Quantum Streaming Node', style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
               subtitle: Text('Direct hardware pipeline active', style: TextStyle(color: kDimGreen, fontSize: 12)),
@@ -1841,7 +1836,7 @@ class ChannelScreen extends StatelessWidget {
               borderRadius: BorderRadius.circular(12),
               border: Border.all(color: kNeonCyan.withOpacity(0.4)),
             ),
-            child:ListTile(
+            child: const ListTile(
               leading: Icon(Icons.cloud_done, color: kNeonCyan, size: 32),
               title: Text('High Speed CDN Node', style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
               subtitle: Text('Buffer acceleration: ENABLED', style: TextStyle(color: kNeonCyan, fontSize: 12)),
@@ -1852,7 +1847,6 @@ class ChannelScreen extends StatelessWidget {
     );
   }
 }
-
 class HistoryScreen extends StatefulWidget {
   const HistoryScreen({super.key});
   @override
@@ -1959,7 +1953,6 @@ class _HistoryScreenState extends State<HistoryScreen> {
     );
   }
 }
-
 class MoreScreen extends StatelessWidget {
   const MoreScreen({super.key});
 
@@ -2090,7 +2083,7 @@ class MoreScreen extends StatelessWidget {
             trailing: const Icon(Icons.arrow_forward_ios, size: 14, color: kGreen),
             onTap: () => Navigator.push(context, MaterialPageRoute(builder: (_) => const EarningsScreen())),
           ),
-          Divider(color: kGreen.withOpacity(0.15)),
+          const Divider(color: kGreen.withOpacity(0.15)),
           const SizedBox(height: 20),
           const Text('JOIN US', style: TextStyle(color: kGreen, fontSize: 13, fontWeight: FontWeight.bold, letterSpacing: 2)),
           const SizedBox(height: 12),
@@ -2141,8 +2134,7 @@ class MoreScreen extends StatelessWidget {
       ),
     );
   }
-}
-class SettingsScreen extends StatefulWidget {
+  class SettingsScreen extends StatefulWidget {
   const SettingsScreen({super.key});
   @override
   State<SettingsScreen> createState() => _SettingsScreenState();
@@ -2296,8 +2288,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
     );
   }
 }
-
-class StreamPreviewScreen extends StatefulWidget {
+  class StreamPreviewScreen extends StatefulWidget {
   final String targetUrl;
   const StreamPreviewScreen({super.key, required this.targetUrl});
   @override
@@ -2410,8 +2401,7 @@ class _StreamPreviewScreenState extends State<StreamPreviewScreen> with SingleTi
       _startCountdown();
     }
   }
-  
-  void _shareStreamDirect() {
+    void _shareStreamDirect() {
     Share.share('🚀 Watch this stream on MayaJaal:\n${widget.targetUrl}');
   }
 
@@ -2523,7 +2513,7 @@ class _StreamPreviewScreenState extends State<StreamPreviewScreen> with SingleTi
                   ),
                 ],
               ),
-              const SizedBox(height: 15),
+                            const SizedBox(height: 15),
               Container(
                 width: double.infinity,
                 padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 20),
@@ -2826,7 +2816,7 @@ class _StreamPreviewScreenState extends State<StreamPreviewScreen> with SingleTi
     );
   }
 }
-class NativeVideoPlayerScreen extends StatefulWidget {
+  class NativeVideoPlayerScreen extends StatefulWidget {
   final String videoUrl;
   final String title;
   final String uploader;
@@ -2940,8 +2930,7 @@ class _NativeVideoPlayerScreenState extends State<NativeVideoPlayerScreen> {
     _initFastVideo();
     _startViewTrackingTimer();
   }
-
-  Future<void> _fetchRealStatsAndRegisterView() async {
+    Future<void> _fetchRealStatsAndRegisterView() async {
     try {
       final prefs = await SharedPreferences.getInstance();
       _isLiked = prefs.getBool('liked_${widget.videoId}') ?? false;
@@ -3092,7 +3081,7 @@ class _NativeVideoPlayerScreenState extends State<NativeVideoPlayerScreen> {
     final h = d.inHours > 0 ? '${d.inHours}:' : '';
     return '$h$m:$s';
   }
-  Future<void> _shareVideoLink() async {
+    Future<void> _shareVideoLink() async {
     setState(() => _sharesCount++);
     final int? vId = int.tryParse(widget.videoId);
     if (vId != null) {
@@ -3134,8 +3123,7 @@ class _NativeVideoPlayerScreenState extends State<NativeVideoPlayerScreen> {
       }
 
       final safeName = widget.title.replaceAll(RegExp(r'[^a-zA-Z0-9._-]'), '_');
-      final savePath =
-          '${baseDir.path}/${safeName}_${DateTime.now().millisecondsSinceEpoch}.mp4';
+      final savePath = '${baseDir.path}/${safeName}_${DateTime.now().millisecondsSinceEpoch}.mp4';
       final file = File(savePath);
       final sink = file.openWrite();
 
@@ -3157,8 +3145,7 @@ class _NativeVideoPlayerScreenState extends State<NativeVideoPlayerScreen> {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
             backgroundColor: kCardBg,
-            content: Text('✅ Video saved to:\n$savePath',
-                style: const TextStyle(color: kGreen, fontSize: 11)),
+            content: Text('✅ Video saved to:\n$savePath', style: const TextStyle(color: kGreen, fontSize: 11)),
           ),
         );
       }
@@ -3258,8 +3245,7 @@ class _NativeVideoPlayerScreenState extends State<NativeVideoPlayerScreen> {
           children: [
             Icon(Icons.hd, color: kGreen, size: 24),
             SizedBox(width: 8),
-            Text('SELECT QUALITY',
-                style: TextStyle(color: kGreen, fontSize: 15, fontWeight: FontWeight.bold)),
+            Text('SELECT QUALITY', style: TextStyle(color: kGreen, fontSize: 15, fontWeight: FontWeight.bold)),
           ],
         ),
         content: Column(
@@ -3269,9 +3255,7 @@ class _NativeVideoPlayerScreenState extends State<NativeVideoPlayerScreen> {
               value: q,
               groupValue: _selectedQuality,
               activeColor: kGreen,
-              title: Text(q,
-                  style: const TextStyle(
-                      color: Colors.white, fontSize: 13, fontWeight: FontWeight.w600)),
+              title: Text(q, style: const TextStyle(color: Colors.white, fontSize: 13, fontWeight: FontWeight.w600)),
               onChanged: (val) {
                 if (val != null) {
                   setState(() => _selectedQuality = val);
@@ -3279,8 +3263,7 @@ class _NativeVideoPlayerScreenState extends State<NativeVideoPlayerScreen> {
                   ScaffoldMessenger.of(context).showSnackBar(
                     SnackBar(
                       backgroundColor: const Color(0xFF031408),
-                      content: Text('Switched stream quality to $val',
-                          style: const TextStyle(color: kGreen)),
+                      content: Text('Switched stream quality to $val', style: const TextStyle(color: kGreen)),
                       duration: const Duration(seconds: 1),
                     ),
                   );
@@ -3415,500 +3398,393 @@ class _NativeVideoPlayerScreenState extends State<NativeVideoPlayerScreen> {
                   ],
                 ),
               ),
-
-          // VIDEO VIEW
-          Expanded(
-            flex: _isFullscreen ? 1 : 0,
-            child: Padding(
-              padding: EdgeInsets.symmetric(horizontal: _isFullscreen ? 0 : 12, vertical: 4),
-              child: Container(
-                width: double.infinity,
-                height: _isFullscreen ? double.infinity : 225,
-                decoration: BoxDecoration(
-                  color: Colors.black,
-                  borderRadius: BorderRadius.circular(_isFullscreen ? 0 : 16),
-                  border: Border.all(color: kGreen.withOpacity(0.55), width: 1.5),
-                ),
-                child: ClipRRect(
-                  borderRadius: BorderRadius.circular(_isFullscreen ? 0 : 15),
-                  child: _hasError
-                      ? Center(
-                          child: Column(
-                            mainAxisAlignment: MainAxisAlignment.center,
-                            children: [
-                              const Icon(Icons.error_outline, color: Colors.redAccent, size: 45),
-                              const SizedBox(height: 10),
-                              const Text('Stream Connection Error',
-                                  style: TextStyle(color: Colors.redAccent)),
-                              TextButton(
-                                onPressed: _initFastVideo,
-                                child: const Text('RETRY', style: TextStyle(color: kGreen)),
-                              ),
-                            ],
-                          ),
-                        )
-                      : !_isInitialized
-                          ? const Center(child: CircularProgressIndicator(color: kGreen))
-                          : GestureDetector(
-                              onTap: _onScreenTapped,
-                              behavior: HitTestBehavior.opaque,
-                              child: Stack(
-                                alignment: Alignment.center,
-                                children: [
-                                  _buildSmartScaledVideo(),
-                                  Positioned(
-                                    top: 10,
-                                    left: 10,
-                                    child: GestureDetector(
-                                      onTap: _showQualityDialog,
+            Expanded(
+              flex: _isFullscreen ? 1 : 0,
+              child: Padding(
+                padding: EdgeInsets.symmetric(horizontal: _isFullscreen ? 0 : 12, vertical: 4),
+                child: Container(
+                  width: double.infinity,
+                  height: _isFullscreen ? double.infinity : 225,
+                  decoration: BoxDecoration(
+                    color: Colors.black,
+                    borderRadius: BorderRadius.circular(_isFullscreen ? 0 : 16),
+                    border: Border.all(color: kGreen.withOpacity(0.55), width: 1.5),
+                  ),
+                  child: ClipRRect(
+                    borderRadius: BorderRadius.circular(_isFullscreen ? 0 : 15),
+                    child: _hasError
+                        ? Center(
+                            child: Column(
+                              mainAxisAlignment: MainAxisAlignment.center,
+                              children: [
+                                const Icon(Icons.error_outline, color: Colors.redAccent, size: 45),
+                                const SizedBox(height: 10),
+                                const Text('Stream Connection Error', style: TextStyle(color: Colors.redAccent)),
+                                TextButton(
+                                  onPressed: _initFastVideo,
+                                  child: const Text('RETRY', style: TextStyle(color: kGreen)),
+                                ),
+                              ],
+                            ),
+                          )
+                        : !_isInitialized
+                            ? const Center(child: CircularProgressIndicator(color: kGreen))
+                            : GestureDetector(
+                                onTap: _onScreenTapped,
+                                behavior: HitTestBehavior.opaque,
+                                child: Stack(
+                                  alignment: Alignment.center,
+                                  children: [
+                                    _buildSmartScaledVideo(),
+                                    Positioned(
+                                      top: 10,
+                                      left: 10,
+                                      child: GestureDetector(
+                                        onTap: _showQualityDialog,
+                                        child: Container(
+                                          padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 3),
+                                          decoration: BoxDecoration(
+                                            color: Colors.black.withOpacity(0.7),
+                                            borderRadius: BorderRadius.circular(6),
+                                            border: Border.all(color: kGreen, width: 1),
+                                          ),
+                                          child: const Column(
+                                            mainAxisSize: MainAxisSize.min,
+                                            children: [
+                                              Text('HD', style: TextStyle(color: kGreen, fontSize: 10, fontWeight: FontWeight.bold)),
+                                              Text('1080p', style: TextStyle(color: kGreen, fontSize: 7, fontWeight: FontWeight.bold)),
+                                            ],
+                                          ),
+                                        ),
+                                      ),
+                                    ),
+                                    Positioned(
+                                      top: 10,
                                       child: Container(
-                                        padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 3),
+                                        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
                                         decoration: BoxDecoration(
                                           color: Colors.black.withOpacity(0.7),
-                                          borderRadius: BorderRadius.circular(6),
-                                          border: Border.all(color: kGreen, width: 1),
+                                          borderRadius: BorderRadius.circular(20),
                                         ),
-                                        child: const Column(
-                                          mainAxisSize: MainAxisSize.min,
-                                          children: [
-                                            Text('HD',
-                                                style: TextStyle(
-                                                    color: kGreen,
-                                                    fontSize: 10,
-                                                    fontWeight: FontWeight.bold)),
-                                            Text('1080p',
-                                                style: TextStyle(
-                                                    color: kGreen,
-                                                    fontSize: 7,
-                                                    fontWeight: FontWeight.bold)),
-                                          ],
+                                        child: const Text(
+                                          'सम्पुर - बह्र 😍🧿🔥',
+                                          style: TextStyle(color: Colors.white, fontSize: 11, fontWeight: FontWeight.bold),
                                         ),
                                       ),
                                     ),
-                                  ),
-                                  Positioned(
-                                    top: 10,
-                                    child: Container(
-                                      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
-                                      decoration: BoxDecoration(
-                                        color: Colors.black.withOpacity(0.7),
-                                        borderRadius: BorderRadius.circular(20),
-                                      ),
-                                      child: const Text(
-                                        'सम्पुर - बह्र 😍🧿🔥',
-                                        style: TextStyle(
+                                    if (_showControls)
+                                      GestureDetector(
+                                        onTap: () {
+                                          setState(() {
+                                            _controller.value.isPlaying ? _controller.pause() : _controller.play();
+                                          });
+                                          _resetControlTimer();
+                                        },
+                                        child: Container(
+                                          width: 58,
+                                          height: 58,
+                                          decoration: BoxDecoration(
+                                            color: Colors.black.withOpacity(0.55),
+                                            shape: BoxShape.circle,
+                                            border: Border.all(color: Colors.white, width: 2),
+                                          ),
+                                          child: Icon(
+                                            _controller.value.isPlaying ? Icons.pause : Icons.play_arrow,
                                             color: Colors.white,
-                                            fontSize: 11,
-                                            fontWeight: FontWeight.bold),
+                                            size: 34,
+                                          ),
+                                        ),
+                                      ),
+                                    if (_flashFeedback.isNotEmpty)
+                                      Center(
+                                        child: Container(
+                                          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
+                                          decoration: BoxDecoration(
+                                            color: Colors.black.withOpacity(0.8),
+                                            borderRadius: BorderRadius.circular(10),
+                                          ),
+                                          child: Text(
+                                            _flashFeedback,
+                                            style: const TextStyle(color: kGreen, fontWeight: FontWeight.bold, fontSize: 20),
+                                          ),
+                                        ),
+                                      ),
+                                    Positioned(
+                                      bottom: 6,
+                                      left: 10,
+                                      right: 10,
+                                      child: Row(
+                                        children: [
+                                          Text(
+                                            _formatDuration(_controller.value.position),
+                                            style: const TextStyle(color: Colors.white, fontSize: 10, fontFamily: 'monospace'),
+                                          ),
+                                          const SizedBox(width: 6),
+                                          Expanded(
+                                            child: SliderTheme(
+                                              data: SliderTheme.of(context).copyWith(
+                                                trackHeight: 2.5,
+                                                activeTrackColor: kGreen,
+                                                inactiveTrackColor: Colors.white30,
+                                                thumbColor: kGreen,
+                                                thumbShape: const RoundSliderThumbShape(enabledThumbRadius: 4),
+                                              ),
+                                              child: Slider(
+                                                value: _controller.value.position.inSeconds.toDouble().clamp(
+                                                      0.0,
+                                                      _controller.value.duration.inSeconds.toDouble() <= 0
+                                                          ? 1.0
+                                                          : _controller.value.duration.inSeconds.toDouble(),
+                                                    ),
+                                                min: 0.0,
+                                                max: _controller.value.duration.inSeconds.toDouble() > 0
+                                                    ? _controller.value.duration.inSeconds.toDouble()
+                                                    : 1.0,
+                                                onChanged: (val) {
+                                                  _controller.seekTo(Duration(seconds: val.toInt()));
+                                                },
+                                              ),
+                                            ),
+                                          ),
+                                          const SizedBox(width: 6),
+                                          Text(
+                                            _formatDuration(_controller.value.duration),
+                                            style: const TextStyle(color: Colors.white, fontSize: 10, fontFamily: 'monospace'),
+                                          ),
+                                          const SizedBox(width: 8),
+                                          GestureDetector(
+                                            onTap: _toggleSmartFullscreen,
+                                            child: Icon(
+                                              _isFullscreen ? Icons.fullscreen_exit : Icons.fullscreen,
+                                              color: Colors.white,
+                                              size: 20,
+                                            ),
+                                          ),
+                                        ],
+                                      ),
+                                    ),
+                                  ],
+                                ),
+                              ),
+                  ),
+                ),
+              ),
+            ),
+                        if (!_isFullscreen)
+              Expanded(
+                child: SingleChildScrollView(
+                  padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+                  child: Column(
+                    children: [
+                      Container(
+                        padding: const EdgeInsets.all(12),
+                        decoration: BoxDecoration(
+                          color: const Color(0xFF031408),
+                          borderRadius: BorderRadius.circular(16),
+                          border: Border.all(color: kGreen.withOpacity(0.55)),
+                        ),
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Row(
+                              children: [
+                                const Icon(Icons.play_circle_fill, color: kGreen, size: 26),
+                                const SizedBox(width: 8),
+                                Expanded(
+                                  child: Text(
+                                    widget.title,
+                                    style: const TextStyle(color: Colors.white, fontSize: 14, fontWeight: FontWeight.bold),
+                                    maxLines: 1,
+                                    overflow: TextOverflow.ellipsis,
+                                  ),
+                                ),
+                                Container(
+                                  padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 3),
+                                  decoration: BoxDecoration(
+                                    borderRadius: BorderRadius.circular(6),
+                                    border: Border.all(color: kGreen),
+                                  ),
+                                  child: const Text('HD', style: TextStyle(color: kGreen, fontSize: 10, fontWeight: FontWeight.bold)),
+                                ),
+                              ],
+                            ),
+                            const SizedBox(height: 8),
+                            Row(
+                              children: [
+                                const Icon(Icons.account_circle, color: kGreen, size: 14),
+                                const SizedBox(width: 4),
+                                Text('Uploaded by: ${widget.uploader}', style: const TextStyle(color: kGreen, fontSize: 10)),
+                                const SizedBox(width: 8),
+                                Text('|   📅 Sep 24, 2026', style: TextStyle(color: Colors.white.withOpacity(0.6), fontSize: 10)),
+                                const SizedBox(width: 8),
+                                Text('|   👁 $_viewsCount views', style: TextStyle(color: Colors.white.withOpacity(0.6), fontSize: 10)),
+                              ],
+                            ),
+                            const SizedBox(height: 12),
+                            Row(
+                              children: [
+                                Expanded(
+                                  child: InkWell(
+                                    onTap: _toggleLike,
+                                    child: Container(
+                                      padding: const EdgeInsets.symmetric(vertical: 8),
+                                      decoration: BoxDecoration(
+                                        color: Colors.black,
+                                        borderRadius: BorderRadius.circular(8),
+                                        border: Border.all(color: _isLiked ? kGreen : kGreen.withOpacity(0.4)),
+                                      ),
+                                      child: Column(
+                                        children: [
+                                          Row(
+                                            mainAxisAlignment: MainAxisAlignment.center,
+                                            children: [
+                                              Icon(_isLiked ? Icons.thumb_up : Icons.thumb_up_alt_outlined, color: kGreen, size: 14),
+                                              const SizedBox(width: 4),
+                                              Text('$_likesCount', style: const TextStyle(color: Colors.white, fontSize: 11, fontWeight: FontWeight.bold)),
+                                            ],
+                                          ),
+                                          const Text('Like', style: TextStyle(color: Colors.white54, fontSize: 9)),
+                                        ],
                                       ),
                                     ),
                                   ),
-                                  if (_showControls)
-                                    GestureDetector(
-                                      onTap: () {
-                                        setState(() {
-                                          _controller.value.isPlaying
-                                              ? _controller.pause()
-                                              : _controller.play();
-                                        });
-                                        _resetControlTimer();
-                                      },
-                                      child: Container(
-                                        width: 58,
-                                        height: 58,
-                                        decoration: BoxDecoration(
-                                          color: Colors.black.withOpacity(0.55),
-                                          shape: BoxShape.circle,
-                                          border: Border.all(color: Colors.white, width: 2),
-                                        ),
-                                        child: Icon(
-                                          _controller.value.isPlaying
-                                              ? Icons.pause
-                                              : Icons.play_arrow,
-                                          color: Colors.white,
-                                          size: 34,
-                                        ),
+                                ),
+                                const SizedBox(width: 6),
+                                Expanded(
+                                  child: InkWell(
+                                    onTap: _toggleUnlike,
+                                    child: Container(
+                                      padding: const EdgeInsets.symmetric(vertical: 8),
+                                      decoration: BoxDecoration(
+                                        color: Colors.black,
+                                        borderRadius: BorderRadius.circular(8),
+                                        border: Border.all(color: _isUnliked ? Colors.redAccent : kGreen.withOpacity(0.4)),
+                                      ),
+                                      child: Column(
+                                        children: [
+                                          Row(
+                                            mainAxisAlignment: MainAxisAlignment.center,
+                                            children: [
+                                              Icon(_isUnliked ? Icons.thumb_down : Icons.thumb_down_alt_outlined, color: Colors.redAccent, size: 14),
+                                              const SizedBox(width: 4),
+                                              Text('$_unlikesCount', style: const TextStyle(color: Colors.white, fontSize: 11, fontWeight: FontWeight.bold)),
+                                            ],
+                                          ),
+                                          const Text('Dislike', style: TextStyle(color: Colors.white54, fontSize: 9)),
+                                        ],
                                       ),
                                     ),
-                                  if (_flashFeedback.isNotEmpty)
-                                    Center(
-                                      child: Container(
-                                        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
-                                        decoration: BoxDecoration(
-                                          color: Colors.black.withOpacity(0.8),
-                                          borderRadius: BorderRadius.circular(10),
-                                        ),
-                                        child: Text(
-                                          _flashFeedback,
-                                          style: const TextStyle(
-                                              color: kGreen,
-                                              fontWeight: FontWeight.bold,
-                                              fontSize: 20),
-                                        ),
+                                  ),
+                                ),
+                                const SizedBox(width: 6),
+                                Expanded(
+                                  child: InkWell(
+                                    onTap: _toggleSave,
+                                    child: Container(
+                                      padding: const EdgeInsets.symmetric(vertical: 8),
+                                      decoration: BoxDecoration(
+                                        color: Colors.black,
+                                        borderRadius: BorderRadius.circular(8),
+                                        border: Border.all(color: _isSaved ? kGreen : kGreen.withOpacity(0.4)),
+                                      ),
+                                      child: Column(
+                                        children: [
+                                          Icon(_isSaved ? Icons.bookmark : Icons.bookmark_border, color: _isSaved ? kGreen : Colors.white, size: 14),
+                                          const Text('Save', style: TextStyle(color: Colors.white54, fontSize: 9)),
+                                        ],
                                       ),
                                     ),
-                                  Positioned(
-                                    bottom: 6,
-                                    left: 10,
-                                    right: 10,
+                                  ),
+                                ),
+                                const SizedBox(width: 8),
+                                InkWell(
+                                  onTap: _startInAppDownload,
+                                  child: Container(
+                                    padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+                                    decoration: BoxDecoration(
+                                      color: kGreen,
+                                      borderRadius: BorderRadius.circular(10),
+                                    ),
                                     child: Row(
                                       children: [
+                                        const Icon(Icons.download, color: Colors.black, size: 18),
+                                        const SizedBox(width: 4),
                                         Text(
-                                          _formatDuration(_controller.value.position),
-                                          style: const TextStyle(
-                                              color: Colors.white,
-                                              fontSize: 10,
-                                              fontFamily: 'monospace'),
-                                        ),
-                                        const SizedBox(width: 6),
-                                        Expanded(
-                                          child: SliderTheme(
-                                            data: SliderTheme.of(context).copyWith(
-                                              trackHeight: 2.5,
-                                              activeTrackColor: kGreen,
-                                              inactiveTrackColor: Colors.white30,
-                                              thumbColor: kGreen,
-                                              thumbShape: const RoundSliderThumbShape(
-                                                  enabledThumbRadius: 4),
-                                            ),
-                                            child: Slider(
-                                              value: _controller.value.position.inSeconds
-                                                  .toDouble()
-                                                  .clamp(
-                                                    0.0,
-                                                    _controller.value.duration.inSeconds
-                                                                .toDouble() <=
-                                                            0
-                                                        ? 1.0
-                                                        : _controller.value.duration
-                                                            .inSeconds
-                                                            .toDouble(),
-                                                  ),
-                                              min: 0.0,
-                                              max: _controller.value.duration.inSeconds.toDouble() > 0
-                                                  ? _controller.value.duration.inSeconds.toDouble()
-                                                  : 1.0,
-                                              onChanged: (val) {
-                                                _controller.seekTo(Duration(seconds: val.toInt()));
-                                              },
-                                            ),
-                                          ),
-                                        ),
-                                        const SizedBox(width: 6),
-                                        Text(
-                                          _formatDuration(_controller.value.duration),
-                                          style: const TextStyle(
-                                              color: Colors.white,
-                                              fontSize: 10,
-                                              fontFamily: 'monospace'),
-                                        ),
-                                        const SizedBox(width: 8),
-                                        GestureDetector(
-                                          onTap: _toggleSmartFullscreen,
-                                          child: Icon(
-                                            _isFullscreen
-                                                ? Icons.fullscreen_exit
-                                                : Icons.fullscreen,
-                                            color: Colors.white,
-                                            size: 20,
-                                          ),
+                                          _isDownloading ? '${(_downloadProgress * 100).toInt()}%' : 'Download',
+                                          style: const TextStyle(color: Colors.black, fontSize: 11, fontWeight: FontWeight.bold),
                                         ),
                                       ],
                                     ),
                                   ),
+                                ),
+                              ],
+                            ),
+                          ],
+                        ),
+                      ),
+                      const SizedBox(height: 12),
+                      Container(
+                        padding: const EdgeInsets.all(12),
+                        decoration: BoxDecoration(
+                          color: const Color(0xFF031408),
+                          borderRadius: BorderRadius.circular(16),
+                          border: Border.all(color: kGreen.withOpacity(0.4)),
+                        ),
+                        child: Row(
+                          children: [
+                            Container(
+                              padding: const EdgeInsets.symmetric(horizontal: 5, vertical: 2),
+                              decoration: BoxDecoration(color: kGreen, borderRadius: BorderRadius.circular(3)),
+                              child: const Text('AD', style: TextStyle(color: Colors.black, fontSize: 9, fontWeight: FontWeight.bold)),
+                            ),
+                            const SizedBox(width: 10),
+                            Expanded(
+                              child: Column(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                children: [
+                                  const Text('YOUR AD HERE', style: TextStyle(color: Colors.white, fontSize: 13, fontWeight: FontWeight.bold)),
+                                  Text('Grow Your Brand with Us', style: TextStyle(color: Colors.white.withOpacity(0.6), fontSize: 10)),
                                 ],
                               ),
                             ),
+                            const Icon(Icons.campaign_outlined, color: kGreen, size: 28),
+                          ],
+                        ),
+                      ),
+                      const SizedBox(height: 14),
+                      const Row(
+                        children: [
+                          Icon(Icons.play_circle_outline, color: kGreen, size: 18),
+                          SizedBox(width: 6),
+                          Text('Related Videos', style: TextStyle(color: Colors.white, fontSize: 13, fontWeight: FontWeight.bold)),
+                          Spacer(),
+                          Text('More Videos >', style: TextStyle(color: kGreen, fontSize: 11, fontWeight: FontWeight.bold)),
+                        ],
+                      ),
+                      const SizedBox(height: 10),
+                      SizedBox(
+                        height: 130,
+                        child: ListView(
+                          scrollDirection: Axis.horizontal,
+                          children: [
+                            _buildRelatedCard('Jaisalmer Tour Part 1', '@travel123', '05:42'),
+                            const SizedBox(width: 10),
+                            _buildRelatedCard('Jaisalmer Desert Ride', '@travel123', '08:15'),
+                            const SizedBox(width: 10),
+                            _buildRelatedCard('Jaisalmer Fort View', '@travel123', '06:30'),
+                          ],
+                        ),
+                      ),
+                      const SizedBox(height: 16),
+                    ],
+                  ),
                 ),
               ),
-            ),
-          ),
-          if (!_isFullscreen)
-            Expanded(
-              child: SingleChildScrollView(
-                padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
-                child: Column(
-                  children: [
-                    Container(
-                      padding: const EdgeInsets.all(12),
-                      decoration: BoxDecoration(
-                        color: const Color(0xFF031408),
-                        borderRadius: BorderRadius.circular(16),
-                        border: Border.all(color: kGreen.withOpacity(0.55)),
-                      ),
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          Row(
-                            children: [
-                              const Icon(Icons.play_circle_fill, color: kGreen, size: 26),
-                              const SizedBox(width: 8),
-                              Expanded(
-                                child: Text(
-                                  widget.title,
-                                  style: const TextStyle(
-                                      color: Colors.white,
-                                      fontSize: 14,
-                                      fontWeight: FontWeight.bold),
-                                  maxLines: 1,
-                                  overflow: TextOverflow.ellipsis,
-                                ),
-                              ),
-                              Container(
-                                padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 3),
-                                decoration: BoxDecoration(
-                                  borderRadius: BorderRadius.circular(6),
-                                  border: Border.all(color: kGreen),
-                                ),
-                                child: const Text('HD',
-                                    style: TextStyle(
-                                        color: kGreen,
-                                        fontSize: 10,
-                                        fontWeight: FontWeight.bold)),
-                              ),
-                            ],
-                          ),
-                          const SizedBox(height: 8),
-                          Row(
-                            children: [
-                              const Icon(Icons.account_circle, color: kGreen, size: 14),
-                              const SizedBox(width: 4),
-                              Text('Uploaded by: ${widget.uploader}',
-                                  style: const TextStyle(color: kGreen, fontSize: 10)),
-                              const SizedBox(width: 8),
-                              Text('|   📅 Sep 24, 2026',
-                                  style: TextStyle(
-                                      color: Colors.white.withOpacity(0.6), fontSize: 10)),
-                              const SizedBox(width: 8),
-                              Text('|   👁 $_viewsCount views',
-                                  style: TextStyle(
-                                      color: Colors.white.withOpacity(0.6), fontSize: 10)),
-                            ],
-                          ),
-                          const SizedBox(height: 12),
-                          Row(
-                            children: [
-                              Expanded(
-                                child: InkWell(
-                                  onTap: _toggleLike,
-                                  child: Container(
-                                    padding: const EdgeInsets.symmetric(vertical: 8),
-                                    decoration: BoxDecoration(
-                                      color: Colors.black,
-                                      borderRadius: BorderRadius.circular(8),
-                                      border: Border.all(
-                                          color: _isLiked ? kGreen : kGreen.withOpacity(0.4)),
-                                    ),
-                                    child: Column(
-                                      children: [
-                                        Row(
-                                          mainAxisAlignment: MainAxisAlignment.center,
-                                          children: [
-                                            Icon(
-                                                _isLiked
-                                                    ? Icons.thumb_up
-                                                    : Icons.thumb_up_alt_outlined,
-                                                color: kGreen,
-                                                size: 14),
-                                            const SizedBox(width: 4),
-                                            Text('$_likesCount',
-                                                style: const TextStyle(
-                                                    color: Colors.white,
-                                                     fontSize: 11,
-                                                    fontWeight: FontWeight.bold)),
-                                          ],
-                                        ),
-                                        const Text('Like',
-                                            style: TextStyle(
-                                                color: Colors.white54, fontSize: 9)),
-                                      ],
-                                    ),
-                                  ),
-                                ),
-                              ),
-                              const SizedBox(width: 6),
-                              Expanded(
-                                child: InkWell(
-                                  onTap: _toggleUnlike,
-                                  child: Container(
-                                    padding: const EdgeInsets.symmetric(vertical: 8),
-                                    decoration: BoxDecoration(
-                                      color: Colors.black,
-                                      borderRadius: BorderRadius.circular(8),
-                                      border: Border.all(
-                                          color: _isUnliked
-                                              ? Colors.redAccent
-                                              : kGreen.withOpacity(0.4)),
-                                    ),
-                                    child: Column(
-                                      children: [
-                                        Row(
-                                          mainAxisAlignment: MainAxisAlignment.center,
-                                          children: [
-                                            Icon(
-                                                _isUnliked
-                                                    ? Icons.thumb_down
-                                                    : Icons.thumb_down_alt_outlined,
-                                                color: Colors.redAccent,
-                                                size: 14),
-                                            const SizedBox(width: 4),
-                                            Text('$_unlikesCount',
-                                                style: const TextStyle(
-                                                    color: Colors.white,
-                                                    fontSize: 11,
-                                                    fontWeight: FontWeight.bold)),
-                                          ],
-                                        ),
-                                        const Text('Dislike',
-                                            style: TextStyle(
-                                                color: Colors.white54, fontSize: 9)),
-                                      ],
-                                    ),
-                                  ),
-                                ),
-                              ),
-                              const SizedBox(width: 6),
-                              Expanded(
-                                child: InkWell(
-                                  onTap: _toggleSave,
-                                  child: Container(
-                                    padding: const EdgeInsets.symmetric(vertical: 8),
-                                    decoration: BoxDecoration(
-                                      color: Colors.black,
-                                      borderRadius: BorderRadius.circular(8),
-                                      border: Border.all(
-                                          color: _isSaved ? kGreen : kGreen.withOpacity(0.4)),
-                                    ),
-                                    child: Column(
-                                      children: [
-                                        Icon(
-                                            _isSaved
-                                                ? Icons.bookmark
-                                                : Icons.bookmark_border,
-                                            color: _isSaved ? kGreen : Colors.white,
-                                            size: 14),
-                                        const Text('Save',
-                                            style: TextStyle(
-                                                color: Colors.white54, fontSize: 9)),
-                                      ],
-                                    ),
-                                  ),
-                                ),
-                              ),
-                              const SizedBox(width: 8),
-                              InkWell(
-                                onTap: _startInAppDownload,
-                                child: Container(
-                                  padding: const EdgeInsets.symmetric(
-                                      horizontal: 14, vertical: 12),
-                                  decoration: BoxDecoration(
-                                    color: kGreen,
-                                    borderRadius: BorderRadius.circular(10),
-                                  ),
-                                  child: Row(
-                                    children: [
-                                      const Icon(Icons.download,
-                                          color: Colors.black, size: 18),
-                                      const SizedBox(width: 4),
-                                      Text(
-                                        _isDownloading
-                                            ? '${(_downloadProgress * 100).toInt()}%'
-                                            : 'Download',
-                                        style: const TextStyle(
-                                            color: Colors.black,
-                                            fontSize: 11,
-                                            fontWeight: FontWeight.bold),
-                                      ),
-                                    ],
-                                  ),
-                                ),
-                              ),
-                            ],
-                          ),
-                        ],
-                      ),
-                    ),
-                    const SizedBox(height: 12),
-                    Container(
-                      padding: const EdgeInsets.all(12),
-                      decoration: BoxDecoration(
-                        color: const Color(0xFF031408),
-                        borderRadius: BorderRadius.circular(16),
-                        border: Border.all(color: kGreen.withOpacity(0.4)),
-                      ),
-                      child: Row(
-                        children: [
-                          Container(
-                            padding: const EdgeInsets.symmetric(horizontal: 5, vertical: 2),
-                            decoration: BoxDecoration(
-                                color: kGreen, borderRadius: BorderRadius.circular(3)),
-                            child: const Text('AD',
-                                style: TextStyle(
-                                    color: Colors.black,
-                                    fontSize: 9,
-                                    fontWeight: FontWeight.bold)),
-                          ),
-                          const SizedBox(width: 10),
-                          Expanded(
-                            child: Column(
-                              crossAxisAlignment: CrossAxisAlignment.start,
-                              children: [
-                                const Text('YOUR AD HERE',
-                                    style: TextStyle(
-                                        color: Colors.white,
-                                        fontSize: 13,
-                                        fontWeight: FontWeight.bold)),
-                                Text('Grow Your Brand with Us',
-                                    style: TextStyle(
-                                        color: Colors.white.withOpacity(0.6),
-                                        fontSize: 10)),
-                              ],
-                            ),
-                          ),
-                          const Icon(Icons.campaign_outlined, color: kGreen, size: 28),
-                        ],
-                      ),
-                    ),
-                    const SizedBox(height: 14),
-                    const Row(
-                      children: [
-                        Icon(Icons.play_circle_outline, color: kGreen, size: 18),
-                        SizedBox(width: 6),
-                        Text('Related Videos',
-                            style: TextStyle(
-                                color: Colors.white,
-                                fontSize: 13,
-                                fontWeight: FontWeight.bold)),
-                        Spacer(),
-                        Text('More Videos >',
-                            style: TextStyle(
-                                color: kGreen, fontSize: 11, fontWeight: FontWeight.bold)),
-                      ],
-                    ),
-                    const SizedBox(height: 10),
-                    SizedBox(
-                      height: 130,
-                      child: ListView(
-                        scrollDirection: Axis.horizontal,
-                        children: [
-                          _buildRelatedCard('Jaisalmer Tour Part 1', '@travel123', '05:42'),
-                          const SizedBox(width: 10),
-                          _buildRelatedCard('Jaisalmer Desert Ride', '@travel123', '08:15'),
-                          const SizedBox(width: 10),
-                          _buildRelatedCard('Jaisalmer Fort View', '@travel123', '06:30'),
-                        ],
-                      ),
-                    ),
-                    const SizedBox(height: 16),
-                  ],
-                ),
-              ),
-            ),
-        ],
+          ],
+        ),
       ),
-    ),  
-  );
- }
+    );
+  }
 
   Widget _buildRelatedCard(String title, String user, String duration) {
     return Container(
@@ -3938,10 +3814,8 @@ class _NativeVideoPlayerScreenState extends State<NativeVideoPlayerScreen> {
                 right: 4,
                 child: Container(
                   padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 1),
-                  decoration: BoxDecoration(
-                      color: Colors.black87, borderRadius: BorderRadius.circular(4)),
-                  child: Text(duration,
-                      style: const TextStyle(color: Colors.white, fontSize: 8)),
+                  decoration: BoxDecoration(color: Colors.black87, borderRadius: BorderRadius.circular(4)),
+                  child: Text(duration, style: const TextStyle(color: Colors.white, fontSize: 8)),
                 ),
               ),
             ],
@@ -3951,24 +3825,17 @@ class _NativeVideoPlayerScreenState extends State<NativeVideoPlayerScreen> {
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Text(title,
-                    style: const TextStyle(
-                        color: Colors.white,
-                        fontSize: 10,
-                        fontWeight: FontWeight.bold),
-                    maxLines: 1),
-                Text(user,
-                    style: TextStyle(
-                        color: Colors.white.withOpacity(0.5), fontSize: 9)),
+                Text(title, style: const TextStyle(color: Colors.white, fontSize: 10, fontWeight: FontWeight.bold), maxLines: 1),
+                Text(user, style: TextStyle(color: Colors.white.withOpacity(0.5), fontSize: 9)),
               ],
             ),
           ),
         ],
       ),
     );
-  } 
+  }
 }
-class SupabaseService {
+  class SupabaseService {
   final SupabaseClient client = Supabase.instance.client;
 
   Future<void> recordView(int videoId) async {
@@ -3997,8 +3864,7 @@ class SupabaseService {
 
   Future<int> getViewCount(int videoId) async {
     try {
-      final res =
-          await client.from('videos').select('views').eq('id', videoId).maybeSingle();
+      final res = await client.from('videos').select('views').eq('id', videoId).maybeSingle();
       return (res?['views'] as int?) ?? 0;
     } catch (_) {
       return 0;
@@ -4007,8 +3873,7 @@ class SupabaseService {
 
   Future<int> getLikeCount(int videoId) async {
     try {
-      final res =
-          await client.from('videos').select('likes').eq('id', videoId).maybeSingle();
+      final res = await client.from('videos').select('likes').eq('id', videoId).maybeSingle();
       return (res?['likes'] as int?) ?? 0;
     } catch (_) {
       return 0;
@@ -4017,8 +3882,7 @@ class SupabaseService {
 
   Future<int> getShareCount(int videoId) async {
     try {
-      final res =
-          await client.from('videos').select('shares').eq('id', videoId).maybeSingle();
+      final res = await client.from('videos').select('shares').eq('id', videoId).maybeSingle();
       return (res?['shares'] as int?) ?? 0;
     } catch (_) {
       return 0;
@@ -4160,8 +4024,7 @@ class UserSearchDelegate extends SearchDelegate {
                   backgroundColor: kGreen,
                   child: Icon(Icons.person, color: Colors.black),
                 ),
-                title: Text(u['display_name'] ?? u['username'] ?? '',
-                    style: const TextStyle(color: Colors.white)),
+                title: Text(u['display_name'] ?? u['username'] ?? '', style: const TextStyle(color: Colors.white)),
                 subtitle: Text('@${u['username']}', style: const TextStyle(color: kGreen)),
                 onTap: () {
                   Navigator.push(
@@ -4179,7 +4042,7 @@ class UserSearchDelegate extends SearchDelegate {
     );
   }
 }
-class UserProfileScreen extends StatefulWidget {
+  class UserProfileScreen extends StatefulWidget {
   final Map<String, dynamic> channelProfile;
   const UserProfileScreen({super.key, required this.channelProfile});
 
@@ -4216,8 +4079,7 @@ class _UserProfileScreenState extends State<UserProfileScreen> {
   @override
   Widget build(BuildContext context) {
     final currentUserId = Supabase.instance.client.auth.currentUser?.id;
-    final isOwnProfile =
-        currentUserId == widget.channelProfile['id']?.toString();
+    final isOwnProfile = currentUserId == widget.channelProfile['id']?.toString();
 
     return Scaffold(
       backgroundColor: Colors.black,
@@ -4236,13 +4098,8 @@ class _UserProfileScreenState extends State<UserProfileScreen> {
                 ),
                 const SizedBox(height: 10),
                 Text(
-                  widget.channelProfile['display_name'] ??
-                      widget.channelProfile['username'] ??
-                      '',
-                  style: const TextStyle(
-                      color: Colors.white,
-                      fontSize: 18,
-                      fontWeight: FontWeight.bold),
+                  widget.channelProfile['display_name'] ?? widget.channelProfile['username'] ?? '',
+                  style: const TextStyle(color: Colors.white, fontSize: 18, fontWeight: FontWeight.bold),
                 ),
                 Text(
                   '@${widget.channelProfile['username']}',
@@ -4252,40 +4109,33 @@ class _UserProfileScreenState extends State<UserProfileScreen> {
                 if (!isOwnProfile)
                   ElevatedButton(
                     onPressed: () async {
-                      final status = await _service.toggleSubscription(
-                          widget.channelProfile['id']?.toString() ?? '');
+                      final status = await _service.toggleSubscription(widget.channelProfile['id']?.toString() ?? '');
                       setState(() => _isSubscribed = status);
                     },
                     style: ElevatedButton.styleFrom(
                       backgroundColor: _isSubscribed ? Colors.grey[850] : kGreen,
                       foregroundColor: _isSubscribed ? Colors.white : Colors.black,
-                      shape: RoundedRectangleBorder(
-                          borderRadius: BorderRadius.circular(20)),
+                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
                     ),
                     child: Text(_isSubscribed ? 'SUBSCRIBED' : 'SUBSCRIBE'),
                   ),
                 const Divider(color: Colors.white24, height: 30),
                 Expanded(
                   child: _videos.isEmpty
-                      ? const Center(
-                          child: Text('No uploads yet.',
-                              style: TextStyle(color: Colors.white54)))
+                      ? const Center(child: Text('No uploads yet.', style: TextStyle(color: Colors.white54)))
                       : ListView.builder(
                           itemCount: _videos.length,
                           itemBuilder: (context, i) {
                             final vid = _videos[i];
                             return ListTile(
                               leading: const Icon(Icons.play_circle_fill, color: kGreen),
-                              title: Text(vid['title'] ?? 'Video',
-                                  style: const TextStyle(color: Colors.white)),
-                              subtitle: Text('${vid['views'] ?? 0} views',
-                                  style: const TextStyle(color: Colors.white54)),
+                              title: Text(vid['title'] ?? 'Video', style: const TextStyle(color: Colors.white)),
+                              subtitle: Text('${vid['views'] ?? 0} views', style: const TextStyle(color: Colors.white54)),
                               onTap: () {
                                 Navigator.push(
                                   context,
                                   MaterialPageRoute(
-                                    builder: (_) => StreamPreviewScreen(
-                                        targetUrl: vid['video_url'] ?? ''),
+                                    builder: (_) => StreamPreviewScreen(targetUrl: vid['video_url'] ?? ''),
                                   ),
                                 );
                               },
@@ -4421,3 +4271,5 @@ class EarningsScreen extends StatelessWidget {
     );
   }
 }
+  
+                  
