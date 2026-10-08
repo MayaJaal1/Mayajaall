@@ -1827,7 +1827,7 @@ class ChannelScreen extends StatelessWidget {
               borderRadius: BorderRadius.circular(12),
               border: Border.all(color: kGreen.withOpacity(0.4)),
             ),
-            child: const ListTile(
+            child:ListTile(
               leading: Icon(Icons.bolt, color: kGreen, size: 32),
               title: Text('Quantum Streaming Node', style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
               subtitle: Text('Direct hardware pipeline active', style: TextStyle(color: kDimGreen, fontSize: 12)),
@@ -1841,7 +1841,7 @@ class ChannelScreen extends StatelessWidget {
               borderRadius: BorderRadius.circular(12),
               border: Border.all(color: kNeonCyan.withOpacity(0.4)),
             ),
-            child: const ListTile(
+            child:ListTile(
               leading: Icon(Icons.cloud_done, color: kNeonCyan, size: 32),
               title: Text('High Speed CDN Node', style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
               subtitle: Text('Buffer acceleration: ENABLED', style: TextStyle(color: kNeonCyan, fontSize: 12)),
