@@ -3906,8 +3906,9 @@ class _NativeVideoPlayerScreenState extends State<NativeVideoPlayerScreen> {
             ),
         ],
       ),
-    );
-  }
+    ),  
+  );
+ }
 
   Widget _buildRelatedCard(String title, String user, String duration) {
     return Container(
