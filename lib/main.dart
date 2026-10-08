@@ -4408,7 +4408,7 @@ class EarningsScreen extends StatelessWidget {
                                 title: Text(originalUrl, style: const TextStyle(color: Colors.white, fontSize: 12, fontWeight: FontWeight.bold), maxLines: 1),
                                 subtitle: Text('Views: $views • Earnings: \$${earnings.toStringAsFixed(2)}', style: TextStyle(color: kGreen.withOpacity(0.7), fontSize: 11)),
                            ),
-                        ),
+                        );
                       ),
                     ),
                 ],
