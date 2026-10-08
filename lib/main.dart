@@ -4337,6 +4337,7 @@ class _UserProfileScreenState extends State<UserProfileScreen> {
     );
   }
 }
+  
 class EarningsScreen extends StatelessWidget {
   const EarningsScreen({super.key});
 
