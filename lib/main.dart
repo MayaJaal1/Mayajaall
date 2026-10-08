@@ -2083,7 +2083,7 @@ class MoreScreen extends StatelessWidget {
             trailing: const Icon(Icons.arrow_forward_ios, size: 14, color: kGreen),
             onTap: () => Navigator.push(context, MaterialPageRoute(builder: (_) => const EarningsScreen())),
           ),
-          const Divider(color: kGreen.withOpacity(0.15)),
+          Divider(color: kGreen.withOpacity(0.15)),
           const SizedBox(height: 20),
           const Text('JOIN US', style: TextStyle(color: kGreen, fontSize: 13, fontWeight: FontWeight.bold, letterSpacing: 2)),
           const SizedBox(height: 12),
