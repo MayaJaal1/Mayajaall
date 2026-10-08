@@ -1414,7 +1414,7 @@ class _HomeScreenState extends State<HomeScreen> with SingleTickerProviderStateM
                 Padding(
                   padding: const EdgeInsets.all(16.0),
                   child: Row(
-                    children: const [
+                    children: [
                       Icon(Icons.notifications_active, color: kGreen),
                       SizedBox(width: 8),
                       Text(
