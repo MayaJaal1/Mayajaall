@@ -14,7 +14,7 @@ import 'package:video_player/video_player.dart';
 import 'package:share_plus/share_plus.dart';
 import 'package:http/http.dart' as http;
 import 'package:onesignal_flutter/onesignal_flutter.dart';
-
+import 'package:firebase_core/firebase_core.dart';
 const String supabaseUrl = 'https://rbdfqmmjgfwikaoxdexu.supabase.co';
 const String supabaseAnonKey = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InJiZGZxbW1qZ2Z3aWthb3hkZXh1Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3OTEwOTkxNzMsImV4cCI6MjEwNjY3NTE3M30.qB_DrMLR33BcUJtu5IlyBuw0gXlcw9dXk3SX_uIknP0';
 const String webClientId = '985001671962-rok8qnng0rumjsd8mgr8uhr92o5vhs4n.apps.googleusercontent.com';
