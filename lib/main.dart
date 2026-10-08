@@ -404,6 +404,53 @@ class _SplashScreenState extends State<SplashScreen>
     );
   }
 }
+class MyApp extends StatelessWidget {
+  const MyApp({super.key});
+
+  @override
+  Widget build(BuildContext context) {
+    return ValueListenableBuilder<String>(
+      valueListenable: languageNotifier,
+      builder: (context, lang, _) {
+        return ValueListenableBuilder<ThemeMode>(
+          valueListenable: themeNotifier,
+          builder: (context, mode, _) {
+            return MaterialApp(
+              navigatorKey: navigatorKey,
+              title: 'MayaJaal',
+              debugShowCheckedModeBanner: false,
+              themeMode: ThemeMode.dark,
+              theme: _buildPureDarkTheme(),
+              darkTheme: _buildPureDarkTheme(),
+              home: const AuthGate(),
+            );
+          },
+        );
+      },
+    );
+  }
+
+  ThemeData _buildPureDarkTheme() {
+    return ThemeData(
+      brightness: Brightness.dark,
+      scaffoldBackgroundColor: Colors.black,
+      canvasColor: Colors.black,
+      dialogBackgroundColor: const Color(0xFF021206),
+      colorScheme: const ColorScheme.dark(
+        primary: kGreen,
+        surface: Color(0xFF021206),
+      ),
+      useMaterial3: true,
+      fontFamily: 'monospace',
+      appBarTheme: const AppBarTheme(
+        backgroundColor: Colors.black,
+        foregroundColor: kGreen,
+        elevation: 0,
+        centerTitle: true,
+      ),
+    );
+  }
+}
 
 class AuthGate extends StatelessWidget {
   final String? pendingTargetUrl;
@@ -415,10 +462,7 @@ class AuthGate extends StatelessWidget {
       stream: Supabase.instance.client.auth.onAuthStateChange,
       builder: (context, snapshot) {
         if (snapshot.connectionState == ConnectionState.waiting) {
-          return const Scaffold(
-            backgroundColor: Colors.black,
-            body: Center(child: CircularProgressIndicator(color: kGreen)),
-          );
+          SplashScreen();
         }
         final session = Supabase.instance.client.auth.currentSession;
         if (session != null) {
@@ -432,6 +476,7 @@ class AuthGate extends StatelessWidget {
     );
   }
 }
+
 class LoginScreen extends StatefulWidget {
   final String? pendingTargetUrl;
   const LoginScreen({super.key, this.pendingTargetUrl});
