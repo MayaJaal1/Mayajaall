@@ -4414,7 +4414,7 @@ class EarningsScreen extends StatelessWidget {
                 ],
               ),
             ),
-        ],
+        },
       ),
     );
   }
