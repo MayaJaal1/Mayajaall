@@ -90,16 +90,20 @@ String tr(String key) {
 
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
-  SystemChrome.setSystemUIOverlayStyle(const SystemUiOverlayStyle(
-    statusBarColor: Colors.transparent,
-    statusBarBrightness: Brightness.dark,
-    statusBarIconBrightness: Brightness.light,
-    systemNavigationBarColor: Colors.black,
-    systemNavigationBarIconBrightness: Brightness.light,
-  ));
+  
+  // ... System UI overlay code ...
 
-  await Firebase.initializeApp();
-  await Supabase.initialize(url: supabaseUrl, anonKey: supabaseAnonKey);
+  try {
+    await Firebase.initializeApp();
+  } catch (e) {
+    debugPrint("Firebase Initialization Error: $e");
+  }
+
+  try {
+    await Supabase.initialize(url: supabaseUrl, anonKey: supabaseAnonKey);
+  } catch (e) {
+    debugPrint("Supabase Initialization Error: $e");
+  }
 
   try {
     OneSignal.Debug.setLogLevel(OSLogLevel.verbose);
@@ -110,14 +114,9 @@ Future<void> main() async {
   }
 
   final prefs = await SharedPreferences.getInstance();
-  final isDark = prefs.getBool('dark_theme') ?? true;
-  final lang = prefs.getString('language') ?? 'English';
-  themeNotifier.value = isDark ? ThemeMode.dark : ThemeMode.light;
-  languageNotifier.value = lang;
+  // ... baaki code ...
   runApp(const MyApp());
 }
-
-
 
 class MatrixRain extends StatefulWidget {
   final double opacity;
@@ -350,7 +349,7 @@ class AuthGate extends StatelessWidget {
       stream: Supabase.instance.client.auth.onAuthStateChange,
       builder: (context, snapshot) {
         if (snapshot.connectionState == ConnectionState.waiting) {
-          SplashScreen();
+        return const SplashScreen();
         }
         final session = Supabase.instance.client.auth.currentSession;
         if (session != null) {
