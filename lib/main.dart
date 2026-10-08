@@ -4328,3 +4328,125 @@ class _UserProfileScreenState extends State<UserProfileScreen> {
     );
   }
 }
+class EarningsScreen extends StatelessWidget {
+  const EarningsScreen({super.key});
+
+  @override
+  Widget build(BuildContext context) {
+    final user = Supabase.instance.client.auth.currentUser;
+
+    if (user == null) {
+      return Scaffold(
+        backgroundColor: Colors.black,
+        appBar: AppBar(title: const Text('EARNINGS DASHBOARD')),
+        body: const Center(
+          child: Text('Please login to view your earnings.', style: TextStyle(color: Colors.white70)),
+        ),
+      );
+    }
+
+    return Scaffold(
+      backgroundColor: Colors.black,
+      appBar: AppBar(
+        title: const Text('EARNINGS DASHBOARD', style: TextStyle(letterSpacing: 1.5)),
+        backgroundColor: Colors.black,
+      ),
+      body: StreamBuilder<QuerySnapshot>(
+        stream: FirebaseFirestore.instance
+            .collection('links')
+            .where('userId', isEqualTo: user.id)
+            .snapshots(),
+        builder: (context, snapshot) {
+          if (snapshot.connectionState == ConnectionState.waiting) {
+            return const Center(child: CircularProgressIndicator(color: kGreen));
+          }
+          if (snapshot.hasError) {
+            return Center(child: Text('Error: ${snapshot.error}', style: const TextStyle(color: Colors.redAccent)));
+          }
+
+          final docs = snapshot.data?.docs ?? [];
+          
+          int totalViews = 0;
+          for (var doc in docs) {
+            final data = doc.data() as Map<String, dynamic>;
+            totalViews += (data['views'] ?? 0) as int;
+          }
+
+          double totalEarnings = (totalViews / 1000) * 2;
+
+          return Padding(
+            padding: const EdgeInsets.all(16.0),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Container(
+                  width: double.infinity,
+                  padding: const EdgeInsets.all(20),
+                  decoration: BoxDecoration(
+                    color: const Color(0xFF031408),
+                    borderRadius: BorderRadius.circular(16),
+                    border: Border.all(color: kGreen, width: 1.5),
+                  ),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      const Text('TOTAL BALANCE', style: TextStyle(color: Colors.white54, fontSize: 11, letterSpacing: 1.5)),
+                      const SizedBox(height: 6),
+                      Text('\$${totalEarnings.toStringAsFixed(2)}', style: const TextStyle(color: kGreen, fontSize: 32, fontWeight: FontWeight.w900)),
+                      const Divider(color: Colors.white24, height: 24),
+                      Row(
+                        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                        children: [
+                          Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              const Text('Total Views', style: TextStyle(color: Colors.white54, fontSize: 10)),
+                              Text('$totalViews', style: const TextStyle(color: Colors.white, fontSize: 16, fontWeight: FontWeight.bold)),
+                            ],
+                          ),
+                          Column(
+                            crossAxisAlignment: CrossAxisAlignment.end,
+                            children: [
+                              const Text('Total Links', style: TextStyle(color: Colors.white54, fontSize: 10)),
+                              Text('${docs.length}', style: const TextStyle(color: Colors.white, fontSize: 16, fontWeight: FontWeight.bold)),
+                            ],
+                          ),
+                        ],
+                      ),
+                    ],
+                  ),
+                ),
+                const SizedBox(height: 20),
+                const Text('YOUR CREATED LINKS', style: TextStyle(color: kGreen, fontSize: 13, fontWeight: FontWeight.bold, letterSpacing: 1.5)),
+                const SizedBox(height: 10),
+                Expanded(
+                  child: docs.isEmpty
+                      ? const Center(child: Text('No links created yet.', style: TextStyle(color: Colors.white54)))
+                      : ListView.builder(
+                          itemCount: docs.length,
+                          itemBuilder: (context, index) {
+                            final linkData = docs[index].data() as Map<String, dynamic>;
+                            final views = linkData['views'] ?? 0;
+                            final originalUrl = linkData['originalUrl'] ?? 'Stream Link';
+                            final earnings = (views / 1000) * 2;
+
+                            return Container(
+                              margin: const EdgeInsets.only(bottom: 10),
+                              child: ListTile(
+                                tileColor: const Color(0xFF031408),
+                                leading: const Icon(Icons.link, color: kGreen),
+                                title: Text(originalUrl, style: const TextStyle(color: Colors.white, fontSize: 12, fontWeight: FontWeight.bold), maxLines: 1),
+                                subtitle: Text('Views: $views • Earnings: \$${earnings.toStringAsFixed(2)}', style: TextStyle(color: kGreen.withOpacity(0.7), fontSize: 11)),
+                              ),
+                            );
+                          },
+                        ),
+                ),
+              ],
+            ),
+          );
+        },
+      ),
+    );
+  }
+}
