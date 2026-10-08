@@ -2084,7 +2084,7 @@ class MoreScreen extends StatelessWidget {
             ),
           ),
           ListTile(
-            leading: constIcon(Icons.account_balance_wallet, color: kGreen),
+            leading: const Icon(Icons.account_balance_wallet, color: kGreen),
             title: const Text('Earnings Dashboard', style: TextStyle(color: Colors.white)),
             subtitle: const Text('View your earnings and links', style: TextStyle(color: kGreen, fontSize: 12)),
             trailing: const Icon(Icons.arrow_forward_ios, size: 14, color: kGreen),
