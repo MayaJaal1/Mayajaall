@@ -2904,12 +2904,71 @@ class _NativeVideoPlayerScreenState extends State<NativeVideoPlayerScreen> {
   bool _isLiked = false;
   bool _isUnliked = false;
   bool _isSaved = false;
+class _NativeVideoPlayerScreenState extends State<NativeVideoPlayerScreen> {
+  final SupabaseService _supabaseService = SupabaseService();
+
+  // 🕒 Yeh poora function yahan paste kar dein:
+  void _startViewTrackingTimer() {
+    Future.delayed(const Duration(seconds: 10), () async {
+      if (!mounted || !_controller.value.isPlaying) return;
+
+      final user = Supabase.instance.client.auth.currentUser;
+      if (user == null) return;
+      String userId = user.id;
+
+      final docRef = FirebaseFirestore.instance.collection('links').doc(widget.videoId);
+
+      try {
+        await FirebaseFirestore.instance.runTransaction((transaction) async {
+          final snapshot = await transaction.get(docRef);
+
+          Map<String, dynamic> userWatches = {};
+          Map<String, dynamic> userContributed = {};
+          int totalViews = 0;
+
+          if (snapshot.exists) {
+            userWatches = Map<String, dynamic>.from(snapshot.data()?['user_watches'] ?? {});
+            userContributed = Map<String, dynamic>.from(snapshot.data()?['user_contributed'] ?? {});
+            totalViews = snapshot.data()?['views'] ?? 0;
+          }
+
+          int currentWatches = userWatches[userId] ?? 0;
+          currentWatches += 1;
+          userWatches[userId] = currentWatches;
+
+          int targetContributedViews = 1; 
+          if (currentWatches >= 20) {
+            targetContributedViews = 3; 
+          } else if (currentWatches >= 10) {
+            targetContributedViews = 2; 
+          }
+
+          int oldContributed = userContributed[userId] ?? 0;
+          int delta = targetContributedViews - oldContributed;
+
+          if (delta > 0) {
+            userContributed[userId] = targetContributedViews;
+            totalViews += delta; 
+
+            transaction.set(docRef, {
+              'views': totalViews,
+              'user_watches': userWatches,
+              'user_contributed': userContributed,
+            }, SetOptions(merge: true));
+          }
+        });
+      } catch (e) {
+        debugPrint("View tracking error: $e");
+      }
+    });
+  }
 
   @override
   void initState() {
     super.initState();
     _fetchRealStatsAndRegisterView();
     _initFastVideo();
+ _startViewTrackingTimer();
   }
 
   Future<void> _fetchRealStatsAndRegisterView() async {
