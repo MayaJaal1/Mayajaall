@@ -2134,6 +2134,7 @@ class MoreScreen extends StatelessWidget {
       ),
     );
   }
+}
   class SettingsScreen extends StatefulWidget {
   const SettingsScreen({super.key});
   @override
