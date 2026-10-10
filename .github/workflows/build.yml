@@ -193,7 +193,7 @@ jobs:
               sourceSets { main.java.srcDirs += 'src/main/kotlin' }
               defaultConfig {
                   applicationId "com.mayajaal.online"
-                  minSdkVersion 21
+                  minSdkVersion 23
                   targetSdkVersion 34
                   versionCode flutterVersionCode.toInteger()
                   versionName flutterVersionName
