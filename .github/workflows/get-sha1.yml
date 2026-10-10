@@ -16,17 +16,11 @@ jobs:
           distribution: 'zulu'
           java-version: '17'
 
-      - name: Delete old files
-        run: |
-          rm -f mayajaal-new.jks
-          rm -f mayajaal-release-new.jks
-          rm -f mayajaal-temp.jks
-
       - name: Generate New Keystore
         run: |
           keytool -genkeypair -v \
             -keystore mayajaal-new.jks \
-            -alias mayajaalnewkey \
+            -alias newkey2024 \
             -keyalg RSA \
             -keysize 2048 \
             -validity 10000 \
@@ -38,10 +32,10 @@ jobs:
       - name: Get SHA1 and SHA256 Fingerprints
         run: |
           echo "=========================================="
-          echo "SHA FINGERPRINTS (YEH COPY KAREIN):"
+          echo "SHA FINGERPRINTS:"
           echo "=========================================="
           keytool -list -v -keystore mayajaal-new.jks \
-            -alias mayajaalnewkey \
+            -alias newkey2024 \
             -storepass MayajaalRelease2024 \
             -keypass MayajaalRelease2024 | grep -iE "sha1|sha-1|sha256|sha-256"
           echo "=========================================="
