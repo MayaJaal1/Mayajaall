@@ -16,15 +16,17 @@ jobs:
           distribution: 'zulu'
           java-version: '17'
 
-      - name: Delete old keystore
+      - name: Delete old files
         run: |
+          rm -f mayajaal-new.jks
           rm -f mayajaal-release-new.jks
+          rm -f mayajaal-temp.jks
 
       - name: Generate New Keystore
         run: |
           keytool -genkeypair -v \
-            -keystore mayajaal-release-new.jks \
-            -alias mayajaalnew \
+            -keystore mayajaal-new.jks \
+            -alias mayajaalnewkey \
             -keyalg RSA \
             -keysize 2048 \
             -validity 10000 \
@@ -38,8 +40,8 @@ jobs:
           echo "=========================================="
           echo "SHA FINGERPRINTS (YEH COPY KAREIN):"
           echo "=========================================="
-          keytool -list -v -keystore mayajaal-release-new.jks \
-            -alias mayajaalnew \
+          keytool -list -v -keystore mayajaal-new.jks \
+            -alias mayajaalnewkey \
             -storepass MayajaalRelease2024 \
             -keypass MayajaalRelease2024 | grep -iE "sha1|sha-1|sha256|sha-256"
           echo "=========================================="
@@ -48,4 +50,4 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: mayajaal-new-keystore
-          path: mayajaal-release-new.jks
+          path: mayajaal-new.jks
