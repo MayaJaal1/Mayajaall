@@ -16,7 +16,7 @@ jobs:
           distribution: 'zulu'
           java-version: '17'
 
-      - name: Delete existing keystore if any
+      - name: Delete old keystore
         run: |
           rm -f mayajaal-release-new.jks
 
@@ -24,7 +24,7 @@ jobs:
         run: |
           keytool -genkeypair -v \
             -keystore mayajaal-release-new.jks \
-            -alias mayajaal \
+            -alias mayajaalnew \
             -keyalg RSA \
             -keysize 2048 \
             -validity 10000 \
@@ -39,7 +39,7 @@ jobs:
           echo "SHA FINGERPRINTS (YEH COPY KAREIN):"
           echo "=========================================="
           keytool -list -v -keystore mayajaal-release-new.jks \
-            -alias mayajaal \
+            -alias mayajaalnew \
             -storepass MayajaalRelease2024 \
             -keypass MayajaalRelease2024 | grep -iE "sha1|sha-1|sha256|sha-256"
           echo "=========================================="
