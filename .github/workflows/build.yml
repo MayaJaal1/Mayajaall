@@ -113,7 +113,7 @@ jobs:
               <uses-permission android:name="android.permission.WAKE_LOCK"/>
 
               <application
-                  android:label="MaayaJaal"
+                  android:label="MayaJaal"
                   android:name="${applicationName}"
                   android:icon="@mipmap/ic_launcher"
                   android:hardwareAccelerated="true"
@@ -290,22 +290,22 @@ jobs:
 
       - name: Rename APK
         run: |
-          mv build/app/outputs/flutter-apk/app-release.apk build/app/outputs/flutter-apk/MaayaJaal.apk
+          mv build/app/outputs/flutter-apk/app-release.apk build/app/outputs/flutter-apk/MayaJaal.apk
 
       - name: Upload APK Artifact
         uses: actions/upload-artifact@v4
         with:
-          name: MaayaJaal-APK
-          path: build/app/outputs/flutter-apk/MaayaJaal.apk
+          name: MayaJaal-APK
+          path: build/app/outputs/flutter-apk/MayaJaal.apk
 
       - name: Release APK to GitHub Releases
         uses: softprops/action-gh-release@v2
         if: startsWith(github.ref, 'refs/heads/main')
         with:
           tag_name: latest
-          name: "MaayaJaal Latest Release"
+          name: "MayaJaal Latest Release"
           draft: false
           prerelease: false
-          files: build/app/outputs/flutter-apk/MaayaJaal.apk
+          files: build/app/outputs/flutter-apk/MayaJaal.apk
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
