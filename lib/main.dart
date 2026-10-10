@@ -16,14 +16,16 @@ import 'package:http/http.dart' as http;
 import 'package:onesignal_flutter/onesignal_flutter.dart';
 import 'package:firebase_core/firebase_core.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:firebase_database/firebase_database.dart';
+import 'package:device_info_plus/device_info_plus.dart';
 
 const String supabaseUrl = 'https://rbdfqmmjgfwikaoxdexu.supabase.co';
 const String supabaseAnonKey = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InJiZGZxbW1qZ2Z3aWthb3hkZXh1Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3OTEwOTkxNzMsImV4cCI6MjEwNjY3NTE3M30.qB_DrMLR33BcUJtu5IlyBuw0gXlcw9dXk3SX_uIknP0';
 const String webClientId = '985001671962-rok8qnng0rumjsd8mgr8uhr92o5vhs4n.apps.googleusercontent.com';
 
 const String oneSignalAppId = '06b99c2b-b3b4-413b-b6cc-480a624f4e25';
-const int kAppCurrentVersionCode = 2;
-const String kBackendBaseUrl = 'https://mayajaal.online';
+const int kAppCurrentVersionCode = 3;
+const String kBackendBaseUrl = 'https://www.mayajaal.online';
 
 const Color kGreen = Color(0xFF00FF66);
 const Color kNeonCyan = Color(0xFF00F0FF);
@@ -88,13 +90,228 @@ String tr(String key) {
   return localizedStrings[lang]?[key] ?? localizedStrings['English']?[key] ?? key;
 }
 
+// ============================================================
+// MAYAJAAL ACCOUNT SERVICE (RTDB sync)
+// ============================================================
+class MayaJaalAccount {
+  static const _prefApiKey = 'mj_api_key';
+  static const _prefFirebaseUid = 'mj_firebase_uid';
+  static const _prefEmail = 'mj_email';
+
+  static String? cachedApiKey;
+  static String? cachedFirebaseUid;
+  static String? cachedEmail;
+
+  static DatabaseReference get _rtdb => FirebaseDatabase.instance.ref();
+
+  static Future<void> init() async {
+    final prefs = await SharedPreferences.getInstance();
+    cachedApiKey = prefs.getString(_prefApiKey);
+    cachedFirebaseUid = prefs.getString(_prefFirebaseUid);
+    cachedEmail = prefs.getString(_prefEmail);
+  }
+
+  static bool get isLinked => cachedApiKey != null && cachedFirebaseUid != null;
+
+  static Future<Map<String, dynamic>?> _findUserByApiKey(String apiKey) async {
+    try {
+      final snap = await _rtdb
+          .child('users')
+          .orderByChild('apiKey')
+          .equalTo(apiKey)
+          .limitToFirst(1)
+          .once();
+      final val = snap.snapshot.value;
+      if (val == null) return null;
+      final map = Map<String, dynamic>.from(val as Map);
+      if (map.isEmpty) return null;
+      final uid = map.keys.first;
+      final data = Map<String, dynamic>.from(map[uid] as Map);
+      data['uid'] = uid;
+      return data;
+    } catch (e) {
+      debugPrint('findUserByApiKey error: $e');
+      return null;
+    }
+  }
+
+  static Future<Map<String, dynamic>> linkWithApiKey(String apiKey) async {
+    final trimmed = apiKey.trim();
+    if (trimmed.length < 12) {
+      return {'success': false, 'error': 'Key must be 12+ chars'};
+    }
+    final user = await _findUserByApiKey(trimmed);
+    if (user == null) {
+      return {'success': false, 'error': 'Invalid API key'};
+    }
+
+    final uid = user['uid'] as String;
+    final email = (user['email'] ?? '').toString();
+
+    cachedApiKey = trimmed;
+    cachedFirebaseUid = uid;
+    cachedEmail = email;
+
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setString(_prefApiKey, trimmed);
+    await prefs.setString(_prefFirebaseUid, uid);
+    await prefs.setString(_prefEmail, email);
+
+    try {
+      await _rtdb.child('users/$uid/app').update({
+        'lastLinkedAt': DateTime.now().millisecondsSinceEpoch,
+      });
+    } catch (_) {}
+
+    return {'success': true, 'email': email, 'uid': uid};
+  }
+
+  static Future<void> unlink() async {
+    cachedApiKey = null;
+    cachedFirebaseUid = null;
+    cachedEmail = null;
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.remove(_prefApiKey);
+    await prefs.remove(_prefFirebaseUid);
+    await prefs.remove(_prefEmail);
+  }
+
+  static Future<Map<String, dynamic>> getDashboard() async {
+    if (cachedFirebaseUid == null) return {};
+    try {
+      final snap = await _rtdb
+          .child('users/${cachedFirebaseUid!}/dashboard')
+          .once();
+      return Map<String, dynamic>.from((snap.snapshot.value ?? {}) as Map);
+    } catch (e) {
+      debugPrint('getDashboard error: $e');
+      return {};
+    }
+  }
+
+  static Future<List<Map<String, dynamic>>> getUserLinks({int limit = 20}) async {
+    if (cachedFirebaseUid == null) return [];
+    try {
+      final snap = await _rtdb
+          .child('links')
+          .orderByChild('ownerUid')
+          .equalTo(cachedFirebaseUid!)
+          .once();
+      final val = snap.snapshot.value;
+      if (val == null) return [];
+      final map = Map<String, dynamic>.from(val as Map);
+      final arr = map.entries.map((e) {
+        final data = Map<String, dynamic>.from(e.value as Map);
+        data['id'] = e.key;
+        return data;
+      }).toList();
+      arr.sort((a, b) => (b['createdAt'] ?? 0).compareTo(a['createdAt'] ?? 0));
+      return arr.take(limit).toList();
+    } catch (e) {
+      debugPrint('getUserLinks error: $e');
+      return [];
+    }
+  }
+
+  static double calcEarnings(int views) {
+    views = math.max(0, views);
+    if (views <= 0) return 0;
+    if (views <= 1000) return _round2((views / 1000) * 1);
+    double income = 1;
+    int remaining = views - 1000;
+    int tier = 1;
+    while (remaining > 0) {
+      final chunk = math.min(remaining, 2000);
+      income += (chunk / 1000) * math.pow(1.5, tier);
+      remaining -= chunk;
+      tier++;
+      if (tier > 30) break;
+    }
+    return _round2(income);
+  }
+
+  static Map<String, dynamic> getTierInfo(int views) {
+    views = math.max(0, views);
+    if (views < 1000) {
+      return {'tier': 1, 'rate': 1.00, 'from': 0, 'to': 1000, 'next': 1000 - views};
+    }
+    int tier = 1;
+    int start = 1000;
+    while (views >= start + 2000) {
+      tier++;
+      start += 2000;
+      if (tier > 30) break;
+    }
+    return {
+      'tier': tier + 1,
+      'rate': _round2(math.pow(1.5, tier).toDouble()),
+      'from': start,
+      'to': start + 2000,
+      'next': start + 2000 - views,
+    };
+  }
+
+  static double _round2(num n) => (n * 100).round() / 100;
+}
+
+// ============================================================
+// DEVICE ID HELPER
+// ============================================================
+class DeviceIdHelper {
+  static String? _cached;
+  static Future<String> get() async {
+    if (_cached != null) return _cached!;
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      String? stored = prefs.getString('mj_device_id');
+      if (stored != null && stored.isNotEmpty) {
+        _cached = stored;
+        return stored;
+      }
+      final info = DeviceInfoPlugin();
+      if (Platform.isAndroid) {
+        final a = await info.androidInfo;
+        stored = 'and-${a.id}-${a.model}'.replaceAll(RegExp(r'[^a-zA-Z0-9-]'), '');
+      } else if (Platform.isIOS) {
+        final i = await info.iosInfo;
+        stored = 'ios-${i.identifierForVendor ?? 'unknown'}';
+      } else {
+        stored = 'dev-${DateTime.now().millisecondsSinceEpoch}';
+      }
+      await prefs.setString('mj_device_id', stored!);
+      _cached = stored;
+      return stored!;
+    } catch (_) {
+      _cached = 'dev-${DateTime.now().millisecondsSinceEpoch}';
+      return _cached!;
+    }
+  }
+}
+
+// ============================================================
+// MAIN
+// ============================================================
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
-  
-  // ... System UI overlay code ...
+
+  SystemChrome.setSystemUIOverlayStyle(const SystemUiOverlayStyle(
+    statusBarColor: Colors.black,
+    statusBarIconBrightness: Brightness.light,
+  ));
 
   try {
-    await Firebase.initializeApp();
+    await Firebase.initializeApp(
+      options: const FirebaseOptions(
+        apiKey: "AIzaSyDI5hgBbaUeTpXcPIlAnq5yDjIenfY-ylM",
+        authDomain: "www.mayajaal.online",
+        databaseURL: "https://mayajaal-app-default-rtdb.asia-southeast1.firebasedatabase.app",
+        projectId: "mayajaal-app",
+        storageBucket: "mayajaal-app.firebasestorage.app",
+        messagingSenderId: "96139047750",
+        appId: "1:96139047750:web:850537e9c436dd7d012b47",
+      ),
+    );
+    debugPrint("Firebase Initialized");
   } catch (e) {
     debugPrint("Firebase Initialization Error: $e");
   }
@@ -106,6 +323,12 @@ Future<void> main() async {
   }
 
   try {
+    await MayaJaalAccount.init();
+  } catch (e) {
+    debugPrint("MayaJaalAccount init error: $e");
+  }
+
+  try {
     OneSignal.Debug.setLogLevel(OSLogLevel.verbose);
     OneSignal.initialize(oneSignalAppId);
     OneSignal.Notifications.requestPermission(true);
@@ -113,11 +336,12 @@ Future<void> main() async {
     debugPrint("OneSignal Init Error: $e");
   }
 
-  final prefs = await SharedPreferences.getInstance();
-  // ... baaki code ...
   runApp(const MyApp());
 }
 
+// ============================================================
+// MATRIX RAIN
+// ============================================================
 class MatrixRain extends StatefulWidget {
   final double opacity;
   const MatrixRain({super.key, this.opacity = 0.7});
@@ -188,6 +412,9 @@ class _MatrixRainState extends State<MatrixRain> {
   }
 }
 
+// ============================================================
+// SPLASH
+// ============================================================
 class SplashScreen extends StatefulWidget {
   const SplashScreen({super.key});
   @override
@@ -291,11 +518,110 @@ class _SplashScreenState extends State<SplashScreen>
     );
   }
 }
-class MyApp extends StatelessWidget {
+
+// ============================================================
+// MY APP — Deep link handling
+// ============================================================
+class MyApp extends StatefulWidget {
   const MyApp({super.key});
+  @override
+  State<MyApp> createState() => _MyAppState();
+}
+
+class _MyAppState extends State<MyApp> {
+  late AppLinks _appLinks;
+  StreamSubscription<Uri>? _linkSub;
+  Uri? _initialLink;
+  bool _linkReady = false;
+
+  @override
+  void initState() {
+    super.initState();
+    _initDeepLinks();
+  }
+
+  Future<void> _initDeepLinks() async {
+    _appLinks = AppLinks();
+
+    try {
+      final initial = await _appLinks.getInitialLink();
+      if (initial != null) {
+        _initialLink = initial;
+        debugPrint('Initial deep link: $initial');
+      }
+    } catch (e) {
+      debugPrint('Initial link error: $e');
+    }
+    if (mounted) setState(() => _linkReady = true);
+
+    _linkSub = _appLinks.uriLinkStream.listen((uri) {
+      debugPrint('Deep link received: $uri');
+      if (!mounted) return;
+      _handleDeepLink(uri);
+    }, onError: (e) => debugPrint('Link stream error: $e'));
+  }
+
+  void _handleDeepLink(Uri uri) {
+    final navigator = navigatorKey.currentState;
+    if (navigator == null) return;
+
+    if (uri.path.startsWith('/v/') || uri.host == 'watch' || uri.scheme == 'mayajaal') {
+      String videoId = '';
+      final token = uri.queryParameters['t'] ?? uri.queryParameters['s'] ?? '';
+
+      if (uri.path.startsWith('/v/')) {
+        videoId = uri.pathSegments.isNotEmpty ? uri.pathSegments.last : '';
+      } else if (uri.queryParameters['v'] != null) {
+        videoId = uri.queryParameters['v']!;
+      }
+      if (videoId.isEmpty) return;
+
+      final targetUrl = token.isNotEmpty
+          ? 'https://www.mayajaal.online/v/$videoId?t=$token'
+          : 'https://www.mayajaal.online/v/$videoId';
+
+      navigator.push(MaterialPageRoute(
+        builder: (_) => StreamPreviewScreen(targetUrl: targetUrl),
+      ));
+    } else if (uri.path.startsWith('/s/')) {
+      final shortCode = uri.pathSegments.isNotEmpty ? uri.pathSegments.last : '';
+      if (shortCode.isNotEmpty) {
+        launchUrl(
+          Uri.parse('https://www.mayajaal.online/s/$shortCode'),
+          mode: LaunchMode.externalApplication,
+        );
+      }
+    }
+  }
+
+  @override
+  void dispose() {
+    _linkSub?.cancel();
+    super.dispose();
+  }
+
+  String _buildUrlFromLink(Uri uri) {
+    String videoId = '';
+    final token = uri.queryParameters['t'] ?? uri.queryParameters['s'] ?? '';
+    if (uri.path.startsWith('/v/')) {
+      videoId = uri.pathSegments.isNotEmpty ? uri.pathSegments.last : '';
+    } else if (uri.queryParameters['v'] != null) {
+      videoId = uri.queryParameters['v']!;
+    }
+    return token.isNotEmpty
+        ? 'https://www.mayajaal.online/v/$videoId?t=$token'
+        : 'https://www.mayajaal.online/v/$videoId';
+  }
 
   @override
   Widget build(BuildContext context) {
+    if (!_linkReady) {
+      return MaterialApp(
+        home: const SplashScreen(),
+        debugShowCheckedModeBanner: false,
+      );
+    }
+
     return ValueListenableBuilder<String>(
       valueListenable: languageNotifier,
       builder: (context, lang, _) {
@@ -309,7 +635,9 @@ class MyApp extends StatelessWidget {
               themeMode: ThemeMode.dark,
               theme: _buildPureDarkTheme(),
               darkTheme: _buildPureDarkTheme(),
-              home: const AuthGate(),
+              home: _initialLink != null
+                  ? StreamPreviewScreen(targetUrl: _buildUrlFromLink(_initialLink!))
+                  : const AuthGate(),
             );
           },
         );
@@ -339,6 +667,9 @@ class MyApp extends StatelessWidget {
   }
 }
 
+// ============================================================
+// AUTH GATE
+// ============================================================
 class AuthGate extends StatelessWidget {
   final String? pendingTargetUrl;
   const AuthGate({super.key, this.pendingTargetUrl});
@@ -349,7 +680,7 @@ class AuthGate extends StatelessWidget {
       stream: Supabase.instance.client.auth.onAuthStateChange,
       builder: (context, snapshot) {
         if (snapshot.connectionState == ConnectionState.waiting) {
-        return const SplashScreen();
+          return const SplashScreen();
         }
         final session = Supabase.instance.client.auth.currentSession;
         if (session != null) {
@@ -364,6 +695,9 @@ class AuthGate extends StatelessWidget {
   }
 }
 
+// ============================================================
+// LOGIN SCREEN
+// ============================================================
 class LoginScreen extends StatefulWidget {
   final String? pendingTargetUrl;
   const LoginScreen({super.key, this.pendingTargetUrl});
@@ -453,7 +787,7 @@ class _LoginScreenState extends State<LoginScreen> with SingleTickerProviderStat
     final pass = _signupPasswordController.text.trim();
 
     if (matrixId.isEmpty || phone.length < 10 || pass.length < 6) {
-      setState(() => _error = 'Sabhi details bharein! Password kam से kam 6 akshar ka ho.');
+      setState(() => _error = 'Sabhi details bharein! Password kam se kam 6 akshar ka ho.');
       return;
     }
 
@@ -475,7 +809,8 @@ class _LoginScreenState extends State<LoginScreen> with SingleTickerProviderStat
       if (mounted) setState(() => _loading = false);
     }
   }
-    Future<void> _verifySignupOtpAndRegister() async {
+
+  Future<void> _verifySignupOtpAndRegister() async {
     final matrixId = _signupMatrixIdController.text.trim().toLowerCase().replaceAll('@', '');
     final phone = _formatPhone(_signupPhoneController.text.trim());
     final pass = _signupPasswordController.text.trim();
@@ -565,7 +900,8 @@ class _LoginScreenState extends State<LoginScreen> with SingleTickerProviderStat
       if (mounted) setState(() => _loading = false);
     }
   }
-    Future<void> _signInWithGoogle() async {
+
+  Future<void> _signInWithGoogle() async {
     setState(() {
       _loading = true;
       _error = '';
@@ -720,7 +1056,8 @@ class _LoginScreenState extends State<LoginScreen> with SingleTickerProviderStat
       ),
     );
   }
-    @override
+
+  @override
   Widget build(BuildContext context) {
     return Scaffold(
       backgroundColor: Colors.black,
@@ -749,8 +1086,7 @@ class _LoginScreenState extends State<LoginScreen> with SingleTickerProviderStat
                           ),
                           boxShadow: [
                             BoxShadow(
-                              color: const Color(0xFF00FF66)
-                                  .withOpacity(_showMagicUnlock ? 0.45 : 0.15),
+                              color: const Color(0xFF00FF66).withOpacity(_showMagicUnlock ? 0.45 : 0.15),
                               blurRadius: _glowAnimation.value + 15,
                               spreadRadius: _showMagicUnlock ? 4 : 0,
                             ),
@@ -772,11 +1108,7 @@ class _LoginScreenState extends State<LoginScreen> with SingleTickerProviderStat
                           borderRadius: BorderRadius.circular(22),
                           border: Border.all(color: const Color(0xFF00FF66), width: 1.8),
                           boxShadow: [
-                            BoxShadow(
-                              color: const Color(0xFF00FF66).withOpacity(0.55),
-                              blurRadius: 18,
-                              spreadRadius: 2,
-                            ),
+                            BoxShadow(color: const Color(0xFF00FF66).withOpacity(0.55), blurRadius: 18, spreadRadius: 2),
                           ],
                         ),
                         child: ClipRRect(
@@ -784,11 +1116,7 @@ class _LoginScreenState extends State<LoginScreen> with SingleTickerProviderStat
                           child: Image.asset(
                             'assets/icon/logo.png',
                             fit: BoxFit.cover,
-                            errorBuilder: (context, error, stackTrace) => const Icon(
-                              Icons.change_history,
-                              size: 42,
-                              color: Color(0xFF00FF66),
-                            ),
+                            errorBuilder: (context, error, stackTrace) => const Icon(Icons.change_history, size: 42, color: Color(0xFF00FF66)),
                           ),
                         ),
                       ),
@@ -828,17 +1156,12 @@ class _LoginScreenState extends State<LoginScreen> with SingleTickerProviderStat
                           children: [
                             Expanded(
                               child: GestureDetector(
-                                onTap: () => setState(() {
-                                  _isLoginTab = true;
-                                  _error = '';
-                                }),
+                                onTap: () => setState(() { _isLoginTab = true; _error = ''; }),
                                 child: Container(
                                   decoration: BoxDecoration(
                                     color: _isLoginTab ? const Color(0xFF01240B) : Colors.transparent,
                                     borderRadius: BorderRadius.circular(24),
-                                    border: _isLoginTab
-                                        ? Border.all(color: const Color(0xFF00FF66), width: 1.6)
-                                        : null,
+                                    border: _isLoginTab ? Border.all(color: const Color(0xFF00FF66), width: 1.6) : null,
                                   ),
                                   alignment: Alignment.center,
                                   child: Text(
@@ -855,17 +1178,12 @@ class _LoginScreenState extends State<LoginScreen> with SingleTickerProviderStat
                             ),
                             Expanded(
                               child: GestureDetector(
-                                onTap: () => setState(() {
-                                  _isLoginTab = false;
-                                  _error = '';
-                                }),
+                                onTap: () => setState(() { _isLoginTab = false; _error = ''; }),
                                 child: Container(
                                   decoration: BoxDecoration(
                                     color: !_isLoginTab ? const Color(0xFF01240B) : Colors.transparent,
                                     borderRadius: BorderRadius.circular(24),
-                                    border: !_isLoginTab
-                                        ? Border.all(color: const Color(0xFF00FF66), width: 1.6)
-                                        : null,
+                                    border: !_isLoginTab ? Border.all(color: const Color(0xFF00FF66), width: 1.6) : null,
                                   ),
                                   alignment: Alignment.center,
                                   child: Text(
@@ -883,7 +1201,8 @@ class _LoginScreenState extends State<LoginScreen> with SingleTickerProviderStat
                           ],
                         ),
                       ),
-                                            Container(
+                      const SizedBox(height: 16),
+                      Container(
                         padding: const EdgeInsets.all(14),
                         decoration: BoxDecoration(
                           color: Colors.black.withOpacity(0.6),
@@ -926,11 +1245,7 @@ class _LoginScreenState extends State<LoginScreen> with SingleTickerProviderStat
                                       decoration: InputDecoration(
                                         icon: const Icon(Icons.lock_outline, color: Color(0xFF00FF66), size: 20),
                                         suffixIcon: IconButton(
-                                          icon: Icon(
-                                            _obscurePassword ? Icons.visibility_off_outlined : Icons.visibility_outlined,
-                                            color: const Color(0xFF00FF66),
-                                            size: 19,
-                                          ),
+                                          icon: Icon(_obscurePassword ? Icons.visibility_off_outlined : Icons.visibility_outlined, color: const Color(0xFF00FF66), size: 19),
                                           onPressed: () => setState(() => _obscurePassword = !_obscurePassword),
                                         ),
                                         hintText: 'Password',
@@ -1056,9 +1371,7 @@ class _LoginScreenState extends State<LoginScreen> with SingleTickerProviderStat
                                     width: double.infinity,
                                     height: 48,
                                     child: ElevatedButton(
-                                      onPressed: _loading
-                                          ? null
-                                          : (_otpSentForSignup ? _verifySignupOtpAndRegister : _sendSignupOtp),
+                                      onPressed: _loading ? null : (_otpSentForSignup ? _verifySignupOtpAndRegister : _sendSignupOtp),
                                       style: ElevatedButton.styleFrom(
                                         backgroundColor: const Color(0xFF00FF66),
                                         foregroundColor: Colors.black,
@@ -1075,7 +1388,7 @@ class _LoginScreenState extends State<LoginScreen> with SingleTickerProviderStat
                                 ],
                               ),
                       ),
-                                            const SizedBox(height: 16),
+                      const SizedBox(height: 16),
                       Row(
                         children: [
                           Expanded(child: Divider(color: const Color(0xFF00FF66).withOpacity(0.3))),
@@ -1174,6 +1487,10 @@ class _LoginScreenState extends State<LoginScreen> with SingleTickerProviderStat
     );
   }
 }
+
+// ============================================================
+// MAIN NAVIGATION HOLDER — 3 tabs + Drawer
+// ============================================================
 class MainNavigationHolder extends StatefulWidget {
   const MainNavigationHolder({super.key});
   @override
@@ -1181,23 +1498,22 @@ class MainNavigationHolder extends StatefulWidget {
 }
 
 class _MainNavigationHolderState extends State<MainNavigationHolder> {
+  final GlobalKey<ScaffoldState> _scaffoldKey = GlobalKey<ScaffoldState>();
   int _currentIndex = 0;
-
-  final List<Widget> _screens = const [
-    HomeScreen(),
-    ChannelScreen(),
-    HistoryScreen(),
-    MoreScreen(),
-  ];
 
   @override
   Widget build(BuildContext context) {
+    final screens = [
+      HomeScreen(onMenuTap: () => _scaffoldKey.currentState?.openDrawer()),
+      const ChannelScreen(),
+      const HistoryScreen(),
+    ];
+
     return Scaffold(
+      key: _scaffoldKey,
       backgroundColor: Colors.black,
-      body: IndexedStack(
-        index: _currentIndex,
-        children: _screens,
-      ),
+      drawer: const MoreDrawer(),
+      body: IndexedStack(index: _currentIndex, children: screens),
       bottomNavigationBar: Container(
         decoration: BoxDecoration(
           color: const Color(0xFF000803),
@@ -1232,19 +1548,19 @@ class _MainNavigationHolderState extends State<MainNavigationHolder> {
               activeIcon: Icon(Icons.history, color: kGreen),
               label: 'History',
             ),
-            BottomNavigationBarItem(
-              icon: Icon(Icons.more_horiz_outlined),
-              activeIcon: Icon(Icons.more_horiz, color: kGreen),
-              label: 'More',
-            ),
           ],
         ),
       ),
     );
   }
 }
+
+// ============================================================
+// HOME SCREEN
+// ============================================================
 class HomeScreen extends StatefulWidget {
-  const HomeScreen({super.key});
+  final VoidCallback? onMenuTap;
+  const HomeScreen({super.key, this.onMenuTap});
   @override
   State<HomeScreen> createState() => _HomeScreenState();
 }
@@ -1280,11 +1596,7 @@ class _HomeScreenState extends State<HomeScreen> with SingleTickerProviderStateM
               return Center(
                 child: Padding(
                   padding: const EdgeInsets.all(20.0),
-                  child: Text(
-                    'Error: ${snapshot.error}',
-                    style: const TextStyle(color: Colors.redAccent, fontSize: 13),
-                    textAlign: TextAlign.center,
-                  ),
+                  child: Text('Error: ${snapshot.error}', style: const TextStyle(color: Colors.redAccent, fontSize: 13), textAlign: TextAlign.center),
                 ),
               );
             }
@@ -1293,10 +1605,7 @@ class _HomeScreenState extends State<HomeScreen> with SingleTickerProviderStateM
               return const Center(
                 child: Padding(
                   padding: EdgeInsets.all(40.0),
-                  child: Text(
-                    'Koi naya notification nahi hai',
-                    style: TextStyle(color: Colors.white70, fontSize: 15),
-                  ),
+                  child: Text('Koi naya notification nahi hai', style: TextStyle(color: Colors.white70, fontSize: 15)),
                 ),
               );
             }
@@ -1306,17 +1615,10 @@ class _HomeScreenState extends State<HomeScreen> with SingleTickerProviderStateM
                 Padding(
                   padding: const EdgeInsets.all(16.0),
                   child: Row(
-                    children: [
-                      const Icon(Icons.notifications_active, color: kGreen),
-                      const SizedBox(width: 8),
-                      const Text(
-                        'Notifications',
-                        style: TextStyle(
-                          color: kGreen,
-                          fontSize: 18,
-                          fontWeight: FontWeight.bold,
-                        ),
-                      ),
+                    children: const [
+                      Icon(Icons.notifications_active, color: kGreen),
+                      SizedBox(width: 8),
+                      Text('Notifications', style: TextStyle(color: kGreen, fontSize: 18, fontWeight: FontWeight.bold)),
                     ],
                   ),
                 ),
@@ -1328,18 +1630,8 @@ class _HomeScreenState extends State<HomeScreen> with SingleTickerProviderStateM
                       final item = list[i];
                       return ListTile(
                         contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
-                        title: Text(
-                          item['title']?.toString() ?? '',
-                          style: const TextStyle(
-                            color: Colors.white,
-                            fontWeight: FontWeight.bold,
-                            fontSize: 15,
-                          ),
-                        ),
-                        subtitle: Text(
-                          item['message']?.toString() ?? '',
-                          style: const TextStyle(color: Colors.white70, fontSize: 13),
-                        ),
+                        title: Text(item['title']?.toString() ?? '', style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 15)),
+                        subtitle: Text(item['message']?.toString() ?? '', style: const TextStyle(color: Colors.white70, fontSize: 13)),
                       );
                     },
                   ),
@@ -1351,7 +1643,8 @@ class _HomeScreenState extends State<HomeScreen> with SingleTickerProviderStateM
       },
     );
   }
-    @override
+
+  @override
   void initState() {
     super.initState();
     _pulseController = AnimationController(
@@ -1392,9 +1685,7 @@ class _HomeScreenState extends State<HomeScreen> with SingleTickerProviderStateM
         color: const Color(0xFF031408),
         borderRadius: BorderRadius.circular(14),
         border: Border.all(color: kGreen.withOpacity(0.4), width: 1.2),
-        boxShadow: [
-          BoxShadow(color: kGreen.withOpacity(0.08), blurRadius: 10),
-        ],
+        boxShadow: [BoxShadow(color: kGreen.withOpacity(0.08), blurRadius: 10)],
       ),
       child: Column(
         mainAxisSize: MainAxisSize.min,
@@ -1402,23 +1693,15 @@ class _HomeScreenState extends State<HomeScreen> with SingleTickerProviderStateM
         children: [
           Icon(icon, color: kGreen, size: 28),
           const SizedBox(height: 8),
-          Text(
-            title,
-            style: const TextStyle(color: Colors.white, fontSize: 13, fontWeight: FontWeight.bold),
-          ),
+          Text(title, style: const TextStyle(color: Colors.white, fontSize: 13, fontWeight: FontWeight.bold)),
           const SizedBox(height: 2),
-          Text(
-            subtitle,
-            style: TextStyle(color: Colors.white.withOpacity(0.55), fontSize: 9.5),
-            textAlign: TextAlign.center,
-            maxLines: 1,
-            overflow: TextOverflow.ellipsis,
-          ),
+          Text(subtitle, style: TextStyle(color: Colors.white.withOpacity(0.55), fontSize: 9.5), textAlign: TextAlign.center, maxLines: 1, overflow: TextOverflow.ellipsis),
         ],
       ),
     );
   }
-    @override
+
+  @override
   Widget build(BuildContext context) {
     return Scaffold(
       backgroundColor: Colors.black,
@@ -1433,41 +1716,27 @@ class _HomeScreenState extends State<HomeScreen> with SingleTickerProviderStateM
                   children: [
                     IconButton(
                       icon: const Icon(Icons.menu, color: kGreen, size: 26),
-                      onPressed: () {},
+                      onPressed: widget.onMenuTap,
+                      tooltip: 'More Options',
                     ),
                     Expanded(
                       child: Column(
                         mainAxisSize: MainAxisSize.min,
+                        crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
-                          const Text(
-                            'MAYA JAAL',
-                            style: TextStyle(
-                              color: kGreen,
-                              fontSize: 24,
-                              fontWeight: FontWeight.w900,
-                              letterSpacing: 4,
-                              shadows: [
-                                Shadow(color: kGreen, blurRadius: 15),
-                              ],
-                            ),
+                          Row(
+                            children: [
+                              const Text('maya', style: TextStyle(color: kGreen, fontSize: 22, fontWeight: FontWeight.w900, letterSpacing: 1, shadows: [Shadow(color: kGreen, blurRadius: 12)])),
+                              Text('Jaal', style: TextStyle(color: Colors.white.withOpacity(0.9), fontSize: 22, fontWeight: FontWeight.w400, letterSpacing: 1)),
+                            ],
                           ),
-                          Text(
-                            'STREAM BEYOND LIMITS',
-                            style: TextStyle(
-                              color: kGreen.withOpacity(0.7),
-                              fontSize: 9,
-                              letterSpacing: 3,
-                              fontWeight: FontWeight.w600,
-                            ),
-                          ),
+                          Text('VIDEOS  |  LINKS  |  BEYOND', style: TextStyle(color: kGreen.withOpacity(0.7), fontSize: 8, letterSpacing: 1.5, fontWeight: FontWeight.w600)),
                         ],
                       ),
                     ),
                     IconButton(
                       icon: const Icon(Icons.search, color: kGreen, size: 24),
-                      onPressed: () {
-                        showSearch(context: context, delegate: UserSearchDelegate());
-                      },
+                      onPressed: () => showSearch(context: context, delegate: UserSearchDelegate()),
                     ),
                     Stack(
                       children: [
@@ -1478,14 +1747,7 @@ class _HomeScreenState extends State<HomeScreen> with SingleTickerProviderStateM
                         Positioned(
                           right: 11,
                           top: 11,
-                          child: Container(
-                            width: 7,
-                            height: 7,
-                            decoration: const BoxDecoration(
-                              color: Colors.redAccent,
-                              shape: BoxShape.circle,
-                            ),
-                          ),
+                          child: Container(width: 7, height: 7, decoration: const BoxDecoration(color: Colors.redAccent, shape: BoxShape.circle)),
                         ),
                       ],
                     ),
@@ -1500,29 +1762,11 @@ class _HomeScreenState extends State<HomeScreen> with SingleTickerProviderStateM
                   children: [
                     Positioned(
                       left: 18,
-                      child: Text(
-                        'MOVIES\nWEB SERIES\nLIVE TV\n& MORE',
-                        style: TextStyle(
-                          color: Colors.white.withOpacity(0.7),
-                          fontSize: 11,
-                          fontWeight: FontWeight.w700,
-                          letterSpacing: 1.5,
-                          height: 1.5,
-                        ),
-                      ),
+                      child: Text('MOVIES\nWEB SERIES\nLIVE TV\n& MORE', style: TextStyle(color: Colors.white.withOpacity(0.7), fontSize: 11, fontWeight: FontWeight.w700, letterSpacing: 1.5, height: 1.5)),
                     ),
                     Positioned(
                       right: 18,
-                      child: Text(
-                        'Your\nStreaming\nUniverse',
-                        style: TextStyle(
-                          color: const Color(0xFF66FF99).withOpacity(0.85),
-                          fontSize: 16,
-                          fontWeight: FontWeight.w700,
-                          fontStyle: FontStyle.italic,
-                          height: 1.2,
-                        ),
-                      ),
+                      child: Text('Your\nStreaming\nUniverse', style: TextStyle(color: const Color(0xFF66FF99).withOpacity(0.85), fontSize: 16, fontWeight: FontWeight.w700, fontStyle: FontStyle.italic, height: 1.2)),
                     ),
                     AnimatedBuilder(
                       animation: _pulseAnimation,
@@ -1533,40 +1777,26 @@ class _HomeScreenState extends State<HomeScreen> with SingleTickerProviderStateM
                           height: 140,
                           decoration: BoxDecoration(
                             shape: BoxShape.circle,
-                            boxShadow: [
-                              BoxShadow(color: kGreen.withOpacity(0.25), blurRadius: 40, spreadRadius: 10),
-                            ],
+                            boxShadow: [BoxShadow(color: kGreen.withOpacity(0.25), blurRadius: 40, spreadRadius: 10)],
                           ),
                           child: Stack(
                             alignment: Alignment.center,
                             children: [
-                              Container(
-                                width: 130,
-                                height: 130,
-                                decoration: BoxDecoration(
-                                  shape: BoxShape.circle,
-                                  border: Border.all(color: kGreen.withOpacity(0.6), width: 1.5),
-                                ),
-                              ),
+                              Container(width: 130, height: 130, decoration: BoxDecoration(shape: BoxShape.circle, border: Border.all(color: kGreen.withOpacity(0.6), width: 1.5))),
                               Container(
                                 width: 95,
                                 height: 95,
                                 decoration: BoxDecoration(
                                   borderRadius: BorderRadius.circular(22),
                                   border: Border.all(color: kGreen, width: 2),
-                                  boxShadow: [
-                                    BoxShadow(color: kGreen.withOpacity(0.5), blurRadius: 20),
-                                  ],
+                                  boxShadow: [BoxShadow(color: kGreen.withOpacity(0.5), blurRadius: 20)],
                                 ),
                                 child: ClipRRect(
                                   borderRadius: BorderRadius.circular(20),
                                   child: Image.asset(
                                     'assets/icon/logo.png',
                                     fit: BoxFit.cover,
-                                    errorBuilder: (context, error, stackTrace) => Container(
-                                      color: Colors.black,
-                                      child: const Icon(Icons.movie_filter, size: 50, color: kGreen),
-                                    ),
+                                    errorBuilder: (context, error, stackTrace) => Container(color: Colors.black, child: const Icon(Icons.movie_filter, size: 50, color: kGreen)),
                                   ),
                                 ),
                               ),
@@ -1585,9 +1815,7 @@ class _HomeScreenState extends State<HomeScreen> with SingleTickerProviderStateM
                     color: const Color(0xFF011206),
                     borderRadius: BorderRadius.circular(22),
                     border: Border.all(color: kGreen.withOpacity(0.6), width: 1.5),
-                    boxShadow: [
-                      BoxShadow(color: kGreen.withOpacity(0.2), blurRadius: 25),
-                    ],
+                    boxShadow: [BoxShadow(color: kGreen.withOpacity(0.2), blurRadius: 25)],
                   ),
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
@@ -1606,15 +1834,7 @@ class _HomeScreenState extends State<HomeScreen> with SingleTickerProviderStateM
                             children: [
                               Icon(Icons.link, color: kGreen, size: 14),
                               SizedBox(width: 6),
-                              Text(
-                                'MATRIX NEURAL STREAM NODE',
-                                style: TextStyle(
-                                  color: kGreen,
-                                  fontSize: 10,
-                                  fontWeight: FontWeight.bold,
-                                  letterSpacing: 1.5,
-                                ),
-                              ),
+                              Text('MATRIX NEURAL STREAM NODE', style: TextStyle(color: kGreen, fontSize: 10, fontWeight: FontWeight.bold, letterSpacing: 1.5)),
                             ],
                           ),
                         ),
@@ -1649,10 +1869,7 @@ class _HomeScreenState extends State<HomeScreen> with SingleTickerProviderStateM
                                       ),
                                     ),
                                     const SizedBox(height: 2),
-                                    Text(
-                                      'Enter your link and start streaming securely',
-                                      style: TextStyle(color: Colors.white.withOpacity(0.5), fontSize: 10),
-                                    ),
+                                    Text('Enter your link and start streaming securely', style: TextStyle(color: Colors.white.withOpacity(0.5), fontSize: 10)),
                                   ],
                                 ),
                               ),
@@ -1664,9 +1881,7 @@ class _HomeScreenState extends State<HomeScreen> with SingleTickerProviderStateM
                                   decoration: BoxDecoration(
                                     color: kGreen,
                                     shape: BoxShape.circle,
-                                    boxShadow: [
-                                      BoxShadow(color: kGreen.withOpacity(0.6), blurRadius: 16),
-                                    ],
+                                    boxShadow: [BoxShadow(color: kGreen.withOpacity(0.6), blurRadius: 16)],
                                   ),
                                   child: const Icon(Icons.play_arrow_rounded, color: Colors.black, size: 32),
                                 ),
@@ -1706,12 +1921,7 @@ class _HomeScreenState extends State<HomeScreen> with SingleTickerProviderStateM
                     children: [
                       Icon(Icons.verified_user_rounded, color: kGreen, size: 20),
                       SizedBox(width: 10),
-                      Expanded(
-                        child: Text(
-                          'Secure Quantum Stream Pipeline Active',
-                          style: TextStyle(color: Colors.white, fontSize: 12, fontWeight: FontWeight.bold),
-                        ),
-                      ),
+                      Expanded(child: Text('Secure Quantum Stream Pipeline Active', style: TextStyle(color: Colors.white, fontSize: 12, fontWeight: FontWeight.bold))),
                       Icon(Icons.arrow_forward_ios, color: kGreen, size: 14),
                     ],
                   ),
@@ -1719,15 +1929,7 @@ class _HomeScreenState extends State<HomeScreen> with SingleTickerProviderStateM
               ),
               const Padding(
                 padding: EdgeInsets.symmetric(vertical: 18),
-                child: Text(
-                  '>   CONNECT   •   STREAM   •   ENJOY   <',
-                  style: TextStyle(
-                    color: Color(0xBF00FF66),
-                    fontSize: 10.5,
-                    letterSpacing: 2,
-                    fontWeight: FontWeight.w700,
-                  ),
-                ),
+                child: Text('>   CONNECT   •   STREAM   •   ENJOY   <', style: TextStyle(color: Color(0xBF00FF66), fontSize: 10.5, letterSpacing: 2, fontWeight: FontWeight.w700)),
               ),
             ],
           ),
@@ -1736,6 +1938,341 @@ class _HomeScreenState extends State<HomeScreen> with SingleTickerProviderStateM
     );
   }
 }
+
+// ============================================================
+// MORE DRAWER
+// ============================================================
+class MoreDrawer extends StatelessWidget {
+  const MoreDrawer({super.key});
+
+  Future<void> _logout() async {
+    await Supabase.instance.client.auth.signOut();
+    await GoogleSignIn().signOut();
+    await MayaJaalAccount.unlink();
+  }
+
+  Future<void> _launchURL(String url) async {
+    try {
+      final target = Uri.parse(url);
+      if (!await launchUrl(target, mode: LaunchMode.externalApplication)) {
+        await launchUrl(target, mode: LaunchMode.platformDefault);
+      }
+    } catch (e) {
+      debugPrint('Launch error: $e');
+      try { await launchUrl(Uri.parse(url)); } catch (_) {}
+    }
+  }
+
+  void _shareApp() {
+    Share.share('🚀 Experience Matrix-speed streaming on MayaJaal App!\nDownload: https://www.mayajaal.online/download.html');
+  }
+
+  void _showPolicyDialog(BuildContext context, String title, String content) {
+    showDialog(
+      context: context,
+      builder: (c) => AlertDialog(
+        backgroundColor: kCardBg,
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14), side: const BorderSide(color: kGreen, width: 1.5)),
+        title: Text(title, style: const TextStyle(color: kGreen, fontSize: 15, fontWeight: FontWeight.bold)),
+        content: SingleChildScrollView(child: Text(content, style: const TextStyle(color: Colors.white70, fontSize: 12, height: 1.4))),
+        actions: [TextButton(onPressed: () => Navigator.pop(c), child: const Text('CLOSE', style: TextStyle(color: kGreen)))],
+      ),
+    );
+  }
+
+  void _showConnectApiDialog(BuildContext context) {
+    final controller = TextEditingController();
+    bool loading = false;
+    String msg = '';
+
+    showDialog(
+      context: context,
+      barrierDismissible: false,
+      builder: (c) => StatefulBuilder(
+        builder: (c, setD) => AlertDialog(
+          backgroundColor: kCardBg,
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14), side: const BorderSide(color: kGreen, width: 1.5)),
+          title: Row(
+            children: const [
+              Icon(Icons.link, color: kGreen, size: 22),
+              SizedBox(width: 8),
+              Text('CONNECT MAYAJAAL', style: TextStyle(color: kGreen, fontSize: 14, fontWeight: FontWeight.bold)),
+            ],
+          ),
+          content: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              const Text('Paste your API key from mayajaal.online dashboard to unlock earnings, views & links.', style: TextStyle(color: Colors.white70, fontSize: 12, height: 1.4)),
+              const SizedBox(height: 14),
+              TextField(
+                controller: controller,
+                style: const TextStyle(color: Colors.white, fontFamily: 'monospace', fontSize: 13),
+                decoration: InputDecoration(
+                  hintText: 'Paste API Key',
+                  hintStyle: TextStyle(color: Colors.white.withOpacity(0.4), fontSize: 12),
+                  prefixIcon: const Icon(Icons.vpn_key, color: kGreen),
+                  filled: true,
+                  fillColor: Colors.black,
+                  border: OutlineInputBorder(borderRadius: BorderRadius.circular(10), borderSide: const BorderSide(color: kGreen)),
+                ),
+              ),
+              if (msg.isNotEmpty) ...[
+                const SizedBox(height: 10),
+                Text(msg, style: TextStyle(color: msg.contains('✅') ? kGreen : Colors.redAccent, fontSize: 11)),
+              ],
+            ],
+          ),
+          actions: [
+            TextButton(onPressed: () => Navigator.pop(c), child: const Text('CANCEL', style: TextStyle(color: Colors.white54))),
+            ElevatedButton(
+              onPressed: loading ? null : () async {
+                setD(() { loading = true; msg = ''; });
+                final res = await MayaJaalAccount.linkWithApiKey(controller.text.trim());
+                if (res['success'] == true) {
+                  setD(() => msg = '✅ Linked! ${res['email']}');
+                  await Future.delayed(const Duration(milliseconds: 800));
+                  if (c.mounted) Navigator.pop(c);
+                  if (context.mounted) {
+                    ScaffoldMessenger.of(context).showSnackBar(
+                      SnackBar(backgroundColor: kCardBg, content: Text('✅ Connected: ${res['email']}', style: const TextStyle(color: kGreen))),
+                    );
+                  }
+                } else {
+                  setD(() { loading = false; msg = '❌ ${res['error'] ?? 'Invalid key'}'; });
+                }
+              },
+              style: ElevatedButton.styleFrom(backgroundColor: kGreen, foregroundColor: Colors.black),
+              child: loading ? const SizedBox(width: 18, height: 18, child: CircularProgressIndicator(color: Colors.black, strokeWidth: 2)) : const Text('CONNECT'),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final user = Supabase.instance.client.auth.currentUser;
+
+    return Drawer(
+      backgroundColor: Colors.black,
+      child: SafeArea(
+        child: Column(
+          children: [
+            Container(
+              padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 14),
+              decoration: BoxDecoration(
+                color: const Color(0xFF011206),
+                border: Border(bottom: BorderSide(color: kGreen.withOpacity(0.4), width: 1.2)),
+              ),
+              child: Row(
+                children: [
+                  Container(
+                    width: 42,
+                    height: 42,
+                    decoration: BoxDecoration(
+                      color: Colors.black,
+                      borderRadius: BorderRadius.circular(12),
+                      border: Border.all(color: kGreen, width: 1.5),
+                      boxShadow: [BoxShadow(color: kGreen.withOpacity(0.5), blurRadius: 12)],
+                    ),
+                    child: ClipRRect(
+                      borderRadius: BorderRadius.circular(10),
+                      child: Image.asset(
+                        'assets/icon/logo.png',
+                        fit: BoxFit.cover,
+                        errorBuilder: (c, e, s) => const Icon(Icons.change_history, color: kGreen, size: 22),
+                      ),
+                    ),
+                  ),
+                  const SizedBox(width: 10),
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        Row(
+                          children: const [
+                            Text('maya', style: TextStyle(color: kGreen, fontSize: 18, fontWeight: FontWeight.w900, letterSpacing: 0.5, shadows: [Shadow(color: kGreen, blurRadius: 10)])),
+                            Text('Jaal', style: TextStyle(color: Colors.white, fontSize: 18, fontWeight: FontWeight.w400, letterSpacing: 0.5)),
+                          ],
+                        ),
+                        Text('MORE OPTIONS', style: TextStyle(color: kGreen.withOpacity(0.7), fontSize: 8.5, letterSpacing: 2, fontWeight: FontWeight.bold)),
+                      ],
+                    ),
+                  ),
+                  IconButton(
+                    icon: const Icon(Icons.close, color: kGreen, size: 22),
+                    onPressed: () => Navigator.pop(context),
+                  ),
+                ],
+              ),
+            ),
+            Expanded(
+              child: ListView(
+                padding: const EdgeInsets.symmetric(vertical: 8),
+                children: [
+                  Container(
+                    margin: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+                    padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+                    decoration: BoxDecoration(
+                      color: kCardBg,
+                      borderRadius: BorderRadius.circular(12),
+                      border: Border.all(color: kGreen.withOpacity(0.4)),
+                    ),
+                    child: Row(
+                      children: [
+                        Container(
+                          width: 38,
+                          height: 38,
+                          decoration: BoxDecoration(shape: BoxShape.circle, border: Border.all(color: kGreen, width: 1.5)),
+                          child: const Icon(Icons.person, color: kGreen, size: 22),
+                        ),
+                        const SizedBox(width: 10),
+                        Expanded(
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Text(
+                                MayaJaalAccount.cachedEmail?.isNotEmpty == true ? MayaJaalAccount.cachedEmail! : (user?.email ?? 'Guest User'),
+                                style: const TextStyle(color: kGreen, fontSize: 12, fontWeight: FontWeight.bold),
+                                overflow: TextOverflow.ellipsis,
+                              ),
+                              const SizedBox(height: 2),
+                              Row(
+                                children: [
+                                  Icon(Icons.account_circle_outlined, color: kGreen.withOpacity(0.7), size: 10),
+                                  const SizedBox(width: 3),
+                                  Text('Matrix ID', style: TextStyle(color: kGreen.withOpacity(0.7), fontSize: 9)),
+                                  const SizedBox(width: 8),
+                                  Container(width: 6, height: 6, decoration: const BoxDecoration(color: kGreen, shape: BoxShape.circle)),
+                                  const SizedBox(width: 3),
+                                  Text(MayaJaalAccount.isLinked ? 'Connected' : 'Not linked', style: TextStyle(color: kGreen.withOpacity(0.9), fontSize: 9)),
+                                ],
+                              ),
+                            ],
+                          ),
+                        ),
+                        if (MayaJaalAccount.isLinked)
+                          Container(
+                            padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                            decoration: BoxDecoration(color: kGreen.withOpacity(0.15), borderRadius: BorderRadius.circular(20), border: Border.all(color: kGreen)),
+                            child: const Icon(Icons.verified, color: kGreen, size: 12),
+                          ),
+                      ],
+                    ),
+                  ),
+                  _drawerItem(context, icon: Icons.link, color: kNeonCyan, title: MayaJaalAccount.isLinked ? 'Reconnect MayaJaal' : 'Connect MayaJaal', subtitle: 'Paste API key from website', onTap: () {
+                    Navigator.pop(context);
+                    _showConnectApiDialog(context);
+                  }),
+                  _drawerItem(context, icon: Icons.share, color: kNeonCyan, title: 'Share MayaJaal App', subtitle: 'Invite your friends and grow together', onTap: () {
+                    Navigator.pop(context);
+                    _shareApp();
+                  }),
+                  _drawerItem(context, icon: Icons.settings, color: kGreen, title: 'App Settings', subtitle: 'Customize your app experience', onTap: () {
+                    Navigator.pop(context);
+                    Navigator.push(context, MaterialPageRoute(builder: (_) => const SettingsScreen()));
+                  }),
+                  _drawerItem(context, icon: Icons.support_agent, color: Colors.amberAccent, title: 'Help & Support', subtitle: 'mayajaalsupport@gmail.com', onTap: () {
+                    Navigator.pop(context);
+                    _launchURL('mailto:mayajaalsupport@gmail.com?subject=MayaJaal%20Support%20Request');
+                  }),
+                  _drawerItem(context, icon: Icons.privacy_tip_outlined, color: kDimGreen, title: 'Privacy Policy', subtitle: 'Your data, our priority', onTap: () {
+                    Navigator.pop(context);
+                    _showPolicyDialog(context, 'PRIVACY POLICY', 'MayaJaal respects user privacy. No private credentials are sold or stored inappropriately. Stream decryption occurs locally on your hardware. Logins are handled securely via Supabase Google OAuth integration.');
+                  }),
+                  _drawerItem(context, icon: Icons.description_outlined, color: kDimGreen, title: 'Terms & Conditions', subtitle: 'Read before you continue', onTap: () {
+                    Navigator.pop(context);
+                    _showPolicyDialog(context, 'TERMS AND CONDITIONS', 'By utilizing MayaJaal, you agree to access encrypted streaming endpoints responsibly. Users are personally responsible for streams parsed through node references.');
+                  }),
+                  _drawerItem(context, icon: Icons.account_balance_wallet, color: kGreen, title: 'Earnings Dashboard', subtitle: 'View your earnings and links', onTap: () {
+                    Navigator.pop(context);
+                    Navigator.push(context, MaterialPageRoute(builder: (_) => const EarningsScreen()));
+                  }),
+                  Padding(
+                    padding: const EdgeInsets.only(left: 16, top: 18, bottom: 8),
+                    child: Row(
+                      children: [
+                        Container(width: 14, height: 1.5, color: kGreen),
+                        const SizedBox(width: 6),
+                        const Text('JOIN US', style: TextStyle(color: kGreen, fontSize: 11, fontWeight: FontWeight.bold, letterSpacing: 2)),
+                        const SizedBox(width: 6),
+                        Expanded(child: Container(height: 1, color: kGreen.withOpacity(0.3))),
+                      ],
+                    ),
+                  ),
+                  _drawerItem(context, icon: Icons.camera_alt, color: const Color(0xFFE1306C), title: 'Instagram Official', subtitle: '@maya_jaal_official', onTap: () {
+                    Navigator.pop(context);
+                    _launchURL('https://www.instagram.com/maya_jaal_official');
+                  }),
+                  _drawerItem(context, icon: Icons.play_circle_fill, color: Colors.redAccent, title: 'YouTube Channel', subtitle: '@MayaJaalOfficial00', onTap: () {
+                    Navigator.pop(context);
+                    _launchURL('https://www.youtube.com/@MayaJaalOfficial00');
+                  }),
+                  Padding(
+                    padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 16),
+                    child: Container(
+                      decoration: BoxDecoration(
+                        color: Colors.red.withOpacity(0.08),
+                        borderRadius: BorderRadius.circular(12),
+                        border: Border.all(color: Colors.redAccent.withOpacity(0.4)),
+                      ),
+                      child: ListTile(
+                        leading: const Icon(Icons.logout, color: Colors.redAccent),
+                        title: const Text('Logout Session', style: TextStyle(color: Colors.redAccent, fontWeight: FontWeight.bold, fontSize: 13)),
+                        onTap: () {
+                          Navigator.pop(context);
+                          _logout();
+                        },
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _drawerItem(
+    BuildContext context, {
+    required IconData icon,
+    required Color color,
+    required String title,
+    required String subtitle,
+    required VoidCallback onTap,
+  }) {
+    return Padding(
+      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
+      child: ListTile(
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+        leading: Container(
+          width: 38,
+          height: 38,
+          decoration: BoxDecoration(
+            color: Colors.black,
+            borderRadius: BorderRadius.circular(10),
+            border: Border.all(color: color.withOpacity(0.5)),
+          ),
+          child: Icon(icon, color: color, size: 20),
+        ),
+        title: Text(title, style: const TextStyle(color: Colors.white, fontSize: 13, fontWeight: FontWeight.bold)),
+        subtitle: Text(subtitle, style: TextStyle(color: Colors.white.withOpacity(0.5), fontSize: 10.5)),
+        trailing: Icon(Icons.arrow_forward_ios, color: color, size: 14),
+        onTap: onTap,
+      ),
+    );
+  }
+}
+
+// ========================= PART 1 END =========================
+// ============================================================
+// CHANNEL SCREEN
+// ============================================================
 class ChannelScreen extends StatelessWidget {
   const ChannelScreen({super.key});
 
@@ -1779,6 +2316,10 @@ class ChannelScreen extends StatelessWidget {
     );
   }
 }
+
+// ============================================================
+// HISTORY SCREEN
+// ============================================================
 class HistoryScreen extends StatefulWidget {
   const HistoryScreen({super.key});
   @override
@@ -1873,9 +2414,7 @@ class _HistoryScreenState extends State<HistoryScreen> {
                     onTap: () {
                       Navigator.push(
                         context,
-                        MaterialPageRoute(
-                          builder: (_) => StreamPreviewScreen(targetUrl: item['url']),
-                        ),
+                        MaterialPageRoute(builder: (_) => StreamPreviewScreen(targetUrl: item['url'])),
                       ).then((_) => _loadHistory());
                     },
                   ),
@@ -1885,189 +2424,11 @@ class _HistoryScreenState extends State<HistoryScreen> {
     );
   }
 }
-class MoreScreen extends StatelessWidget {
-  const MoreScreen({super.key});
 
-  Future<void> _logout() async {
-    await Supabase.instance.client.auth.signOut();
-    await GoogleSignIn().signOut();
-  }
-
-  Future<void> _launchURL(String url) async {
-    final target = Uri.parse(url);
-    if (await canLaunchUrl(target)) {
-      await launchUrl(target, mode: LaunchMode.externalApplication);
-    }
-  }
-
-  void _shareApp() {
-    Share.share('🚀 Experience Matrix-speed streaming on MayaJaal App!\nDownload: https://mayajaal.online/download.html');
-  }
-
-  void _showPolicyDialog(BuildContext context, String title, String content) {
-    showDialog(
-      context: context,
-      builder: (c) => AlertDialog(
-        backgroundColor: kCardBg,
-        shape: RoundedRectangleBorder(
-          borderRadius: BorderRadius.circular(14),
-          side: const BorderSide(color: kGreen, width: 1.5),
-        ),
-        title: Text(title, style: const TextStyle(color: kGreen, fontSize: 15, fontWeight: FontWeight.bold)),
-        content: SingleChildScrollView(
-          child: Text(content, style: const TextStyle(color: Colors.white70, fontSize: 12, height: 1.4)),
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(c),
-            child: const Text('CLOSE', style: TextStyle(color: kGreen)),
-          ),
-        ],
-      ),
-    );
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    final user = Supabase.instance.client.auth.currentUser;
-
-    return Scaffold(
-      backgroundColor: Colors.black,
-      appBar: AppBar(title: const Text('MORE OPTIONS')),
-      body: ListView(
-        padding: const EdgeInsets.all(16),
-        children: [
-          Container(
-            padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
-            decoration: BoxDecoration(
-              color: kCardBg,
-              borderRadius: BorderRadius.circular(12),
-              border: Border.all(color: kGreen.withOpacity(0.4)),
-            ),
-            child: Row(
-              children: [
-                const Icon(Icons.account_circle, color: kGreen, size: 28),
-                const SizedBox(width: 12),
-                Expanded(
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      const Text('LOGGED IN AS', style: TextStyle(color: Colors.grey, fontSize: 10, letterSpacing: 1)),
-                      const SizedBox(height: 2),
-                      Text(
-                        user?.email ?? 'Guest User',
-                        style: const TextStyle(color: kGreen, fontSize: 13, fontWeight: FontWeight.bold),
-                        overflow: TextOverflow.ellipsis,
-                      ),
-                    ],
-                  ),
-                ),
-              ],
-            ),
-          ),
-          const SizedBox(height: 14),
-          ListTile(
-            leading: const Icon(Icons.share, color: kNeonCyan),
-            title: const Text('Share MayaJaal App', style: TextStyle(color: Colors.white)),
-            trailing: const Icon(Icons.arrow_forward_ios, size: 14, color: kNeonCyan),
-            onTap: _shareApp,
-          ),
-          Divider(color: kGreen.withOpacity(0.15)),
-          ListTile(
-            leading: const Icon(Icons.settings, color: kGreen),
-            title: const Text('App Settings', style: TextStyle(color: Colors.white)),
-            trailing: const Icon(Icons.arrow_forward_ios, size: 14, color: kGreen),
-            onTap: () => Navigator.push(context, MaterialPageRoute(builder: (_) => const SettingsScreen())),
-          ),
-          Divider(color: kGreen.withOpacity(0.15)),
-          ListTile(
-            leading: const Icon(Icons.support_agent, color: Colors.amberAccent),
-            title: const Text('Help & Support', style: TextStyle(color: Colors.white)),
-            subtitle: const Text('mayajaalsupport@gmail.com', style: TextStyle(color: Colors.amberAccent, fontSize: 11)),
-            trailing: const Icon(Icons.mail_outline, size: 18, color: Colors.amberAccent),
-            onTap: () => _launchURL('mailto:mayajaalsupport@gmail.com?subject=MayaJaal%20Support%20Request'),
-          ),
-          Divider(color: kGreen.withOpacity(0.15)),
-          ListTile(
-            leading: const Icon(Icons.privacy_tip_outlined, color: kDimGreen),
-            title: const Text('Privacy Policy', style: TextStyle(color: Colors.white)),
-            trailing: const Icon(Icons.arrow_forward_ios, size: 14, color: kDimGreen),
-            onTap: () => _showPolicyDialog(
-              context,
-              'PRIVACY POLICY',
-              'MayaJaal respects user privacy. No private credentials are sold or stored inappropriately. Stream decryption occurs locally on your hardware. Logins are handled securely via Supabase Google OAuth integration.',
-            ),
-          ),
-          ListTile(
-            leading: const Icon(Icons.description_outlined, color: kDimGreen),
-            title: const Text('Terms & Conditions', style: TextStyle(color: Colors.white)),
-            trailing: const Icon(Icons.arrow_forward_ios, size: 14, color: kDimGreen),
-            onTap: () => _showPolicyDialog(
-              context,
-              'TERMS AND CONDITIONS',
-              'By utilizing MayaJaal, you agree to access encrypted streaming endpoints responsibly. Users are personally responsible for streams parsed through node references.',
-            ),
-          ),
-          ListTile(
-            leading: const Icon(Icons.account_balance_wallet, color: kGreen),
-            title: const Text('Earnings Dashboard', style: TextStyle(color: Colors.white)),
-            subtitle: const Text('View your earnings and links', style: TextStyle(color: kGreen, fontSize: 12)),
-            trailing: const Icon(Icons.arrow_forward_ios, size: 14, color: kGreen),
-            onTap: () => Navigator.push(context, MaterialPageRoute(builder: (_) => const EarningsScreen())),
-          ),
-          Divider(color: kGreen.withOpacity(0.15)),
-          const SizedBox(height: 20),
-          const Text('JOIN US', style: TextStyle(color: kGreen, fontSize: 13, fontWeight: FontWeight.bold, letterSpacing: 2)),
-          const SizedBox(height: 12),
-          Container(
-            decoration: BoxDecoration(
-              color: kCardBg,
-              borderRadius: BorderRadius.circular(12),
-              border: Border.all(color: const Color(0xFFE1306C).withOpacity(0.5)),
-            ),
-            child: ListTile(
-              leading: const Icon(Icons.camera_alt, color: Color(0xFFE1306C), size: 26),
-              title: const Text('Instagram Official', style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 13)),
-              subtitle: const Text('@maya_jaal_official', style: TextStyle(color: Color(0xFFE1306C), fontSize: 11)),
-              trailing: const Icon(Icons.open_in_new, color: Color(0xFFE1306C), size: 18),
-              onTap: () => _launchURL('https://www.instagram.com/maya_jaal_official?stkn=MWVmZmxxMXlldWwwdg=='),
-            ),
-          ),
-          const SizedBox(height: 12),
-          Container(
-            decoration: BoxDecoration(
-              color: kCardBg,
-              borderRadius: BorderRadius.circular(12),
-              border: Border.all(color: Colors.redAccent.withOpacity(0.5)),
-            ),
-            child: ListTile(
-              leading: const Icon(Icons.play_circle_fill, color: Colors.redAccent, size: 26),
-              title: const Text('YouTube Channel', style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 13)),
-              subtitle: const Text('@MayaJaalOfficial00', style: TextStyle(color: Colors.redAccent, fontSize: 11)),
-              trailing: const Icon(Icons.open_in_new, color: Colors.redAccent, size: 18),
-              onTap: () => _launchURL('https://www.youtube.com/@MayaJaalOfficial00'),
-            ),
-          ),
-          const SizedBox(height: 25),
-          Container(
-            decoration: BoxDecoration(
-              color: Colors.red.withOpacity(0.08),
-              borderRadius: BorderRadius.circular(12),
-              border: Border.all(color: Colors.redAccent.withOpacity(0.4)),
-            ),
-            child: ListTile(
-              leading: const Icon(Icons.logout, color: Colors.redAccent),
-              title: const Text('Logout Session', style: TextStyle(color: Colors.redAccent, fontWeight: FontWeight.bold)),
-              onTap: _logout,
-            ),
-          ),
-          const SizedBox(height: 25),
-        ],
-      ),
-    );
-  }
-}
-  class SettingsScreen extends StatefulWidget {
+// ============================================================
+// SETTINGS SCREEN
+// ============================================================
+class SettingsScreen extends StatefulWidget {
   const SettingsScreen({super.key});
   @override
   State<SettingsScreen> createState() => _SettingsScreenState();
@@ -2152,7 +2513,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
           Divider(color: kGreen.withOpacity(0.2)),
           const SizedBox(height: 30),
           Center(
-            child: Text('> MayaJaal v1.1.0 // Core Matrix Node', style: TextStyle(color: kGreen.withOpacity(0.5), fontSize: 12)),
+            child: Text('> MayaJaal v1.1.1 // Core Matrix Node', style: TextStyle(color: kGreen.withOpacity(0.5), fontSize: 12)),
           ),
         ],
       ),
@@ -2164,10 +2525,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
       context: context,
       builder: (c) => AlertDialog(
         backgroundColor: kCardBg,
-        shape: RoundedRectangleBorder(
-          borderRadius: BorderRadius.circular(12),
-          side: BorderSide(color: kGreen.withOpacity(0.5)),
-        ),
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12), side: BorderSide(color: kGreen.withOpacity(0.5))),
         title: Text(tr('language'), style: const TextStyle(color: kGreen)),
         content: Column(
           mainAxisSize: MainAxisSize.min,
@@ -2195,10 +2553,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
       context: context,
       builder: (c) => AlertDialog(
         backgroundColor: kCardBg,
-        shape: RoundedRectangleBorder(
-          borderRadius: BorderRadius.circular(12),
-          side: BorderSide(color: kGreen.withOpacity(0.5)),
-        ),
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12), side: BorderSide(color: kGreen.withOpacity(0.5))),
         title: Text(tr('download_location'), style: const TextStyle(color: kGreen)),
         content: Column(
           mainAxisSize: MainAxisSize.min,
@@ -2221,7 +2576,11 @@ class _SettingsScreenState extends State<SettingsScreen> {
     );
   }
 }
-  class StreamPreviewScreen extends StatefulWidget {
+
+// ============================================================
+// STREAM PREVIEW SCREEN — 10 second countdown
+// ============================================================
+class StreamPreviewScreen extends StatefulWidget {
   final String targetUrl;
   const StreamPreviewScreen({super.key, required this.targetUrl});
   @override
@@ -2231,8 +2590,8 @@ class _SettingsScreenState extends State<SettingsScreen> {
 class _StreamPreviewScreenState extends State<StreamPreviewScreen> with SingleTickerProviderStateMixin {
   bool _loading = true;
   String _streamUrl = '';
-  String _videoTitle = 'VID-20260924-WA0002.mp4';
-  String _uploaderName = '@john23413';
+  String _videoTitle = 'MayaJaal Video';
+  String _uploaderName = '@mayajaal';
   String _rawId = '';
 
   int _countdown = 10;
@@ -2281,6 +2640,7 @@ class _StreamPreviewScreenState extends State<StreamPreviewScreen> with SingleTi
     try {
       final uri = Uri.parse(widget.targetUrl);
       _rawId = uri.pathSegments.isNotEmpty ? uri.pathSegments.last : 'stream';
+      final token = uri.queryParameters['t'] ?? uri.queryParameters['s'] ?? '';
 
       if (widget.targetUrl.endsWith('.mp4') || widget.targetUrl.endsWith('.m3u8')) {
         setState(() {
@@ -2292,14 +2652,18 @@ class _StreamPreviewScreenState extends State<StreamPreviewScreen> with SingleTi
         return;
       }
 
-      final res = await http.get(Uri.parse('$kBackendBaseUrl/api/stream-info/$_rawId')).timeout(const Duration(seconds: 8));
+      final apiUrl = token.isNotEmpty
+          ? '$kBackendBaseUrl/api/stream-info/$_rawId?t=$token'
+          : '$kBackendBaseUrl/api/stream-info/$_rawId';
+
+      final res = await http.get(Uri.parse(apiUrl)).timeout(const Duration(seconds: 8));
       if (res.statusCode == 200) {
         final data = jsonDecode(res.body);
         if (data['success'] == true && (data['url'] != null || data['video_url'] != null)) {
           setState(() {
             _streamUrl = data['url'] ?? data['video_url'];
             _videoTitle = data['title'] ?? data['file_name'] ?? _rawId;
-            _uploaderName = data['uploader'] ?? '@john23413';
+            _uploaderName = data['uploader'] ?? '@mayajaal';
             _loading = false;
           });
           _startCountdown();
@@ -2307,18 +2671,16 @@ class _StreamPreviewScreenState extends State<StreamPreviewScreen> with SingleTi
         }
       }
 
-      final res2 = await http.get(Uri.parse('$kBackendBaseUrl/api/v/$_rawId')).timeout(const Duration(seconds: 8));
+      final res2 = await http.get(Uri.parse('$kBackendBaseUrl/api/v/$_rawId?t=$token')).timeout(const Duration(seconds: 8));
       if (res2.statusCode == 200) {
         final data = jsonDecode(res2.body);
-        if (data['url'] != null || data['video_url'] != null) {
-          setState(() {
-            _streamUrl = data['url'] ?? data['video_url'];
-            _videoTitle = data['title'] ?? data['file_name'] ?? _rawId;
-            _loading = false;
-          });
-          _startCountdown();
-          return;
-        }
+        setState(() {
+          _streamUrl = widget.targetUrl;
+          _videoTitle = data['name'] ?? _rawId;
+          _loading = false;
+        });
+        _startCountdown();
+        return;
       }
 
       setState(() {
@@ -2334,13 +2696,13 @@ class _StreamPreviewScreenState extends State<StreamPreviewScreen> with SingleTi
       _startCountdown();
     }
   }
-    void _shareStreamDirect() {
+
+  void _shareStreamDirect() {
     Share.share('🚀 Watch this stream on MayaJaal:\n${widget.targetUrl}');
   }
 
   Future<void> _saveWatchRecord() async {
     final prefs = await SharedPreferences.getInstance();
-    final user = Supabase.instance.client.auth.currentUser;
     final localJson = prefs.getString('watch_history_v2');
     List<Map<String, dynamic>> history = [];
     if (localJson != null) {
@@ -2363,19 +2725,6 @@ class _StreamPreviewScreenState extends State<StreamPreviewScreen> with SingleTi
     if (history.length > 50) history.removeLast();
 
     await prefs.setString('watch_history_v2', jsonEncode(history));
-
-    if (user != null) {
-      try {
-        await http.post(
-          Uri.parse('$kBackendBaseUrl/api/history/save'),
-          headers: {'Content-Type': 'application/json'},
-          body: jsonEncode({
-            'telegram_id': user.id,
-            'video': item,
-          }),
-        );
-      } catch (_) {}
-    }
   }
 
   void _launchNativePlayer() {
@@ -2395,361 +2744,276 @@ class _StreamPreviewScreenState extends State<StreamPreviewScreen> with SingleTi
     );
   }
 
+  Widget _buildCountdownCircle() {
+    final progress = 1.0 - (_countdown / 10.0);
+    return SizedBox(
+      width: 140,
+      height: 140,
+      child: Stack(
+        alignment: Alignment.center,
+        children: [
+          SizedBox(
+            width: 140,
+            height: 140,
+            child: CircularProgressIndicator(
+              value: progress,
+              strokeWidth: 7,
+              backgroundColor: Colors.white12,
+              valueColor: AlwaysStoppedAnimation<Color>(_canProceed ? kGreen : Colors.orangeAccent),
+            ),
+          ),
+          Column(
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [
+              Icon(
+                _canProceed ? Icons.play_arrow_rounded : Icons.timer,
+                color: _canProceed ? kGreen : Colors.orangeAccent,
+                size: 44,
+              ),
+              const SizedBox(height: 4),
+              Text(
+                _canProceed ? 'READY' : '$_countdown',
+                style: TextStyle(
+                  color: _canProceed ? kGreen : Colors.orangeAccent,
+                  fontSize: _canProceed ? 20 : 38,
+                  fontWeight: FontWeight.w900,
+                  letterSpacing: 2,
+                  shadows: [
+                    Shadow(color: (_canProceed ? kGreen : Colors.orangeAccent).withOpacity(0.7), blurRadius: 15),
+                  ],
+                ),
+              ),
+              if (!_canProceed)
+                Text(
+                  'SEC',
+                  style: TextStyle(color: Colors.orangeAccent.withOpacity(0.8), fontSize: 11, letterSpacing: 3, fontWeight: FontWeight.bold),
+                ),
+            ],
+          ),
+        ],
+      ),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     return Scaffold(
       backgroundColor: Colors.black,
-      body: SafeArea(
-        child: SingleChildScrollView(
-          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
-          child: Column(
-            children: [
-              Row(
+      body: Stack(
+        children: [
+          const MatrixRain(opacity: 0.35),
+          SafeArea(
+            child: SingleChildScrollView(
+              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
+              child: Column(
                 children: [
-                  IconButton(
-                    icon: const Icon(Icons.arrow_back_ios_new, color: kGreen, size: 22),
-                    onPressed: () => Navigator.pop(context),
+                  Row(
+                    children: [
+                      IconButton(
+                        icon: const Icon(Icons.arrow_back_ios_new, color: kGreen, size: 22),
+                        onPressed: () => Navigator.pop(context),
+                      ),
+                      Expanded(
+                        child: Column(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            const Text(
+                              'STREAM READY',
+                              style: TextStyle(color: kGreen, fontSize: 19, fontWeight: FontWeight.w900, letterSpacing: 2, shadows: [Shadow(color: kGreen, blurRadius: 12)]),
+                            ),
+                            Text(
+                              'MATRIX NEURAL STREAM',
+                              style: TextStyle(color: kGreen.withOpacity(0.7), fontSize: 9, letterSpacing: 2.5, fontWeight: FontWeight.w600),
+                            ),
+                          ],
+                        ),
+                      ),
+                      Container(
+                        padding: const EdgeInsets.all(7),
+                        decoration: BoxDecoration(shape: BoxShape.circle, border: Border.all(color: kGreen.withOpacity(0.6))),
+                        child: const Icon(Icons.verified_user_rounded, color: kGreen, size: 18),
+                      ),
+                    ],
                   ),
-                  Expanded(
+                  const SizedBox(height: 15),
+                  Container(
+                    padding: const EdgeInsets.symmetric(vertical: 26, horizontal: 16),
+                    decoration: BoxDecoration(
+                      color: const Color(0xFF011206),
+                      borderRadius: BorderRadius.circular(24),
+                      border: Border.all(color: _canProceed ? kGreen : Colors.orangeAccent.withOpacity(0.6), width: 1.8),
+                      boxShadow: [
+                        BoxShadow(color: (_canProceed ? kGreen : Colors.orangeAccent).withOpacity(0.25), blurRadius: 30),
+                      ],
+                    ),
                     child: Column(
-                      mainAxisSize: MainAxisSize.min,
                       children: [
-                        const Text(
-                          'NODE VERIFICATION',
+                        _buildCountdownCircle(),
+                        const SizedBox(height: 20),
+                        Text(
+                          _canProceed ? '🚀 VIDEO READY TO PLAY' : '⏱ PLEASE WAIT',
                           style: TextStyle(
-                            color: kGreen,
-                            fontSize: 19,
+                            color: _canProceed ? kGreen : Colors.orangeAccent,
+                            fontSize: 16,
                             fontWeight: FontWeight.w900,
                             letterSpacing: 2,
-                            shadows: [Shadow(color: kGreen, blurRadius: 12)],
                           ),
                         ),
+                        const SizedBox(height: 8),
                         Text(
-                          'MATRIX NEURAL STREAM',
-                          style: TextStyle(
-                            color: kGreen.withOpacity(0.7),
-                            fontSize: 9,
-                            letterSpacing: 2.5,
-                            fontWeight: FontWeight.w600,
+                          _canProceed
+                              ? 'Tap the button below to start streaming'
+                              : 'Video unlocks in $_countdown seconds',
+                          textAlign: TextAlign.center,
+                          style: TextStyle(color: Colors.white.withOpacity(0.75), fontSize: 13, height: 1.5),
+                        ),
+                        const SizedBox(height: 16),
+                        ClipRRect(
+                          borderRadius: BorderRadius.circular(99),
+                          child: LinearProgressIndicator(
+                            value: 1.0 - (_countdown / 10.0),
+                            minHeight: 8,
+                            backgroundColor: Colors.white12,
+                            valueColor: AlwaysStoppedAnimation<Color>(_canProceed ? kGreen : Colors.orangeAccent),
                           ),
                         ),
                       ],
                     ),
                   ),
+                  const SizedBox(height: 16),
                   Container(
-                    padding: const EdgeInsets.all(7),
+                    padding: const EdgeInsets.all(14),
                     decoration: BoxDecoration(
-                      shape: BoxShape.circle,
-                      border: Border.all(color: kGreen.withOpacity(0.6)),
+                      color: const Color(0xFF031A0B),
+                      borderRadius: BorderRadius.circular(16),
+                      border: Border.all(color: kGreen.withOpacity(0.35)),
                     ),
-                    child: const Icon(Icons.verified_user_rounded, color: kGreen, size: 18),
+                    child: Column(
+                      children: [
+                        Row(
+                          children: [
+                            Container(
+                              padding: const EdgeInsets.all(10),
+                              decoration: BoxDecoration(shape: BoxShape.circle, color: Colors.black, border: Border.all(color: kGreen.withOpacity(0.5))),
+                              child: const Icon(Icons.video_collection_outlined, color: kGreen, size: 20),
+                            ),
+                            const SizedBox(width: 14),
+                            Expanded(
+                              child: Column(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                children: [
+                                  Text('FILE NAME', style: TextStyle(color: Colors.white.withOpacity(0.5), fontSize: 9.5, letterSpacing: 1)),
+                                  const SizedBox(height: 2),
+                                  Text(_videoTitle, style: const TextStyle(color: Colors.white, fontSize: 13.5, fontWeight: FontWeight.bold), maxLines: 1, overflow: TextOverflow.ellipsis),
+                                ],
+                              ),
+                            ),
+                          ],
+                        ),
+                        Padding(padding: const EdgeInsets.symmetric(vertical: 8), child: Divider(color: kGreen.withOpacity(0.15))),
+                        Row(
+                          children: [
+                            Container(
+                              padding: const EdgeInsets.all(10),
+                              decoration: BoxDecoration(shape: BoxShape.circle, color: Colors.black, border: Border.all(color: kGreen.withOpacity(0.5))),
+                              child: const Icon(Icons.person_outline, color: kGreen, size: 20),
+                            ),
+                            const SizedBox(width: 14),
+                            Expanded(
+                              child: Column(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                children: [
+                                  Text('UPLOADER', style: TextStyle(color: Colors.white.withOpacity(0.5), fontSize: 9.5, letterSpacing: 1)),
+                                  const SizedBox(height: 2),
+                                  Text(_uploaderName, style: const TextStyle(color: kGreen, fontSize: 13.5, fontWeight: FontWeight.bold)),
+                                ],
+                              ),
+                            ),
+                          ],
+                        ),
+                      ],
+                    ),
                   ),
-                ],
-              ),
-                            const SizedBox(height: 15),
-              Container(
-                width: double.infinity,
-                padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 20),
-                decoration: BoxDecoration(
-                  color: const Color(0xFF011206),
-                  borderRadius: BorderRadius.circular(24),
-                  border: Border.all(color: kGreen.withOpacity(0.65), width: 1.5),
-                  boxShadow: [
-                    BoxShadow(color: kGreen.withOpacity(0.2), blurRadius: 30),
-                  ],
-                ),
-                child: Column(
-                  children: [
-                    Container(
-                      width: 85,
-                      height: 85,
-                      decoration: BoxDecoration(
-                        borderRadius: BorderRadius.circular(20),
-                        border: Border.all(color: kGreen, width: 2),
-                        boxShadow: [
-                          BoxShadow(color: kGreen.withOpacity(0.55), blurRadius: 20),
-                        ],
-                      ),
-                      child: ClipRRect(
-                        borderRadius: BorderRadius.circular(18),
-                        child: Image.asset(
-                          'assets/icon/logo.png',
-                          fit: BoxFit.cover,
-                          errorBuilder: (context, error, stackTrace) => Container(
-                            color: Colors.black,
-                            child: const Icon(Icons.movie_filter, size: 45, color: kGreen),
+                  const SizedBox(height: 16),
+                  AnimatedBuilder(
+                    animation: _pulseAnimation,
+                    builder: (context, child) => Transform.scale(
+                      scale: _canProceed ? _pulseAnimation.value : 1.0,
+                      child: SizedBox(
+                        width: double.infinity,
+                        height: 60,
+                        child: ElevatedButton(
+                          onPressed: _canProceed ? _launchNativePlayer : null,
+                          style: ElevatedButton.styleFrom(
+                            backgroundColor: _canProceed ? kGreen : Colors.grey[850],
+                            foregroundColor: Colors.black,
+                            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
+                            elevation: _canProceed ? 15 : 0,
+                          ),
+                          child: Row(
+                            mainAxisAlignment: MainAxisAlignment.center,
+                            children: [
+                              Icon(Icons.play_arrow_rounded, color: _canProceed ? Colors.black : Colors.white38, size: 28),
+                              const SizedBox(width: 8),
+                              Text(
+                                _canProceed ? 'OPEN PLAYER NOW' : 'PLEASE WAIT...',
+                                style: TextStyle(
+                                  color: _canProceed ? Colors.black : Colors.white38,
+                                  fontSize: 14,
+                                  fontWeight: FontWeight.w900,
+                                  letterSpacing: 1.5,
+                                ),
+                              ),
+                            ],
                           ),
                         ),
                       ),
                     ),
-                    const SizedBox(height: 18),
-                    const Text(
-                      'STREAM READY FOR DECRYPTION',
-                      style: TextStyle(
-                        color: kGreen,
-                        fontSize: 14.5,
-                        fontWeight: FontWeight.w900,
-                        letterSpacing: 1.5,
-                      ),
-                    ),
-                    const SizedBox(height: 6),
-                    Text(
-                      'NODE VERIFIED   •   SECURE   •   STABLE',
-                      style: TextStyle(
-                        color: kGreen.withOpacity(0.7),
-                        fontSize: 9.5,
-                        fontWeight: FontWeight.w700,
-                        letterSpacing: 1.5,
-                      ),
-                    ),
-                    const SizedBox(height: 18),
-                    Container(
-                      padding: const EdgeInsets.all(14),
-                      decoration: BoxDecoration(
-                        color: const Color(0xFF031A0B),
-                        borderRadius: BorderRadius.circular(16),
-                        border: Border.all(color: kGreen.withOpacity(0.35)),
-                      ),
-                      child: Column(
-                        children: [
-                          Row(
-                            children: [
-                              Container(
-                                padding: const EdgeInsets.all(10),
-                                decoration: BoxDecoration(
-                                  shape: BoxShape.circle,
-                                  color: Colors.black,
-                                  border: Border.all(color: kGreen.withOpacity(0.5)),
-                                ),
-                                child: const Icon(Icons.video_collection_outlined, color: kGreen, size: 20),
-                              ),
-                              const SizedBox(width: 14),
-                              Expanded(
-                                child: Column(
-                                  crossAxisAlignment: CrossAxisAlignment.start,
-                                  children: [
-                                    Text(
-                                      'FILE NAME',
-                                      style: TextStyle(color: Colors.white.withOpacity(0.5), fontSize: 9.5, letterSpacing: 1),
-                                    ),
-                                    const SizedBox(height: 2),
-                                    Text(
-                                      _videoTitle,
-                                      style: const TextStyle(color: Colors.white, fontSize: 13.5, fontWeight: FontWeight.bold),
-                                      maxLines: 1,
-                                      overflow: TextOverflow.ellipsis,
-                                    ),
-                                  ],
-                                ),
-                              ),
-                            ],
-                          ),
-                          Padding(
-                            padding: const EdgeInsets.symmetric(vertical: 8),
-                            child: Divider(color: kGreen.withOpacity(0.15)),
-                          ),
-                          Row(
-                            children: [
-                              Container(
-                                padding: const EdgeInsets.all(10),
-                                decoration: BoxDecoration(
-                                  shape: BoxShape.circle,
-                                  color: Colors.black,
-                                  border: Border.all(color: kGreen.withOpacity(0.5)),
-                                ),
-                                child: const Icon(Icons.person_outline, color: kGreen, size: 20),
-                              ),
-                              const SizedBox(width: 14),
-                              Expanded(
-                                child: Column(
-                                  crossAxisAlignment: CrossAxisAlignment.start,
-                                  children: [
-                                    Text(
-                                      'UPLOADER',
-                                      style: TextStyle(color: Colors.white.withOpacity(0.5), fontSize: 9.5, letterSpacing: 1),
-                                    ),
-                                    const SizedBox(height: 2),
-                                    Text(
-                                      _uploaderName,
-                                      style: const TextStyle(color: kGreen, fontSize: 13.5, fontWeight: FontWeight.bold),
-                                    ),
-                                  ],
-                                ),
-                              ),
-                            ],
-                          ),
-                        ],
-                      ),
-                    ),
-                    const SizedBox(height: 16),
-                    Container(
-                      width: double.infinity,
-                      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
-                      decoration: BoxDecoration(
-                        color: const Color(0xFF03220E),
-                        borderRadius: BorderRadius.circular(14),
-                        border: Border.all(color: _canProceed ? kGreen : Colors.orangeAccent, width: 1.2),
+                  ),
+                  const SizedBox(height: 14),
+                  SizedBox(
+                    width: double.infinity,
+                    height: 52,
+                    child: OutlinedButton(
+                      onPressed: _shareStreamDirect,
+                      style: OutlinedButton.styleFrom(
+                        side: const BorderSide(color: kGreen, width: 1.5),
+                        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(26)),
                       ),
                       child: Row(
-                        children: [
-                          Icon(
-                            _canProceed ? Icons.verified_user : Icons.timer,
-                            color: _canProceed ? kGreen : Colors.orangeAccent,
-                            size: 20,
-                          ),
-                          const SizedBox(width: 10),
-                          Expanded(
-                            child: Column(
-                              crossAxisAlignment: CrossAxisAlignment.start,
-                              children: [
-                                Text(
-                                  _canProceed ? 'ACCESS GRANTED // READY' : 'DECRYPTING STREAM NODE...',
-                                  style: TextStyle(
-                                    color: _canProceed ? kGreen : Colors.orangeAccent,
-                                    fontSize: 12.5,
-                                    fontWeight: FontWeight.bold,
-                                    letterSpacing: 1,
-                                  ),
-                                ),
-                                Text(
-                                  _canProceed
-                                      ? 'NODE AUTHENTICATED'
-                                      : 'WAIT FOR SECURITY CIPHER: 00:${_countdown.toString().padLeft(2, '0')}',
-                                  style: TextStyle(color: Colors.white.withOpacity(0.6), fontSize: 9.5),
-                                ),
-                              ],
-                            ),
-                          ),
-                          Icon(
-                            Icons.keyboard_double_arrow_right_rounded,
-                            color: _canProceed ? kGreen : Colors.orangeAccent,
-                            size: 22,
-                          ),
+                        mainAxisAlignment: MainAxisAlignment.center,
+                        children: const [
+                          Icon(Icons.share, color: kGreen, size: 20),
+                          SizedBox(width: 10),
+                          Text('SHARE VIDEO', style: TextStyle(color: kGreen, fontSize: 12, fontWeight: FontWeight.bold, letterSpacing: 1.5)),
                         ],
                       ),
                     ),
-                    const SizedBox(height: 16),
-                    AnimatedBuilder(
-                      animation: _pulseAnimation,
-                      builder: (context, child) => Transform.scale(
-                        scale: _canProceed ? _pulseAnimation.value : 1.0,
-                        child: SizedBox(
-                          width: double.infinity,
-                          height: 54,
-                          child: ElevatedButton(
-                            onPressed: _canProceed ? _launchNativePlayer : null,
-                            style: ElevatedButton.styleFrom(
-                              backgroundColor: _canProceed ? kGreen : Colors.grey[850],
-                              foregroundColor: Colors.black,
-                              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
-                              elevation: _canProceed ? 12 : 0,
-                            ),
-                            child: Row(
-                              mainAxisAlignment: MainAxisAlignment.center,
-                              children: [
-                                Icon(Icons.bolt, color: _canProceed ? Colors.black : Colors.white38, size: 24),
-                                const SizedBox(width: 8),
-                                Text(
-                                  _canProceed ? 'INITIALIZE NEURAL STREAM\nSTREAM (OPEN NOW)' : 'PLEASE WAIT TO DECRYPT...',
-                                  textAlign: TextAlign.center,
-                                  style: TextStyle(
-                                    color: _canProceed ? Colors.black : Colors.white38,
-                                    fontSize: 11.5,
-                                    fontWeight: FontWeight.bold,
-                                    letterSpacing: 1,
-                                  ),
-                                ),
-                                const SizedBox(width: 8),
-                                Icon(Icons.arrow_forward_rounded, color: _canProceed ? Colors.black : Colors.white38, size: 22),
-                              ],
-                            ),
-                          ),
-                        ),
-                      ),
-                    ),
-                  ],
-                ),
-              ),
-              const SizedBox(height: 14),
-              Container(
-                width: double.infinity,
-                padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
-                decoration: BoxDecoration(
-                  color: const Color(0xFF031408),
-                  borderRadius: BorderRadius.circular(18),
-                  border: Border.all(color: kGreen.withOpacity(0.4)),
-                ),
-                child: Row(
-                  children: [
-                    Container(
-                      padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
-                      decoration: BoxDecoration(
-                        color: kGreen,
-                        borderRadius: BorderRadius.circular(4),
-                      ),
-                      child: const Text('Ad', style: TextStyle(color: Colors.black, fontSize: 10, fontWeight: FontWeight.bold)),
-                    ),
-                    const SizedBox(width: 12),
-                    Expanded(
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          const Text('YOUR AD HERE', style: TextStyle(color: Colors.white, fontSize: 13, fontWeight: FontWeight.bold)),
-                          Text('REACH MILLIONS OF USERS', style: TextStyle(color: Colors.white.withOpacity(0.55), fontSize: 9.5)),
-                        ],
-                      ),
-                    ),
-                    const Icon(Icons.campaign_outlined, color: kGreen, size: 28),
-                  ],
-                ),
-              ),
-              const SizedBox(height: 14),
-              SizedBox(
-                width: double.infinity,
-                height: 52,
-                child: OutlinedButton(
-                  onPressed: _shareStreamDirect,
-                  style: OutlinedButton.styleFrom(
-                    side: const BorderSide(color: kGreen, width: 1.5),
-                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(26)),
                   ),
-                  child: Row(
+                  const SizedBox(height: 14),
+                  Row(
                     mainAxisAlignment: MainAxisAlignment.center,
                     children: [
-                      const Icon(Icons.share, color: kGreen, size: 20),
-                      const SizedBox(width: 10),
-                      Column(
-                        mainAxisAlignment: MainAxisAlignment.center,
-                        children: [
-                          const Text('SHARE VIDEO', style: TextStyle(color: kGreen, fontSize: 12, fontWeight: FontWeight.bold, letterSpacing: 1.5)),
-                          Text('SEND TO FRIENDS', style: TextStyle(color: kGreen.withOpacity(0.7), fontSize: 8.5)),
-                        ],
-                      ),
+                      const Icon(Icons.lock_outline, color: kGreen, size: 14),
+                      const SizedBox(width: 6),
+                      Text('SECURE STREAM PIPELINE ACTIVE', style: TextStyle(color: kGreen.withOpacity(0.75), fontSize: 9.5, letterSpacing: 1.2)),
                     ],
                   ),
-                ),
-              ),
-              const SizedBox(height: 12),
-              Row(
-                mainAxisAlignment: MainAxisAlignment.center,
-                children: [
-                  const Icon(Icons.lock_outline, color: kGreen, size: 14),
-                  const SizedBox(width: 6),
-                  Text(
-                    'SECURE QUANTUM STREAM PIPELINE ACTIVE',
-                    style: TextStyle(color: kGreen.withOpacity(0.75), fontSize: 9.5, letterSpacing: 1.2),
-                  ),
+                  const SizedBox(height: 14),
                 ],
               ),
-              const SizedBox(height: 14),
-            ],
+            ),
           ),
-        ),
+        ],
       ),
     );
   }
 }
-  class NativeVideoPlayerScreen extends StatefulWidget {
+
+// ============================================================
+// NATIVE VIDEO PLAYER — reports view after 10 sec
+// ============================================================
+class NativeVideoPlayerScreen extends StatefulWidget {
   final String videoUrl;
   final String title;
   final String uploader;
@@ -2801,59 +3065,66 @@ class _NativeVideoPlayerScreenState extends State<NativeVideoPlayerScreen> {
   bool _isUnliked = false;
   bool _isSaved = false;
 
+  bool _viewReported = false;
+  Timer? _viewReportTimer;
+
+  Future<void> _reportViewToBackend() async {
+    if (_viewReported) return;
+    _viewReported = true;
+
+    try {
+      final uri = Uri.parse(widget.sourcePageUrl);
+      final token = uri.queryParameters['t'] ?? uri.queryParameters['s'] ?? '';
+      final deviceId = await DeviceIdHelper.get();
+
+      final url = token.isNotEmpty
+          ? '$kBackendBaseUrl/api/view/${widget.videoId}?t=$token'
+          : '$kBackendBaseUrl/api/view/${widget.videoId}';
+
+      final res = await http
+          .post(
+            Uri.parse(url),
+            headers: {'Content-Type': 'application/json'},
+            body: jsonEncode({
+              'playedSeconds': 10,
+              'deviceId': deviceId,
+              'token': token,
+            }),
+          )
+          .timeout(const Duration(seconds: 10));
+
+      debugPrint('View report: ${res.statusCode} ${res.body}');
+    } catch (e) {
+      debugPrint('View report error: $e');
+    }
+  }
+
   void _startViewTrackingTimer() {
-    Future.delayed(const Duration(seconds: 10), () async {
-      if (!mounted || !_controller.value.isPlaying) return;
-
-      final user = Supabase.instance.client.auth.currentUser;
-      if (user == null) return;
-      String userId = user.id;
-
-      final docRef = FirebaseFirestore.instance.collection('links').doc(widget.videoId);
-
-      try {
-        await FirebaseFirestore.instance.runTransaction((transaction) async {
-          final snapshot = await transaction.get(docRef);
-
-          Map<String, dynamic> userWatches = {};
-          Map<String, dynamic> userContributed = {};
-          int totalViews = 0;
-
-          if (snapshot.exists) {
-            userWatches = Map<String, dynamic>.from(snapshot.data()?['user_watches'] ?? {});
-            userContributed = Map<String, dynamic>.from(snapshot.data()?['user_contributed'] ?? {});
-            totalViews = snapshot.data()?['views'] ?? 0;
-          }
-
-          int currentWatches = userWatches[userId] ?? 0;
-          currentWatches += 1;
-          userWatches[userId] = currentWatches;
-
-          int targetContributedViews = 1; 
-          if (currentWatches >= 20) {
-            targetContributedViews = 3; 
-          } else if (currentWatches >= 10) {
-            targetContributedViews = 2; 
-          }
-
-          int oldContributed = userContributed[userId] ?? 0;
-          int delta = targetContributedViews - oldContributed;
-
-          if (delta > 0) {
-            userContributed[userId] = targetContributedViews;
-            totalViews += delta; 
-
-            transaction.set(docRef, {
-              'views': totalViews,
-              'user_watches': userWatches,
-              'user_contributed': userContributed,
-            }, SetOptions(merge: true));
-          }
-        });
-      } catch (e) {
-        debugPrint("View tracking error: $e");
+    _viewReportTimer?.cancel();
+    _viewReportTimer = Timer(const Duration(seconds: 10), () async {
+      if (!mounted) return;
+      if (_controller.value.isInitialized && _controller.value.isPlaying) {
+        await _reportViewToBackend();
+        _fetchBackendStats();
       }
     });
+  }
+
+  Future<void> _fetchBackendStats() async {
+    try {
+      final snap = await FirebaseDatabase.instance
+          .ref('links/${widget.videoId}')
+          .once()
+          .timeout(const Duration(seconds: 4));
+      final data = snap.snapshot.value;
+      if (data != null && data is Map) {
+        if (mounted) {
+          setState(() {
+            _viewsCount = (data['views'] ?? _viewsCount) as int;
+          });
+        }
+      }
+    } catch (_) {}
   }
 
   @override
@@ -2861,45 +3132,15 @@ class _NativeVideoPlayerScreenState extends State<NativeVideoPlayerScreen> {
     super.initState();
     _fetchRealStatsAndRegisterView();
     _initFastVideo();
-    _startViewTrackingTimer();
   }
-    Future<void> _fetchRealStatsAndRegisterView() async {
+
+  Future<void> _fetchRealStatsAndRegisterView() async {
     try {
       final prefs = await SharedPreferences.getInstance();
       _isLiked = prefs.getBool('liked_${widget.videoId}') ?? false;
       _isUnliked = prefs.getBool('unliked_${widget.videoId}') ?? false;
       _isSaved = prefs.getBool('saved_${widget.videoId}') ?? false;
-
-      final int? vId = int.tryParse(widget.videoId);
-      if (vId != null) {
-        await _supabaseService.recordView(vId);
-        final liveLikes = await _supabaseService.getLikeCount(vId);
-        final liveViews = await _supabaseService.getViewCount(vId);
-        final liveShares = await _supabaseService.getShareCount(vId);
-        if (mounted) {
-          setState(() {
-            _viewsCount = liveViews;
-            _likesCount = liveLikes;
-            _sharesCount = liveShares;
-          });
-        }
-      } else {
-        final res = await http
-            .get(Uri.parse('$kBackendBaseUrl/api/stats/${widget.videoId}'))
-            .timeout(const Duration(seconds: 4));
-        if (res.statusCode == 200) {
-          final data = jsonDecode(res.body);
-          if (mounted) {
-            setState(() {
-              _viewsCount = (data['views'] ?? 0) + 1;
-              _likesCount = data['likes'] ?? 0;
-              _unlikesCount = data['unlikes'] ?? 0;
-              _sharesCount = data['shares'] ?? 0;
-            });
-          }
-        }
-        await _sendStatUpdate('view');
-      }
+      await _fetchBackendStats();
     } catch (_) {}
   }
 
@@ -2908,10 +3149,7 @@ class _NativeVideoPlayerScreenState extends State<NativeVideoPlayerScreen> {
       await http.post(
         Uri.parse('$kBackendBaseUrl/api/stats/update'),
         headers: {'Content-Type': 'application/json'},
-        body: jsonEncode({
-          'video_id': widget.videoId,
-          'action': action,
-        }),
+        body: jsonEncode({'video_id': widget.videoId, 'action': action}),
       );
     } catch (_) {}
   }
@@ -2919,7 +3157,7 @@ class _NativeVideoPlayerScreenState extends State<NativeVideoPlayerScreen> {
   Future<void> _initFastVideo() async {
     final Map<String, String> headers = {
       'User-Agent': 'MayaJaalApp/1.0',
-      'Referer': 'https://mayajaal.online/',
+      'Referer': 'https://www.mayajaal.online/',
     };
 
     _controller = VideoPlayerController.networkUrl(
@@ -2937,6 +3175,7 @@ class _NativeVideoPlayerScreenState extends State<NativeVideoPlayerScreen> {
       });
       setState(() => _isInitialized = true);
       _resetControlTimer();
+      _startViewTrackingTimer();
     } catch (e) {
       debugPrint("Player Init Error: $e");
       setState(() => _hasError = true);
@@ -2947,6 +3186,7 @@ class _NativeVideoPlayerScreenState extends State<NativeVideoPlayerScreen> {
   void dispose() {
     _controlsTimer?.cancel();
     _feedbackTimer?.cancel();
+    _viewReportTimer?.cancel();
     _controller.dispose();
     SystemChrome.setPreferredOrientations([DeviceOrientation.portraitUp]);
     super.dispose();
@@ -3014,21 +3254,17 @@ class _NativeVideoPlayerScreenState extends State<NativeVideoPlayerScreen> {
     final h = d.inHours > 0 ? '${d.inHours}:' : '';
     return '$h$m:$s';
   }
-    Future<void> _shareVideoLink() async {
+
+  Future<void> _shareVideoLink() async {
     setState(() => _sharesCount++);
-    final int? vId = int.tryParse(widget.videoId);
-    if (vId != null) {
-      await _supabaseService.recordShare(vId);
-    } else {
-      _sendStatUpdate('share');
-    }
+    _sendStatUpdate('share');
     try {
       await Supabase.instance.client.from('notifications').insert({
         'title': '🚀 Video Shared!',
         'message': 'Someone shared: ${widget.title}',
       });
     } catch (_) {}
-    Share.share('🎬 Watch this video on MayaJaal:\n${widget.videoUrl}');
+    Share.share('🎬 Watch this video on MayaJaal:\n${widget.sourcePageUrl}');
   }
 
   Future<void> _startInAppDownload() async {
@@ -3076,25 +3312,19 @@ class _NativeVideoPlayerScreenState extends State<NativeVideoPlayerScreen> {
       if (mounted) {
         setState(() => _isDownloading = false);
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            backgroundColor: kCardBg,
-            content: Text('✅ Video saved to:\n$savePath', style: const TextStyle(color: kGreen, fontSize: 11)),
-          ),
+          SnackBar(backgroundColor: kCardBg, content: Text('✅ Video saved to:\n$savePath', style: const TextStyle(color: kGreen, fontSize: 11))),
         );
       }
     } catch (e) {
       if (mounted) {
         setState(() => _isDownloading = false);
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Download status: $e')),
-        );
+        ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Download status: $e')));
       }
     }
   }
 
   Future<void> _toggleLike() async {
     final prefs = await SharedPreferences.getInstance();
-    final int? vId = int.tryParse(widget.videoId);
 
     setState(() {
       if (_isLiked) {
@@ -3113,21 +3343,7 @@ class _NativeVideoPlayerScreenState extends State<NativeVideoPlayerScreen> {
       }
     });
 
-    if (vId != null) {
-      if (!_isLiked) {
-        await _supabaseService.unlikeVideo(vId);
-      } else {
-        await _supabaseService.likeVideo(vId);
-        try {
-          await Supabase.instance.client.from('notifications').insert({
-            'title': '❤️ New Like!',
-            'message': 'Someone liked your video: ${widget.title}',
-          });
-        } catch (_) {}
-      }
-    } else {
-      _sendStatUpdate(_isLiked ? 'like' : 'unlike_dec');
-    }
+    _sendStatUpdate(_isLiked ? 'like' : 'unlike_dec');
   }
 
   Future<void> _toggleUnlike() async {
@@ -3158,10 +3374,7 @@ class _NativeVideoPlayerScreenState extends State<NativeVideoPlayerScreen> {
       prefs.setBool('saved_${widget.videoId}', _isSaved);
     });
     ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(
-        content: Text(_isSaved ? 'Video Saved to Favorites' : 'Removed from Favorites'),
-        duration: const Duration(seconds: 1),
-      ),
+      SnackBar(content: Text(_isSaved ? 'Video Saved to Favorites' : 'Removed from Favorites'), duration: const Duration(seconds: 1)),
     );
   }
 
@@ -3170,12 +3383,9 @@ class _NativeVideoPlayerScreenState extends State<NativeVideoPlayerScreen> {
       context: context,
       builder: (c) => AlertDialog(
         backgroundColor: const Color(0xFF031408),
-        shape: RoundedRectangleBorder(
-          borderRadius: BorderRadius.circular(16),
-          side: const BorderSide(color: kGreen, width: 1.5),
-        ),
-        title: const Row(
-          children: [
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16), side: const BorderSide(color: kGreen, width: 1.5)),
+        title: Row(
+          children: const [
             Icon(Icons.hd, color: kGreen, size: 24),
             SizedBox(width: 8),
             Text('SELECT QUALITY', style: TextStyle(color: kGreen, fontSize: 15, fontWeight: FontWeight.bold)),
@@ -3194,11 +3404,7 @@ class _NativeVideoPlayerScreenState extends State<NativeVideoPlayerScreen> {
                   setState(() => _selectedQuality = val);
                   Navigator.pop(c);
                   ScaffoldMessenger.of(context).showSnackBar(
-                    SnackBar(
-                      backgroundColor: const Color(0xFF031408),
-                      content: Text('Switched stream quality to $val', style: const TextStyle(color: kGreen)),
-                      duration: const Duration(seconds: 1),
-                    ),
+                    SnackBar(backgroundColor: const Color(0xFF031408), content: Text('Switched stream quality to $val', style: const TextStyle(color: kGreen)), duration: const Duration(seconds: 1)),
                   );
                 }
               },
@@ -3214,10 +3420,7 @@ class _NativeVideoPlayerScreenState extends State<NativeVideoPlayerScreen> {
       context: context,
       builder: (c) => AlertDialog(
         backgroundColor: const Color(0xFF031408),
-        shape: RoundedRectangleBorder(
-          borderRadius: BorderRadius.circular(16),
-          side: const BorderSide(color: kGreen, width: 1.5),
-        ),
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16), side: const BorderSide(color: kGreen, width: 1.5)),
         title: const Text('PLAYBACK SPEED', style: TextStyle(color: kGreen, fontSize: 14)),
         content: Column(
           mainAxisSize: MainAxisSize.min,
@@ -3261,7 +3464,8 @@ class _NativeVideoPlayerScreenState extends State<NativeVideoPlayerScreen> {
       ),
     );
   }
-    @override
+
+  @override
   Widget build(BuildContext context) {
     return Scaffold(
       backgroundColor: Colors.black,
@@ -3287,42 +3491,22 @@ class _NativeVideoPlayerScreenState extends State<NativeVideoPlayerScreen> {
                               Container(
                                 width: 22,
                                 height: 22,
-                                decoration: BoxDecoration(
-                                  shape: BoxShape.circle,
-                                  border: Border.all(color: kGreen, width: 1.5),
-                                ),
-                                child: const Center(
-                                  child: Icon(Icons.change_history, color: kGreen, size: 14),
-                                ),
+                                decoration: BoxDecoration(shape: BoxShape.circle, border: Border.all(color: kGreen, width: 1.5)),
+                                child: const Center(child: Icon(Icons.change_history, color: kGreen, size: 14)),
                               ),
                               const SizedBox(width: 8),
                               const Text(
                                 'MAYA JAAL',
-                                style: TextStyle(
-                                  color: kGreen,
-                                  fontSize: 19,
-                                  fontWeight: FontWeight.w900,
-                                  letterSpacing: 2,
-                                  shadows: [Shadow(color: kGreen, blurRadius: 10)],
-                                ),
+                                style: TextStyle(color: kGreen, fontSize: 19, fontWeight: FontWeight.w900, letterSpacing: 2, shadows: [Shadow(color: kGreen, blurRadius: 10)]),
                               ),
                             ],
                           ),
                           Text(
                             '— STREAM BEYOND LIMITS —',
-                            style: TextStyle(
-                              color: kGreen.withOpacity(0.8),
-                              fontSize: 8.5,
-                              letterSpacing: 2,
-                              fontWeight: FontWeight.bold,
-                            ),
+                            style: TextStyle(color: kGreen.withOpacity(0.8), fontSize: 8.5, letterSpacing: 2, fontWeight: FontWeight.bold),
                           ),
                         ],
                       ),
-                    ),
-                    IconButton(
-                      icon: const Icon(Icons.search, color: kGreen, size: 22),
-                      onPressed: () {},
                     ),
                     IconButton(
                       icon: const Icon(Icons.share, color: kGreen, size: 22),
@@ -3353,10 +3537,7 @@ class _NativeVideoPlayerScreenState extends State<NativeVideoPlayerScreen> {
                                 const Icon(Icons.error_outline, color: Colors.redAccent, size: 45),
                                 const SizedBox(height: 10),
                                 const Text('Stream Connection Error', style: TextStyle(color: Colors.redAccent)),
-                                TextButton(
-                                  onPressed: _initFastVideo,
-                                  child: const Text('RETRY', style: TextStyle(color: kGreen)),
-                                ),
+                                TextButton(onPressed: _initFastVideo, child: const Text('RETRY', style: TextStyle(color: kGreen))),
                               ],
                             ),
                           )
@@ -3391,20 +3572,6 @@ class _NativeVideoPlayerScreenState extends State<NativeVideoPlayerScreen> {
                                         ),
                                       ),
                                     ),
-                                    Positioned(
-                                      top: 10,
-                                      child: Container(
-                                        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
-                                        decoration: BoxDecoration(
-                                          color: Colors.black.withOpacity(0.7),
-                                          borderRadius: BorderRadius.circular(20),
-                                        ),
-                                        child: const Text(
-                                          'सम्पुर - बह्र 😍🧿🔥',
-                                          style: TextStyle(color: Colors.white, fontSize: 11, fontWeight: FontWeight.bold),
-                                        ),
-                                      ),
-                                    ),
                                     if (_showControls)
                                       GestureDetector(
                                         onTap: () {
@@ -3432,14 +3599,8 @@ class _NativeVideoPlayerScreenState extends State<NativeVideoPlayerScreen> {
                                       Center(
                                         child: Container(
                                           padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
-                                          decoration: BoxDecoration(
-                                            color: Colors.black.withOpacity(0.8),
-                                            borderRadius: BorderRadius.circular(10),
-                                          ),
-                                          child: Text(
-                                            _flashFeedback,
-                                            style: const TextStyle(color: kGreen, fontWeight: FontWeight.bold, fontSize: 20),
-                                          ),
+                                          decoration: BoxDecoration(color: Colors.black.withOpacity(0.8), borderRadius: BorderRadius.circular(10)),
+                                          child: Text(_flashFeedback, style: const TextStyle(color: kGreen, fontWeight: FontWeight.bold, fontSize: 20)),
                                         ),
                                       ),
                                     Positioned(
@@ -3448,10 +3609,7 @@ class _NativeVideoPlayerScreenState extends State<NativeVideoPlayerScreen> {
                                       right: 10,
                                       child: Row(
                                         children: [
-                                          Text(
-                                            _formatDuration(_controller.value.position),
-                                            style: const TextStyle(color: Colors.white, fontSize: 10, fontFamily: 'monospace'),
-                                          ),
+                                          Text(_formatDuration(_controller.value.position), style: const TextStyle(color: Colors.white, fontSize: 10, fontFamily: 'monospace')),
                                           const SizedBox(width: 6),
                                           Expanded(
                                             child: SliderTheme(
@@ -3465,14 +3623,10 @@ class _NativeVideoPlayerScreenState extends State<NativeVideoPlayerScreen> {
                                               child: Slider(
                                                 value: _controller.value.position.inSeconds.toDouble().clamp(
                                                       0.0,
-                                                      _controller.value.duration.inSeconds.toDouble() <= 0
-                                                          ? 1.0
-                                                          : _controller.value.duration.inSeconds.toDouble(),
+                                                      _controller.value.duration.inSeconds.toDouble() <= 0 ? 1.0 : _controller.value.duration.inSeconds.toDouble(),
                                                     ),
                                                 min: 0.0,
-                                                max: _controller.value.duration.inSeconds.toDouble() > 0
-                                                    ? _controller.value.duration.inSeconds.toDouble()
-                                                    : 1.0,
+                                                max: _controller.value.duration.inSeconds.toDouble() > 0 ? _controller.value.duration.inSeconds.toDouble() : 1.0,
                                                 onChanged: (val) {
                                                   _controller.seekTo(Duration(seconds: val.toInt()));
                                                 },
@@ -3480,18 +3634,11 @@ class _NativeVideoPlayerScreenState extends State<NativeVideoPlayerScreen> {
                                             ),
                                           ),
                                           const SizedBox(width: 6),
-                                          Text(
-                                            _formatDuration(_controller.value.duration),
-                                            style: const TextStyle(color: Colors.white, fontSize: 10, fontFamily: 'monospace'),
-                                          ),
+                                          Text(_formatDuration(_controller.value.duration), style: const TextStyle(color: Colors.white, fontSize: 10, fontFamily: 'monospace')),
                                           const SizedBox(width: 8),
                                           GestureDetector(
                                             onTap: _toggleSmartFullscreen,
-                                            child: Icon(
-                                              _isFullscreen ? Icons.fullscreen_exit : Icons.fullscreen,
-                                              color: Colors.white,
-                                              size: 20,
-                                            ),
+                                            child: Icon(_isFullscreen ? Icons.fullscreen_exit : Icons.fullscreen, color: Colors.white, size: 20),
                                           ),
                                         ],
                                       ),
@@ -3503,7 +3650,7 @@ class _NativeVideoPlayerScreenState extends State<NativeVideoPlayerScreen> {
                 ),
               ),
             ),
-                        if (!_isFullscreen)
+            if (!_isFullscreen)
               Expanded(
                 child: SingleChildScrollView(
                   padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
@@ -3524,19 +3671,11 @@ class _NativeVideoPlayerScreenState extends State<NativeVideoPlayerScreen> {
                                 const Icon(Icons.play_circle_fill, color: kGreen, size: 26),
                                 const SizedBox(width: 8),
                                 Expanded(
-                                  child: Text(
-                                    widget.title,
-                                    style: const TextStyle(color: Colors.white, fontSize: 14, fontWeight: FontWeight.bold),
-                                    maxLines: 1,
-                                    overflow: TextOverflow.ellipsis,
-                                  ),
+                                  child: Text(widget.title, style: const TextStyle(color: Colors.white, fontSize: 14, fontWeight: FontWeight.bold), maxLines: 1, overflow: TextOverflow.ellipsis),
                                 ),
                                 Container(
                                   padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 3),
-                                  decoration: BoxDecoration(
-                                    borderRadius: BorderRadius.circular(6),
-                                    border: Border.all(color: kGreen),
-                                  ),
+                                  decoration: BoxDecoration(borderRadius: BorderRadius.circular(6), border: Border.all(color: kGreen)),
                                   child: const Text('HD', style: TextStyle(color: kGreen, fontSize: 10, fontWeight: FontWeight.bold)),
                                 ),
                               ],
@@ -3547,8 +3686,6 @@ class _NativeVideoPlayerScreenState extends State<NativeVideoPlayerScreen> {
                                 const Icon(Icons.account_circle, color: kGreen, size: 14),
                                 const SizedBox(width: 4),
                                 Text('Uploaded by: ${widget.uploader}', style: const TextStyle(color: kGreen, fontSize: 10)),
-                                const SizedBox(width: 8),
-                                Text('|   📅 Sep 24, 2026', style: TextStyle(color: Colors.white.withOpacity(0.6), fontSize: 10)),
                                 const SizedBox(width: 8),
                                 Text('|   👁 $_viewsCount views', style: TextStyle(color: Colors.white.withOpacity(0.6), fontSize: 10)),
                               ],
@@ -3634,10 +3771,7 @@ class _NativeVideoPlayerScreenState extends State<NativeVideoPlayerScreen> {
                                   onTap: _startInAppDownload,
                                   child: Container(
                                     padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
-                                    decoration: BoxDecoration(
-                                      color: kGreen,
-                                      borderRadius: BorderRadius.circular(10),
-                                    ),
+                                    decoration: BoxDecoration(color: kGreen, borderRadius: BorderRadius.circular(10)),
                                     child: Row(
                                       children: [
                                         const Icon(Icons.download, color: Colors.black, size: 18),
@@ -3738,9 +3872,7 @@ class _NativeVideoPlayerScreenState extends State<NativeVideoPlayerScreen> {
                   color: Colors.black26,
                   borderRadius: BorderRadius.vertical(top: Radius.circular(11)),
                 ),
-                child: const Center(
-                  child: Icon(Icons.image, color: Colors.white30, size: 30),
-                ),
+                child: const Center(child: Icon(Icons.image, color: Colors.white30, size: 30)),
               ),
               Positioned(
                 bottom: 4,
@@ -3768,7 +3900,11 @@ class _NativeVideoPlayerScreenState extends State<NativeVideoPlayerScreen> {
     );
   }
 }
-  class SupabaseService {
+
+// ============================================================
+// SUPABASE SERVICE
+// ============================================================
+class SupabaseService {
   final SupabaseClient client = Supabase.instance.client;
 
   Future<void> recordView(int videoId) async {
@@ -3896,6 +4032,9 @@ class _NativeVideoPlayerScreenState extends State<NativeVideoPlayerScreen> {
   }
 }
 
+// ============================================================
+// USER SEARCH DELEGATE
+// ============================================================
 class UserSearchDelegate extends SearchDelegate {
   final SupabaseService service = SupabaseService();
 
@@ -3975,7 +4114,11 @@ class UserSearchDelegate extends SearchDelegate {
     );
   }
 }
-  class UserProfileScreen extends StatefulWidget {
+
+// ============================================================
+// USER PROFILE SCREEN
+// ============================================================
+class UserProfileScreen extends StatefulWidget {
   final Map<String, dynamic> channelProfile;
   const UserProfileScreen({super.key, required this.channelProfile});
 
@@ -4082,127 +4225,378 @@ class _UserProfileScreenState extends State<UserProfileScreen> {
   }
 }
 
-class EarningsScreen extends StatelessWidget {
+// ============================================================
+// EARNINGS SCREEN — RTDB Sync (same as website/bot)
+// ============================================================
+class EarningsScreen extends StatefulWidget {
   const EarningsScreen({super.key});
+  @override
+  State<EarningsScreen> createState() => _EarningsScreenState();
+}
+
+class _EarningsScreenState extends State<EarningsScreen> {
+  bool _loading = true;
+  Map<String, dynamic> _dashboard = {};
+  List<Map<String, dynamic>> _links = [];
+  double _totalIncome = 0;
+  int _currentTier = 1;
+  double _currentRate = 1.0;
+  int _nextBoost = 1000;
+
+  @override
+  void initState() {
+    super.initState();
+    _loadData();
+  }
+
+  Future<void> _loadData() async {
+    try {
+      if (!MayaJaalAccount.isLinked) {
+        if (mounted) setState(() => _loading = false);
+        return;
+      }
+
+      final dash = await MayaJaalAccount.getDashboard();
+      final links = await MayaJaalAccount.getUserLinks(limit: 50);
+
+      final views = (dash['totalViews'] ?? 0) as int;
+      final income = MayaJaalAccount.calcEarnings(views);
+      final tierInfo = MayaJaalAccount.getTierInfo(views);
+
+      if (mounted) {
+        setState(() {
+          _dashboard = dash;
+          _links = links;
+          _totalIncome = income;
+          _currentTier = (tierInfo['tier'] ?? 1) as int;
+          _currentRate = (tierInfo['rate'] ?? 1.0) as double;
+          _nextBoost = (tierInfo['next'] ?? 0) as int;
+          _loading = false;
+        });
+      }
+    } catch (e) {
+      debugPrint('Earnings load error: $e');
+      if (mounted) setState(() => _loading = false);
+    }
+  }
 
   @override
   Widget build(BuildContext context) {
-    final user = Supabase.instance.client.auth.currentUser;
-
-    if (user == null) {
-      return Scaffold(
-        backgroundColor: Colors.black,
-        appBar: AppBar(title: const Text('EARNINGS DASHBOARD')),
-        body: const Center(
-          child: Text('Please login to view your earnings.', style: TextStyle(color: Colors.white70)),
-        ),
-      );
-    }
-
     return Scaffold(
       backgroundColor: Colors.black,
       appBar: AppBar(
         title: const Text('EARNINGS DASHBOARD', style: TextStyle(letterSpacing: 1.5)),
-        backgroundColor: Colors.black,
+        actions: [
+          IconButton(
+            icon: const Icon(Icons.refresh, color: kGreen),
+            onPressed: () {
+              setState(() => _loading = true);
+              _loadData();
+            },
+          ),
+        ],
       ),
-      body: StreamBuilder<QuerySnapshot>(
-        stream: FirebaseFirestore.instance
-            .collection('links')
-            .where('userId', isEqualTo: user.id)
-            .snapshots(),
-        builder: (context, snapshot) {
-          if (snapshot.connectionState == ConnectionState.waiting) {
-            return const Center(child: CircularProgressIndicator(color: kGreen));
-          }
-          if (snapshot.hasError) {
-            return Center(child: Text('Error: ${snapshot.error}', style: const TextStyle(color: Colors.redAccent)));
-          }
+      body: _loading
+          ? const Center(child: CircularProgressIndicator(color: kGreen))
+          : !MayaJaalAccount.isLinked
+              ? _buildNotLinked()
+              : _buildDashboard(),
+    );
+  }
 
-          final docs = snapshot.data?.docs ?? [];
-          
-          int totalViews = 0;
-          for (var doc in docs) {
-            final data = doc.data() as Map<String, dynamic>;
-            totalViews += (data['views'] ?? 0) as int;
-          }
-
-          double totalEarnings = (totalViews / 1000) * 2;
-
-          return Padding(
-            padding: const EdgeInsets.all(16.0),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Container(
-                  width: double.infinity,
-                  padding: const EdgeInsets.all(20),
-                  decoration: BoxDecoration(
-                    color: const Color(0xFF031408),
-                    borderRadius: BorderRadius.circular(16),
-                    border: Border.all(color: kGreen, width: 1.5),
+  Widget _buildNotLinked() {
+    return Center(
+      child: Padding(
+        padding: const EdgeInsets.all(24),
+        child: Column(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            const Icon(Icons.link_off, color: Colors.orangeAccent, size: 60),
+            const SizedBox(height: 16),
+            const Text(
+              'ACCOUNT NOT LINKED',
+              style: TextStyle(color: Colors.white, fontSize: 18, fontWeight: FontWeight.bold, letterSpacing: 1.5),
+            ),
+            const SizedBox(height: 12),
+            const Text(
+              'To view your earnings, connect your MayaJaal account using the API key from the website.',
+              textAlign: TextAlign.center,
+              style: TextStyle(color: Colors.white70, fontSize: 13, height: 1.5),
+            ),
+            const SizedBox(height: 24),
+            ElevatedButton.icon(
+              onPressed: () async {
+                Navigator.push(context, MaterialPageRoute(builder: (_) => const MainNavigationHolder()));
+                ScaffoldMessenger.of(context).showSnackBar(
+                  const SnackBar(
+                    backgroundColor: kCardBg,
+                    content: Text('Open menu → Connect MayaJaal', style: TextStyle(color: kGreen)),
+                    duration: Duration(seconds: 3),
                   ),
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
+                );
+              },
+              icon: const Icon(Icons.link, color: Colors.black),
+              label: const Text('GO CONNECT', style: TextStyle(color: Colors.black, fontWeight: FontWeight.bold)),
+              style: ElevatedButton.styleFrom(
+                backgroundColor: kGreen,
+                padding: const EdgeInsets.symmetric(horizontal: 32, vertical: 14),
+                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildDashboard() {
+    final totalViews = (_dashboard['totalViews'] ?? 0) as int;
+    final todayViews = (_dashboard['todayViews'] ?? 0) as int;
+    final totalLinks = (_dashboard['totalLinks'] ?? 0) as int;
+
+    return RefreshIndicator(
+      onRefresh: _loadData,
+      color: kGreen,
+      backgroundColor: kCardBg,
+      child: SingleChildScrollView(
+        physics: const AlwaysScrollableScrollPhysics(),
+        padding: const EdgeInsets.all(16),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Container(
+              padding: const EdgeInsets.all(14),
+              decoration: BoxDecoration(
+                color: kCardBg,
+                borderRadius: BorderRadius.circular(12),
+                border: Border.all(color: kGreen.withOpacity(0.5)),
+              ),
+              child: Row(
+                children: [
+                  const Icon(Icons.verified, color: kGreen, size: 20),
+                  const SizedBox(width: 10),
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        const Text('CONNECTED ACCOUNT', style: TextStyle(color: Colors.white54, fontSize: 9, letterSpacing: 1.5)),
+                        const SizedBox(height: 2),
+                        Text(
+                          MayaJaalAccount.cachedEmail ?? 'N/A',
+                          style: const TextStyle(color: kGreen, fontSize: 13, fontWeight: FontWeight.bold),
+                          overflow: TextOverflow.ellipsis,
+                        ),
+                      ],
+                    ),
+                  ),
+                ],
+              ),
+            ),
+            const SizedBox(height: 16),
+            Container(
+              width: double.infinity,
+              padding: const EdgeInsets.all(22),
+              decoration: BoxDecoration(
+                color: const Color(0xFF031408),
+                borderRadius: BorderRadius.circular(16),
+                border: Border.all(color: kGreen, width: 1.5),
+                boxShadow: [BoxShadow(color: kGreen.withOpacity(0.15), blurRadius: 20)],
+              ),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  const Text('TOTAL BALANCE', style: TextStyle(color: Colors.white54, fontSize: 11, letterSpacing: 1.5)),
+                  const SizedBox(height: 8),
+                  Row(
+                    crossAxisAlignment: CrossAxisAlignment.end,
                     children: [
-                      const Text('TOTAL BALANCE', style: TextStyle(color: Colors.white54, fontSize: 11, letterSpacing: 1.5)),
-                      const SizedBox(height: 6),
-                      Text('\$${totalEarnings.toStringAsFixed(2)}', style: const TextStyle(color: kGreen, fontSize: 32, fontWeight: FontWeight.w900)),
-                      const Divider(color: Colors.white24, height: 24),
-                      Row(
-                        mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                        children: [
-                          Column(
-                            crossAxisAlignment: CrossAxisAlignment.start,
-                            children: [
-                              const Text('Total Views', style: TextStyle(color: Colors.white54, fontSize: 10)),
-                              Text('$totalViews', style: const TextStyle(color: Colors.white, fontSize: 16, fontWeight: FontWeight.bold)),
-                            ],
-                          ),
-                          Column(
-                            crossAxisAlignment: CrossAxisAlignment.end,
-                            children: [
-                              const Text('Total Links', style: TextStyle(color: Colors.white54, fontSize: 10)),
-                              Text('${docs.length}', style: const TextStyle(color: Colors.white, fontSize: 16, fontWeight: FontWeight.bold)),
-                            ],
-                          ),
-                        ],
+                      Text(
+                        '\$${_totalIncome.toStringAsFixed(2)}',
+                        style: const TextStyle(color: kGreen, fontSize: 40, fontWeight: FontWeight.w900, shadows: [Shadow(color: kGreen, blurRadius: 20)]),
                       ),
                     ],
                   ),
-                ),
-                const SizedBox(height: 20),
-                const Text('YOUR CREATED LINKS', style: TextStyle(color: kGreen, fontSize: 13, fontWeight: FontWeight.bold, letterSpacing: 1.5)),
-                const SizedBox(height: 10),
-                Expanded(
-                  child: docs.isEmpty
-                      ? const Center(child: Text('No links created yet.', style: TextStyle(color: Colors.white54)))
-                      : ListView.builder(
-                          itemCount: docs.length,
-                          itemBuilder: (context, index) {
-                            final linkData = docs[index].data() as Map<String, dynamic>;
-                            final views = linkData['views'] ?? 0;
-                            final originalUrl = linkData['originalUrl'] ?? 'Stream Link';
-                            final earnings = (views / 1000) * 2;
-
-                            return Container(
-                              margin: const EdgeInsets.only(bottom: 10),
-                              child: ListTile(
-                                tileColor: const Color(0xFF031408),
-                                leading: const Icon(Icons.link, color: kGreen),
-                                title: Text(originalUrl, style: const TextStyle(color: Colors.white, fontSize: 12, fontWeight: FontWeight.bold), maxLines: 1),
-                                subtitle: Text('Views: $views • Earnings: \$${earnings.toStringAsFixed(2)}', style: TextStyle(color: kGreen.withOpacity(0.7), fontSize: 11)),
-                              ),
-                            );
-                          },
-                        ),
-                ),
-              ],
+                  const SizedBox(height: 4),
+                  Text('≈ ₹${(_totalIncome * 80).toStringAsFixed(0)} INR', style: TextStyle(color: Colors.white.withOpacity(0.5), fontSize: 12)),
+                  const Divider(color: Colors.white24, height: 28),
+                  Row(
+                    children: [
+                      Expanded(child: _statChip('👁 Total Views', '$totalViews')),
+                      const SizedBox(width: 8),
+                      Expanded(child: _statChip('📅 Today', '$todayViews')),
+                      const SizedBox(width: 8),
+                      Expanded(child: _statChip('🔗 Links', '$totalLinks')),
+                    ],
+                  ),
+                ],
+              ),
             ),
-          );
-        },
+            const SizedBox(height: 16),
+            Container(
+              padding: const EdgeInsets.all(16),
+              decoration: BoxDecoration(
+                color: const Color(0xFF031408),
+                borderRadius: BorderRadius.circular(14),
+                border: Border.all(color: Colors.orangeAccent.withOpacity(0.5)),
+              ),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Row(
+                    children: [
+                      const Icon(Icons.local_fire_department, color: Colors.orangeAccent, size: 20),
+                      const SizedBox(width: 8),
+                      Text('TIER $(_currentTier)', style: const TextStyle(color: Colors.orangeAccent, fontSize: 14, fontWeight: FontWeight.bold, letterSpacing: 1.5)),
+                    ],
+                  ),
+                  const SizedBox(height: 12),
+                  Row(
+                    children: [
+                      Expanded(child: _tierStat('Current Rate', '\$${_currentRate.toStringAsFixed(2)}/1K')),
+                      const SizedBox(width: 8),
+                      Expanded(child: _tierStat('Next Boost', '$_nextBoost views')),
+                    ],
+                  ),
+                  const SizedBox(height: 12),
+                  const Text(
+                    'Base: 1K views = \$1 · Every 2K views → rate × 1.5',
+                    style: TextStyle(color: Colors.white54, fontSize: 10.5),
+                  ),
+                ],
+              ),
+            ),
+            const SizedBox(height: 20),
+            const Text('YOUR LINKS', style: TextStyle(color: kGreen, fontSize: 13, fontWeight: FontWeight.bold, letterSpacing: 1.5)),
+            const SizedBox(height: 10),
+            _links.isEmpty
+                ? Container(
+                    padding: const EdgeInsets.all(20),
+                    decoration: BoxDecoration(
+                      color: kCardBg,
+                      borderRadius: BorderRadius.circular(12),
+                      border: Border.all(color: kGreen.withOpacity(0.3)),
+                    ),
+                    child: const Center(
+                      child: Text('No links yet. Upload a video in the bot to get started.', textAlign: TextAlign.center, style: TextStyle(color: Colors.white54, fontSize: 12)),
+                    ),
+                  )
+                : Column(
+                    children: _links.map((link) {
+                      final views = (link['views'] ?? 0) as int;
+                      final earnings = MayaJaalAccount.calcEarnings(views);
+                      final name = (link['filename'] ?? link['originalUrl'] ?? 'link').toString();
+
+                      return Container(
+                        margin: const EdgeInsets.only(bottom: 10),
+                        padding: const EdgeInsets.all(12),
+                        decoration: BoxDecoration(
+                          color: kCardBg,
+                          borderRadius: BorderRadius.circular(12),
+                          border: Border.all(color: kGreen.withOpacity(0.3)),
+                        ),
+                        child: Row(
+                          children: [
+                            Container(
+                              width: 38,
+                              height: 38,
+                              decoration: BoxDecoration(
+                                color: Colors.black,
+                                borderRadius: BorderRadius.circular(10),
+                                border: Border.all(color: kGreen.withOpacity(0.5)),
+                              ),
+                              child: const Icon(Icons.play_circle_outline, color: kGreen, size: 20),
+                            ),
+                            const SizedBox(width: 10),
+                            Expanded(
+                              child: Column(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                children: [
+                                  Text(name, style: const TextStyle(color: Colors.white, fontSize: 12, fontWeight: FontWeight.bold), maxLines: 1, overflow: TextOverflow.ellipsis),
+                                  const SizedBox(height: 3),
+                                  Row(
+                                    children: [
+                                      const Icon(Icons.visibility, color: kGreen, size: 11),
+                                      const SizedBox(width: 3),
+                                      Text('$views', style: TextStyle(color: kGreen.withOpacity(0.9), fontSize: 10.5, fontWeight: FontWeight.bold)),
+                                      const SizedBox(width: 10),
+                                      const Icon(Icons.attach_money, color: Colors.amberAccent, size: 11),
+                                      const SizedBox(width: 2),
+                                      Text('\$${earnings.toStringAsFixed(2)}', style: const TextStyle(color: Colors.amberAccent, fontSize: 10.5, fontWeight: FontWeight.bold)),
+                                    ],
+                                  ),
+                                ],
+                              ),
+                            ),
+                          ],
+                        ),
+                      );
+                    }).toList(),
+                  ),
+            const SizedBox(height: 20),
+            Container(
+              padding: const EdgeInsets.all(14),
+              decoration: BoxDecoration(
+                color: const Color(0xFF031408),
+                borderRadius: BorderRadius.circular(12),
+                border: Border.all(color: kGreen.withOpacity(0.3)),
+              ),
+              child: const Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Row(
+                    children: [
+                      Icon(Icons.info_outline, color: kGreen, size: 16),
+                      SizedBox(width: 6),
+                      Text('WITHDRAWAL INFO', style: TextStyle(color: kGreen, fontSize: 11, fontWeight: FontWeight.bold, letterSpacing: 1.2)),
+                    ],
+                  ),
+                  SizedBox(height: 8),
+                  Text('Minimum: \$20 (≈₹1,600)', style: TextStyle(color: Colors.white70, fontSize: 11.5)),
+                  Text('Methods: Bank Transfer · UPI · Any Bank', style: TextStyle(color: Colors.white70, fontSize: 11.5)),
+                  Text('Processing: 24–48 hours', style: TextStyle(color: Colors.white70, fontSize: 11.5)),
+                ],
+              ),
+            ),
+            const SizedBox(height: 24),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _statChip(String label, String value) {
+    return Container(
+      padding: const EdgeInsets.symmetric(vertical: 10, horizontal: 8),
+      decoration: BoxDecoration(
+        color: Colors.black.withOpacity(0.5),
+        borderRadius: BorderRadius.circular(8),
+        border: Border.all(color: kGreen.withOpacity(0.2)),
+      ),
+      child: Column(
+        children: [
+          Text(label, style: const TextStyle(color: Colors.white54, fontSize: 9.5), textAlign: TextAlign.center),
+          const SizedBox(height: 4),
+          Text(value, style: const TextStyle(color: Colors.white, fontSize: 15, fontWeight: FontWeight.bold)),
+        ],
+      ),
+    );
+  }
+
+  Widget _tierStat(String label, String value) {
+    return Container(
+      padding: const EdgeInsets.symmetric(vertical: 10, horizontal: 8),
+      decoration: BoxDecoration(
+        color: Colors.black.withOpacity(0.5),
+        borderRadius: BorderRadius.circular(8),
+        border: Border.all(color: Colors.orangeAccent.withOpacity(0.3)),
+      ),
+      child: Column(
+        children: [
+          Text(label, style: const TextStyle(color: Colors.white54, fontSize: 9.5)),
+          const SizedBox(height: 4),
+          Text(value, style: const TextStyle(color: Colors.orangeAccent, fontSize: 13, fontWeight: FontWeight.bold)),
+        ],
       ),
     );
   }
 }
-  
-                  
