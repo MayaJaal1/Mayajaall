@@ -1,0 +1,48 @@
+{
+  "project_info": {
+    "project_number": "96139047750",
+    "firebase_url": "https://mayajaal-app-default-rtdb.asia-southeast1.firebasedatabase.app",
+    "project_id": "mayajaal-app",
+    "storage_bucket": "mayajaal-app.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:96139047750:android:b2bfa8b843d71a32012b47",
+        "android_client_info": {
+          "package_name": "com.mayajaal.online"
+        }
+      },
+      "oauth_client": [
+        {
+          "client_id": "96139047750-l19fj3ufurutffu9i442166lk0b8lho0.apps.googleusercontent.com",
+          "client_type": 1,
+          "android_info": {
+            "package_name": "com.mayajaal.online",
+            "certificate_hash": "14104bf1b00e6fb0277aa03daa78f9c54a32e11d"
+          }
+        },
+        {
+          "client_id": "96139047750-3btsfap98b4dnvnn6etq0mfgdh26iolm.apps.googleusercontent.com",
+          "client_type": 3
+        }
+      ],
+      "api_key": [
+        {
+          "current_key": "AIzaSyDI5hgBbaUeTpXcPIlAnq5yDjIenfY-ylM"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": [
+            {
+              "client_id": "96139047750-3btsfap98b4dnvnn6etq0mfgdh26iolm.apps.googleusercontent.com",
+              "client_type": 3
+            }
+          ]
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}
