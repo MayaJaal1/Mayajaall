@@ -5,7 +5,6 @@ import 'dart:math' as math;
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:app_links/app_links.dart';
-import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:google_sign_in/google_sign_in.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:url_launcher/url_launcher.dart';
@@ -15,17 +14,17 @@ import 'package:share_plus/share_plus.dart';
 import 'package:http/http.dart' as http;
 import 'package:onesignal_flutter/onesignal_flutter.dart';
 import 'package:firebase_core/firebase_core.dart';
-import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:firebase_auth/firebase_auth.dart';
 import 'package:firebase_database/firebase_database.dart';
 import 'package:device_info_plus/device_info_plus.dart';
 
-const String supabaseUrl = 'https://rbdfqmmjgfwikaoxdexu.supabase.co';
-const String supabaseAnonKey = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InJiZGZxbW1qZ2Z3aWthb3hkZXh1Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3OTEwOTkxNzMsImV4cCI6MjEwNjY3NTE3M30.qB_DrMLR33BcUJtu5IlyBuw0gXlcw9dXk3SX_uIknP0';
+// ═══════════════════════════════════════════════════════
+// CONFIG
+// ═══════════════════════════════════════════════════════
 const String webClientId = '985001671962-rok8qnng0rumjsd8mgr8uhr92o5vhs4n.apps.googleusercontent.com';
-
 const String oneSignalAppId = '06b99c2b-b3b4-413b-b6cc-480a624f4e25';
-const int kAppCurrentVersionCode = 3;
 const String kBackendBaseUrl = 'https://www.mayajaal.online';
+const int kAppCurrentVersionCode = 3;
 
 const Color kGreen = Color(0xFF00FF66);
 const Color kNeonCyan = Color(0xFF00F0FF);
@@ -38,6 +37,9 @@ final ValueNotifier<ThemeMode> themeNotifier = ValueNotifier(ThemeMode.dark);
 final ValueNotifier<String> languageNotifier = ValueNotifier('English');
 final GlobalKey<NavigatorState> navigatorKey = GlobalKey<NavigatorState>();
 
+// ═══════════════════════════════════════════════════════
+// TRANSLATIONS
+// ═══════════════════════════════════════════════════════
 final Map<String, Map<String, String>> localizedStrings = {
   'English': {
     'app_title': 'MAYA JAAL',
@@ -48,16 +50,8 @@ final Map<String, Map<String, String>> localizedStrings = {
     'dark_theme': 'Dark Theme',
     'language': 'Language',
     'download_location': 'Download Location',
-    'check_updates': 'Check for Updates',
     'clear_history': 'Clear History',
     'logout': 'Logout',
-    'update_available': 'NEW UPDATE FOUND',
-    'update_now': 'UPDATE NOW',
-    'later': 'LATER',
-    'init_stream': 'INITIALIZE NEURAL STREAM\nSTREAM (OPEN NOW)',
-    'stream_ready': 'STREAM READY FOR DECRYPTION',
-    'download': 'DOWNLOAD VIDEO',
-    'share': 'SHARE VIDEO',
     'uploader': 'UPLOADER',
     'filename': 'FILE NAME',
   },
@@ -67,19 +61,11 @@ final Map<String, Map<String, String>> localizedStrings = {
     'watch_history': '> देखने का इतिहास',
     'no_history': 'अभी कोई इतिहास नहीं है',
     'settings': 'सेटिंग्स',
-    'dark_theme': 'डार्क थीम (मैट्रिक्स मोड)',
+    'dark_theme': 'डार्क थीम',
     'language': 'भाषा (Language)',
     'download_location': 'डाउनलोड स्थान',
-    'check_updates': 'अपडेट चेक करें',
     'clear_history': 'इतिहास साफ़ करें',
     'logout': 'लॉग आउट',
-    'update_available': 'नया अपडेट उपलब्ध है',
-    'update_now': 'अभी अपडेट करें',
-    'later': 'बाद में',
-    'init_stream': 'INITIALIZE NEURAL STREAM\nSTREAM (OPEN NOW)',
-    'stream_ready': 'STREAM READY FOR DECRYPTION',
-    'download': 'वीडियो डाउनलोड करें',
-    'share': 'वीडियो लिंक शेयर करें',
     'uploader': 'अपलोडर',
     'filename': 'फ़ाइल का नाम',
   },
@@ -90,125 +76,164 @@ String tr(String key) {
   return localizedStrings[lang]?[key] ?? localizedStrings['English']?[key] ?? key;
 }
 
-// ============================================================
-// MAYAJAAL ACCOUNT SERVICE (RTDB sync)
-// ============================================================
+// ═══════════════════════════════════════════════════════
+// MAYAJAAL FIREBASE ACCOUNT SERVICE
+// ═══════════════════════════════════════════════════════
 class MayaJaalAccount {
-  static const _prefApiKey = 'mj_api_key';
-  static const _prefFirebaseUid = 'mj_firebase_uid';
-  static const _prefEmail = 'mj_email';
-
-  static String? cachedApiKey;
-  static String? cachedFirebaseUid;
+  static String? cachedUid;
   static String? cachedEmail;
+  static String? cachedName;
+  static String? cachedPhoto;
+  static String? cachedApiKey;
 
   static DatabaseReference get _rtdb => FirebaseDatabase.instance.ref();
 
   static Future<void> init() async {
-    final prefs = await SharedPreferences.getInstance();
-    cachedApiKey = prefs.getString(_prefApiKey);
-    cachedFirebaseUid = prefs.getString(_prefFirebaseUid);
-    cachedEmail = prefs.getString(_prefEmail);
+    final user = FirebaseAuth.instance.currentUser;
+    if (user != null) {
+      cachedUid = user.uid;
+      cachedEmail = user.email;
+      cachedName = user.displayName;
+      cachedPhoto = user.photoURL;
+      await syncUserToRTDB(user);
+      await loadApiKey();
+    }
   }
 
-  static bool get isLinked => cachedApiKey != null && cachedFirebaseUid != null;
+  static bool get isLoggedIn => FirebaseAuth.instance.currentUser != null;
 
-  static Future<Map<String, dynamic>?> _findUserByApiKey(String apiKey) async {
+  static Future<void> syncUserToRTDB(User user) async {
     try {
-      final snap = await _rtdb
-          .child('users')
-          .orderByChild('apiKey')
-          .equalTo(apiKey)
-          .limitToFirst(1)
-          .once();
-      final val = snap.snapshot.value;
-      if (val == null) return null;
-      final map = Map<String, dynamic>.from(val as Map);
-      if (map.isEmpty) return null;
-      final uid = map.keys.first;
-      final data = Map<String, dynamic>.from(map[uid] as Map);
-      data['uid'] = uid;
-      return data;
+      final ref = _rtdb.child('users/${user.uid}');
+      final snap = await ref.once();
+      final data = snap.snapshot.value as Map?;
+
+      final updates = <String, dynamic>{
+        'email': (user.email ?? '').toLowerCase(),
+        'name': user.displayName ?? 'User',
+        'photoURL': user.photoURL ?? '',
+        'lastSeen': DateTime.now().millisecondsSinceEpoch,
+      };
+
+      if (data == null) {
+        updates['createdAt'] = DateTime.now().millisecondsSinceEpoch;
+        updates['subscribersCount'] = 0;
+        updates['dashboard'] = {
+          'totalLinks': 0,
+          'totalViews': 0,
+          'todayViews': 0,
+          'todayConversions': 0,
+          'totalIncome': 0,
+          'todayIncome': 0,
+          'viewsByDay': {},
+          'linksByDay': {},
+        };
+      }
+
+      await ref.update(updates);
+      debugPrint('✅ User synced to RTDB: ${user.uid}');
     } catch (e) {
-      debugPrint('findUserByApiKey error: $e');
-      return null;
+      debugPrint('RTDB sync error: $e');
     }
   }
 
-  static Future<Map<String, dynamic>> linkWithApiKey(String apiKey) async {
-    final trimmed = apiKey.trim();
-    if (trimmed.length < 12) {
-      return {'success': false, 'error': 'Key must be 12+ chars'};
-    }
-    final user = await _findUserByApiKey(trimmed);
-    if (user == null) {
-      return {'success': false, 'error': 'Invalid API key'};
-    }
-
-    final uid = user['uid'] as String;
-    final email = (user['email'] ?? '').toString();
-
-    cachedApiKey = trimmed;
-    cachedFirebaseUid = uid;
-    cachedEmail = email;
-
-    final prefs = await SharedPreferences.getInstance();
-    await prefs.setString(_prefApiKey, trimmed);
-    await prefs.setString(_prefFirebaseUid, uid);
-    await prefs.setString(_prefEmail, email);
-
+  static Future<String> loadApiKey() async {
+    if (cachedUid == null) return '';
     try {
-      await _rtdb.child('users/$uid/app').update({
-        'lastLinkedAt': DateTime.now().millisecondsSinceEpoch,
-      });
-    } catch (_) {}
+      final ref = _rtdb.child('users/$cachedUid/apiKey');
+      final snap = await ref.once();
+      var key = snap.snapshot.value as String?;
 
-    return {'success': true, 'email': email, 'uid': uid};
+      if (key == null || key.length < 12) {
+        key = _generateKey();
+        await ref.set(key);
+      }
+      cachedApiKey = key;
+      return key;
+    } catch (e) {
+      debugPrint('API key error: $e');
+      return '';
+    }
   }
 
-  static Future<void> unlink() async {
-    cachedApiKey = null;
-    cachedFirebaseUid = null;
+  static String _generateKey() {
+    const chars = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789';
+    final r = math.Random.secure();
+    return List.generate(24, (_) => chars[r.nextInt(chars.length)]).join();
+  }
+
+  static Future<UserCredential?> signInWithGoogle() async {
+    final googleSignIn = GoogleSignIn(serverClientId: webClientId);
+    final googleUser = await googleSignIn.signIn();
+    if (googleUser == null) return null;
+
+    final googleAuth = await googleUser.authentication;
+    final credential = GoogleAuthProvider.credential(
+      idToken: googleAuth.idToken,
+      accessToken: googleAuth.accessToken,
+    );
+    return await FirebaseAuth.instance.signInWithCredential(credential);
+  }
+
+  static Future<UserCredential> signInWithEmail(String email, String password) async {
+    return await FirebaseAuth.instance.signInWithEmailAndPassword(
+      email: email.toLowerCase().trim(),
+      password: password.trim(),
+    );
+  }
+
+  static Future<UserCredential> signUpWithEmail(String email, String password, String name) async {
+    final cred = await FirebaseAuth.instance.createUserWithEmailAndPassword(
+      email: email.toLowerCase().trim(),
+      password: password.trim(),
+    );
+    if (cred.user != null && name.isNotEmpty) {
+      await cred.user!.updateDisplayName(name);
+    }
+    return cred;
+  }
+
+  static Future<void> sendPasswordReset(String email) async {
+    await FirebaseAuth.instance.sendPasswordResetEmail(email: email.toLowerCase().trim());
+  }
+
+  static Future<void> signOut() async {
+    try {
+      await GoogleSignIn().signOut();
+    } catch (_) {}
+    await FirebaseAuth.instance.signOut();
+    cachedUid = null;
     cachedEmail = null;
-    final prefs = await SharedPreferences.getInstance();
-    await prefs.remove(_prefApiKey);
-    await prefs.remove(_prefFirebaseUid);
-    await prefs.remove(_prefEmail);
+    cachedName = null;
+    cachedPhoto = null;
+    cachedApiKey = null;
   }
 
   static Future<Map<String, dynamic>> getDashboard() async {
-    if (cachedFirebaseUid == null) return {};
+    if (cachedUid == null) return {};
     try {
-      final snap = await _rtdb
-          .child('users/${cachedFirebaseUid!}/dashboard')
-          .once();
+      final snap = await _rtdb.child('users/$cachedUid/dashboard').once();
       return Map<String, dynamic>.from((snap.snapshot.value ?? {}) as Map);
     } catch (e) {
-      debugPrint('getDashboard error: $e');
       return {};
     }
   }
 
   static Future<List<Map<String, dynamic>>> getUserLinks({int limit = 20}) async {
-    if (cachedFirebaseUid == null) return [];
+    if (cachedUid == null) return [];
     try {
-      final snap = await _rtdb
-          .child('links')
-          .orderByChild('ownerUid')
-          .equalTo(cachedFirebaseUid!)
-          .once();
+      final snap = await _rtdb.child('links').orderByChild('ownerUid').equalTo(cachedUid!).once();
       final val = snap.snapshot.value;
       if (val == null) return [];
       final map = Map<String, dynamic>.from(val as Map);
       final arr = map.entries.map((e) {
-        final data = Map<String, dynamic>.from(e.value as Map);
-        data['id'] = e.key;
-        return data;
+        final d = Map<String, dynamic>.from(e.value as Map);
+        d['id'] = e.key;
+        return d;
       }).toList();
       arr.sort((a, b) => (b['createdAt'] ?? 0).compareTo(a['createdAt'] ?? 0));
       return arr.take(limit).toList();
     } catch (e) {
-      debugPrint('getUserLinks error: $e');
       return [];
     }
   }
@@ -216,7 +241,7 @@ class MayaJaalAccount {
   static double calcEarnings(int views) {
     views = math.max(0, views);
     if (views <= 0) return 0;
-    if (views <= 1000) return _round2((views / 1000) * 1);
+    if (views <= 1000) return _r2((views / 1000) * 1);
     double income = 1;
     int remaining = views - 1000;
     int tier = 1;
@@ -227,13 +252,13 @@ class MayaJaalAccount {
       tier++;
       if (tier > 30) break;
     }
-    return _round2(income);
+    return _r2(income);
   }
 
   static Map<String, dynamic> getTierInfo(int views) {
     views = math.max(0, views);
     if (views < 1000) {
-      return {'tier': 1, 'rate': 1.00, 'from': 0, 'to': 1000, 'next': 1000 - views};
+      return {'tier': 1, 'rate': 1.00, 'next': 1000 - views};
     }
     int tier = 1;
     int start = 1000;
@@ -244,19 +269,337 @@ class MayaJaalAccount {
     }
     return {
       'tier': tier + 1,
-      'rate': _round2(math.pow(1.5, tier).toDouble()),
-      'from': start,
-      'to': start + 2000,
+      'rate': _r2(math.pow(1.5, tier).toDouble()),
       'next': start + 2000 - views,
     };
   }
 
-  static double _round2(num n) => (n * 100).round() / 100;
+  static double _r2(num n) => (n * 100).round() / 100;
 }
 
-// ============================================================
+// ═══════════════════════════════════════════════════════
+// FIREBASE SERVICE — All tables
+// ═══════════════════════════════════════════════════════
+class FirebaseService {
+  static DatabaseReference get _rtdb => FirebaseDatabase.instance.ref();
+
+  // ──────────── NOTIFICATIONS ────────────
+  static Future<void> sendNotification({
+    required String toUid,
+    required String title,
+    required String message,
+    String type = 'general',
+  }) async {
+    try {
+      final id = _rtdb.child('users/$toUid/notifications').push().key;
+      if (id == null) return;
+      await _rtdb.child('users/$toUid/notifications/$id').set({
+        'title': title,
+        'message': message,
+        'type': type,
+        'time': DateTime.now().millisecondsSinceEpoch,
+        'read': false,
+      });
+    } catch (e) {
+      debugPrint('sendNotification error: $e');
+    }
+  }
+
+  static Stream<List<Map<String, dynamic>>> getNotifications(String uid) {
+    return _rtdb.child('users/$uid/notifications').onValue.map((event) {
+      final val = event.snapshot.value;
+      if (val == null) return <Map<String, dynamic>>[];
+      final map = Map<String, dynamic>.from(val as Map);
+      final list = map.entries.map((e) {
+        final d = Map<String, dynamic>.from(e.value as Map);
+        d['id'] = e.key;
+        return d;
+      }).toList();
+      list.sort((a, b) => (b['time'] ?? 0).compareTo(a['time'] ?? 0));
+      return list;
+    });
+  }
+
+  static Future<void> markNotificationRead(String uid, String notifId) async {
+    try {
+      await _rtdb.child('users/$uid/notifications/$notifId/read').set(true);
+    } catch (_) {}
+  }
+
+  static Future<void> markAllRead(String uid) async {
+    try {
+      final snap = await _rtdb.child('users/$uid/notifications').once();
+      final val = snap.snapshot.value as Map?;
+      if (val == null) return;
+      final updates = <String, dynamic>{};
+      for (final id in val.keys) {
+        updates['$id/read'] = true;
+      }
+      if (updates.isNotEmpty) {
+        await _rtdb.child('users/$uid/notifications').update(updates);
+      }
+    } catch (_) {}
+  }
+
+  static Stream<int> getUnreadCount(String uid) {
+    return _rtdb.child('users/$uid/notifications').onValue.map((event) {
+      final val = event.snapshot.value;
+      if (val == null) return 0;
+      final map = Map<String, dynamic>.from(val as Map);
+      int count = 0;
+      for (final v in map.values) {
+        if (v is Map && v['read'] != true) count++;
+      }
+      return count;
+    });
+  }
+
+  // ──────────── PROFILES ────────────
+  static Future<Map<String, dynamic>?> getProfile(String uid) async {
+    try {
+      final snap = await _rtdb.child('users/$uid').once();
+      final val = snap.snapshot.value;
+      if (val == null) return null;
+      return Map<String, dynamic>.from(val as Map);
+    } catch (e) {
+      return null;
+    }
+  }
+
+  static Future<void> updateProfile(String uid, Map<String, dynamic> data) async {
+    try {
+      await _rtdb.child('users/$uid').update(data);
+    } catch (e) {
+      debugPrint('updateProfile error: $e');
+    }
+  }
+
+  // ──────────── SEARCH USERS ────────────
+  static Future<List<Map<String, dynamic>>> searchUsers(String query) async {
+    if (query.trim().isEmpty) return [];
+    final q = query.trim().toLowerCase();
+
+    try {
+      final snap = await _rtdb.child('users').once();
+      final val = snap.snapshot.value;
+      if (val == null) return [];
+
+      final users = Map<String, dynamic>.from(val as Map);
+      final results = <Map<String, dynamic>>[];
+
+      users.forEach((uid, data) {
+        if (data is! Map) return;
+        final name = (data['name'] ?? '').toString().toLowerCase();
+        final email = (data['email'] ?? '').toString().toLowerCase();
+        if (name.contains(q) || email.contains(q)) {
+          final d = Map<String, dynamic>.from(data);
+          d['uid'] = uid;
+          results.add(d);
+        }
+      });
+
+      return results.take(30).toList();
+    } catch (e) {
+      debugPrint('searchUsers error: $e');
+      return [];
+    }
+  }
+
+  // ──────────── SUBSCRIPTIONS ────────────
+  static Future<bool> isSubscribed(String subscriberUid, String channelUid) async {
+    try {
+      final snap = await _rtdb.child('subscriptions/$channelUid/$subscriberUid').once();
+      return snap.snapshot.value != null;
+    } catch (_) {
+      return false;
+    }
+  }
+
+  static Future<bool> toggleSubscription(String subscriberUid, String channelUid) async {
+    try {
+      final ref = _rtdb.child('subscriptions/$channelUid/$subscriberUid');
+      final snap = await ref.once();
+      final isSubbed = snap.snapshot.value != null;
+
+      if (isSubbed) {
+        await ref.remove();
+        await _rtdb.child('userSubs/$subscriberUid/$channelUid').remove();
+
+        await _rtdb.child('users/$channelUid').transaction((data) {
+          if (data == null || data is! Map) return data;
+          final subs = (data['subscribersCount'] ?? 0) as int;
+          data['subscribersCount'] = math.max(0, subs - 1);
+          return data;
+        });
+
+        return false;
+      } else {
+        await ref.set(DateTime.now().millisecondsSinceEpoch);
+        await _rtdb.child('userSubs/$subscriberUid/$channelUid').set(DateTime.now().millisecondsSinceEpoch);
+
+        await _rtdb.child('users/$channelUid').transaction((data) {
+          if (data == null || data is! Map) return data;
+          final subs = (data['subscribersCount'] ?? 0) as int;
+          data['subscribersCount'] = subs + 1;
+          return data;
+        });
+
+        await sendNotification(
+          toUid: channelUid,
+          title: '🔔 New Subscriber!',
+          message: 'Someone subscribed to your channel.',
+          type: 'subscribe',
+        );
+
+        return true;
+      }
+    } catch (e) {
+      debugPrint('toggleSubscription error: $e');
+      return false;
+    }
+  }
+
+  static Stream<int> getSubscriberCount(String channelUid) {
+    return _rtdb.child('users/$channelUid/subscribersCount').onValue.map((e) {
+      return (e.snapshot.value ?? 0) as int;
+    });
+  }
+
+  static Future<List<String>> getUserSubscriptions(String subscriberUid) async {
+    try {
+      final snap = await _rtdb.child('userSubs/$subscriberUid').once();
+      final val = snap.snapshot.value;
+      if (val == null) return [];
+      return (val as Map).keys.map((k) => k.toString()).toList();
+    } catch (_) {
+      return [];
+    }
+  }
+
+  // ──────────── VIDEOS (Links) ────────────
+  static Future<List<Map<String, dynamic>>> getUserVideos(String uid, {int limit = 30}) async {
+    try {
+      final snap = await _rtdb.child('links').orderByChild('ownerUid').equalTo(uid).once();
+      final val = snap.snapshot.value;
+      if (val == null) return [];
+      final map = Map<String, dynamic>.from(val as Map);
+      final list = map.entries.map((e) {
+        final d = Map<String, dynamic>.from(e.value as Map);
+        d['id'] = e.key;
+        return d;
+      }).toList();
+      list.sort((a, b) => (b['createdAt'] ?? 0).compareTo(a['createdAt'] ?? 0));
+      return list.take(limit).toList();
+    } catch (_) {
+      return [];
+    }
+  }
+
+  static Future<void> deleteVideo(String videoId) async {
+    try {
+      await _rtdb.child('links/$videoId').remove();
+    } catch (_) {}
+  }
+
+  // ──────────── VIDEO STATS ────────────
+  static Stream<Map<String, int>> getVideoStatsStream(String videoId) {
+    return _rtdb.child('links/$videoId').onValue.map((event) {
+      final val = event.snapshot.value;
+      if (val == null || val is! Map) {
+        return {'views': 0, 'likes': 0, 'unlikes': 0, 'shares': 0};
+      }
+
+      int countMap(dynamic d) {
+        if (d == null || d is! Map) return 0;
+        return d.length;
+      }
+
+      return {
+        'views': (val['views'] ?? 0) as int,
+        'likes': countMap(val['likes']),
+        'unlikes': countMap(val['unlikes']),
+        'shares': countMap(val['shares']),
+      };
+    });
+  }
+
+  static Stream<bool> isLikedStream(String videoId, String uid) {
+    return _rtdb.child('links/$videoId/likes/$uid').onValue.map((e) {
+      return e.snapshot.value != null;
+    });
+  }
+
+  static Stream<bool> isUnlikedStream(String videoId, String uid) {
+    return _rtdb.child('links/$videoId/unlikes/$uid').onValue.map((e) {
+      return e.snapshot.value != null;
+    });
+  }
+
+  static Future<bool> toggleLike(String videoId, String uid, String ownerUid, String videoTitle) async {
+    try {
+      final likeRef = _rtdb.child('links/$videoId/likes/$uid');
+      final unlikeRef = _rtdb.child('links/$videoId/unlikes/$uid');
+
+      final likeSnap = await likeRef.once();
+      final isLiked = likeSnap.snapshot.value != null;
+
+      if (isLiked) {
+        await likeRef.remove();
+        return false;
+      } else {
+        await likeRef.set(DateTime.now().millisecondsSinceEpoch);
+        await unlikeRef.remove();
+
+        if (ownerUid.isNotEmpty && ownerUid != uid) {
+          await sendNotification(
+            toUid: ownerUid,
+            title: '❤️ New Like!',
+            message: 'Someone liked your video: $videoTitle',
+            type: 'like',
+          );
+        }
+        return true;
+      }
+    } catch (e) {
+      debugPrint('toggleLike error: $e');
+      return false;
+    }
+  }
+
+  static Future<bool> toggleDislike(String videoId, String uid) async {
+    try {
+      final unlikeRef = _rtdb.child('links/$videoId/unlikes/$uid');
+      final likeRef = _rtdb.child('links/$videoId/likes/$uid');
+
+      final snap = await unlikeRef.once();
+      final isUnliked = snap.snapshot.value != null;
+
+      if (isUnliked) {
+        await unlikeRef.remove();
+        return false;
+      } else {
+        await unlikeRef.set(DateTime.now().millisecondsSinceEpoch);
+        await likeRef.remove();
+        return true;
+      }
+    } catch (e) {
+      return false;
+    }
+  }
+
+  static Future<void> recordShare(String videoId) async {
+    try {
+      final id = _rtdb.child('links/$videoId/shares').push().key;
+      if (id != null) {
+        await _rtdb.child('links/$videoId/shares/$id').set(DateTime.now().millisecondsSinceEpoch);
+      }
+    } catch (_) {}
+  }
+}
+
+// ═══════════════════════════════════════════════════════
 // DEVICE ID HELPER
-// ============================================================
+// ═══════════════════════════════════════════════════════
 class DeviceIdHelper {
   static String? _cached;
   static Future<String> get() async {
@@ -288,9 +631,9 @@ class DeviceIdHelper {
   }
 }
 
-// ============================================================
+// ═══════════════════════════════════════════════════════
 // MAIN
-// ============================================================
+// ═══════════════════════════════════════════════════════
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
 
@@ -303,7 +646,7 @@ Future<void> main() async {
     await Firebase.initializeApp(
       options: const FirebaseOptions(
         apiKey: "AIzaSyDI5hgBbaUeTpXcPIlAnq5yDjIenfY-ylM",
-        authDomain: "www.mayajaal.online",
+        authDomain: "mayajaal-app.firebaseapp.com",
         databaseURL: "https://mayajaal-app-default-rtdb.asia-southeast1.firebasedatabase.app",
         projectId: "mayajaal-app",
         storageBucket: "mayajaal-app.firebasestorage.app",
@@ -311,21 +654,10 @@ Future<void> main() async {
         appId: "1:96139047750:web:850537e9c436dd7d012b47",
       ),
     );
-    debugPrint("Firebase Initialized");
-  } catch (e) {
-    debugPrint("Firebase Initialization Error: $e");
-  }
-
-  try {
-    await Supabase.initialize(url: supabaseUrl, anonKey: supabaseAnonKey);
-  } catch (e) {
-    debugPrint("Supabase Initialization Error: $e");
-  }
-
-  try {
+    debugPrint("✅ Firebase Initialized");
     await MayaJaalAccount.init();
   } catch (e) {
-    debugPrint("MayaJaalAccount init error: $e");
+    debugPrint("Firebase Init Error: $e");
   }
 
   try {
@@ -339,9 +671,9 @@ Future<void> main() async {
   runApp(const MyApp());
 }
 
-// ============================================================
+// ═══════════════════════════════════════════════════════
 // MATRIX RAIN
-// ============================================================
+// ═══════════════════════════════════════════════════════
 class MatrixRain extends StatefulWidget {
   final double opacity;
   const MatrixRain({super.key, this.opacity = 0.7});
@@ -387,55 +719,47 @@ class _MatrixRainState extends State<MatrixRain> {
 
   @override
   Widget build(BuildContext context) {
-    return LayoutBuilder(
-      builder: (context, c) {
-        final colWidth = c.maxWidth / _yPositions.length;
-        return Stack(
-          children: List.generate(_yPositions.length, (i) {
-            return Positioned(
-              left: i * colWidth,
-              top: _yPositions[i],
-              child: Text(
-                _letters[i],
-                style: TextStyle(
-                  color: kGreen.withOpacity(widget.opacity),
-                  fontSize: 13,
-                  fontFamily: 'monospace',
-                  shadows: const [Shadow(color: kGreen, blurRadius: 6)],
-                ),
+    return LayoutBuilder(builder: (context, c) {
+      final colWidth = c.maxWidth / _yPositions.length;
+      return Stack(
+        children: List.generate(_yPositions.length, (i) {
+          return Positioned(
+            left: i * colWidth,
+            top: _yPositions[i],
+            child: Text(
+              _letters[i],
+              style: TextStyle(
+                color: kGreen.withOpacity(widget.opacity),
+                fontSize: 13,
+                fontFamily: 'monospace',
+                shadows: const [Shadow(color: kGreen, blurRadius: 6)],
               ),
-            );
-          }),
-        );
-      },
-    );
+            ),
+          );
+        }),
+      );
+    });
   }
 }
 
-// ============================================================
-// SPLASH
-// ============================================================
+// ═══════════════════════════════════════════════════════
+// SPLASH SCREEN
+// ═══════════════════════════════════════════════════════
 class SplashScreen extends StatefulWidget {
   const SplashScreen({super.key});
   @override
   State<SplashScreen> createState() => _SplashScreenState();
 }
 
-class _SplashScreenState extends State<SplashScreen>
-    with SingleTickerProviderStateMixin {
+class _SplashScreenState extends State<SplashScreen> with SingleTickerProviderStateMixin {
   late AnimationController _c;
   late Animation<double> _a;
 
   @override
   void initState() {
     super.initState();
-    _c = AnimationController(
-      vsync: this,
-      duration: const Duration(milliseconds: 900),
-    )..repeat(reverse: true);
-    _a = Tween<double>(begin: 0.9, end: 1.1).animate(
-      CurvedAnimation(parent: _c, curve: Curves.easeInOut),
-    );
+    _c = AnimationController(vsync: this, duration: const Duration(milliseconds: 900))..repeat(reverse: true);
+    _a = Tween<double>(begin: 0.9, end: 1.1).animate(CurvedAnimation(parent: _c, curve: Curves.easeInOut));
   }
 
   @override
@@ -460,27 +784,17 @@ class _SplashScreenState extends State<SplashScreen>
                   builder: (c, _) => Transform.scale(
                     scale: _a.value,
                     child: Container(
-                      width: 125,
-                      height: 125,
+                      width: 125, height: 125,
                       decoration: BoxDecoration(
                         borderRadius: BorderRadius.circular(24),
-                        boxShadow: [
-                          BoxShadow(
-                            color: kGreen.withOpacity(0.6),
-                            blurRadius: 28,
-                            spreadRadius: 6,
-                          ),
-                        ],
+                        boxShadow: [BoxShadow(color: kGreen.withOpacity(0.6), blurRadius: 28, spreadRadius: 6)],
                       ),
                       child: ClipRRect(
                         borderRadius: BorderRadius.circular(24),
                         child: Image.asset(
                           'assets/icon/logo.png',
                           fit: BoxFit.cover,
-                          errorBuilder: (context, error, stackTrace) => Container(
-                            color: Colors.black,
-                            child: const Icon(Icons.movie_filter, size: 70, color: kGreen),
-                          ),
+                          errorBuilder: (c, e, s) => Container(color: Colors.black, child: const Icon(Icons.movie_filter, size: 70, color: kGreen)),
                         ),
                       ),
                     ),
@@ -490,25 +804,15 @@ class _SplashScreenState extends State<SplashScreen>
                 Text(
                   'MAYA JAAL LOADING...',
                   style: TextStyle(
-                    fontSize: 21,
-                    fontWeight: FontWeight.bold,
-                    color: kGreen,
-                    fontFamily: 'monospace',
-                    letterSpacing: 4,
-                    shadows: [
-                      Shadow(color: kGreen.withOpacity(0.85), blurRadius: 16),
-                    ],
+                    fontSize: 21, fontWeight: FontWeight.bold, color: kGreen,
+                    fontFamily: 'monospace', letterSpacing: 4,
+                    shadows: [Shadow(color: kGreen.withOpacity(0.85), blurRadius: 16)],
                   ),
                 ),
                 const SizedBox(height: 10),
                 Text(
                   '> initializing quantum cipher...',
-                  style: TextStyle(
-                    fontSize: 11,
-                    color: kGreen.withOpacity(0.7),
-                    fontFamily: 'monospace',
-                    letterSpacing: 2,
-                  ),
+                  style: TextStyle(fontSize: 11, color: kGreen.withOpacity(0.7), fontFamily: 'monospace', letterSpacing: 2),
                 ),
               ],
             ),
@@ -519,9 +823,9 @@ class _SplashScreenState extends State<SplashScreen>
   }
 }
 
-// ============================================================
-// MY APP — Deep link handling
-// ============================================================
+// ═══════════════════════════════════════════════════════
+// MY APP — Deep Link Handling
+// ═══════════════════════════════════════════════════════
 class MyApp extends StatefulWidget {
   const MyApp({super.key});
   @override
@@ -542,7 +846,6 @@ class _MyAppState extends State<MyApp> {
 
   Future<void> _initDeepLinks() async {
     _appLinks = AppLinks();
-
     try {
       final initial = await _appLinks.getInitialLink();
       if (initial != null) {
@@ -565,7 +868,7 @@ class _MyAppState extends State<MyApp> {
     final navigator = navigatorKey.currentState;
     if (navigator == null) return;
 
-    if (uri.path.startsWith('/v/') || uri.host == 'watch' || uri.scheme == 'mayajaal') {
+    if (uri.path.startsWith('/v/') || uri.host == 'watch' || uri.scheme == 'mayajaall') {
       String videoId = '';
       final token = uri.queryParameters['t'] ?? uri.queryParameters['s'] ?? '';
 
@@ -583,14 +886,6 @@ class _MyAppState extends State<MyApp> {
       navigator.push(MaterialPageRoute(
         builder: (_) => StreamPreviewScreen(targetUrl: targetUrl),
       ));
-    } else if (uri.path.startsWith('/s/')) {
-      final shortCode = uri.pathSegments.isNotEmpty ? uri.pathSegments.last : '';
-      if (shortCode.isNotEmpty) {
-        launchUrl(
-          Uri.parse('https://www.mayajaal.online/s/$shortCode'),
-          mode: LaunchMode.externalApplication,
-        );
-      }
     }
   }
 
@@ -616,10 +911,7 @@ class _MyAppState extends State<MyApp> {
   @override
   Widget build(BuildContext context) {
     if (!_linkReady) {
-      return MaterialApp(
-        home: const SplashScreen(),
-        debugShowCheckedModeBanner: false,
-      );
+      return MaterialApp(home: const SplashScreen(), debugShowCheckedModeBanner: false);
     }
 
     return ValueListenableBuilder<String>(
@@ -651,57 +943,51 @@ class _MyAppState extends State<MyApp> {
       scaffoldBackgroundColor: Colors.black,
       canvasColor: Colors.black,
       dialogBackgroundColor: const Color(0xFF021206),
-      colorScheme: const ColorScheme.dark(
-        primary: kGreen,
-        surface: Color(0xFF021206),
-      ),
+      colorScheme: const ColorScheme.dark(primary: kGreen, surface: Color(0xFF021206)),
       useMaterial3: true,
       fontFamily: 'monospace',
-      appBarTheme: const AppBarTheme(
-        backgroundColor: Colors.black,
-        foregroundColor: kGreen,
-        elevation: 0,
-        centerTitle: true,
-      ),
+      appBarTheme: const AppBarTheme(backgroundColor: Colors.black, foregroundColor: kGreen, elevation: 0, centerTitle: true),
     );
   }
 }
 
-// ============================================================
+// ═══════════════════════════════════════════════════════
 // AUTH GATE
-// ============================================================
+// ═══════════════════════════════════════════════════════
 class AuthGate extends StatelessWidget {
-  final String? pendingTargetUrl;
-  const AuthGate({super.key, this.pendingTargetUrl});
+  const AuthGate({super.key});
 
   @override
   Widget build(BuildContext context) {
-    return StreamBuilder<AuthState>(
-      stream: Supabase.instance.client.auth.onAuthStateChange,
+    return StreamBuilder<User?>(
+      stream: FirebaseAuth.instance.authStateChanges(),
       builder: (context, snapshot) {
         if (snapshot.connectionState == ConnectionState.waiting) {
           return const SplashScreen();
         }
-        final session = Supabase.instance.client.auth.currentSession;
-        if (session != null) {
-          if (pendingTargetUrl != null && pendingTargetUrl!.isNotEmpty) {
-            return StreamPreviewScreen(targetUrl: pendingTargetUrl!);
-          }
+        if (snapshot.hasData && snapshot.data != null) {
+          final user = snapshot.data!;
+          WidgetsBinding.instance.addPostFrameCallback((_) async {
+            MayaJaalAccount.cachedUid = user.uid;
+            MayaJaalAccount.cachedEmail = user.email;
+            MayaJaalAccount.cachedName = user.displayName;
+            MayaJaalAccount.cachedPhoto = user.photoURL;
+            await MayaJaalAccount.syncUserToRTDB(user);
+            await MayaJaalAccount.loadApiKey();
+          });
           return const MainNavigationHolder();
         }
-        return LoginScreen(pendingTargetUrl: pendingTargetUrl);
+        return const LoginScreen();
       },
     );
   }
 }
 
-// ============================================================
+// ═══════════════════════════════════════════════════════
 // LOGIN SCREEN
-// ============================================================
+// ═══════════════════════════════════════════════════════
 class LoginScreen extends StatefulWidget {
-  final String? pendingTargetUrl;
-  const LoginScreen({super.key, this.pendingTargetUrl});
-
+  const LoginScreen({super.key});
   @override
   State<LoginScreen> createState() => _LoginScreenState();
 }
@@ -713,59 +999,32 @@ class _LoginScreenState extends State<LoginScreen> with SingleTickerProviderStat
   String _error = '';
   String _successMsg = '';
 
-  final TextEditingController _loginIdController = TextEditingController();
-  final TextEditingController _loginPasswordController = TextEditingController();
-
-  final TextEditingController _signupMatrixIdController = TextEditingController();
-  final TextEditingController _signupPhoneController = TextEditingController();
-  final TextEditingController _signupPasswordController = TextEditingController();
-  final TextEditingController _signupOtpController = TextEditingController();
-  bool _otpSentForSignup = false;
-
-  final TextEditingController _resetPhoneController = TextEditingController();
-  final TextEditingController _resetOtpController = TextEditingController();
-  final TextEditingController _newPasswordController = TextEditingController();
+  final _emailCtrl = TextEditingController();
+  final _passCtrl = TextEditingController();
+  final _nameCtrl = TextEditingController();
 
   late AnimationController _magicController;
   late Animation<double> _glowAnimation;
   late Animation<double> _scaleAnimation;
-  bool _showMagicUnlock = false;
 
   @override
   void initState() {
     super.initState();
-    _magicController = AnimationController(
-      vsync: this,
-      duration: const Duration(milliseconds: 1200),
-    );
-    _glowAnimation = Tween<double>(begin: 0.0, end: 40.0).animate(
-      CurvedAnimation(parent: _magicController, curve: Curves.easeInOut),
-    );
-    _scaleAnimation = Tween<double>(begin: 1.0, end: 1.04).animate(
-      CurvedAnimation(parent: _magicController, curve: Curves.easeInOut),
-    );
+    _magicController = AnimationController(vsync: this, duration: const Duration(milliseconds: 1200));
+    _glowAnimation = Tween<double>(begin: 0.0, end: 40.0).animate(CurvedAnimation(parent: _magicController, curve: Curves.easeInOut));
+    _scaleAnimation = Tween<double>(begin: 1.0, end: 1.04).animate(CurvedAnimation(parent: _magicController, curve: Curves.easeInOut));
   }
 
   @override
   void dispose() {
-    _loginIdController.dispose();
-    _loginPasswordController.dispose();
-    _signupMatrixIdController.dispose();
-    _signupPhoneController.dispose();
-    _signupPasswordController.dispose();
-    _signupOtpController.dispose();
-    _resetPhoneController.dispose();
-    _resetOtpController.dispose();
-    _newPasswordController.dispose();
+    _emailCtrl.dispose();
+    _passCtrl.dispose();
+    _nameCtrl.dispose();
     _magicController.dispose();
     super.dispose();
   }
 
-  Future<void> _triggerMagicUnlock() async {
-    setState(() {
-      _showMagicUnlock = true;
-      _error = '';
-    });
+  Future<void> _triggerMagic() async {
     try {
       await SystemSound.play(SystemSoundType.click);
       await HapticFeedback.heavyImpact();
@@ -774,287 +1033,97 @@ class _LoginScreenState extends State<LoginScreen> with SingleTickerProviderStat
     await Future.delayed(const Duration(milliseconds: 400));
   }
 
-  String _formatPhone(String raw) {
-    String clean = raw.replaceAll(RegExp(r'\D'), '');
-    if (clean.length == 10) return '+91$clean';
-    if (!clean.startsWith('+')) return '+$clean';
-    return clean;
-  }
+  Future<void> _handleLogin() async {
+    final email = _emailCtrl.text.trim();
+    final pass = _passCtrl.text.trim();
 
-  Future<void> _sendSignupOtp() async {
-    final matrixId = _signupMatrixIdController.text.trim().toLowerCase().replaceAll('@', '');
-    final phone = _formatPhone(_signupPhoneController.text.trim());
-    final pass = _signupPasswordController.text.trim();
-
-    if (matrixId.isEmpty || phone.length < 10 || pass.length < 6) {
-      setState(() => _error = 'Sabhi details bharein! Password kam se kam 6 akshar ka ho.');
+    if (email.isEmpty || pass.isEmpty) {
+      setState(() => _error = 'Email aur Password dono daalein');
       return;
     }
 
-    setState(() {
-      _loading = true;
-      _error = '';
-      _successMsg = '';
-    });
+    setState(() { _loading = true; _error = ''; _successMsg = ''; });
 
     try {
-      await Supabase.instance.client.auth.signInWithOtp(phone: phone);
-      setState(() {
-        _otpSentForSignup = true;
-        _successMsg = 'OTP aapke phone number par bhej diya gaya hai!';
-      });
+      await MayaJaalAccount.signInWithEmail(email, pass);
+      await _triggerMagic();
+    } on FirebaseAuthException catch (e) {
+      setState(() => _error = '❌ ${_fbError(e.code)}');
     } catch (e) {
-      setState(() => _error = 'OTP send error: ${e.toString()}');
+      setState(() => _error = '❌ Login failed: $e');
     } finally {
       if (mounted) setState(() => _loading = false);
     }
   }
 
-  Future<void> _verifySignupOtpAndRegister() async {
-    final matrixId = _signupMatrixIdController.text.trim().toLowerCase().replaceAll('@', '');
-    final phone = _formatPhone(_signupPhoneController.text.trim());
-    final pass = _signupPasswordController.text.trim();
-    final otp = _signupOtpController.text.trim();
+  Future<void> _handleSignup() async {
+    final email = _emailCtrl.text.trim();
+    final pass = _passCtrl.text.trim();
+    final name = _nameCtrl.text.trim();
 
-    if (otp.length < 4) {
-      setState(() => _error = 'Kripya sahi OTP dalein');
+    if (email.isEmpty || pass.length < 6) {
+      setState(() => _error = 'Email aur 6+ character ka password daalein');
       return;
     }
 
-    setState(() {
-      _loading = true;
-      _error = '';
-    });
+    setState(() { _loading = true; _error = ''; _successMsg = ''; });
 
     try {
-      final res = await Supabase.instance.client.auth.verifyOTP(
-        phone: phone,
-        token: otp,
-        type: OtpType.sms,
-      );
-
-      if (res.user != null) {
-        await Supabase.instance.client.from('profiles').upsert({
-          'id': res.user!.id,
-          'username': matrixId,
-          'display_name': '@$matrixId',
-        });
-        await Supabase.instance.client.auth.updateUser(
-          UserAttributes(password: pass),
-        );
-
-        await Supabase.instance.client.auth.signOut();
-        setState(() {
-          _isLoginTab = true;
-          _otpSentForSignup = false;
-          _loginIdController.text = matrixId;
-          _loginPasswordController.text = pass;
-          _successMsg = 'Matrix ID ban chuki hai! Ab seedha Login karein.';
-        });
-      }
+      await MayaJaalAccount.signUpWithEmail(email, pass, name);
+      await _triggerMagic();
+    } on FirebaseAuthException catch (e) {
+      setState(() => _error = '❌ ${_fbError(e.code)}');
     } catch (e) {
-      setState(() => _error = 'Signup failed: ${e.toString()}');
+      setState(() => _error = '❌ Signup failed: $e');
     } finally {
       if (mounted) setState(() => _loading = false);
     }
   }
 
-  Future<void> _handleMatrixLogin() async {
-    final rawInput = _loginIdController.text.trim().toLowerCase().replaceAll('@', '');
-    final password = _loginPasswordController.text.trim();
-
-    if (rawInput.isEmpty || password.isEmpty) {
-      setState(() => _error = 'Matrix ID / Phone aur Password dalein');
-      return;
-    }
-
-    setState(() {
-      _loading = true;
-      _error = '';
-      _successMsg = '';
-    });
-
+  Future<void> _handleGoogle() async {
+    setState(() { _loading = true; _error = ''; });
     try {
-      String finalEmailOrPhone = rawInput;
-
-      if (!rawInput.contains('@') && !RegExp(r'^[0-9+]+$').hasMatch(rawInput)) {
-        finalEmailOrPhone = '$rawInput@mayajaal.online';
-      }
-
-      if (RegExp(r'^[0-9+]{10,}$').hasMatch(rawInput)) {
-        await Supabase.instance.client.auth.signInWithPassword(
-          phone: _formatPhone(rawInput),
-          password: password,
-        );
-      } else {
-        await Supabase.instance.client.auth.signInWithPassword(
-          email: finalEmailOrPhone,
-          password: password,
-        );
-      }
-
-      await _triggerMagicUnlock();
-    } catch (e) {
-      setState(() => _error = 'Login Failed: Invalid Matrix ID or Password');
-    } finally {
-      if (mounted) setState(() => _loading = false);
-    }
-  }
-
-  Future<void> _signInWithGoogle() async {
-    setState(() {
-      _loading = true;
-      _error = '';
-    });
-    try {
-      final GoogleSignIn googleSignIn = GoogleSignIn(serverClientId: webClientId);
-      final googleUser = await googleSignIn.signIn();
-      if (googleUser == null) {
+      final result = await MayaJaalAccount.signInWithGoogle();
+      if (result == null) {
         setState(() => _loading = false);
         return;
       }
-      final googleAuth = await googleUser.authentication;
-      if (googleAuth.idToken == null) throw 'No ID Token found.';
-      await Supabase.instance.client.auth.signInWithIdToken(
-        provider: OAuthProvider.google,
-        idToken: googleAuth.idToken!,
-      );
-      await _triggerMagicUnlock();
+      await _triggerMagic();
+    } on FirebaseAuthException catch (e) {
+      setState(() => _error = '❌ ${_fbError(e.code)}');
     } catch (e) {
-      setState(() => _error = 'Google Error: $e');
+      setState(() => _error = '❌ Google Error: $e');
     } finally {
       if (mounted) setState(() => _loading = false);
     }
   }
 
-  void _openForgotPasswordDialog() {
-    bool otpSent = false;
-    bool dialogLoading = false;
-    String dialogMsg = '';
+  Future<void> _handleForgot() async {
+    final email = _emailCtrl.text.trim();
+    if (email.isEmpty) {
+      setState(() => _error = 'Pehle email daalein, phir Forgot Password dabayein');
+      return;
+    }
+    try {
+      await MayaJaalAccount.sendPasswordReset(email);
+      setState(() => _successMsg = '✅ Password reset link sent to $email');
+    } catch (e) {
+      setState(() => _error = '❌ $e');
+    }
+  }
 
-    showModalBottomSheet(
-      context: context,
-      isScrollControlled: true,
-      backgroundColor: const Color(0xFF011406),
-      shape: const RoundedRectangleBorder(
-        borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
-        side: BorderSide(color: Color(0xFF00FF66), width: 1.5),
-      ),
-      builder: (ctx) => StatefulBuilder(
-        builder: (ctx, setDialogState) {
-          return Padding(
-            padding: EdgeInsets.only(
-              left: 20,
-              right: 20,
-              top: 20,
-              bottom: MediaQuery.of(ctx).viewInsets.bottom + 20,
-            ),
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                Container(width: 40, height: 4, decoration: BoxDecoration(color: Colors.white24, borderRadius: BorderRadius.circular(2))),
-                const SizedBox(height: 16),
-                const Text(
-                  'RESET MATRIX PASSWORD',
-                  style: TextStyle(color: Color(0xFF00FF66), fontSize: 16, fontWeight: FontWeight.bold, letterSpacing: 1.5),
-                ),
-                const SizedBox(height: 14),
-                if (!otpSent) ...[
-                  TextField(
-                    controller: _resetPhoneController,
-                    keyboardType: TextInputType.phone,
-                    style: const TextStyle(color: Colors.white),
-                    decoration: InputDecoration(
-                      hintText: 'Enter Registered Phone Number (+91)',
-                      hintStyle: TextStyle(color: Colors.white.withOpacity(0.4), fontSize: 13),
-                      prefixIcon: const Icon(Icons.phone_android, color: Color(0xFF00FF66)),
-                      filled: true,
-                      fillColor: Colors.black,
-                      border: OutlineInputBorder(borderRadius: BorderRadius.circular(12), borderSide: const BorderSide(color: Color(0xFF00FF66))),
-                    ),
-                  ),
-                  const SizedBox(height: 14),
-                  ElevatedButton(
-                    onPressed: dialogLoading ? null : () async {
-                      setDialogState(() => dialogLoading = true);
-                      try {
-                        await Supabase.instance.client.auth.signInWithOtp(phone: _formatPhone(_resetPhoneController.text.trim()));
-                        setDialogState(() {
-                          otpSent = true;
-                          dialogMsg = 'OTP Sent to ${_resetPhoneController.text.trim()}';
-                        });
-                      } catch (e) {
-                        setDialogState(() => dialogMsg = 'Error: $e');
-                      } finally {
-                        setDialogState(() => dialogLoading = false);
-                      }
-                    },
-                    style: ElevatedButton.styleFrom(backgroundColor: const Color(0xFF00FF66), foregroundColor: Colors.black),
-                    child: dialogLoading ? const CircularProgressIndicator(color: Colors.black) : const Text('SEND RESET OTP'),
-                  ),
-                ] else ...[
-                  TextField(
-                    controller: _resetOtpController,
-                    keyboardType: TextInputType.number,
-                    style: const TextStyle(color: Colors.white),
-                    decoration: InputDecoration(
-                      hintText: 'Enter 6-Digit OTP',
-                      hintStyle: TextStyle(color: Colors.white.withOpacity(0.4), fontSize: 13),
-                      prefixIcon: const Icon(Icons.lock_clock, color: Color(0xFF00FF66)),
-                      filled: true,
-                      fillColor: Colors.black,
-                      border: OutlineInputBorder(borderRadius: BorderRadius.circular(12), borderSide: const BorderSide(color: Color(0xFF00FF66))),
-                    ),
-                  ),
-                  const SizedBox(height: 10),
-                  TextField(
-                    controller: _newPasswordController,
-                    obscureText: true,
-                    style: const TextStyle(color: Colors.white),
-                    decoration: InputDecoration(
-                      hintText: 'Enter New Password',
-                      hintStyle: TextStyle(color: Colors.white.withOpacity(0.4), fontSize: 13),
-                      prefixIcon: const Icon(Icons.vpn_key, color: Color(0xFF00FF66)),
-                      filled: true,
-                      fillColor: Colors.black,
-                      border: OutlineInputBorder(borderRadius: BorderRadius.circular(12), borderSide: const BorderSide(color: Color(0xFF00FF66))),
-                    ),
-                  ),
-                  const SizedBox(height: 14),
-                  ElevatedButton(
-                    onPressed: dialogLoading ? null : () async {
-                      setDialogState(() => dialogLoading = true);
-                      try {
-                        await Supabase.instance.client.auth.verifyOTP(
-                          phone: _formatPhone(_resetPhoneController.text.trim()),
-                          token: _resetOtpController.text.trim(),
-                          type: OtpType.sms,
-                        );
-                        await Supabase.instance.client.auth.updateUser(
-                          UserAttributes(password: _newPasswordController.text.trim()),
-                        );
-                        Navigator.pop(ctx);
-                        setState(() => _successMsg = 'Password successfully changed! Please login.');
-                      } catch (e) {
-                        setDialogState(() => dialogMsg = 'Reset failed: $e');
-                      } finally {
-                        setDialogState(() => dialogLoading = false);
-                      }
-                    },
-                    style: ElevatedButton.styleFrom(backgroundColor: const Color(0xFF00FF66), foregroundColor: Colors.black),
-                    child: dialogLoading ? const CircularProgressIndicator(color: Colors.black) : const Text('UPDATE PASSWORD'),
-                  ),
-                ],
-                if (dialogMsg.isNotEmpty) ...[
-                  const SizedBox(height: 8),
-                  Text(dialogMsg, style: const TextStyle(color: Colors.yellowAccent, fontSize: 11)),
-                ]
-              ],
-            ),
-          );
-        },
-      ),
-    );
+  String _fbError(String code) {
+    switch (code) {
+      case 'user-not-found': return 'Is email ka koi account nahi hai';
+      case 'wrong-password': return 'Password galat hai';
+      case 'invalid-email': return 'Email galat format me hai';
+      case 'email-already-in-use': return 'Ye email already registered hai';
+      case 'weak-password': return 'Password kam se kam 6 character ka ho';
+      case 'invalid-credential': return 'Email ya password galat hai';
+      case 'too-many-requests': return 'Bohot zyada attempts, thodi der baad try karein';
+      case 'network-request-failed': return 'Internet connection check karein';
+      default: return code.replaceAll('-', ' ');
+    }
   }
 
   @override
@@ -1063,405 +1132,158 @@ class _LoginScreenState extends State<LoginScreen> with SingleTickerProviderStat
       backgroundColor: Colors.black,
       body: Stack(
         children: [
-          const MatrixRain(opacity: 0.55),
+          const MatrixRain(opacity: 0.5),
           SafeArea(
             child: Center(
               child: SingleChildScrollView(
                 padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 20),
                 child: AnimatedBuilder(
                   animation: _magicController,
-                  builder: (context, child) {
-                    return Transform.scale(
-                      scale: _scaleAnimation.value,
-                      child: Container(
-                        padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 24),
-                        decoration: BoxDecoration(
-                          color: const Color(0xFF021206).withOpacity(0.85),
-                          borderRadius: BorderRadius.circular(22),
-                          border: Border.all(
-                            color: _showMagicUnlock
-                                ? const Color(0xFF00FF66)
-                                : const Color(0xFF00FF66).withOpacity(0.4),
-                            width: _showMagicUnlock ? 2.2 : 1.2,
-                          ),
-                          boxShadow: [
-                            BoxShadow(
-                              color: const Color(0xFF00FF66).withOpacity(_showMagicUnlock ? 0.45 : 0.15),
-                              blurRadius: _glowAnimation.value + 15,
-                              spreadRadius: _showMagicUnlock ? 4 : 0,
-                            ),
-                          ],
-                        ),
-                        child: child,
+                  builder: (context, child) => Transform.scale(
+                    scale: _scaleAnimation.value,
+                    child: Container(
+                      padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 24),
+                      decoration: BoxDecoration(
+                        color: const Color(0xFF021206).withOpacity(0.9),
+                        borderRadius: BorderRadius.circular(22),
+                        border: Border.all(color: kGreen, width: 1.5),
+                        boxShadow: [BoxShadow(color: kGreen.withOpacity(0.2), blurRadius: _glowAnimation.value + 15, spreadRadius: 2)],
                       ),
-                    );
-                  },
+                      child: child,
+                    ),
+                  ),
                   child: Column(
                     mainAxisSize: MainAxisSize.min,
                     children: [
                       Container(
-                        width: 78,
-                        height: 78,
-                        padding: const EdgeInsets.all(4),
+                        width: 78, height: 78, padding: const EdgeInsets.all(4),
                         decoration: BoxDecoration(
                           color: Colors.black,
                           borderRadius: BorderRadius.circular(22),
-                          border: Border.all(color: const Color(0xFF00FF66), width: 1.8),
-                          boxShadow: [
-                            BoxShadow(color: const Color(0xFF00FF66).withOpacity(0.55), blurRadius: 18, spreadRadius: 2),
-                          ],
+                          border: Border.all(color: kGreen, width: 1.8),
+                          boxShadow: [BoxShadow(color: kGreen.withOpacity(0.5), blurRadius: 18)],
                         ),
                         child: ClipRRect(
                           borderRadius: BorderRadius.circular(18),
-                          child: Image.asset(
-                            'assets/icon/logo.png',
-                            fit: BoxFit.cover,
-                            errorBuilder: (context, error, stackTrace) => const Icon(Icons.change_history, size: 42, color: Color(0xFF00FF66)),
-                          ),
+                          child: Image.asset('assets/icon/logo.png', fit: BoxFit.cover,
+                            errorBuilder: (c, e, s) => const Icon(Icons.change_history, size: 42, color: kGreen)),
                         ),
                       ),
                       const SizedBox(height: 16),
-                      const Text(
-                        'MAYA JAAL',
-                        style: TextStyle(
-                          fontSize: 28,
-                          fontWeight: FontWeight.w900,
-                          color: Color(0xFF00FF66),
-                          fontFamily: 'monospace',
-                          letterSpacing: 6,
-                          shadows: [Shadow(color: Color(0xFF00FF66), blurRadius: 16)],
-                        ),
-                      ),
+                      const Text('MAYA JAAL',
+                        style: TextStyle(fontSize: 26, fontWeight: FontWeight.w900, color: kGreen,
+                          fontFamily: 'monospace', letterSpacing: 5,
+                          shadows: [Shadow(color: kGreen, blurRadius: 16)])),
                       const SizedBox(height: 6),
-                      Text(
-                        '> Enter the real world behind\n   the digital veil _',
+                      Text('> Enter the real world behind\n   the digital veil _',
                         textAlign: TextAlign.center,
-                        style: TextStyle(
-                          fontSize: 11.5,
-                          color: const Color(0xFF00FF66).withOpacity(0.85),
-                          fontFamily: 'monospace',
-                          letterSpacing: 1.5,
-                          height: 1.3,
-                        ),
-                      ),
+                        style: TextStyle(fontSize: 11, color: kGreen.withOpacity(0.85),
+                          fontFamily: 'monospace', letterSpacing: 1.5, height: 1.3)),
                       const SizedBox(height: 20),
+
                       Container(
                         height: 44,
                         decoration: BoxDecoration(
                           color: Colors.black,
                           borderRadius: BorderRadius.circular(24),
-                          border: Border.all(color: const Color(0xFF00FF66).withOpacity(0.6)),
+                          border: Border.all(color: kGreen.withOpacity(0.6)),
                         ),
                         child: Row(
                           children: [
-                            Expanded(
-                              child: GestureDetector(
-                                onTap: () => setState(() { _isLoginTab = true; _error = ''; }),
-                                child: Container(
-                                  decoration: BoxDecoration(
-                                    color: _isLoginTab ? const Color(0xFF01240B) : Colors.transparent,
-                                    borderRadius: BorderRadius.circular(24),
-                                    border: _isLoginTab ? Border.all(color: const Color(0xFF00FF66), width: 1.6) : null,
-                                  ),
-                                  alignment: Alignment.center,
-                                  child: Text(
-                                    'LOGIN',
-                                    style: TextStyle(
-                                      color: _isLoginTab ? const Color(0xFF00FF66) : Colors.white60,
-                                      fontWeight: FontWeight.bold,
-                                      letterSpacing: 1.5,
-                                      fontSize: 12.5,
-                                    ),
-                                  ),
-                                ),
-                              ),
-                            ),
-                            Expanded(
-                              child: GestureDetector(
-                                onTap: () => setState(() { _isLoginTab = false; _error = ''; }),
-                                child: Container(
-                                  decoration: BoxDecoration(
-                                    color: !_isLoginTab ? const Color(0xFF01240B) : Colors.transparent,
-                                    borderRadius: BorderRadius.circular(24),
-                                    border: !_isLoginTab ? Border.all(color: const Color(0xFF00FF66), width: 1.6) : null,
-                                  ),
-                                  alignment: Alignment.center,
-                                  child: Text(
-                                    'SIGN UP',
-                                    style: TextStyle(
-                                      color: !_isLoginTab ? const Color(0xFF00FF66) : Colors.white60,
-                                      fontWeight: FontWeight.bold,
-                                      letterSpacing: 1.5,
-                                      fontSize: 12.5,
-                                    ),
-                                  ),
-                                ),
-                              ),
-                            ),
+                            Expanded(child: _tab('LOGIN', _isLoginTab, () => setState(() { _isLoginTab = true; _error = ''; _successMsg = ''; }))),
+                            Expanded(child: _tab('SIGN UP', !_isLoginTab, () => setState(() { _isLoginTab = false; _error = ''; _successMsg = ''; }))),
                           ],
                         ),
                       ),
                       const SizedBox(height: 16),
+
                       Container(
                         padding: const EdgeInsets.all(14),
                         decoration: BoxDecoration(
                           color: Colors.black.withOpacity(0.6),
                           borderRadius: BorderRadius.circular(16),
-                          border: Border.all(color: const Color(0xFF00FF66).withOpacity(0.35)),
+                          border: Border.all(color: kGreen.withOpacity(0.35)),
                         ),
-                        child: _isLoginTab
-                            ? Column(
-                                children: [
-                                  Container(
-                                    padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 4),
-                                    decoration: BoxDecoration(
-                                      color: const Color(0xFF031A0B),
-                                      borderRadius: BorderRadius.circular(12),
-                                      border: Border.all(color: const Color(0xFF00FF66).withOpacity(0.5)),
-                                    ),
-                                    child: TextField(
-                                      controller: _loginIdController,
-                                      style: const TextStyle(color: Colors.white, fontSize: 13, fontFamily: 'monospace'),
-                                      decoration: InputDecoration(
-                                        icon: const Icon(Icons.person_outline, color: Color(0xFF00FF66), size: 20),
-                                        hintText: 'Matrix ID / Phone / Email',
-                                        hintStyle: TextStyle(color: Colors.white.withOpacity(0.4), fontSize: 12),
-                                        border: InputBorder.none,
+                        child: Column(
+                          children: [
+                            if (!_isLoginTab) ...[
+                              _inputField(_nameCtrl, Icons.person_outline, 'Your Name', false),
+                              const SizedBox(height: 10),
+                            ],
+                            _inputField(_emailCtrl, Icons.email_outlined, 'Email', false),
+                            const SizedBox(height: 10),
+                            _inputField(_passCtrl, Icons.lock_outline, 'Password', true),
+                            const SizedBox(height: 16),
+                            SizedBox(
+                              width: double.infinity, height: 48,
+                              child: ElevatedButton(
+                                onPressed: _loading ? null : (_isLoginTab ? _handleLogin : _handleSignup),
+                                style: ElevatedButton.styleFrom(
+                                  backgroundColor: kGreen, foregroundColor: Colors.black,
+                                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+                                  elevation: 8,
+                                ),
+                                child: _loading
+                                    ? const SizedBox(width: 22, height: 22, child: CircularProgressIndicator(color: Colors.black, strokeWidth: 2.2))
+                                    : Text(
+                                        _isLoginTab ? 'LOGIN' : 'CREATE ACCOUNT',
+                                        style: const TextStyle(fontWeight: FontWeight.w900, letterSpacing: 1.5, fontSize: 12.5),
                                       ),
-                                    ),
-                                  ),
-                                  const SizedBox(height: 12),
-                                  Container(
-                                    padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 4),
-                                    decoration: BoxDecoration(
-                                      color: const Color(0xFF031A0B),
-                                      borderRadius: BorderRadius.circular(12),
-                                      border: Border.all(color: const Color(0xFF00FF66).withOpacity(0.5)),
-                                    ),
-                                    child: TextField(
-                                      controller: _loginPasswordController,
-                                      obscureText: _obscurePassword,
-                                      style: const TextStyle(color: Colors.white, fontSize: 13, fontFamily: 'monospace'),
-                                      decoration: InputDecoration(
-                                        icon: const Icon(Icons.lock_outline, color: Color(0xFF00FF66), size: 20),
-                                        suffixIcon: IconButton(
-                                          icon: Icon(_obscurePassword ? Icons.visibility_off_outlined : Icons.visibility_outlined, color: const Color(0xFF00FF66), size: 19),
-                                          onPressed: () => setState(() => _obscurePassword = !_obscurePassword),
-                                        ),
-                                        hintText: 'Password',
-                                        hintStyle: TextStyle(color: Colors.white.withOpacity(0.4), fontSize: 12),
-                                        border: InputBorder.none,
-                                      ),
-                                    ),
-                                  ),
-                                  const SizedBox(height: 16),
-                                  SizedBox(
-                                    width: double.infinity,
-                                    height: 48,
-                                    child: ElevatedButton(
-                                      onPressed: _loading ? null : _handleMatrixLogin,
-                                      style: ElevatedButton.styleFrom(
-                                        backgroundColor: const Color(0xFF00FF66),
-                                        foregroundColor: Colors.black,
-                                        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
-                                        elevation: 8,
-                                      ),
-                                      child: _loading
-                                          ? const SizedBox(width: 22, height: 22, child: CircularProgressIndicator(color: Colors.black, strokeWidth: 2.2))
-                                          : const Row(
-                                              mainAxisAlignment: MainAxisAlignment.center,
-                                              children: [
-                                                Icon(Icons.login, size: 19, color: Colors.black),
-                                                SizedBox(width: 8),
-                                                Text('LOGIN WITH MATRIX ID', style: TextStyle(fontWeight: FontWeight.w900, letterSpacing: 1.5, fontSize: 12.5)),
-                                              ],
-                                            ),
-                                    ),
-                                  ),
-                                ],
-                              )
-                            : Column(
-                                children: [
-                                  Container(
-                                    padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 4),
-                                    decoration: BoxDecoration(
-                                      color: const Color(0xFF031A0B),
-                                      borderRadius: BorderRadius.circular(12),
-                                      border: Border.all(color: const Color(0xFF00FF66).withOpacity(0.5)),
-                                    ),
-                                    child: TextField(
-                                      controller: _signupMatrixIdController,
-                                      enabled: !_otpSentForSignup,
-                                      style: const TextStyle(color: Colors.white, fontSize: 13, fontFamily: 'monospace'),
-                                      decoration: InputDecoration(
-                                        prefixText: '@',
-                                        prefixStyle: const TextStyle(color: Color(0xFF00FF66), fontWeight: FontWeight.bold),
-                                        icon: const Icon(Icons.alternate_email, color: Color(0xFF00FF66), size: 20),
-                                        hintText: 'Choose Matrix ID (like insta)',
-                                        hintStyle: TextStyle(color: Colors.white.withOpacity(0.4), fontSize: 12),
-                                        border: InputBorder.none,
-                                      ),
-                                    ),
-                                  ),
-                                  const SizedBox(height: 10),
-                                  Container(
-                                    padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 4),
-                                    decoration: BoxDecoration(
-                                      color: const Color(0xFF031A0B),
-                                      borderRadius: BorderRadius.circular(12),
-                                      border: Border.all(color: const Color(0xFF00FF66).withOpacity(0.5)),
-                                    ),
-                                    child: TextField(
-                                      controller: _signupPhoneController,
-                                      enabled: !_otpSentForSignup,
-                                      keyboardType: TextInputType.phone,
-                                      style: const TextStyle(color: Colors.white, fontSize: 13, fontFamily: 'monospace'),
-                                      decoration: InputDecoration(
-                                        icon: const Icon(Icons.phone_android, color: Color(0xFF00FF66), size: 20),
-                                        hintText: 'Mobile Number (+91)',
-                                        hintStyle: TextStyle(color: Colors.white.withOpacity(0.4), fontSize: 12),
-                                        border: InputBorder.none,
-                                      ),
-                                    ),
-                                  ),
-                                  const SizedBox(height: 10),
-                                  Container(
-                                    padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 4),
-                                    decoration: BoxDecoration(
-                                      color: const Color(0xFF031A0B),
-                                      borderRadius: BorderRadius.circular(12),
-                                      border: Border.all(color: const Color(0xFF00FF66).withOpacity(0.5)),
-                                    ),
-                                    child: TextField(
-                                      controller: _signupPasswordController,
-                                      obscureText: _obscurePassword,
-                                      style: const TextStyle(color: Colors.white, fontSize: 13, fontFamily: 'monospace'),
-                                      decoration: InputDecoration(
-                                        icon: const Icon(Icons.lock_outline, color: Color(0xFF00FF66), size: 20),
-                                        hintText: 'Create Strong Password',
-                                        hintStyle: TextStyle(color: Colors.white.withOpacity(0.4), fontSize: 12),
-                                        border: InputBorder.none,
-                                      ),
-                                    ),
-                                  ),
-                                  if (_otpSentForSignup) ...[
-                                    const SizedBox(height: 10),
-                                    Container(
-                                      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 4),
-                                      decoration: BoxDecoration(
-                                        color: const Color(0xFF03220E),
-                                        borderRadius: BorderRadius.circular(12),
-                                        border: Border.all(color: Colors.yellowAccent),
-                                      ),
-                                      child: TextField(
-                                        controller: _signupOtpController,
-                                        keyboardType: TextInputType.number,
-                                        style: const TextStyle(color: Colors.white, fontSize: 14, fontFamily: 'monospace', letterSpacing: 4),
-                                        decoration: InputDecoration(
-                                          icon: const Icon(Icons.message_outlined, color: Colors.yellowAccent, size: 20),
-                                          hintText: 'Enter SMS OTP',
-                                          hintStyle: TextStyle(color: Colors.white.withOpacity(0.4), fontSize: 12, letterSpacing: 0),
-                                          border: InputBorder.none,
-                                        ),
-                                      ),
-                                    ),
-                                  ],
-                                  const SizedBox(height: 16),
-                                  SizedBox(
-                                    width: double.infinity,
-                                    height: 48,
-                                    child: ElevatedButton(
-                                      onPressed: _loading ? null : (_otpSentForSignup ? _verifySignupOtpAndRegister : _sendSignupOtp),
-                                      style: ElevatedButton.styleFrom(
-                                        backgroundColor: const Color(0xFF00FF66),
-                                        foregroundColor: Colors.black,
-                                        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
-                                      ),
-                                      child: _loading
-                                          ? const SizedBox(width: 22, height: 22, child: CircularProgressIndicator(color: Colors.black, strokeWidth: 2.2))
-                                          : Text(
-                                              _otpSentForSignup ? 'VERIFY OTP & COMPLETE' : 'GET OTP ON NUMBER',
-                                              style: const TextStyle(fontWeight: FontWeight.w900, letterSpacing: 1.2, fontSize: 12.5),
-                                            ),
-                                    ),
-                                  ),
-                                ],
                               ),
+                            ),
+                          ],
+                        ),
                       ),
+
                       const SizedBox(height: 16),
-                      Row(
-                        children: [
-                          Expanded(child: Divider(color: const Color(0xFF00FF66).withOpacity(0.3))),
-                          Padding(
-                            padding: const EdgeInsets.symmetric(horizontal: 10),
-                            child: Text('OR', style: TextStyle(color: const Color(0xFF00FF66).withOpacity(0.7), fontSize: 11, fontWeight: FontWeight.bold)),
-                          ),
-                          Expanded(child: Divider(color: const Color(0xFF00FF66).withOpacity(0.3))),
-                        ],
-                      ),
+                      Row(children: [
+                        Expanded(child: Divider(color: kGreen.withOpacity(0.3))),
+                        Padding(
+                          padding: const EdgeInsets.symmetric(horizontal: 10),
+                          child: Text('OR', style: TextStyle(color: kGreen.withOpacity(0.7), fontSize: 11, fontWeight: FontWeight.bold)),
+                        ),
+                        Expanded(child: Divider(color: kGreen.withOpacity(0.3))),
+                      ]),
                       const SizedBox(height: 16),
+
                       SizedBox(
-                        width: double.infinity,
-                        height: 48,
+                        width: double.infinity, height: 48,
                         child: ElevatedButton(
-                          onPressed: _loading ? null : _signInWithGoogle,
+                          onPressed: _loading ? null : _handleGoogle,
                           style: ElevatedButton.styleFrom(
-                            backgroundColor: Colors.white,
-                            foregroundColor: Colors.black87,
+                            backgroundColor: Colors.white, foregroundColor: Colors.black87,
                             shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(24)),
                           ),
                           child: Row(
                             mainAxisAlignment: MainAxisAlignment.center,
                             children: [
-                              Image.network(
-                                'https://developers.google.com/identity/images/g-logo.png',
+                              Image.network('https://developers.google.com/identity/images/g-logo.png',
                                 height: 20,
-                                errorBuilder: (c, e, s) => const Icon(Icons.g_mobiledata, color: Colors.red, size: 24),
-                              ),
+                                errorBuilder: (c, e, s) => const Icon(Icons.g_mobiledata, color: Colors.red, size: 24)),
                               const SizedBox(width: 10),
                               const Text('Sign in with Google', style: TextStyle(fontSize: 14, fontWeight: FontWeight.w700)),
                             ],
                           ),
                         ),
                       ),
-                      const SizedBox(height: 14),
-                      TextButton(
-                        onPressed: _openForgotPasswordDialog,
-                        child: Text(
-                          'Forgot Password?',
-                          style: TextStyle(color: const Color(0xFF00FF66).withOpacity(0.9), fontSize: 12.5, fontWeight: FontWeight.w600),
+
+                      const SizedBox(height: 12),
+                      if (_isLoginTab)
+                        TextButton(
+                          onPressed: _handleForgot,
+                          child: Text('Forgot Password?', style: TextStyle(color: kGreen.withOpacity(0.9), fontSize: 12.5, fontWeight: FontWeight.w600)),
                         ),
-                      ),
-                      Row(
-                        mainAxisAlignment: MainAxisAlignment.center,
-                        children: [
-                          Text(
-                            _isLoginTab ? "Don't have an account? " : "Already have an account? ",
-                            style: TextStyle(color: Colors.white.withOpacity(0.6), fontSize: 12),
-                          ),
-                          GestureDetector(
-                            onTap: () => setState(() {
-                              _isLoginTab = !_isLoginTab;
-                              _error = '';
-                              _successMsg = '';
-                            }),
-                            child: Text(
-                              _isLoginTab ? 'Sign Up →' : 'Login →',
-                              style: const TextStyle(color: Color(0xFF00FF66), fontSize: 12, fontWeight: FontWeight.bold),
-                            ),
-                          ),
-                        ],
-                      ),
+
                       if (_successMsg.isNotEmpty) ...[
                         const SizedBox(height: 12),
                         Container(
                           padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
                           decoration: BoxDecoration(
                             color: Colors.green.withOpacity(0.2),
-                            border: Border.all(color: const Color(0xFF00FF66)),
+                            border: Border.all(color: kGreen),
                             borderRadius: BorderRadius.circular(8),
                           ),
-                          child: Text(_successMsg, style: const TextStyle(color: Color(0xFF00FF66), fontSize: 11.5), textAlign: TextAlign.center),
+                          child: Text(_successMsg, style: const TextStyle(color: kGreen, fontSize: 11.5), textAlign: TextAlign.center),
                         ),
                       ],
                       if (_error.isNotEmpty) ...[
@@ -1486,11 +1308,55 @@ class _LoginScreenState extends State<LoginScreen> with SingleTickerProviderStat
       ),
     );
   }
+
+  Widget _tab(String label, bool active, VoidCallback onTap) {
+    return GestureDetector(
+      onTap: onTap,
+      child: Container(
+        decoration: BoxDecoration(
+          color: active ? const Color(0xFF01240B) : Colors.transparent,
+          borderRadius: BorderRadius.circular(24),
+          border: active ? Border.all(color: kGreen, width: 1.6) : null,
+        ),
+        alignment: Alignment.center,
+        child: Text(label,
+          style: TextStyle(color: active ? kGreen : Colors.white60, fontWeight: FontWeight.bold, letterSpacing: 1.5, fontSize: 12.5)),
+      ),
+    );
+  }
+
+  Widget _inputField(TextEditingController ctrl, IconData icon, String hint, bool isPassword) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 4),
+      decoration: BoxDecoration(
+        color: const Color(0xFF031A0B),
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(color: kGreen.withOpacity(0.5)),
+      ),
+      child: TextField(
+        controller: ctrl,
+        obscureText: isPassword ? _obscurePassword : false,
+        style: const TextStyle(color: Colors.white, fontSize: 13, fontFamily: 'monospace'),
+        decoration: InputDecoration(
+          icon: Icon(icon, color: kGreen, size: 20),
+          suffixIcon: isPassword
+              ? IconButton(
+                  icon: Icon(_obscurePassword ? Icons.visibility_off_outlined : Icons.visibility_outlined, color: kGreen, size: 19),
+                  onPressed: () => setState(() => _obscurePassword = !_obscurePassword),
+                )
+              : null,
+          hintText: hint,
+          hintStyle: TextStyle(color: Colors.white.withOpacity(0.4), fontSize: 12),
+          border: InputBorder.none,
+        ),
+      ),
+    );
+  }
 }
 
-// ============================================================
-// MAIN NAVIGATION HOLDER — 3 tabs + Drawer
-// ============================================================
+// ═══════════════════════════════════════════════════════
+// MAIN NAVIGATION HOLDER
+// ═══════════════════════════════════════════════════════
 class MainNavigationHolder extends StatefulWidget {
   const MainNavigationHolder({super.key});
   @override
@@ -1518,9 +1384,7 @@ class _MainNavigationHolderState extends State<MainNavigationHolder> {
         decoration: BoxDecoration(
           color: const Color(0xFF000803),
           border: Border(top: BorderSide(color: kGreen.withOpacity(0.35), width: 1.2)),
-          boxShadow: [
-            BoxShadow(color: kGreen.withOpacity(0.1), blurRadius: 15, offset: const Offset(0, -3)),
-          ],
+          boxShadow: [BoxShadow(color: kGreen.withOpacity(0.1), blurRadius: 15, offset: const Offset(0, -3))],
         ),
         child: BottomNavigationBar(
           currentIndex: _currentIndex,
@@ -1533,21 +1397,9 @@ class _MainNavigationHolderState extends State<MainNavigationHolder> {
           unselectedFontSize: 11,
           onTap: (index) => setState(() => _currentIndex = index),
           items: const [
-            BottomNavigationBarItem(
-              icon: Icon(Icons.home_outlined),
-              activeIcon: Icon(Icons.home, color: kGreen),
-              label: 'Home',
-            ),
-            BottomNavigationBarItem(
-              icon: Icon(Icons.ondemand_video_outlined),
-              activeIcon: Icon(Icons.ondemand_video, color: kGreen),
-              label: 'Channel',
-            ),
-            BottomNavigationBarItem(
-              icon: Icon(Icons.history_outlined),
-              activeIcon: Icon(Icons.history, color: kGreen),
-              label: 'History',
-            ),
+            BottomNavigationBarItem(icon: Icon(Icons.home_outlined), activeIcon: Icon(Icons.home, color: kGreen), label: 'Home'),
+            BottomNavigationBarItem(icon: Icon(Icons.ondemand_video_outlined), activeIcon: Icon(Icons.ondemand_video, color: kGreen), label: 'Channel'),
+            BottomNavigationBarItem(icon: Icon(Icons.history_outlined), activeIcon: Icon(Icons.history, color: kGreen), label: 'History'),
           ],
         ),
       ),
@@ -1555,9 +1407,9 @@ class _MainNavigationHolderState extends State<MainNavigationHolder> {
   }
 }
 
-// ============================================================
-// HOME SCREEN
-// ============================================================
+// ═══════════════════════════════════════════════════════
+// HOME SCREEN — Real notifications
+// ═══════════════════════════════════════════════════════
 class HomeScreen extends StatefulWidget {
   final VoidCallback? onMenuTap;
   const HomeScreen({super.key, this.onMenuTap});
@@ -1570,68 +1422,131 @@ class _HomeScreenState extends State<HomeScreen> with SingleTickerProviderStateM
   late AnimationController _pulseController;
   late Animation<double> _pulseAnimation;
 
+  @override
+  void initState() {
+    super.initState();
+    _pulseController = AnimationController(vsync: this, duration: const Duration(milliseconds: 1600))..repeat(reverse: true);
+    _pulseAnimation = Tween<double>(begin: 0.95, end: 1.05).animate(CurvedAnimation(parent: _pulseController, curve: Curves.easeInOut));
+  }
+
+  @override
+  void dispose() {
+    _pulseController.dispose();
+    _linkController.dispose();
+    super.dispose();
+  }
+
   void _showNotificationsSheet(BuildContext context) {
+    final uid = MayaJaalAccount.cachedUid;
+    if (uid == null) return;
+
     showModalBottomSheet(
       context: context,
       backgroundColor: const Color(0xFF111714),
-      shape: const RoundedRectangleBorder(
-        borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
-      ),
+      isScrollControlled: true,
+      shape: const RoundedRectangleBorder(borderRadius: BorderRadius.vertical(top: Radius.circular(20))),
       builder: (ctx) {
-        return FutureBuilder<List<Map<String, dynamic>>>(
-          future: Supabase.instance.client
-              .from('notifications')
-              .select('*')
-              .order('created_at', ascending: false),
-          builder: (context, snapshot) {
-            if (snapshot.connectionState == ConnectionState.waiting) {
-              return const Center(
-                child: Padding(
-                  padding: EdgeInsets.all(40.0),
-                  child: CircularProgressIndicator(color: kGreen),
-                ),
-              );
-            }
-            if (snapshot.hasError) {
-              return Center(
-                child: Padding(
-                  padding: const EdgeInsets.all(20.0),
-                  child: Text('Error: ${snapshot.error}', style: const TextStyle(color: Colors.redAccent, fontSize: 13), textAlign: TextAlign.center),
-                ),
-              );
-            }
-            final list = snapshot.data ?? [];
-            if (list.isEmpty) {
-              return const Center(
-                child: Padding(
-                  padding: EdgeInsets.all(40.0),
-                  child: Text('Koi naya notification nahi hai', style: TextStyle(color: Colors.white70, fontSize: 15)),
-                ),
-              );
-            }
+        return DraggableScrollableSheet(
+          initialChildSize: 0.6,
+          maxChildSize: 0.9,
+          minChildSize: 0.3,
+          expand: false,
+          builder: (ctx, scrollController) {
             return Column(
-              mainAxisSize: MainAxisSize.min,
               children: [
                 Padding(
-                  padding: const EdgeInsets.all(16.0),
+                  padding: const EdgeInsets.all(16),
                   child: Row(
-                    children: const [
-                      Icon(Icons.notifications_active, color: kGreen),
-                      SizedBox(width: 8),
-                      Text('Notifications', style: TextStyle(color: kGreen, fontSize: 18, fontWeight: FontWeight.bold)),
+                    children: [
+                      const Icon(Icons.notifications_active, color: kGreen),
+                      const SizedBox(width: 8),
+                      const Text('Notifications', style: TextStyle(color: kGreen, fontSize: 18, fontWeight: FontWeight.bold)),
+                      const Spacer(),
+                      TextButton(
+                        onPressed: () => FirebaseService.markAllRead(uid),
+                        child: const Text('Mark all read', style: TextStyle(color: kGreen, fontSize: 12)),
+                      ),
                     ],
                   ),
                 ),
                 const Divider(color: Colors.white24, height: 1),
                 Expanded(
-                  child: ListView.builder(
-                    itemCount: list.length,
-                    itemBuilder: (c, i) {
-                      final item = list[i];
-                      return ListTile(
-                        contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
-                        title: Text(item['title']?.toString() ?? '', style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 15)),
-                        subtitle: Text(item['message']?.toString() ?? '', style: const TextStyle(color: Colors.white70, fontSize: 13)),
+                  child: StreamBuilder<List<Map<String, dynamic>>>(
+                    stream: FirebaseService.getNotifications(uid),
+                    builder: (context, snapshot) {
+                      if (snapshot.connectionState == ConnectionState.waiting) {
+                        return const Center(child: CircularProgressIndicator(color: kGreen));
+                      }
+                      final list = snapshot.data ?? [];
+                      if (list.isEmpty) {
+                        return Center(
+                          child: Column(
+                            mainAxisAlignment: MainAxisAlignment.center,
+                            children: [
+                              Icon(Icons.notifications_off_outlined, size: 60, color: kGreen.withOpacity(0.4)),
+                              const SizedBox(height: 12),
+                              Text('Koi notification nahi hai', style: TextStyle(color: kGreen.withOpacity(0.6), fontSize: 14)),
+                            ],
+                          ),
+                        );
+                      }
+                      return ListView.builder(
+                        controller: scrollController,
+                        padding: const EdgeInsets.all(8),
+                        itemCount: list.length,
+                        itemBuilder: (c, i) {
+                          final n = list[i];
+                          final isRead = n['read'] == true;
+                          final time = n['time'] as int? ?? 0;
+                          final dt = DateTime.fromMillisecondsSinceEpoch(time);
+                          final ago = _timeAgo(dt);
+
+                          return GestureDetector(
+                            onTap: () {
+                              if (!isRead) FirebaseService.markNotificationRead(uid, n['id'] as String);
+                            },
+                            child: Container(
+                              margin: const EdgeInsets.symmetric(vertical: 4),
+                              padding: const EdgeInsets.all(12),
+                              decoration: BoxDecoration(
+                                color: isRead ? Colors.black.withOpacity(0.3) : const Color(0xFF03220E),
+                                borderRadius: BorderRadius.circular(10),
+                                border: Border.all(color: isRead ? kGreen.withOpacity(0.2) : kGreen.withOpacity(0.5)),
+                              ),
+                              child: Row(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                children: [
+                                  Container(
+                                    padding: const EdgeInsets.all(8),
+                                    decoration: BoxDecoration(
+                                      color: Colors.black,
+                                      shape: BoxShape.circle,
+                                      border: Border.all(color: kGreen.withOpacity(0.5)),
+                                    ),
+                                    child: Icon(_notifIcon(n['type']?.toString() ?? 'general'), color: kGreen, size: 18),
+                                  ),
+                                  const SizedBox(width: 12),
+                                  Expanded(
+                                    child: Column(
+                                      crossAxisAlignment: CrossAxisAlignment.start,
+                                      children: [
+                                        Text(n['title'] ?? '',
+                                          style: TextStyle(color: kGreen, fontSize: 13.5,
+                                            fontWeight: isRead ? FontWeight.w500 : FontWeight.bold)),
+                                        const SizedBox(height: 4),
+                                        Text(n['message'] ?? '', style: const TextStyle(color: Colors.white70, fontSize: 12)),
+                                        const SizedBox(height: 4),
+                                        Text(ago, style: TextStyle(color: kGreen.withOpacity(0.5), fontSize: 10)),
+                                      ],
+                                    ),
+                                  ),
+                                  if (!isRead)
+                                    Container(width: 8, height: 8, decoration: const BoxDecoration(color: Colors.redAccent, shape: BoxShape.circle)),
+                                ],
+                              ),
+                            ),
+                          );
+                        },
                       );
                     },
                   ),
@@ -1644,58 +1559,54 @@ class _HomeScreenState extends State<HomeScreen> with SingleTickerProviderStateM
     );
   }
 
-  @override
-  void initState() {
-    super.initState();
-    _pulseController = AnimationController(
-      vsync: this,
-      duration: const Duration(milliseconds: 1600),
-    )..repeat(reverse: true);
-    _pulseAnimation = Tween<double>(begin: 0.95, end: 1.05).animate(
-      CurvedAnimation(parent: _pulseController, curve: Curves.easeInOut),
-    );
+  IconData _notifIcon(String type) {
+    switch (type) {
+      case 'like': return Icons.favorite;
+      case 'subscribe': return Icons.person_add;
+      case 'share': return Icons.share;
+      case 'upload': return Icons.upload;
+      default: return Icons.notifications;
+    }
   }
 
-  @override
-  void dispose() {
-    _pulseController.dispose();
-    _linkController.dispose();
-    super.dispose();
+  String _timeAgo(DateTime dt) {
+    final diff = DateTime.now().difference(dt);
+    if (diff.inSeconds < 60) return 'just now';
+    if (diff.inMinutes < 60) return '${diff.inMinutes}m ago';
+    if (diff.inHours < 24) return '${diff.inHours}h ago';
+    if (diff.inDays < 7) return '${diff.inDays}d ago';
+    return '${dt.day}/${dt.month}/${dt.year}';
   }
 
   void _searchAndPlay() {
     String input = _linkController.text.trim();
     if (input.isEmpty) {
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Please paste a stream URL first!'), backgroundColor: Color(0xFF031408)),
+        const SnackBar(content: Text('Please paste a stream URL first!'), backgroundColor: kCardBg),
       );
       return;
     }
     _linkController.clear();
-    Navigator.push(
-      context,
-      MaterialPageRoute(builder: (_) => StreamPreviewScreen(targetUrl: input)),
-    );
+    Navigator.push(context, MaterialPageRoute(builder: (_) => StreamPreviewScreen(targetUrl: input)));
   }
 
-  Widget _buildCategoryCard(IconData icon, String title, String subtitle) {
+  Widget _catCard(IconData icon, String title, String subtitle) {
     return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 12),
+      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 12),
       decoration: BoxDecoration(
-        color: const Color(0xFF031408),
+        color: kCardBg,
         borderRadius: BorderRadius.circular(14),
         border: Border.all(color: kGreen.withOpacity(0.4), width: 1.2),
         boxShadow: [BoxShadow(color: kGreen.withOpacity(0.08), blurRadius: 10)],
       ),
       child: Column(
         mainAxisSize: MainAxisSize.min,
-        mainAxisAlignment: MainAxisAlignment.center,
         children: [
-          Icon(icon, color: kGreen, size: 28),
-          const SizedBox(height: 8),
-          Text(title, style: const TextStyle(color: Colors.white, fontSize: 13, fontWeight: FontWeight.bold)),
+          Icon(icon, color: kGreen, size: 26),
+          const SizedBox(height: 6),
+          Text(title, style: const TextStyle(color: Colors.white, fontSize: 12, fontWeight: FontWeight.bold)),
           const SizedBox(height: 2),
-          Text(subtitle, style: TextStyle(color: Colors.white.withOpacity(0.55), fontSize: 9.5), textAlign: TextAlign.center, maxLines: 1, overflow: TextOverflow.ellipsis),
+          Text(subtitle, style: TextStyle(color: Colors.white.withOpacity(0.55), fontSize: 9), textAlign: TextAlign.center, maxLines: 1, overflow: TextOverflow.ellipsis),
         ],
       ),
     );
@@ -1708,7 +1619,6 @@ class _HomeScreenState extends State<HomeScreen> with SingleTickerProviderStateM
       body: SafeArea(
         child: SingleChildScrollView(
           child: Column(
-            crossAxisAlignment: CrossAxisAlignment.center,
             children: [
               Padding(
                 padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
@@ -1717,39 +1627,57 @@ class _HomeScreenState extends State<HomeScreen> with SingleTickerProviderStateM
                     IconButton(
                       icon: const Icon(Icons.menu, color: kGreen, size: 26),
                       onPressed: widget.onMenuTap,
-                      tooltip: 'More Options',
                     ),
                     Expanded(
                       child: Column(
-                        mainAxisSize: MainAxisSize.min,
                         crossAxisAlignment: CrossAxisAlignment.start,
+                        mainAxisSize: MainAxisSize.min,
                         children: [
-                          Row(
-                            children: [
-                              const Text('maya', style: TextStyle(color: kGreen, fontSize: 22, fontWeight: FontWeight.w900, letterSpacing: 1, shadows: [Shadow(color: kGreen, blurRadius: 12)])),
-                              Text('Jaal', style: TextStyle(color: Colors.white.withOpacity(0.9), fontSize: 22, fontWeight: FontWeight.w400, letterSpacing: 1)),
-                            ],
-                          ),
+                          Row(children: [
+                            const Text('maya', style: TextStyle(color: kGreen, fontSize: 22, fontWeight: FontWeight.w900, letterSpacing: 1, shadows: [Shadow(color: kGreen, blurRadius: 12)])),
+                            Text('Jaal', style: TextStyle(color: Colors.white.withOpacity(0.9), fontSize: 22, fontWeight: FontWeight.w400, letterSpacing: 1)),
+                          ]),
                           Text('VIDEOS  |  LINKS  |  BEYOND', style: TextStyle(color: kGreen.withOpacity(0.7), fontSize: 8, letterSpacing: 1.5, fontWeight: FontWeight.w600)),
                         ],
                       ),
                     ),
                     IconButton(
                       icon: const Icon(Icons.search, color: kGreen, size: 24),
-                      onPressed: () => showSearch(context: context, delegate: UserSearchDelegate()),
+                      onPressed: () {
+                        showSearch(context: context, delegate: UserSearchDelegate());
+                      },
                     ),
-                    Stack(
-                      children: [
-                        IconButton(
-                          icon: const Icon(Icons.notifications_none, color: kGreen, size: 24),
-                          onPressed: () => _showNotificationsSheet(context),
-                        ),
-                        Positioned(
-                          right: 11,
-                          top: 11,
-                          child: Container(width: 7, height: 7, decoration: const BoxDecoration(color: Colors.redAccent, shape: BoxShape.circle)),
-                        ),
-                      ],
+                    StreamBuilder<int>(
+                      stream: MayaJaalAccount.cachedUid != null
+                          ? FirebaseService.getUnreadCount(MayaJaalAccount.cachedUid!)
+                          : Stream.value(0),
+                      builder: (context, snapshot) {
+                        final unread = snapshot.data ?? 0;
+                        return Stack(children: [
+                          IconButton(
+                            icon: const Icon(Icons.notifications_none, color: kGreen, size: 24),
+                            onPressed: () => _showNotificationsSheet(context),
+                          ),
+                          if (unread > 0)
+                            Positioned(
+                              right: 8, top: 8,
+                              child: Container(
+                                padding: const EdgeInsets.symmetric(horizontal: 5, vertical: 2),
+                                decoration: BoxDecoration(
+                                  color: Colors.redAccent,
+                                  borderRadius: BorderRadius.circular(10),
+                                  border: Border.all(color: Colors.black, width: 1.5),
+                                ),
+                                constraints: const BoxConstraints(minWidth: 18),
+                                child: Text(
+                                  unread > 99 ? '99+' : '$unread',
+                                  textAlign: TextAlign.center,
+                                  style: const TextStyle(color: Colors.white, fontSize: 9, fontWeight: FontWeight.bold),
+                                ),
+                              ),
+                            ),
+                        ]);
+                      },
                     ),
                   ],
                 ),
@@ -1770,11 +1698,10 @@ class _HomeScreenState extends State<HomeScreen> with SingleTickerProviderStateM
                     ),
                     AnimatedBuilder(
                       animation: _pulseAnimation,
-                      builder: (context, child) => Transform.scale(
+                      builder: (c, _) => Transform.scale(
                         scale: _pulseAnimation.value,
                         child: Container(
-                          width: 140,
-                          height: 140,
+                          width: 140, height: 140,
                           decoration: BoxDecoration(
                             shape: BoxShape.circle,
                             boxShadow: [BoxShadow(color: kGreen.withOpacity(0.25), blurRadius: 40, spreadRadius: 10)],
@@ -1784,8 +1711,7 @@ class _HomeScreenState extends State<HomeScreen> with SingleTickerProviderStateM
                             children: [
                               Container(width: 130, height: 130, decoration: BoxDecoration(shape: BoxShape.circle, border: Border.all(color: kGreen.withOpacity(0.6), width: 1.5))),
                               Container(
-                                width: 95,
-                                height: 95,
+                                width: 95, height: 95,
                                 decoration: BoxDecoration(
                                   borderRadius: BorderRadius.circular(22),
                                   border: Border.all(color: kGreen, width: 2),
@@ -1793,11 +1719,8 @@ class _HomeScreenState extends State<HomeScreen> with SingleTickerProviderStateM
                                 ),
                                 child: ClipRRect(
                                   borderRadius: BorderRadius.circular(20),
-                                  child: Image.asset(
-                                    'assets/icon/logo.png',
-                                    fit: BoxFit.cover,
-                                    errorBuilder: (context, error, stackTrace) => Container(color: Colors.black, child: const Icon(Icons.movie_filter, size: 50, color: kGreen)),
-                                  ),
+                                  child: Image.asset('assets/icon/logo.png', fit: BoxFit.cover,
+                                    errorBuilder: (c, e, s) => Container(color: Colors.black, child: const Icon(Icons.movie_filter, size: 50, color: kGreen))),
                                 ),
                               ),
                             ],
@@ -1861,8 +1784,7 @@ class _HomeScreenState extends State<HomeScreen> with SingleTickerProviderStateM
                                       controller: _linkController,
                                       style: const TextStyle(color: Colors.white, fontSize: 14, fontWeight: FontWeight.bold),
                                       decoration: const InputDecoration(
-                                        isDense: true,
-                                        contentPadding: EdgeInsets.zero,
+                                        isDense: true, contentPadding: EdgeInsets.zero,
                                         hintText: 'Paste Stream URL',
                                         hintStyle: TextStyle(color: Colors.white, fontSize: 14, fontWeight: FontWeight.bold),
                                         border: InputBorder.none,
@@ -1876,11 +1798,9 @@ class _HomeScreenState extends State<HomeScreen> with SingleTickerProviderStateM
                               GestureDetector(
                                 onTap: _searchAndPlay,
                                 child: Container(
-                                  width: 48,
-                                  height: 48,
+                                  width: 48, height: 48,
                                   decoration: BoxDecoration(
-                                    color: kGreen,
-                                    shape: BoxShape.circle,
+                                    color: kGreen, shape: BoxShape.circle,
                                     boxShadow: [BoxShadow(color: kGreen.withOpacity(0.6), blurRadius: 16)],
                                   ),
                                   child: const Icon(Icons.play_arrow_rounded, color: Colors.black, size: 32),
@@ -1898,13 +1818,13 @@ class _HomeScreenState extends State<HomeScreen> with SingleTickerProviderStateM
                 padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
                 child: Row(
                   children: [
-                    Expanded(child: _buildCategoryCard(Icons.movie_creation_outlined, 'Movies', 'Latest & Classic')),
+                    Expanded(child: _catCard(Icons.movie_creation_outlined, 'Movies', 'Latest')),
                     const SizedBox(width: 10),
-                    Expanded(child: _buildCategoryCard(Icons.live_tv_rounded, 'Web Series', 'Binge Watch')),
+                    Expanded(child: _catCard(Icons.live_tv_rounded, 'Web Series', 'Binge')),
                     const SizedBox(width: 10),
-                    Expanded(child: _buildCategoryCard(Icons.tv_rounded, 'Live TV', 'Sports • News • More')),
+                    Expanded(child: _catCard(Icons.tv_rounded, 'Live TV', 'Sports')),
                     const SizedBox(width: 10),
-                    Expanded(child: _buildCategoryCard(Icons.star_rounded, 'Favorites', 'Save & Watch Later')),
+                    Expanded(child: _catCard(Icons.star_rounded, 'Favorites', 'Saved')),
                   ],
                 ),
               ),
@@ -1929,7 +1849,8 @@ class _HomeScreenState extends State<HomeScreen> with SingleTickerProviderStateM
               ),
               const Padding(
                 padding: EdgeInsets.symmetric(vertical: 18),
-                child: Text('>   CONNECT   •   STREAM   •   ENJOY   <', style: TextStyle(color: Color(0xBF00FF66), fontSize: 10.5, letterSpacing: 2, fontWeight: FontWeight.w700)),
+                child: Text('>   CONNECT   •   STREAM   •   ENJOY   <',
+                  style: TextStyle(color: Color(0xBF00FF66), fontSize: 10.5, letterSpacing: 2, fontWeight: FontWeight.w700)),
               ),
             ],
           ),
@@ -1939,16 +1860,19 @@ class _HomeScreenState extends State<HomeScreen> with SingleTickerProviderStateM
   }
 }
 
-// ============================================================
+// ============ PART 1 END ============
+
+// ═══════════════════════════════════════════════════════
 // MORE DRAWER
-// ============================================================
+// ═══════════════════════════════════════════════════════
 class MoreDrawer extends StatelessWidget {
   const MoreDrawer({super.key});
 
-  Future<void> _logout() async {
-    await Supabase.instance.client.auth.signOut();
-    await GoogleSignIn().signOut();
-    await MayaJaalAccount.unlink();
+  Future<void> _logout(BuildContext context) async {
+    await MayaJaalAccount.signOut();
+    if (context.mounted) {
+      Navigator.of(context).popUntil((route) => route.isFirst);
+    }
   }
 
   Future<void> _launchURL(String url) async {
@@ -1980,80 +1904,69 @@ class MoreDrawer extends StatelessWidget {
     );
   }
 
-  void _showConnectApiDialog(BuildContext context) {
-    final controller = TextEditingController();
-    bool loading = false;
-    String msg = '';
-
+  void _showApiKeyDialog(BuildContext context) {
     showDialog(
       context: context,
-      barrierDismissible: false,
-      builder: (c) => StatefulBuilder(
-        builder: (c, setD) => AlertDialog(
-          backgroundColor: kCardBg,
-          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14), side: const BorderSide(color: kGreen, width: 1.5)),
-          title: Row(
-            children: const [
-              Icon(Icons.link, color: kGreen, size: 22),
-              SizedBox(width: 8),
-              Text('CONNECT MAYAJAAL', style: TextStyle(color: kGreen, fontSize: 14, fontWeight: FontWeight.bold)),
-            ],
-          ),
-          content: Column(
+      builder: (c) => AlertDialog(
+        backgroundColor: kCardBg,
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14), side: const BorderSide(color: kGreen, width: 1.5)),
+        title: Row(
+          children: const [
+            Icon(Icons.vpn_key, color: kGreen, size: 22),
+            SizedBox(width: 8),
+            Text('YOUR API KEY', style: TextStyle(color: kGreen, fontSize: 14, fontWeight: FontWeight.bold)),
+          ],
+        ),
+        content: SingleChildScrollView(
+          child: Column(
             mainAxisSize: MainAxisSize.min,
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              const Text('Paste your API key from mayajaal.online dashboard to unlock earnings, views & links.', style: TextStyle(color: Colors.white70, fontSize: 12, height: 1.4)),
+              const Text('Ye API key Telegram bot me use karein — /api YOUR_KEY',
+                style: TextStyle(color: Colors.white70, fontSize: 12, height: 1.4)),
               const SizedBox(height: 14),
-              TextField(
-                controller: controller,
-                style: const TextStyle(color: Colors.white, fontFamily: 'monospace', fontSize: 13),
-                decoration: InputDecoration(
-                  hintText: 'Paste API Key',
-                  hintStyle: TextStyle(color: Colors.white.withOpacity(0.4), fontSize: 12),
-                  prefixIcon: const Icon(Icons.vpn_key, color: kGreen),
-                  filled: true,
-                  fillColor: Colors.black,
-                  border: OutlineInputBorder(borderRadius: BorderRadius.circular(10), borderSide: const BorderSide(color: kGreen)),
+              Container(
+                padding: const EdgeInsets.all(12),
+                decoration: BoxDecoration(
+                  color: Colors.black,
+                  borderRadius: BorderRadius.circular(8),
+                  border: Border.all(color: kGreen.withOpacity(0.5)),
+                ),
+                child: SelectableText(
+                  MayaJaalAccount.cachedApiKey ?? 'Loading...',
+                  style: const TextStyle(color: kGreen, fontFamily: 'monospace', fontSize: 13, letterSpacing: 1.5, fontWeight: FontWeight.bold),
                 ),
               ),
-              if (msg.isNotEmpty) ...[
-                const SizedBox(height: 10),
-                Text(msg, style: TextStyle(color: msg.contains('✅') ? kGreen : Colors.redAccent, fontSize: 11)),
-              ],
+              const SizedBox(height: 10),
+              Text('Email: ${MayaJaalAccount.cachedEmail ?? 'N/A'}',
+                style: const TextStyle(color: Colors.white54, fontSize: 11)),
             ],
           ),
-          actions: [
-            TextButton(onPressed: () => Navigator.pop(c), child: const Text('CANCEL', style: TextStyle(color: Colors.white54))),
-            ElevatedButton(
-              onPressed: loading ? null : () async {
-                setD(() { loading = true; msg = ''; });
-                final res = await MayaJaalAccount.linkWithApiKey(controller.text.trim());
-                if (res['success'] == true) {
-                  setD(() => msg = '✅ Linked! ${res['email']}');
-                  await Future.delayed(const Duration(milliseconds: 800));
-                  if (c.mounted) Navigator.pop(c);
-                  if (context.mounted) {
-                    ScaffoldMessenger.of(context).showSnackBar(
-                      SnackBar(backgroundColor: kCardBg, content: Text('✅ Connected: ${res['email']}', style: const TextStyle(color: kGreen))),
-                    );
-                  }
-                } else {
-                  setD(() { loading = false; msg = '❌ ${res['error'] ?? 'Invalid key'}'; });
-                }
-              },
-              style: ElevatedButton.styleFrom(backgroundColor: kGreen, foregroundColor: Colors.black),
-              child: loading ? const SizedBox(width: 18, height: 18, child: CircularProgressIndicator(color: Colors.black, strokeWidth: 2)) : const Text('CONNECT'),
-            ),
-          ],
         ),
+        actions: [
+          TextButton(
+            onPressed: () async {
+              final key = MayaJaalAccount.cachedApiKey ?? '';
+              if (key.isNotEmpty) {
+                await Clipboard.setData(ClipboardData(text: key));
+                if (context.mounted) {
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    const SnackBar(backgroundColor: kCardBg, content: Text('✅ API Key copied', style: TextStyle(color: kGreen))),
+                  );
+                }
+              }
+            },
+            child: const Text('COPY', style: TextStyle(color: kGreen)),
+          ),
+          TextButton(onPressed: () => Navigator.pop(c), child: const Text('CLOSE', style: TextStyle(color: Colors.white54))),
+        ],
       ),
     );
   }
 
   @override
   Widget build(BuildContext context) {
-    final user = Supabase.instance.client.auth.currentUser;
+    final user = FirebaseAuth.instance.currentUser;
 
     return Drawer(
       backgroundColor: Colors.black,
@@ -2069,8 +1982,7 @@ class MoreDrawer extends StatelessWidget {
               child: Row(
                 children: [
                   Container(
-                    width: 42,
-                    height: 42,
+                    width: 42, height: 42,
                     decoration: BoxDecoration(
                       color: Colors.black,
                       borderRadius: BorderRadius.circular(12),
@@ -2079,11 +1991,8 @@ class MoreDrawer extends StatelessWidget {
                     ),
                     child: ClipRRect(
                       borderRadius: BorderRadius.circular(10),
-                      child: Image.asset(
-                        'assets/icon/logo.png',
-                        fit: BoxFit.cover,
-                        errorBuilder: (c, e, s) => const Icon(Icons.change_history, color: kGreen, size: 22),
-                      ),
+                      child: Image.asset('assets/icon/logo.png', fit: BoxFit.cover,
+                        errorBuilder: (c, e, s) => const Icon(Icons.change_history, color: kGreen, size: 22)),
                     ),
                   ),
                   const SizedBox(width: 10),
@@ -2092,12 +2001,10 @@ class MoreDrawer extends StatelessWidget {
                       crossAxisAlignment: CrossAxisAlignment.start,
                       mainAxisSize: MainAxisSize.min,
                       children: [
-                        Row(
-                          children: const [
-                            Text('maya', style: TextStyle(color: kGreen, fontSize: 18, fontWeight: FontWeight.w900, letterSpacing: 0.5, shadows: [Shadow(color: kGreen, blurRadius: 10)])),
-                            Text('Jaal', style: TextStyle(color: Colors.white, fontSize: 18, fontWeight: FontWeight.w400, letterSpacing: 0.5)),
-                          ],
-                        ),
+                        Row(children: const [
+                          Text('maya', style: TextStyle(color: kGreen, fontSize: 18, fontWeight: FontWeight.w900, letterSpacing: 0.5, shadows: [Shadow(color: kGreen, blurRadius: 10)])),
+                          Text('Jaal', style: TextStyle(color: Colors.white, fontSize: 18, fontWeight: FontWeight.w400, letterSpacing: 0.5)),
+                        ]),
                         Text('MORE OPTIONS', style: TextStyle(color: kGreen.withOpacity(0.7), fontSize: 8.5, letterSpacing: 2, fontWeight: FontWeight.bold)),
                       ],
                     ),
@@ -2124,10 +2031,12 @@ class MoreDrawer extends StatelessWidget {
                     child: Row(
                       children: [
                         Container(
-                          width: 38,
-                          height: 38,
+                          width: 38, height: 38,
                           decoration: BoxDecoration(shape: BoxShape.circle, border: Border.all(color: kGreen, width: 1.5)),
-                          child: const Icon(Icons.person, color: kGreen, size: 22),
+                          child: user?.photoURL != null
+                              ? ClipOval(child: Image.network(user!.photoURL!, fit: BoxFit.cover,
+                                  errorBuilder: (c, e, s) => const Icon(Icons.person, color: kGreen, size: 22)))
+                              : const Icon(Icons.person, color: kGreen, size: 22),
                         ),
                         const SizedBox(width: 10),
                         Expanded(
@@ -2135,62 +2044,80 @@ class MoreDrawer extends StatelessWidget {
                             crossAxisAlignment: CrossAxisAlignment.start,
                             children: [
                               Text(
-                                MayaJaalAccount.cachedEmail?.isNotEmpty == true ? MayaJaalAccount.cachedEmail! : (user?.email ?? 'Guest User'),
+                                user?.displayName ?? user?.email ?? 'User',
                                 style: const TextStyle(color: kGreen, fontSize: 12, fontWeight: FontWeight.bold),
                                 overflow: TextOverflow.ellipsis,
                               ),
                               const SizedBox(height: 2),
                               Row(
                                 children: [
-                                  Icon(Icons.account_circle_outlined, color: kGreen.withOpacity(0.7), size: 10),
+                                  Icon(Icons.verified, color: kGreen.withOpacity(0.7), size: 10),
                                   const SizedBox(width: 3),
-                                  Text('Matrix ID', style: TextStyle(color: kGreen.withOpacity(0.7), fontSize: 9)),
+                                  Text('Firebase Account', style: TextStyle(color: kGreen.withOpacity(0.7), fontSize: 9)),
                                   const SizedBox(width: 8),
                                   Container(width: 6, height: 6, decoration: const BoxDecoration(color: kGreen, shape: BoxShape.circle)),
                                   const SizedBox(width: 3),
-                                  Text(MayaJaalAccount.isLinked ? 'Connected' : 'Not linked', style: TextStyle(color: kGreen.withOpacity(0.9), fontSize: 9)),
+                                  Text('Connected', style: TextStyle(color: kGreen.withOpacity(0.9), fontSize: 9)),
                                 ],
                               ),
                             ],
                           ),
                         ),
-                        if (MayaJaalAccount.isLinked)
-                          Container(
-                            padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
-                            decoration: BoxDecoration(color: kGreen.withOpacity(0.15), borderRadius: BorderRadius.circular(20), border: Border.all(color: kGreen)),
-                            child: const Icon(Icons.verified, color: kGreen, size: 12),
-                          ),
                       ],
                     ),
                   ),
-                  _drawerItem(context, icon: Icons.link, color: kNeonCyan, title: MayaJaalAccount.isLinked ? 'Reconnect MayaJaal' : 'Connect MayaJaal', subtitle: 'Paste API key from website', onTap: () {
-                    Navigator.pop(context);
-                    _showConnectApiDialog(context);
-                  }),
-                  _drawerItem(context, icon: Icons.share, color: kNeonCyan, title: 'Share MayaJaal App', subtitle: 'Invite your friends and grow together', onTap: () {
-                    Navigator.pop(context);
-                    _shareApp();
-                  }),
-                  _drawerItem(context, icon: Icons.settings, color: kGreen, title: 'App Settings', subtitle: 'Customize your app experience', onTap: () {
-                    Navigator.pop(context);
-                    Navigator.push(context, MaterialPageRoute(builder: (_) => const SettingsScreen()));
-                  }),
-                  _drawerItem(context, icon: Icons.support_agent, color: Colors.amberAccent, title: 'Help & Support', subtitle: 'mayajaalsupport@gmail.com', onTap: () {
-                    Navigator.pop(context);
-                    _launchURL('mailto:mayajaalsupport@gmail.com?subject=MayaJaal%20Support%20Request');
-                  }),
-                  _drawerItem(context, icon: Icons.privacy_tip_outlined, color: kDimGreen, title: 'Privacy Policy', subtitle: 'Your data, our priority', onTap: () {
-                    Navigator.pop(context);
-                    _showPolicyDialog(context, 'PRIVACY POLICY', 'MayaJaal respects user privacy. No private credentials are sold or stored inappropriately. Stream decryption occurs locally on your hardware. Logins are handled securely via Supabase Google OAuth integration.');
-                  }),
-                  _drawerItem(context, icon: Icons.description_outlined, color: kDimGreen, title: 'Terms & Conditions', subtitle: 'Read before you continue', onTap: () {
-                    Navigator.pop(context);
-                    _showPolicyDialog(context, 'TERMS AND CONDITIONS', 'By utilizing MayaJaal, you agree to access encrypted streaming endpoints responsibly. Users are personally responsible for streams parsed through node references.');
-                  }),
-                  _drawerItem(context, icon: Icons.account_balance_wallet, color: kGreen, title: 'Earnings Dashboard', subtitle: 'View your earnings and links', onTap: () {
-                    Navigator.pop(context);
-                    Navigator.push(context, MaterialPageRoute(builder: (_) => const EarningsScreen()));
-                  }),
+
+                  _drawerItem(context, icon: Icons.vpn_key, color: kNeonCyan,
+                    title: 'My API Key', subtitle: 'View & copy for bot',
+                    onTap: () {
+                      Navigator.pop(context);
+                      _showApiKeyDialog(context);
+                    }),
+
+                  _drawerItem(context, icon: Icons.share, color: kNeonCyan,
+                    title: 'Share MayaJaal App', subtitle: 'Invite your friends',
+                    onTap: () {
+                      Navigator.pop(context);
+                      _shareApp();
+                    }),
+
+                  _drawerItem(context, icon: Icons.settings, color: kGreen,
+                    title: 'App Settings', subtitle: 'Customize your experience',
+                    onTap: () {
+                      Navigator.pop(context);
+                      Navigator.push(context, MaterialPageRoute(builder: (_) => const SettingsScreen()));
+                    }),
+
+                  _drawerItem(context, icon: Icons.support_agent, color: Colors.amberAccent,
+                    title: 'Help & Support', subtitle: 'mayajaalsupport@gmail.com',
+                    onTap: () {
+                      Navigator.pop(context);
+                      _launchURL('mailto:mayajaalsupport@gmail.com?subject=MayaJaal%20Support');
+                    }),
+
+                  _drawerItem(context, icon: Icons.privacy_tip_outlined, color: kDimGreen,
+                    title: 'Privacy Policy', subtitle: 'Your data, our priority',
+                    onTap: () {
+                      Navigator.pop(context);
+                      _showPolicyDialog(context, 'PRIVACY POLICY',
+                        'MayaJaal respects user privacy. No private credentials are sold or stored inappropriately. Stream decryption occurs locally on your hardware. Logins are handled securely via Firebase Google OAuth integration.');
+                    }),
+
+                  _drawerItem(context, icon: Icons.description_outlined, color: kDimGreen,
+                    title: 'Terms & Conditions', subtitle: 'Read before you continue',
+                    onTap: () {
+                      Navigator.pop(context);
+                      _showPolicyDialog(context, 'TERMS AND CONDITIONS',
+                        'By utilizing MayaJaal, you agree to access encrypted streaming endpoints responsibly. Users are personally responsible for streams parsed through node references.');
+                    }),
+
+                  _drawerItem(context, icon: Icons.account_balance_wallet, color: kGreen,
+                    title: 'Earnings Dashboard', subtitle: 'View your earnings and links',
+                    onTap: () {
+                      Navigator.pop(context);
+                      Navigator.push(context, MaterialPageRoute(builder: (_) => const EarningsScreen()));
+                    }),
+
                   Padding(
                     padding: const EdgeInsets.only(left: 16, top: 18, bottom: 8),
                     child: Row(
@@ -2203,14 +2130,21 @@ class MoreDrawer extends StatelessWidget {
                       ],
                     ),
                   ),
-                  _drawerItem(context, icon: Icons.camera_alt, color: const Color(0xFFE1306C), title: 'Instagram Official', subtitle: '@maya_jaal_official', onTap: () {
-                    Navigator.pop(context);
-                    _launchURL('https://www.instagram.com/maya_jaal_official');
-                  }),
-                  _drawerItem(context, icon: Icons.play_circle_fill, color: Colors.redAccent, title: 'YouTube Channel', subtitle: '@MayaJaalOfficial00', onTap: () {
-                    Navigator.pop(context);
-                    _launchURL('https://www.youtube.com/@MayaJaalOfficial00');
-                  }),
+
+                  _drawerItem(context, icon: Icons.camera_alt, color: const Color(0xFFE1306C),
+                    title: 'Instagram Official', subtitle: '@maya_jaal_official',
+                    onTap: () {
+                      Navigator.pop(context);
+                      _launchURL('https://www.instagram.com/maya_jaal_official');
+                    }),
+
+                  _drawerItem(context, icon: Icons.play_circle_fill, color: Colors.redAccent,
+                    title: 'YouTube Channel', subtitle: '@MayaJaalOfficial00',
+                    onTap: () {
+                      Navigator.pop(context);
+                      _launchURL('https://www.youtube.com/@MayaJaalOfficial00');
+                    }),
+
                   Padding(
                     padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 16),
                     child: Container(
@@ -2221,10 +2155,11 @@ class MoreDrawer extends StatelessWidget {
                       ),
                       child: ListTile(
                         leading: const Icon(Icons.logout, color: Colors.redAccent),
-                        title: const Text('Logout Session', style: TextStyle(color: Colors.redAccent, fontWeight: FontWeight.bold, fontSize: 13)),
+                        title: const Text('Logout Session',
+                          style: TextStyle(color: Colors.redAccent, fontWeight: FontWeight.bold, fontSize: 13)),
                         onTap: () {
                           Navigator.pop(context);
-                          _logout();
+                          _logout(context);
                         },
                       ),
                     ),
@@ -2238,8 +2173,7 @@ class MoreDrawer extends StatelessWidget {
     );
   }
 
-  Widget _drawerItem(
-    BuildContext context, {
+  Widget _drawerItem(BuildContext context, {
     required IconData icon,
     required Color color,
     required String title,
@@ -2251,8 +2185,7 @@ class MoreDrawer extends StatelessWidget {
       child: ListTile(
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
         leading: Container(
-          width: 38,
-          height: 38,
+          width: 38, height: 38,
           decoration: BoxDecoration(
             color: Colors.black,
             borderRadius: BorderRadius.circular(10),
@@ -2269,10 +2202,9 @@ class MoreDrawer extends StatelessWidget {
   }
 }
 
-// ========================= PART 1 END =========================
-// ============================================================
+// ═══════════════════════════════════════════════════════
 // CHANNEL SCREEN
-// ============================================================
+// ═══════════════════════════════════════════════════════
 class ChannelScreen extends StatelessWidget {
   const ChannelScreen({super.key});
 
@@ -2317,9 +2249,9 @@ class ChannelScreen extends StatelessWidget {
   }
 }
 
-// ============================================================
+// ═══════════════════════════════════════════════════════
 // HISTORY SCREEN
-// ============================================================
+// ═══════════════════════════════════════════════════════
 class HistoryScreen extends StatefulWidget {
   const HistoryScreen({super.key});
   @override
@@ -2403,10 +2335,8 @@ class _HistoryScreenState extends State<HistoryScreen> {
                       maxLines: 1,
                       overflow: TextOverflow.ellipsis,
                     ),
-                    subtitle: Text(
-                      'By: ${item['uploader'] ?? 'Node'}',
-                      style: TextStyle(fontSize: 11, color: kDimGreen.withOpacity(0.8)),
-                    ),
+                    subtitle: Text('By: ${item['uploader'] ?? 'Node'}',
+                      style: TextStyle(fontSize: 11, color: kDimGreen.withOpacity(0.8))),
                     trailing: IconButton(
                       icon: const Icon(Icons.close, size: 16, color: Colors.redAccent),
                       onPressed: () => _deleteItem(i),
@@ -2425,9 +2355,9 @@ class _HistoryScreenState extends State<HistoryScreen> {
   }
 }
 
-// ============================================================
+// ═══════════════════════════════════════════════════════
 // SETTINGS SCREEN
-// ============================================================
+// ═══════════════════════════════════════════════════════
 class SettingsScreen extends StatefulWidget {
   const SettingsScreen({super.key});
   @override
@@ -2491,7 +2421,8 @@ class _SettingsScreenState extends State<SettingsScreen> {
           ListTile(
             leading: const Icon(Icons.palette_outlined, color: kGreen),
             title: Text(tr('dark_theme'), style: const TextStyle(color: kGreen)),
-            subtitle: Text(_darkTheme ? 'Matrix Cyber Neon' : 'Standard Light', style: TextStyle(color: kGreen.withOpacity(0.6), fontSize: 12)),
+            subtitle: Text(_darkTheme ? 'Matrix Cyber Neon' : 'Standard Light',
+              style: TextStyle(color: kGreen.withOpacity(0.6), fontSize: 12)),
             trailing: Switch(value: _darkTheme, activeColor: kGreen, onChanged: _saveDarkTheme),
           ),
           Divider(color: kGreen.withOpacity(0.2)),
@@ -2500,7 +2431,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
             title: Text(tr('language'), style: const TextStyle(color: kGreen)),
             subtitle: Text(_language, style: TextStyle(color: kGreen.withOpacity(0.6), fontSize: 12)),
             trailing: const Icon(Icons.arrow_forward_ios, size: 14, color: kGreen),
-            onTap: () => _showLanguageDialog(),
+            onTap: _showLanguageDialog,
           ),
           Divider(color: kGreen.withOpacity(0.2)),
           ListTile(
@@ -2508,12 +2439,13 @@ class _SettingsScreenState extends State<SettingsScreen> {
             title: Text(tr('download_location'), style: const TextStyle(color: kGreen)),
             subtitle: Text(_downloadLocation, style: TextStyle(color: kGreen.withOpacity(0.6), fontSize: 12)),
             trailing: const Icon(Icons.arrow_forward_ios, size: 14, color: kGreen),
-            onTap: () => _showDownloadLocationDialog(),
+            onTap: _showDownloadLocationDialog,
           ),
           Divider(color: kGreen.withOpacity(0.2)),
           const SizedBox(height: 30),
           Center(
-            child: Text('> MayaJaal v1.1.1 // Core Matrix Node', style: TextStyle(color: kGreen.withOpacity(0.5), fontSize: 12)),
+            child: Text('> MayaJaal v1.2.0 // Firebase Core Node',
+              style: TextStyle(color: kGreen.withOpacity(0.5), fontSize: 12)),
           ),
         ],
       ),
@@ -2577,9 +2509,9 @@ class _SettingsScreenState extends State<SettingsScreen> {
   }
 }
 
-// ============================================================
+// ═══════════════════════════════════════════════════════
 // STREAM PREVIEW SCREEN — 10 second countdown
-// ============================================================
+// ═══════════════════════════════════════════════════════
 class StreamPreviewScreen extends StatefulWidget {
   final String targetUrl;
   const StreamPreviewScreen({super.key, required this.targetUrl});
@@ -2593,6 +2525,7 @@ class _StreamPreviewScreenState extends State<StreamPreviewScreen> with SingleTi
   String _videoTitle = 'MayaJaal Video';
   String _uploaderName = '@mayajaal';
   String _rawId = '';
+  String _token = '';
 
   int _countdown = 10;
   Timer? _countdownTimer;
@@ -2604,13 +2537,8 @@ class _StreamPreviewScreenState extends State<StreamPreviewScreen> with SingleTi
   @override
   void initState() {
     super.initState();
-    _pulseController = AnimationController(
-      vsync: this,
-      duration: const Duration(milliseconds: 1400),
-    )..repeat(reverse: true);
-    _pulseAnimation = Tween<double>(begin: 0.95, end: 1.05).animate(
-      CurvedAnimation(parent: _pulseController, curve: Curves.easeInOut),
-    );
+    _pulseController = AnimationController(vsync: this, duration: const Duration(milliseconds: 1400))..repeat(reverse: true);
+    _pulseAnimation = Tween<double>(begin: 0.95, end: 1.05).animate(CurvedAnimation(parent: _pulseController, curve: Curves.easeInOut));
     _fetchStreamMetadata();
   }
 
@@ -2640,7 +2568,7 @@ class _StreamPreviewScreenState extends State<StreamPreviewScreen> with SingleTi
     try {
       final uri = Uri.parse(widget.targetUrl);
       _rawId = uri.pathSegments.isNotEmpty ? uri.pathSegments.last : 'stream';
-      final token = uri.queryParameters['t'] ?? uri.queryParameters['s'] ?? '';
+      _token = uri.queryParameters['t'] ?? uri.queryParameters['s'] ?? '';
 
       if (widget.targetUrl.endsWith('.mp4') || widget.targetUrl.endsWith('.m3u8')) {
         setState(() {
@@ -2652,8 +2580,8 @@ class _StreamPreviewScreenState extends State<StreamPreviewScreen> with SingleTi
         return;
       }
 
-      final apiUrl = token.isNotEmpty
-          ? '$kBackendBaseUrl/api/stream-info/$_rawId?t=$token'
+      final apiUrl = _token.isNotEmpty
+          ? '$kBackendBaseUrl/api/stream-info/$_rawId?t=$_token'
           : '$kBackendBaseUrl/api/stream-info/$_rawId';
 
       final res = await http.get(Uri.parse(apiUrl)).timeout(const Duration(seconds: 8));
@@ -2671,7 +2599,7 @@ class _StreamPreviewScreenState extends State<StreamPreviewScreen> with SingleTi
         }
       }
 
-      final res2 = await http.get(Uri.parse('$kBackendBaseUrl/api/v/$_rawId?t=$token')).timeout(const Duration(seconds: 8));
+      final res2 = await http.get(Uri.parse('$kBackendBaseUrl/api/v/$_rawId?t=$_token')).timeout(const Duration(seconds: 8));
       if (res2.statusCode == 200) {
         final data = jsonDecode(res2.body);
         setState(() {
@@ -2747,14 +2675,12 @@ class _StreamPreviewScreenState extends State<StreamPreviewScreen> with SingleTi
   Widget _buildCountdownCircle() {
     final progress = 1.0 - (_countdown / 10.0);
     return SizedBox(
-      width: 140,
-      height: 140,
+      width: 140, height: 140,
       child: Stack(
         alignment: Alignment.center,
         children: [
           SizedBox(
-            width: 140,
-            height: 140,
+            width: 140, height: 140,
             child: CircularProgressIndicator(
               value: progress,
               strokeWidth: 7,
@@ -2765,11 +2691,8 @@ class _StreamPreviewScreenState extends State<StreamPreviewScreen> with SingleTi
           Column(
             mainAxisAlignment: MainAxisAlignment.center,
             children: [
-              Icon(
-                _canProceed ? Icons.play_arrow_rounded : Icons.timer,
-                color: _canProceed ? kGreen : Colors.orangeAccent,
-                size: 44,
-              ),
+              Icon(_canProceed ? Icons.play_arrow_rounded : Icons.timer,
+                color: _canProceed ? kGreen : Colors.orangeAccent, size: 44),
               const SizedBox(height: 4),
               Text(
                 _canProceed ? 'READY' : '$_countdown',
@@ -2778,16 +2701,12 @@ class _StreamPreviewScreenState extends State<StreamPreviewScreen> with SingleTi
                   fontSize: _canProceed ? 20 : 38,
                   fontWeight: FontWeight.w900,
                   letterSpacing: 2,
-                  shadows: [
-                    Shadow(color: (_canProceed ? kGreen : Colors.orangeAccent).withOpacity(0.7), blurRadius: 15),
-                  ],
+                  shadows: [Shadow(color: (_canProceed ? kGreen : Colors.orangeAccent).withOpacity(0.7), blurRadius: 15)],
                 ),
               ),
               if (!_canProceed)
-                Text(
-                  'SEC',
-                  style: TextStyle(color: Colors.orangeAccent.withOpacity(0.8), fontSize: 11, letterSpacing: 3, fontWeight: FontWeight.bold),
-                ),
+                Text('SEC',
+                  style: TextStyle(color: Colors.orangeAccent.withOpacity(0.8), fontSize: 11, letterSpacing: 3, fontWeight: FontWeight.bold)),
             ],
           ),
         ],
@@ -2817,14 +2736,11 @@ class _StreamPreviewScreenState extends State<StreamPreviewScreen> with SingleTi
                         child: Column(
                           mainAxisSize: MainAxisSize.min,
                           children: [
-                            const Text(
-                              'STREAM READY',
-                              style: TextStyle(color: kGreen, fontSize: 19, fontWeight: FontWeight.w900, letterSpacing: 2, shadows: [Shadow(color: kGreen, blurRadius: 12)]),
-                            ),
-                            Text(
-                              'MATRIX NEURAL STREAM',
-                              style: TextStyle(color: kGreen.withOpacity(0.7), fontSize: 9, letterSpacing: 2.5, fontWeight: FontWeight.w600),
-                            ),
+                            const Text('STREAM READY',
+                              style: TextStyle(color: kGreen, fontSize: 19, fontWeight: FontWeight.w900, letterSpacing: 2,
+                                shadows: [Shadow(color: kGreen, blurRadius: 12)])),
+                            Text('MATRIX NEURAL STREAM',
+                              style: TextStyle(color: kGreen.withOpacity(0.7), fontSize: 9, letterSpacing: 2.5, fontWeight: FontWeight.w600)),
                           ],
                         ),
                       ),
@@ -2836,15 +2752,14 @@ class _StreamPreviewScreenState extends State<StreamPreviewScreen> with SingleTi
                     ],
                   ),
                   const SizedBox(height: 15),
+
                   Container(
                     padding: const EdgeInsets.symmetric(vertical: 26, horizontal: 16),
                     decoration: BoxDecoration(
                       color: const Color(0xFF011206),
                       borderRadius: BorderRadius.circular(24),
                       border: Border.all(color: _canProceed ? kGreen : Colors.orangeAccent.withOpacity(0.6), width: 1.8),
-                      boxShadow: [
-                        BoxShadow(color: (_canProceed ? kGreen : Colors.orangeAccent).withOpacity(0.25), blurRadius: 30),
-                      ],
+                      boxShadow: [BoxShadow(color: (_canProceed ? kGreen : Colors.orangeAccent).withOpacity(0.25), blurRadius: 30)],
                     ),
                     child: Column(
                       children: [
@@ -2852,12 +2767,8 @@ class _StreamPreviewScreenState extends State<StreamPreviewScreen> with SingleTi
                         const SizedBox(height: 20),
                         Text(
                           _canProceed ? '🚀 VIDEO READY TO PLAY' : '⏱ PLEASE WAIT',
-                          style: TextStyle(
-                            color: _canProceed ? kGreen : Colors.orangeAccent,
-                            fontSize: 16,
-                            fontWeight: FontWeight.w900,
-                            letterSpacing: 2,
-                          ),
+                          style: TextStyle(color: _canProceed ? kGreen : Colors.orangeAccent,
+                            fontSize: 16, fontWeight: FontWeight.w900, letterSpacing: 2),
                         ),
                         const SizedBox(height: 8),
                         Text(
@@ -2881,6 +2792,7 @@ class _StreamPreviewScreenState extends State<StreamPreviewScreen> with SingleTi
                     ),
                   ),
                   const SizedBox(height: 16),
+
                   Container(
                     padding: const EdgeInsets.all(14),
                     decoration: BoxDecoration(
@@ -2894,7 +2806,8 @@ class _StreamPreviewScreenState extends State<StreamPreviewScreen> with SingleTi
                           children: [
                             Container(
                               padding: const EdgeInsets.all(10),
-                              decoration: BoxDecoration(shape: BoxShape.circle, color: Colors.black, border: Border.all(color: kGreen.withOpacity(0.5))),
+                              decoration: BoxDecoration(shape: BoxShape.circle, color: Colors.black,
+                                border: Border.all(color: kGreen.withOpacity(0.5))),
                               child: const Icon(Icons.video_collection_outlined, color: kGreen, size: 20),
                             ),
                             const SizedBox(width: 14),
@@ -2902,9 +2815,12 @@ class _StreamPreviewScreenState extends State<StreamPreviewScreen> with SingleTi
                               child: Column(
                                 crossAxisAlignment: CrossAxisAlignment.start,
                                 children: [
-                                  Text('FILE NAME', style: TextStyle(color: Colors.white.withOpacity(0.5), fontSize: 9.5, letterSpacing: 1)),
+                                  Text('FILE NAME',
+                                    style: TextStyle(color: Colors.white.withOpacity(0.5), fontSize: 9.5, letterSpacing: 1)),
                                   const SizedBox(height: 2),
-                                  Text(_videoTitle, style: const TextStyle(color: Colors.white, fontSize: 13.5, fontWeight: FontWeight.bold), maxLines: 1, overflow: TextOverflow.ellipsis),
+                                  Text(_videoTitle,
+                                    style: const TextStyle(color: Colors.white, fontSize: 13.5, fontWeight: FontWeight.bold),
+                                    maxLines: 1, overflow: TextOverflow.ellipsis),
                                 ],
                               ),
                             ),
@@ -2915,7 +2831,8 @@ class _StreamPreviewScreenState extends State<StreamPreviewScreen> with SingleTi
                           children: [
                             Container(
                               padding: const EdgeInsets.all(10),
-                              decoration: BoxDecoration(shape: BoxShape.circle, color: Colors.black, border: Border.all(color: kGreen.withOpacity(0.5))),
+                              decoration: BoxDecoration(shape: BoxShape.circle, color: Colors.black,
+                                border: Border.all(color: kGreen.withOpacity(0.5))),
                               child: const Icon(Icons.person_outline, color: kGreen, size: 20),
                             ),
                             const SizedBox(width: 14),
@@ -2923,9 +2840,11 @@ class _StreamPreviewScreenState extends State<StreamPreviewScreen> with SingleTi
                               child: Column(
                                 crossAxisAlignment: CrossAxisAlignment.start,
                                 children: [
-                                  Text('UPLOADER', style: TextStyle(color: Colors.white.withOpacity(0.5), fontSize: 9.5, letterSpacing: 1)),
+                                  Text('UPLOADER',
+                                    style: TextStyle(color: Colors.white.withOpacity(0.5), fontSize: 9.5, letterSpacing: 1)),
                                   const SizedBox(height: 2),
-                                  Text(_uploaderName, style: const TextStyle(color: kGreen, fontSize: 13.5, fontWeight: FontWeight.bold)),
+                                  Text(_uploaderName,
+                                    style: const TextStyle(color: kGreen, fontSize: 13.5, fontWeight: FontWeight.bold)),
                                 ],
                               ),
                             ),
@@ -2935,13 +2854,13 @@ class _StreamPreviewScreenState extends State<StreamPreviewScreen> with SingleTi
                     ),
                   ),
                   const SizedBox(height: 16),
+
                   AnimatedBuilder(
                     animation: _pulseAnimation,
                     builder: (context, child) => Transform.scale(
                       scale: _canProceed ? _pulseAnimation.value : 1.0,
                       child: SizedBox(
-                        width: double.infinity,
-                        height: 60,
+                        width: double.infinity, height: 60,
                         child: ElevatedButton(
                           onPressed: _canProceed ? _launchNativePlayer : null,
                           style: ElevatedButton.styleFrom(
@@ -2953,15 +2872,14 @@ class _StreamPreviewScreenState extends State<StreamPreviewScreen> with SingleTi
                           child: Row(
                             mainAxisAlignment: MainAxisAlignment.center,
                             children: [
-                              Icon(Icons.play_arrow_rounded, color: _canProceed ? Colors.black : Colors.white38, size: 28),
+                              Icon(Icons.play_arrow_rounded,
+                                color: _canProceed ? Colors.black : Colors.white38, size: 28),
                               const SizedBox(width: 8),
                               Text(
                                 _canProceed ? 'OPEN PLAYER NOW' : 'PLEASE WAIT...',
                                 style: TextStyle(
                                   color: _canProceed ? Colors.black : Colors.white38,
-                                  fontSize: 14,
-                                  fontWeight: FontWeight.w900,
-                                  letterSpacing: 1.5,
+                                  fontSize: 14, fontWeight: FontWeight.w900, letterSpacing: 1.5,
                                 ),
                               ),
                             ],
@@ -2971,9 +2889,9 @@ class _StreamPreviewScreenState extends State<StreamPreviewScreen> with SingleTi
                     ),
                   ),
                   const SizedBox(height: 14),
+
                   SizedBox(
-                    width: double.infinity,
-                    height: 52,
+                    width: double.infinity, height: 52,
                     child: OutlinedButton(
                       onPressed: _shareStreamDirect,
                       style: OutlinedButton.styleFrom(
@@ -2985,18 +2903,21 @@ class _StreamPreviewScreenState extends State<StreamPreviewScreen> with SingleTi
                         children: const [
                           Icon(Icons.share, color: kGreen, size: 20),
                           SizedBox(width: 10),
-                          Text('SHARE VIDEO', style: TextStyle(color: kGreen, fontSize: 12, fontWeight: FontWeight.bold, letterSpacing: 1.5)),
+                          Text('SHARE VIDEO',
+                            style: TextStyle(color: kGreen, fontSize: 12, fontWeight: FontWeight.bold, letterSpacing: 1.5)),
                         ],
                       ),
                     ),
                   ),
                   const SizedBox(height: 14),
+
                   Row(
                     mainAxisAlignment: MainAxisAlignment.center,
                     children: [
                       const Icon(Icons.lock_outline, color: kGreen, size: 14),
                       const SizedBox(width: 6),
-                      Text('SECURE STREAM PIPELINE ACTIVE', style: TextStyle(color: kGreen.withOpacity(0.75), fontSize: 9.5, letterSpacing: 1.2)),
+                      Text('SECURE STREAM PIPELINE ACTIVE',
+                        style: TextStyle(color: kGreen.withOpacity(0.75), fontSize: 9.5, letterSpacing: 1.2)),
                     ],
                   ),
                   const SizedBox(height: 14),
@@ -3010,9 +2931,9 @@ class _StreamPreviewScreenState extends State<StreamPreviewScreen> with SingleTi
   }
 }
 
-// ============================================================
-// NATIVE VIDEO PLAYER — reports view after 10 sec
-// ============================================================
+// ═══════════════════════════════════════════════════════
+// NATIVE VIDEO PLAYER — Real-time stats
+// ═══════════════════════════════════════════════════════
 class NativeVideoPlayerScreen extends StatefulWidget {
   final String videoUrl;
   final String title;
@@ -3034,8 +2955,6 @@ class NativeVideoPlayerScreen extends StatefulWidget {
 }
 
 class _NativeVideoPlayerScreenState extends State<NativeVideoPlayerScreen> {
-  final SupabaseService _supabaseService = SupabaseService();
-
   late VideoPlayerController _controller;
   bool _isInitialized = false;
   bool _hasError = false;
@@ -3047,7 +2966,6 @@ class _NativeVideoPlayerScreenState extends State<NativeVideoPlayerScreen> {
   bool _showControls = true;
   Timer? _controlsTimer;
 
-  bool _isCcEnabled = false;
   double _playbackSpeed = 1.0;
   final List<double> _speeds = [0.5, 0.75, 1.0, 1.25, 1.5, 2.0];
 
@@ -3057,17 +2975,21 @@ class _NativeVideoPlayerScreenState extends State<NativeVideoPlayerScreen> {
   bool _isDownloading = false;
   double _downloadProgress = 0.0;
 
-  int _viewsCount = 0;
-  int _likesCount = 0;
-  int _unlikesCount = 0;
-  int _sharesCount = 0;
+  // REAL-TIME STATS
+  Map<String, int> _stats = {'views': 0, 'likes': 0, 'unlikes': 0, 'shares': 0};
   bool _isLiked = false;
   bool _isUnliked = false;
   bool _isSaved = false;
+  String _ownerUid = '';
+
+  StreamSubscription? _statsSub;
+  StreamSubscription? _likeSub;
+  StreamSubscription? _unlikeSub;
 
   bool _viewReported = false;
   Timer? _viewReportTimer;
 
+  // ═══════════ VIEW REPORT ═══════════
   Future<void> _reportViewToBackend() async {
     if (_viewReported) return;
     _viewReported = true;
@@ -3081,17 +3003,15 @@ class _NativeVideoPlayerScreenState extends State<NativeVideoPlayerScreen> {
           ? '$kBackendBaseUrl/api/view/${widget.videoId}?t=$token'
           : '$kBackendBaseUrl/api/view/${widget.videoId}';
 
-      final res = await http
-          .post(
-            Uri.parse(url),
-            headers: {'Content-Type': 'application/json'},
-            body: jsonEncode({
-              'playedSeconds': 10,
-              'deviceId': deviceId,
-              'token': token,
-            }),
-          )
-          .timeout(const Duration(seconds: 10));
+      final res = await http.post(
+        Uri.parse(url),
+        headers: {'Content-Type': 'application/json'},
+        body: jsonEncode({
+          'playedSeconds': 10,
+          'deviceId': deviceId,
+          'token': token,
+        }),
+      ).timeout(const Duration(seconds: 10));
 
       debugPrint('View report: ${res.statusCode} ${res.body}');
     } catch (e) {
@@ -3105,57 +3025,54 @@ class _NativeVideoPlayerScreenState extends State<NativeVideoPlayerScreen> {
       if (!mounted) return;
       if (_controller.value.isInitialized && _controller.value.isPlaying) {
         await _reportViewToBackend();
-        _fetchBackendStats();
       }
     });
   }
 
-  Future<void> _fetchBackendStats() async {
+  void _startStatsListeners() {
+    final uid = MayaJaalAccount.cachedUid;
+    if (uid == null) return;
+
+    _statsSub = FirebaseService.getVideoStatsStream(widget.videoId).listen((s) {
+      if (mounted) setState(() => _stats = s);
+    });
+
+    _likeSub = FirebaseService.isLikedStream(widget.videoId, uid).listen((liked) {
+      if (mounted) setState(() => _isLiked = liked);
+    });
+
+    _unlikeSub = FirebaseService.isUnlikedStream(widget.videoId, uid).listen((unliked) {
+      if (mounted) setState(() => _isUnliked = unliked);
+    });
+  }
+
+  Future<void> _fetchOwner() async {
     try {
-      final snap = await FirebaseDatabase.instance
-          .ref('links/${widget.videoId}')
-          .once()
-          .timeout(const Duration(seconds: 4));
-      final data = snap.snapshot.value;
-      if (data != null && data is Map) {
-        if (mounted) {
-          setState(() {
-            _viewsCount = (data['views'] ?? _viewsCount) as int;
-          });
-        }
-      }
+      final snap = await FirebaseDatabase.instance.ref('links/${widget.videoId}/ownerUid').once();
+      _ownerUid = snap.snapshot.value?.toString() ?? '';
     } catch (_) {}
   }
 
   @override
   void initState() {
     super.initState();
-    _fetchRealStatsAndRegisterView();
-    _initFastVideo();
+    _loadUserPrefs();
+    _initVideo();
+    _startStatsListeners();
+    _fetchOwner();
   }
 
-  Future<void> _fetchRealStatsAndRegisterView() async {
+  Future<void> _loadUserPrefs() async {
     try {
       final prefs = await SharedPreferences.getInstance();
-      _isLiked = prefs.getBool('liked_${widget.videoId}') ?? false;
-      _isUnliked = prefs.getBool('unliked_${widget.videoId}') ?? false;
-      _isSaved = prefs.getBool('saved_${widget.videoId}') ?? false;
-      await _fetchBackendStats();
+      setState(() {
+        _isSaved = prefs.getBool('saved_${widget.videoId}') ?? false;
+      });
     } catch (_) {}
   }
 
-  Future<void> _sendStatUpdate(String action) async {
-    try {
-      await http.post(
-        Uri.parse('$kBackendBaseUrl/api/stats/update'),
-        headers: {'Content-Type': 'application/json'},
-        body: jsonEncode({'video_id': widget.videoId, 'action': action}),
-      );
-    } catch (_) {}
-  }
-
-  Future<void> _initFastVideo() async {
-    final Map<String, String> headers = {
+  Future<void> _initVideo() async {
+    final headers = {
       'User-Agent': 'MayaJaalApp/1.0',
       'Referer': 'https://www.mayajaal.online/',
     };
@@ -3184,6 +3101,9 @@ class _NativeVideoPlayerScreenState extends State<NativeVideoPlayerScreen> {
 
   @override
   void dispose() {
+    _statsSub?.cancel();
+    _likeSub?.cancel();
+    _unlikeSub?.cancel();
     _controlsTimer?.cancel();
     _feedbackTimer?.cancel();
     _viewReportTimer?.cancel();
@@ -3214,32 +3134,13 @@ class _NativeVideoPlayerScreenState extends State<NativeVideoPlayerScreen> {
     });
   }
 
-  void _seekRelative(int seconds) {
-    final current = _controller.value.position;
-    final target = current + Duration(seconds: seconds);
-    final total = _controller.value.duration;
-
-    if (target < Duration.zero) {
-      _controller.seekTo(Duration.zero);
-    } else if (target > total) {
-      _controller.seekTo(total);
-    } else {
-      _controller.seekTo(target);
-    }
-    _showFeedback(seconds > 0 ? '+10s' : '-10s');
-    _resetControlTimer();
-  }
-
   void _toggleSmartFullscreen() {
     setState(() => _isFullscreen = !_isFullscreen);
     final isWide = _controller.value.aspectRatio >= 1.2;
 
     if (_isFullscreen) {
       if (isWide) {
-        SystemChrome.setPreferredOrientations([
-          DeviceOrientation.landscapeLeft,
-          DeviceOrientation.landscapeRight,
-        ]);
+        SystemChrome.setPreferredOrientations([DeviceOrientation.landscapeLeft, DeviceOrientation.landscapeRight]);
       } else {
         SystemChrome.setPreferredOrientations([DeviceOrientation.portraitUp]);
       }
@@ -3255,15 +3156,20 @@ class _NativeVideoPlayerScreenState extends State<NativeVideoPlayerScreen> {
     return '$h$m:$s';
   }
 
+  Future<void> _handleLike() async {
+    final uid = MayaJaalAccount.cachedUid;
+    if (uid == null) return;
+    await FirebaseService.toggleLike(widget.videoId, uid, _ownerUid, widget.title);
+  }
+
+  Future<void> _handleDislike() async {
+    final uid = MayaJaalAccount.cachedUid;
+    if (uid == null) return;
+    await FirebaseService.toggleDislike(widget.videoId, uid);
+  }
+
   Future<void> _shareVideoLink() async {
-    setState(() => _sharesCount++);
-    _sendStatUpdate('share');
-    try {
-      await Supabase.instance.client.from('notifications').insert({
-        'title': '🚀 Video Shared!',
-        'message': 'Someone shared: ${widget.title}',
-      });
-    } catch (_) {}
+    await FirebaseService.recordShare(widget.videoId);
     Share.share('🎬 Watch this video on MayaJaal:\n${widget.sourcePageUrl}');
   }
 
@@ -3323,50 +3229,6 @@ class _NativeVideoPlayerScreenState extends State<NativeVideoPlayerScreen> {
     }
   }
 
-  Future<void> _toggleLike() async {
-    final prefs = await SharedPreferences.getInstance();
-
-    setState(() {
-      if (_isLiked) {
-        _isLiked = false;
-        _likesCount = math.max(0, _likesCount - 1);
-        prefs.setBool('liked_${widget.videoId}', false);
-      } else {
-        _isLiked = true;
-        _likesCount++;
-        prefs.setBool('liked_${widget.videoId}', true);
-        if (_isUnliked) {
-          _isUnliked = false;
-          _unlikesCount = math.max(0, _unlikesCount - 1);
-          prefs.setBool('unliked_${widget.videoId}', false);
-        }
-      }
-    });
-
-    _sendStatUpdate(_isLiked ? 'like' : 'unlike_dec');
-  }
-
-  Future<void> _toggleUnlike() async {
-    final prefs = await SharedPreferences.getInstance();
-    setState(() {
-      if (_isUnliked) {
-        _isUnliked = false;
-        _unlikesCount = math.max(0, _unlikesCount - 1);
-        prefs.setBool('unliked_${widget.videoId}', false);
-      } else {
-        _isUnliked = true;
-        _unlikesCount++;
-        _sendStatUpdate('unlike');
-        prefs.setBool('unliked_${widget.videoId}', true);
-        if (_isLiked) {
-          _isLiked = false;
-          _likesCount = math.max(0, _likesCount - 1);
-          prefs.setBool('liked_${widget.videoId}', false);
-        }
-      }
-    });
-  }
-
   Future<void> _toggleSave() async {
     final prefs = await SharedPreferences.getInstance();
     setState(() {
@@ -3403,9 +3265,6 @@ class _NativeVideoPlayerScreenState extends State<NativeVideoPlayerScreen> {
                 if (val != null) {
                   setState(() => _selectedQuality = val);
                   Navigator.pop(c);
-                  ScaffoldMessenger.of(context).showSnackBar(
-                    SnackBar(backgroundColor: const Color(0xFF031408), content: Text('Switched stream quality to $val', style: const TextStyle(color: kGreen)), duration: const Duration(seconds: 1)),
-                  );
                 }
               },
             );
@@ -3444,7 +3303,7 @@ class _NativeVideoPlayerScreenState extends State<NativeVideoPlayerScreen> {
     );
   }
 
-  Widget _buildSmartScaledVideo() {
+  Widget _buildScaledVideo() {
     if (_isFullscreen) {
       return SizedBox.expand(
         child: FittedBox(
@@ -3489,22 +3348,18 @@ class _NativeVideoPlayerScreenState extends State<NativeVideoPlayerScreen> {
                             mainAxisAlignment: MainAxisAlignment.center,
                             children: [
                               Container(
-                                width: 22,
-                                height: 22,
+                                width: 22, height: 22,
                                 decoration: BoxDecoration(shape: BoxShape.circle, border: Border.all(color: kGreen, width: 1.5)),
                                 child: const Center(child: Icon(Icons.change_history, color: kGreen, size: 14)),
                               ),
                               const SizedBox(width: 8),
-                              const Text(
-                                'MAYA JAAL',
-                                style: TextStyle(color: kGreen, fontSize: 19, fontWeight: FontWeight.w900, letterSpacing: 2, shadows: [Shadow(color: kGreen, blurRadius: 10)]),
-                              ),
+                              const Text('MAYA JAAL',
+                                style: TextStyle(color: kGreen, fontSize: 19, fontWeight: FontWeight.w900, letterSpacing: 2,
+                                  shadows: [Shadow(color: kGreen, blurRadius: 10)])),
                             ],
                           ),
-                          Text(
-                            '— STREAM BEYOND LIMITS —',
-                            style: TextStyle(color: kGreen.withOpacity(0.8), fontSize: 8.5, letterSpacing: 2, fontWeight: FontWeight.bold),
-                          ),
+                          Text('— STREAM BEYOND LIMITS —',
+                            style: TextStyle(color: kGreen.withOpacity(0.8), fontSize: 8.5, letterSpacing: 2, fontWeight: FontWeight.bold)),
                         ],
                       ),
                     ),
@@ -3537,7 +3392,7 @@ class _NativeVideoPlayerScreenState extends State<NativeVideoPlayerScreen> {
                                 const Icon(Icons.error_outline, color: Colors.redAccent, size: 45),
                                 const SizedBox(height: 10),
                                 const Text('Stream Connection Error', style: TextStyle(color: Colors.redAccent)),
-                                TextButton(onPressed: _initFastVideo, child: const Text('RETRY', style: TextStyle(color: kGreen))),
+                                TextButton(onPressed: _initVideo, child: const Text('RETRY', style: TextStyle(color: kGreen))),
                               ],
                             ),
                           )
@@ -3549,10 +3404,9 @@ class _NativeVideoPlayerScreenState extends State<NativeVideoPlayerScreen> {
                                 child: Stack(
                                   alignment: Alignment.center,
                                   children: [
-                                    _buildSmartScaledVideo(),
+                                    _buildScaledVideo(),
                                     Positioned(
-                                      top: 10,
-                                      left: 10,
+                                      top: 10, left: 10,
                                       child: GestureDetector(
                                         onTap: _showQualityDialog,
                                         child: Container(
@@ -3581,8 +3435,7 @@ class _NativeVideoPlayerScreenState extends State<NativeVideoPlayerScreen> {
                                           _resetControlTimer();
                                         },
                                         child: Container(
-                                          width: 58,
-                                          height: 58,
+                                          width: 58, height: 58,
                                           decoration: BoxDecoration(
                                             color: Colors.black.withOpacity(0.55),
                                             shape: BoxShape.circle,
@@ -3590,8 +3443,7 @@ class _NativeVideoPlayerScreenState extends State<NativeVideoPlayerScreen> {
                                           ),
                                           child: Icon(
                                             _controller.value.isPlaying ? Icons.pause : Icons.play_arrow,
-                                            color: Colors.white,
-                                            size: 34,
+                                            color: Colors.white, size: 34,
                                           ),
                                         ),
                                       ),
@@ -3604,12 +3456,11 @@ class _NativeVideoPlayerScreenState extends State<NativeVideoPlayerScreen> {
                                         ),
                                       ),
                                     Positioned(
-                                      bottom: 6,
-                                      left: 10,
-                                      right: 10,
+                                      bottom: 6, left: 10, right: 10,
                                       child: Row(
                                         children: [
-                                          Text(_formatDuration(_controller.value.position), style: const TextStyle(color: Colors.white, fontSize: 10, fontFamily: 'monospace')),
+                                          Text(_formatDuration(_controller.value.position),
+                                            style: const TextStyle(color: Colors.white, fontSize: 10, fontFamily: 'monospace')),
                                           const SizedBox(width: 6),
                                           Expanded(
                                             child: SliderTheme(
@@ -3634,7 +3485,8 @@ class _NativeVideoPlayerScreenState extends State<NativeVideoPlayerScreen> {
                                             ),
                                           ),
                                           const SizedBox(width: 6),
-                                          Text(_formatDuration(_controller.value.duration), style: const TextStyle(color: Colors.white, fontSize: 10, fontFamily: 'monospace')),
+                                          Text(_formatDuration(_controller.value.duration),
+                                            style: const TextStyle(color: Colors.white, fontSize: 10, fontFamily: 'monospace')),
                                           const SizedBox(width: 8),
                                           GestureDetector(
                                             onTap: _toggleSmartFullscreen,
@@ -3671,7 +3523,9 @@ class _NativeVideoPlayerScreenState extends State<NativeVideoPlayerScreen> {
                                 const Icon(Icons.play_circle_fill, color: kGreen, size: 26),
                                 const SizedBox(width: 8),
                                 Expanded(
-                                  child: Text(widget.title, style: const TextStyle(color: Colors.white, fontSize: 14, fontWeight: FontWeight.bold), maxLines: 1, overflow: TextOverflow.ellipsis),
+                                  child: Text(widget.title,
+                                    style: const TextStyle(color: Colors.white, fontSize: 14, fontWeight: FontWeight.bold),
+                                    maxLines: 1, overflow: TextOverflow.ellipsis),
                                 ),
                                 Container(
                                   padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 3),
@@ -3685,9 +3539,11 @@ class _NativeVideoPlayerScreenState extends State<NativeVideoPlayerScreen> {
                               children: [
                                 const Icon(Icons.account_circle, color: kGreen, size: 14),
                                 const SizedBox(width: 4),
-                                Text('Uploaded by: ${widget.uploader}', style: const TextStyle(color: kGreen, fontSize: 10)),
+                                Text('Uploaded by: ${widget.uploader}',
+                                  style: const TextStyle(color: kGreen, fontSize: 10)),
                                 const SizedBox(width: 8),
-                                Text('|   👁 $_viewsCount views', style: TextStyle(color: Colors.white.withOpacity(0.6), fontSize: 10)),
+                                Text('|   👁 ${_stats['views']} views',
+                                  style: TextStyle(color: Colors.white.withOpacity(0.6), fontSize: 10)),
                               ],
                             ),
                             const SizedBox(height: 12),
@@ -3695,7 +3551,7 @@ class _NativeVideoPlayerScreenState extends State<NativeVideoPlayerScreen> {
                               children: [
                                 Expanded(
                                   child: InkWell(
-                                    onTap: _toggleLike,
+                                    onTap: _handleLike,
                                     child: Container(
                                       padding: const EdgeInsets.symmetric(vertical: 8),
                                       decoration: BoxDecoration(
@@ -3710,7 +3566,7 @@ class _NativeVideoPlayerScreenState extends State<NativeVideoPlayerScreen> {
                                             children: [
                                               Icon(_isLiked ? Icons.thumb_up : Icons.thumb_up_alt_outlined, color: kGreen, size: 14),
                                               const SizedBox(width: 4),
-                                              Text('$_likesCount', style: const TextStyle(color: Colors.white, fontSize: 11, fontWeight: FontWeight.bold)),
+                                              Text('${_stats['likes']}', style: const TextStyle(color: Colors.white, fontSize: 11, fontWeight: FontWeight.bold)),
                                             ],
                                           ),
                                           const Text('Like', style: TextStyle(color: Colors.white54, fontSize: 9)),
@@ -3722,7 +3578,7 @@ class _NativeVideoPlayerScreenState extends State<NativeVideoPlayerScreen> {
                                 const SizedBox(width: 6),
                                 Expanded(
                                   child: InkWell(
-                                    onTap: _toggleUnlike,
+                                    onTap: _handleDislike,
                                     child: Container(
                                       padding: const EdgeInsets.symmetric(vertical: 8),
                                       decoration: BoxDecoration(
@@ -3737,7 +3593,7 @@ class _NativeVideoPlayerScreenState extends State<NativeVideoPlayerScreen> {
                                             children: [
                                               Icon(_isUnliked ? Icons.thumb_down : Icons.thumb_down_alt_outlined, color: Colors.redAccent, size: 14),
                                               const SizedBox(width: 4),
-                                              Text('$_unlikesCount', style: const TextStyle(color: Colors.white, fontSize: 11, fontWeight: FontWeight.bold)),
+                                              Text('${_stats['unlikes']}', style: const TextStyle(color: Colors.white, fontSize: 11, fontWeight: FontWeight.bold)),
                                             ],
                                           ),
                                           const Text('Dislike', style: TextStyle(color: Colors.white54, fontSize: 9)),
@@ -3824,8 +3680,6 @@ class _NativeVideoPlayerScreenState extends State<NativeVideoPlayerScreen> {
                           Icon(Icons.play_circle_outline, color: kGreen, size: 18),
                           SizedBox(width: 6),
                           Text('Related Videos', style: TextStyle(color: Colors.white, fontSize: 13, fontWeight: FontWeight.bold)),
-                          Spacer(),
-                          Text('More Videos >', style: TextStyle(color: kGreen, fontSize: 11, fontWeight: FontWeight.bold)),
                         ],
                       ),
                       const SizedBox(height: 10),
@@ -3834,11 +3688,11 @@ class _NativeVideoPlayerScreenState extends State<NativeVideoPlayerScreen> {
                         child: ListView(
                           scrollDirection: Axis.horizontal,
                           children: [
-                            _buildRelatedCard('Jaisalmer Tour Part 1', '@travel123', '05:42'),
+                            _buildRelatedCard('Trending Video', '@user123', '05:42'),
                             const SizedBox(width: 10),
-                            _buildRelatedCard('Jaisalmer Desert Ride', '@travel123', '08:15'),
+                            _buildRelatedCard('Top Picks Today', '@user456', '08:15'),
                             const SizedBox(width: 10),
-                            _buildRelatedCard('Jaisalmer Fort View', '@travel123', '06:30'),
+                            _buildRelatedCard('New Uploads', '@user789', '06:30'),
                           ],
                         ),
                       ),
@@ -3875,8 +3729,7 @@ class _NativeVideoPlayerScreenState extends State<NativeVideoPlayerScreen> {
                 child: const Center(child: Icon(Icons.image, color: Colors.white30, size: 30)),
               ),
               Positioned(
-                bottom: 4,
-                right: 4,
+                bottom: 4, right: 4,
                 child: Container(
                   padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 1),
                   decoration: BoxDecoration(color: Colors.black87, borderRadius: BorderRadius.circular(4)),
@@ -3901,143 +3754,10 @@ class _NativeVideoPlayerScreenState extends State<NativeVideoPlayerScreen> {
   }
 }
 
-// ============================================================
-// SUPABASE SERVICE
-// ============================================================
-class SupabaseService {
-  final SupabaseClient client = Supabase.instance.client;
-
-  Future<void> recordView(int videoId) async {
-    try {
-      await client.rpc('increment_views', params: {'row_id': videoId});
-    } catch (_) {}
-  }
-
-  Future<void> likeVideo(int videoId) async {
-    try {
-      await client.rpc('increment_likes', params: {'row_id': videoId});
-    } catch (_) {}
-  }
-
-  Future<void> unlikeVideo(int videoId) async {
-    try {
-      await client.rpc('decrement_likes', params: {'row_id': videoId});
-    } catch (_) {}
-  }
-
-  Future<void> recordShare(int videoId) async {
-    try {
-      await client.rpc('increment_shares', params: {'row_id': videoId});
-    } catch (_) {}
-  }
-
-  Future<int> getViewCount(int videoId) async {
-    try {
-      final res = await client.from('videos').select('views').eq('id', videoId).maybeSingle();
-      return (res?['views'] as int?) ?? 0;
-    } catch (_) {
-      return 0;
-    }
-  }
-
-  Future<int> getLikeCount(int videoId) async {
-    try {
-      final res = await client.from('videos').select('likes').eq('id', videoId).maybeSingle();
-      return (res?['likes'] as int?) ?? 0;
-    } catch (_) {
-      return 0;
-    }
-  }
-
-  Future<int> getShareCount(int videoId) async {
-    try {
-      final res = await client.from('videos').select('shares').eq('id', videoId).maybeSingle();
-      return (res?['shares'] as int?) ?? 0;
-    } catch (_) {
-      return 0;
-    }
-  }
-
-  Future<List<Map<String, dynamic>>> searchUsers(String query) async {
-    if (query.trim().isEmpty) return [];
-    try {
-      final res = await client
-          .from('profiles')
-          .select('id, username, display_name, avatar_url')
-          .ilike('username', '%$query%')
-          .limit(15);
-      return List<Map<String, dynamic>>.from(res);
-    } catch (_) {
-      return [];
-    }
-  }
-
-  Future<bool> isSubscribed(String channelId) async {
-    final user = client.auth.currentUser;
-    if (user == null) return false;
-    try {
-      final res = await client
-          .from('subscriptions')
-          .select('id')
-          .eq('subscriber_id', user.id)
-          .eq('channel_id', channelId)
-          .maybeSingle();
-      return res != null;
-    } catch (_) {
-      return false;
-    }
-  }
-
-  Future<bool> toggleSubscription(String channelId) async {
-    final user = client.auth.currentUser;
-    if (user == null) return false;
-    final alreadySubscribed = await isSubscribed(channelId);
-    try {
-      if (alreadySubscribed) {
-        await client
-            .from('subscriptions')
-            .delete()
-            .eq('subscriber_id', user.id)
-            .eq('channel_id', channelId);
-        return false;
-      } else {
-        await client.from('subscriptions').insert({
-          'subscriber_id': user.id,
-          'channel_id': channelId,
-        });
-        try {
-          await client.from('notifications').insert({
-            'title': '🔔 New Subscriber!',
-            'message': 'Someone subscribed to your channel.',
-          });
-        } catch (_) {}
-        return true;
-      }
-    } catch (_) {
-      return alreadySubscribed;
-    }
-  }
-
-  Future<List<Map<String, dynamic>>> getUserUploads(String targetUserId) async {
-    try {
-      final res = await client
-          .from('videos')
-          .select('*')
-          .eq('uploader_id', targetUserId)
-          .order('id', ascending: false);
-      return List<Map<String, dynamic>>.from(res);
-    } catch (_) {
-      return [];
-    }
-  }
-}
-
-// ============================================================
+// ═══════════════════════════════════════════════════════
 // USER SEARCH DELEGATE
-// ============================================================
+// ═══════════════════════════════════════════════════════
 class UserSearchDelegate extends SearchDelegate {
-  final SupabaseService service = SupabaseService();
-
   @override
   ThemeData appBarTheme(BuildContext context) {
     return ThemeData(
@@ -4046,9 +3766,7 @@ class UserSearchDelegate extends SearchDelegate {
         hintStyle: TextStyle(color: Colors.white54),
         border: InputBorder.none,
       ),
-      textTheme: const TextTheme(
-        titleLarge: TextStyle(color: Colors.white, fontSize: 16),
-      ),
+      textTheme: const TextTheme(titleLarge: TextStyle(color: Colors.white, fontSize: 16)),
     );
   }
 
@@ -4067,44 +3785,79 @@ class UserSearchDelegate extends SearchDelegate {
       );
 
   @override
-  Widget buildResults(BuildContext context) => _buildSearchResults();
+  Widget buildResults(BuildContext context) => _buildSearch();
 
   @override
-  Widget buildSuggestions(BuildContext context) => _buildSearchResults();
+  Widget buildSuggestions(BuildContext context) => _buildSearch();
 
-  Widget _buildSearchResults() {
+  Widget _buildSearch() {
+    if (query.trim().isEmpty) {
+      return Container(
+        color: Colors.black,
+        child: Center(
+          child: Column(
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [
+              Icon(Icons.search, color: kGreen.withOpacity(0.4), size: 60),
+              const SizedBox(height: 12),
+              const Text('Search users by name or email',
+                style: TextStyle(color: Colors.white54, fontSize: 14)),
+            ],
+          ),
+        ),
+      );
+    }
+
     return Container(
       color: Colors.black,
       child: FutureBuilder<List<Map<String, dynamic>>>(
-        future: service.searchUsers(query),
+        future: FirebaseService.searchUsers(query),
         builder: (context, snapshot) {
           if (snapshot.connectionState == ConnectionState.waiting) {
             return const Center(child: CircularProgressIndicator(color: kGreen));
           }
           final users = snapshot.data ?? [];
           if (users.isEmpty) {
-            return const Center(
-              child: Text('No users found', style: TextStyle(color: Colors.white54)),
+            return Center(
+              child: Column(
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: [
+                  Icon(Icons.person_off_outlined, color: kGreen.withOpacity(0.4), size: 60),
+                  const SizedBox(height: 12),
+                  Text('No user found for "$query"',
+                    style: const TextStyle(color: Colors.white54, fontSize: 14)),
+                ],
+              ),
             );
           }
           return ListView.builder(
             itemCount: users.length,
             itemBuilder: (context, i) {
               final u = users[i];
+              final name = u['name'] ?? 'User';
+              final email = u['email'] ?? '';
+              final photo = u['photoURL']?.toString() ?? '';
+
               return ListTile(
-                leading: const CircleAvatar(
-                  backgroundColor: kGreen,
-                  child: Icon(Icons.person, color: Colors.black),
+                leading: Container(
+                  width: 42, height: 42,
+                  decoration: BoxDecoration(
+                    shape: BoxShape.circle,
+                    border: Border.all(color: kGreen, width: 1.5),
+                  ),
+                  child: photo.isNotEmpty
+                      ? ClipOval(child: Image.network(photo, fit: BoxFit.cover,
+                          errorBuilder: (c, e, s) => const Icon(Icons.person, color: kGreen)))
+                      : const Icon(Icons.person, color: kGreen),
                 ),
-                title: Text(u['display_name'] ?? u['username'] ?? '', style: const TextStyle(color: Colors.white)),
-                subtitle: Text('@${u['username']}', style: const TextStyle(color: kGreen)),
+                title: Text(name, style: const TextStyle(color: Colors.white, fontSize: 14, fontWeight: FontWeight.bold)),
+                subtitle: Text(email, style: TextStyle(color: kGreen.withOpacity(0.7), fontSize: 11.5)),
+                trailing: const Icon(Icons.arrow_forward_ios, color: kGreen, size: 14),
                 onTap: () {
-                  Navigator.push(
-                    context,
-                    MaterialPageRoute(
-                      builder: (_) => UserProfileScreen(channelProfile: u),
-                    ),
-                  );
+                  close(context, null);
+                  Navigator.push(context, MaterialPageRoute(
+                    builder: (_) => UserProfileScreen(channelProfile: u),
+                  ));
                 },
               );
             },
@@ -4115,9 +3868,9 @@ class UserSearchDelegate extends SearchDelegate {
   }
 }
 
-// ============================================================
+// ═══════════════════════════════════════════════════════
 // USER PROFILE SCREEN
-// ============================================================
+// ═══════════════════════════════════════════════════════
 class UserProfileScreen extends StatefulWidget {
   final Map<String, dynamic> channelProfile;
   const UserProfileScreen({super.key, required this.channelProfile});
@@ -4127,94 +3880,181 @@ class UserProfileScreen extends StatefulWidget {
 }
 
 class _UserProfileScreenState extends State<UserProfileScreen> {
-  final SupabaseService _service = SupabaseService();
   bool _isSubscribed = false;
   List<Map<String, dynamic>> _videos = [];
   bool _loading = true;
 
+  String get _channelUid => widget.channelProfile['uid']?.toString() ?? '';
+  String get _channelName => widget.channelProfile['name']?.toString() ?? 'User';
+  String get _channelEmail => widget.channelProfile['email']?.toString() ?? '';
+  String get _channelPhoto => widget.channelProfile['photoURL']?.toString() ?? '';
+
   @override
   void initState() {
     super.initState();
-    _loadProfileData();
+    _loadData();
   }
 
-  Future<void> _loadProfileData() async {
-    final channelId = widget.channelProfile['id']?.toString() ?? '';
-    final subStatus = await _service.isSubscribed(channelId);
-    final uploads = await _service.getUserUploads(channelId);
+  Future<void> _loadData() async {
+    try {
+      final myUid = MayaJaalAccount.cachedUid;
+      if (myUid != null && _channelUid.isNotEmpty) {
+        _isSubscribed = await FirebaseService.isSubscribed(myUid, _channelUid);
+      }
+      _videos = await FirebaseService.getUserVideos(_channelUid, limit: 50);
+      if (mounted) setState(() => _loading = false);
+    } catch (e) {
+      debugPrint('Profile load error: $e');
+      if (mounted) setState(() => _loading = false);
+    }
+  }
 
+  Future<void> _toggleSub() async {
+    final myUid = MayaJaalAccount.cachedUid;
+    if (myUid == null) return;
+    final newState = await FirebaseService.toggleSubscription(myUid, _channelUid);
     if (mounted) {
-      setState(() {
-        _isSubscribed = subStatus;
-        _videos = uploads;
-        _loading = false;
-      });
+      setState(() => _isSubscribed = newState);
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          backgroundColor: kCardBg,
+          content: Text(newState ? '✅ Subscribed!' : 'Unsubscribed',
+            style: const TextStyle(color: kGreen)),
+          duration: const Duration(seconds: 1),
+        ),
+      );
     }
   }
 
   @override
   Widget build(BuildContext context) {
-    final currentUserId = Supabase.instance.client.auth.currentUser?.id;
-    final isOwnProfile = currentUserId == widget.channelProfile['id']?.toString();
+    final isOwnProfile = MayaJaalAccount.cachedUid == _channelUid;
 
     return Scaffold(
       backgroundColor: Colors.black,
-      appBar: AppBar(
-        title: Text('@${widget.channelProfile['username'] ?? 'Profile'}'),
-      ),
+      appBar: AppBar(title: Text('@${_channelName.split(' ').first}')),
       body: _loading
           ? const Center(child: CircularProgressIndicator(color: kGreen))
           : Column(
               children: [
                 const SizedBox(height: 20),
-                const CircleAvatar(
-                  radius: 38,
-                  backgroundColor: kGreen,
-                  child: Icon(Icons.person, size: 45, color: Colors.black),
+                Container(
+                  width: 82, height: 82,
+                  decoration: BoxDecoration(
+                    shape: BoxShape.circle,
+                    border: Border.all(color: kGreen, width: 2),
+                    boxShadow: [BoxShadow(color: kGreen.withOpacity(0.4), blurRadius: 20)],
+                  ),
+                  child: _channelPhoto.isNotEmpty
+                      ? ClipOval(child: Image.network(_channelPhoto, fit: BoxFit.cover,
+                          errorBuilder: (c, e, s) => const Icon(Icons.person, size: 45, color: kGreen)))
+                      : const Icon(Icons.person, size: 45, color: kGreen),
+                ),
+                const SizedBox(height: 12),
+                Text(_channelName,
+                  style: const TextStyle(color: Colors.white, fontSize: 20, fontWeight: FontWeight.bold)),
+                const SizedBox(height: 3),
+                Text(_channelEmail,
+                  style: TextStyle(color: kGreen.withOpacity(0.7), fontSize: 12)),
+                const SizedBox(height: 6),
+                StreamBuilder<int>(
+                  stream: FirebaseService.getSubscriberCount(_channelUid),
+                  builder: (c, s) {
+                    final count = s.data ?? 0;
+                    return Text('$count subscribers',
+                      style: TextStyle(color: Colors.white.withOpacity(0.5), fontSize: 11));
+                  },
+                ),
+                const SizedBox(height: 16),
+
+                if (!isOwnProfile)
+                  SizedBox(
+                    width: 200,
+                    child: ElevatedButton(
+                      onPressed: _toggleSub,
+                      style: ElevatedButton.styleFrom(
+                        backgroundColor: _isSubscribed ? Colors.grey[850] : kGreen,
+                        foregroundColor: _isSubscribed ? Colors.white : Colors.black,
+                        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+                        padding: const EdgeInsets.symmetric(vertical: 12),
+                      ),
+                      child: Text(_isSubscribed ? '✓ SUBSCRIBED' : '+ SUBSCRIBE',
+                        style: const TextStyle(fontWeight: FontWeight.bold, letterSpacing: 1.2)),
+                    ),
+                  ),
+
+                const Divider(color: Colors.white24, height: 30),
+
+                Padding(
+                  padding: const EdgeInsets.symmetric(horizontal: 16),
+                  child: Row(
+                    children: [
+                      const Icon(Icons.video_library, color: kGreen, size: 18),
+                      const SizedBox(width: 6),
+                      Text('VIDEOS (${_videos.length})',
+                        style: const TextStyle(color: kGreen, fontSize: 12, fontWeight: FontWeight.bold, letterSpacing: 1.2)),
+                    ],
+                  ),
                 ),
                 const SizedBox(height: 10),
-                Text(
-                  widget.channelProfile['display_name'] ?? widget.channelProfile['username'] ?? '',
-                  style: const TextStyle(color: Colors.white, fontSize: 18, fontWeight: FontWeight.bold),
-                ),
-                Text(
-                  '@${widget.channelProfile['username']}',
-                  style: const TextStyle(color: kGreen, fontSize: 13),
-                ),
-                const SizedBox(height: 14),
-                if (!isOwnProfile)
-                  ElevatedButton(
-                    onPressed: () async {
-                      final status = await _service.toggleSubscription(widget.channelProfile['id']?.toString() ?? '');
-                      setState(() => _isSubscribed = status);
-                    },
-                    style: ElevatedButton.styleFrom(
-                      backgroundColor: _isSubscribed ? Colors.grey[850] : kGreen,
-                      foregroundColor: _isSubscribed ? Colors.white : Colors.black,
-                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
-                    ),
-                    child: Text(_isSubscribed ? 'SUBSCRIBED' : 'SUBSCRIBE'),
-                  ),
-                const Divider(color: Colors.white24, height: 30),
+
                 Expanded(
                   child: _videos.isEmpty
-                      ? const Center(child: Text('No uploads yet.', style: TextStyle(color: Colors.white54)))
+                      ? Center(
+                          child: Column(
+                            mainAxisAlignment: MainAxisAlignment.center,
+                            children: [
+                              Icon(Icons.video_library_outlined, color: kGreen.withOpacity(0.4), size: 60),
+                              const SizedBox(height: 12),
+                              const Text('No uploads yet', style: TextStyle(color: Colors.white54, fontSize: 14)),
+                            ],
+                          ),
+                        )
                       : ListView.builder(
+                          padding: const EdgeInsets.symmetric(horizontal: 12),
                           itemCount: _videos.length,
                           itemBuilder: (context, i) {
                             final vid = _videos[i];
-                            return ListTile(
-                              leading: const Icon(Icons.play_circle_fill, color: kGreen),
-                              title: Text(vid['title'] ?? 'Video', style: const TextStyle(color: Colors.white)),
-                              subtitle: Text('${vid['views'] ?? 0} views', style: const TextStyle(color: Colors.white54)),
-                              onTap: () {
-                                Navigator.push(
-                                  context,
-                                  MaterialPageRoute(
-                                    builder: (_) => StreamPreviewScreen(targetUrl: vid['video_url'] ?? ''),
+                            final id = vid['id']?.toString() ?? '';
+                            final name = vid['filename'] ?? 'Video';
+                            final views = vid['views'] ?? 0;
+
+                            return Container(
+                              margin: const EdgeInsets.only(bottom: 8),
+                              decoration: BoxDecoration(
+                                color: kCardBg,
+                                borderRadius: BorderRadius.circular(12),
+                                border: Border.all(color: kGreen.withOpacity(0.3)),
+                              ),
+                              child: ListTile(
+                                leading: Container(
+                                  width: 40, height: 40,
+                                  decoration: BoxDecoration(
+                                    color: Colors.black,
+                                    borderRadius: BorderRadius.circular(8),
+                                    border: Border.all(color: kGreen.withOpacity(0.5)),
                                   ),
-                                );
-                              },
+                                  child: const Icon(Icons.play_circle_fill, color: kGreen, size: 22),
+                                ),
+                                title: Text(name,
+                                  style: const TextStyle(color: Colors.white, fontSize: 12.5, fontWeight: FontWeight.bold),
+                                  maxLines: 1, overflow: TextOverflow.ellipsis),
+                                subtitle: Row(
+                                  children: [
+                                    const Icon(Icons.visibility, color: kGreen, size: 11),
+                                    const SizedBox(width: 3),
+                                    Text('$views views',
+                                      style: TextStyle(color: kGreen.withOpacity(0.8), fontSize: 10.5)),
+                                  ],
+                                ),
+                                onTap: () {
+                                  Navigator.push(context, MaterialPageRoute(
+                                    builder: (_) => StreamPreviewScreen(
+                                      targetUrl: '$kBackendBaseUrl/v/$id',
+                                    ),
+                                  ));
+                                },
+                              ),
                             );
                           },
                         ),
@@ -4225,9 +4065,9 @@ class _UserProfileScreenState extends State<UserProfileScreen> {
   }
 }
 
-// ============================================================
-// EARNINGS SCREEN — RTDB Sync (same as website/bot)
-// ============================================================
+// ═══════════════════════════════════════════════════════
+// EARNINGS SCREEN
+// ═══════════════════════════════════════════════════════
 class EarningsScreen extends StatefulWidget {
   const EarningsScreen({super.key});
   @override
@@ -4251,7 +4091,7 @@ class _EarningsScreenState extends State<EarningsScreen> {
 
   Future<void> _loadData() async {
     try {
-      if (!MayaJaalAccount.isLinked) {
+      if (!MayaJaalAccount.isLoggedIn) {
         if (mounted) setState(() => _loading = false);
         return;
       }
@@ -4298,13 +4138,13 @@ class _EarningsScreenState extends State<EarningsScreen> {
       ),
       body: _loading
           ? const Center(child: CircularProgressIndicator(color: kGreen))
-          : !MayaJaalAccount.isLinked
-              ? _buildNotLinked()
+          : !MayaJaalAccount.isLoggedIn
+              ? _buildNotLoggedIn()
               : _buildDashboard(),
     );
   }
 
-  Widget _buildNotLinked() {
+  Widget _buildNotLoggedIn() {
     return Center(
       child: Padding(
         padding: const EdgeInsets.all(24),
@@ -4313,36 +4153,11 @@ class _EarningsScreenState extends State<EarningsScreen> {
           children: [
             const Icon(Icons.link_off, color: Colors.orangeAccent, size: 60),
             const SizedBox(height: 16),
-            const Text(
-              'ACCOUNT NOT LINKED',
-              style: TextStyle(color: Colors.white, fontSize: 18, fontWeight: FontWeight.bold, letterSpacing: 1.5),
-            ),
+            const Text('NOT LOGGED IN',
+              style: TextStyle(color: Colors.white, fontSize: 18, fontWeight: FontWeight.bold, letterSpacing: 1.5)),
             const SizedBox(height: 12),
-            const Text(
-              'To view your earnings, connect your MayaJaal account using the API key from the website.',
-              textAlign: TextAlign.center,
-              style: TextStyle(color: Colors.white70, fontSize: 13, height: 1.5),
-            ),
-            const SizedBox(height: 24),
-            ElevatedButton.icon(
-              onPressed: () async {
-                Navigator.push(context, MaterialPageRoute(builder: (_) => const MainNavigationHolder()));
-                ScaffoldMessenger.of(context).showSnackBar(
-                  const SnackBar(
-                    backgroundColor: kCardBg,
-                    content: Text('Open menu → Connect MayaJaal', style: TextStyle(color: kGreen)),
-                    duration: Duration(seconds: 3),
-                  ),
-                );
-              },
-              icon: const Icon(Icons.link, color: Colors.black),
-              label: const Text('GO CONNECT', style: TextStyle(color: Colors.black, fontWeight: FontWeight.bold)),
-              style: ElevatedButton.styleFrom(
-                backgroundColor: kGreen,
-                padding: const EdgeInsets.symmetric(horizontal: 32, vertical: 14),
-                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
-              ),
-            ),
+            const Text('Login karke earnings dekh sakte hain.',
+              textAlign: TextAlign.center, style: TextStyle(color: Colors.white70, fontSize: 13, height: 1.5)),
           ],
         ),
       ),
@@ -4379,7 +4194,8 @@ class _EarningsScreenState extends State<EarningsScreen> {
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
-                        const Text('CONNECTED ACCOUNT', style: TextStyle(color: Colors.white54, fontSize: 9, letterSpacing: 1.5)),
+                        const Text('LOGGED IN AS',
+                          style: TextStyle(color: Colors.white54, fontSize: 9, letterSpacing: 1.5)),
                         const SizedBox(height: 2),
                         Text(
                           MayaJaalAccount.cachedEmail ?? 'N/A',
@@ -4393,6 +4209,7 @@ class _EarningsScreenState extends State<EarningsScreen> {
               ),
             ),
             const SizedBox(height: 16),
+
             Container(
               width: double.infinity,
               padding: const EdgeInsets.all(22),
@@ -4405,19 +4222,17 @@ class _EarningsScreenState extends State<EarningsScreen> {
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  const Text('TOTAL BALANCE', style: TextStyle(color: Colors.white54, fontSize: 11, letterSpacing: 1.5)),
+                  const Text('TOTAL BALANCE',
+                    style: TextStyle(color: Colors.white54, fontSize: 11, letterSpacing: 1.5)),
                   const SizedBox(height: 8),
-                  Row(
-                    crossAxisAlignment: CrossAxisAlignment.end,
-                    children: [
-                      Text(
-                        '\$${_totalIncome.toStringAsFixed(2)}',
-                        style: const TextStyle(color: kGreen, fontSize: 40, fontWeight: FontWeight.w900, shadows: [Shadow(color: kGreen, blurRadius: 20)]),
-                      ),
-                    ],
+                  Text(
+                    '\$${_totalIncome.toStringAsFixed(2)}',
+                    style: const TextStyle(color: kGreen, fontSize: 40, fontWeight: FontWeight.w900,
+                      shadows: [Shadow(color: kGreen, blurRadius: 20)]),
                   ),
                   const SizedBox(height: 4),
-                  Text('≈ ₹${(_totalIncome * 80).toStringAsFixed(0)} INR', style: TextStyle(color: Colors.white.withOpacity(0.5), fontSize: 12)),
+                  Text('≈ ₹${(_totalIncome * 80).toStringAsFixed(0)} INR',
+                    style: TextStyle(color: Colors.white.withOpacity(0.5), fontSize: 12)),
                   const Divider(color: Colors.white24, height: 28),
                   Row(
                     children: [
@@ -4432,6 +4247,7 @@ class _EarningsScreenState extends State<EarningsScreen> {
               ),
             ),
             const SizedBox(height: 16),
+
             Container(
               padding: const EdgeInsets.all(16),
               decoration: BoxDecoration(
@@ -4446,7 +4262,8 @@ class _EarningsScreenState extends State<EarningsScreen> {
                     children: [
                       const Icon(Icons.local_fire_department, color: Colors.orangeAccent, size: 20),
                       const SizedBox(width: 8),
-                      Text('TIER $(_currentTier)', style: const TextStyle(color: Colors.orangeAccent, fontSize: 14, fontWeight: FontWeight.bold, letterSpacing: 1.5)),
+                      Text('TIER $_currentTier',
+                        style: const TextStyle(color: Colors.orangeAccent, fontSize: 14, fontWeight: FontWeight.bold, letterSpacing: 1.5)),
                     ],
                   ),
                   const SizedBox(height: 12),
@@ -4458,14 +4275,13 @@ class _EarningsScreenState extends State<EarningsScreen> {
                     ],
                   ),
                   const SizedBox(height: 12),
-                  const Text(
-                    'Base: 1K views = \$1 · Every 2K views → rate × 1.5',
-                    style: TextStyle(color: Colors.white54, fontSize: 10.5),
-                  ),
+                  const Text('Base: 1K views = \$1 · Every 2K views → rate × 1.5',
+                    style: TextStyle(color: Colors.white54, fontSize: 10.5)),
                 ],
               ),
             ),
             const SizedBox(height: 20),
+
             const Text('YOUR LINKS', style: TextStyle(color: kGreen, fontSize: 13, fontWeight: FontWeight.bold, letterSpacing: 1.5)),
             const SizedBox(height: 10),
             _links.isEmpty
@@ -4477,7 +4293,8 @@ class _EarningsScreenState extends State<EarningsScreen> {
                       border: Border.all(color: kGreen.withOpacity(0.3)),
                     ),
                     child: const Center(
-                      child: Text('No links yet. Upload a video in the bot to get started.', textAlign: TextAlign.center, style: TextStyle(color: Colors.white54, fontSize: 12)),
+                      child: Text('No links yet. Bot me video upload karke start karein.',
+                        textAlign: TextAlign.center, style: TextStyle(color: Colors.white54, fontSize: 12)),
                     ),
                   )
                 : Column(
@@ -4497,8 +4314,7 @@ class _EarningsScreenState extends State<EarningsScreen> {
                         child: Row(
                           children: [
                             Container(
-                              width: 38,
-                              height: 38,
+                              width: 38, height: 38,
                               decoration: BoxDecoration(
                                 color: Colors.black,
                                 borderRadius: BorderRadius.circular(10),
@@ -4511,17 +4327,21 @@ class _EarningsScreenState extends State<EarningsScreen> {
                               child: Column(
                                 crossAxisAlignment: CrossAxisAlignment.start,
                                 children: [
-                                  Text(name, style: const TextStyle(color: Colors.white, fontSize: 12, fontWeight: FontWeight.bold), maxLines: 1, overflow: TextOverflow.ellipsis),
+                                  Text(name,
+                                    style: const TextStyle(color: Colors.white, fontSize: 12, fontWeight: FontWeight.bold),
+                                    maxLines: 1, overflow: TextOverflow.ellipsis),
                                   const SizedBox(height: 3),
                                   Row(
                                     children: [
                                       const Icon(Icons.visibility, color: kGreen, size: 11),
                                       const SizedBox(width: 3),
-                                      Text('$views', style: TextStyle(color: kGreen.withOpacity(0.9), fontSize: 10.5, fontWeight: FontWeight.bold)),
+                                      Text('$views',
+                                        style: TextStyle(color: kGreen.withOpacity(0.9), fontSize: 10.5, fontWeight: FontWeight.bold)),
                                       const SizedBox(width: 10),
                                       const Icon(Icons.attach_money, color: Colors.amberAccent, size: 11),
                                       const SizedBox(width: 2),
-                                      Text('\$${earnings.toStringAsFixed(2)}', style: const TextStyle(color: Colors.amberAccent, fontSize: 10.5, fontWeight: FontWeight.bold)),
+                                      Text('\$${earnings.toStringAsFixed(2)}',
+                                        style: const TextStyle(color: Colors.amberAccent, fontSize: 10.5, fontWeight: FontWeight.bold)),
                                     ],
                                   ),
                                 ],
@@ -4533,6 +4353,7 @@ class _EarningsScreenState extends State<EarningsScreen> {
                     }).toList(),
                   ),
             const SizedBox(height: 20),
+
             Container(
               padding: const EdgeInsets.all(14),
               decoration: BoxDecoration(
@@ -4547,7 +4368,8 @@ class _EarningsScreenState extends State<EarningsScreen> {
                     children: [
                       Icon(Icons.info_outline, color: kGreen, size: 16),
                       SizedBox(width: 6),
-                      Text('WITHDRAWAL INFO', style: TextStyle(color: kGreen, fontSize: 11, fontWeight: FontWeight.bold, letterSpacing: 1.2)),
+                      Text('WITHDRAWAL INFO',
+                        style: TextStyle(color: kGreen, fontSize: 11, fontWeight: FontWeight.bold, letterSpacing: 1.2)),
                     ],
                   ),
                   SizedBox(height: 8),
@@ -4600,3 +4422,5 @@ class _EarningsScreenState extends State<EarningsScreen> {
     );
   }
 }
+
+// ============ END OF FILE ============
