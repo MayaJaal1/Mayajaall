@@ -405,18 +405,25 @@ class FirebaseService {
   }
 
   // ──────────── SUBSCRIPTIONS ────────────
-  static Future<bool> toggleSubscription(String subscriberUid, String channelUid) async {
+static Future<bool> isSubscribed(String subscriberUid, String channelUid) async {
+  try {
+    final snap = await _rtdb.child('subscriptions/$channelUid/$subscriberUid').once();
+    return snap.snapshot.value != null;
+  } catch (_) {
+    return false;
+  }
+}
+
+static Future<bool> toggleSubscription(String subscriberUid, String channelUid) async {
   try {
     final ref = _rtdb.child('subscriptions/$channelUid/$subscriberUid');
     final snap = await ref.once();
     final isSubbed = snap.snapshot.value != null;
 
     if (isSubbed) {
-      // Unsubscribe
       await ref.remove();
       await _rtdb.child('userSubs/$subscriberUid/$channelUid').remove();
 
-      // Update counter using runTransaction
       await _rtdb.child('users/$channelUid').runTransaction((data) {
         if (data == null) return Transaction.success(null);
         final map = Map<String, dynamic>.from(data as Map);
@@ -427,11 +434,9 @@ class FirebaseService {
 
       return false;
     } else {
-      // Subscribe
       await ref.set(DateTime.now().millisecondsSinceEpoch);
       await _rtdb.child('userSubs/$subscriberUid/$channelUid').set(DateTime.now().millisecondsSinceEpoch);
 
-      // Update counter using runTransaction
       await _rtdb.child('users/$channelUid').runTransaction((data) {
         if (data == null) return Transaction.success(null);
         final map = Map<String, dynamic>.from(data as Map);
@@ -440,7 +445,6 @@ class FirebaseService {
         return Transaction.success(map);
       });
 
-      // Notify owner
       await sendNotification(
         toUid: channelUid,
         title: '🔔 New Subscriber!',
@@ -456,23 +460,22 @@ class FirebaseService {
   }
 }
 
-  static Stream<int> getSubscriberCount(String channelUid) {
-    return _rtdb.child('users/$channelUid/subscribersCount').onValue.map((e) {
-      return (e.snapshot.value ?? 0) as int;
-    });
-  }
+static Stream<int> getSubscriberCount(String channelUid) {
+  return _rtdb.child('users/$channelUid/subscribersCount').onValue.map((e) {
+    return (e.snapshot.value ?? 0) as int;
+  });
+}
 
-  static Future<List<String>> getUserSubscriptions(String subscriberUid) async {
-    try {
-      final snap = await _rtdb.child('userSubs/$subscriberUid').once();
-      final val = snap.snapshot.value;
-      if (val == null) return [];
-      return (val as Map).keys.map((k) => k.toString()).toList();
-    } catch (_) {
-      return [];
-    }
+static Future<List<String>> getUserSubscriptions(String subscriberUid) async {
+  try {
+    final snap = await _rtdb.child('userSubs/$subscriberUid').once();
+    final val = snap.snapshot.value;
+    if (val == null) return [];
+    return (val as Map).keys.map((k) => k.toString()).toList();
+  } catch (_) {
+    return [];
   }
-
+}
   // ──────────── VIDEOS (Links) ────────────
   static Future<List<Map<String, dynamic>>> getUserVideos(String uid, {int limit = 30}) async {
     try {
