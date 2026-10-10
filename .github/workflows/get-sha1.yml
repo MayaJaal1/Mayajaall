@@ -1,0 +1,51 @@
+name: Get SHA1 Key
+
+on:
+  workflow_dispatch:
+
+jobs:
+  get-sha1:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up Java
+        uses: actions/setup-java@v4
+        with:
+          distribution: 'zulu'
+          java-version: '17'
+
+      - name: Delete existing keystore if any
+        run: |
+          rm -f mayajaal-release-new.jks
+
+      - name: Generate New Keystore
+        run: |
+          keytool -genkeypair -v \
+            -keystore mayajaal-release-new.jks \
+            -alias mayajaal \
+            -keyalg RSA \
+            -keysize 2048 \
+            -validity 10000 \
+            -storepass MayajaalRelease2024 \
+            -keypass MayajaalRelease2024 \
+            -dname "CN=MayaJaal, OU=Dev, O=MayaJaal, L=Delhi, S=Delhi, C=IN" \
+            -noprompt
+
+      - name: Get SHA1 and SHA256 Fingerprints
+        run: |
+          echo "=========================================="
+          echo "SHA FINGERPRINTS (YEH COPY KAREIN):"
+          echo "=========================================="
+          keytool -list -v -keystore mayajaal-release-new.jks \
+            -alias mayajaal \
+            -storepass MayajaalRelease2024 \
+            -keypass MayajaalRelease2024 | grep -iE "sha1|sha-1|sha256|sha-256"
+          echo "=========================================="
+
+      - name: Upload New Keystore
+        uses: actions/upload-artifact@v4
+        with:
+          name: mayajaal-new-keystore
+          path: mayajaal-release-new.jks
