@@ -425,24 +425,26 @@ class FirebaseService {
         await ref.remove();
         await _rtdb.child('userSubs/$subscriberUid/$channelUid').remove();
 
-        await _rtdb.child('users/$channelUid').transaction((data) {
-          if (data == null || data is! Map) return data;
-          final subs = (data['subscribersCount'] ?? 0) as int;
-          data['subscribersCount'] = math.max(0, subs - 1);
-          return data;
-        });
+        await _rtdb.child('users/$channelUid').runTransaction((data) {
+  if (data == null) return Transaction.success(null);
+  final map = Map<String, dynamic>.from(data as Map);
+  final subs = (map['subscribersCount'] ?? 0) as int;
+  map['subscribersCount'] = math.max(0, subs - 1);
+  return Transaction.success(map);
+ });
 
         return false;
       } else {
         await ref.set(DateTime.now().millisecondsSinceEpoch);
         await _rtdb.child('userSubs/$subscriberUid/$channelUid').set(DateTime.now().millisecondsSinceEpoch);
 
-        await _rtdb.child('users/$channelUid').transaction((data) {
-          if (data == null || data is! Map) return data;
-          final subs = (data['subscribersCount'] ?? 0) as int;
-          data['subscribersCount'] = subs + 1;
-          return data;
-        });
+        await _rtdb.child('users/$channelUid').runTransaction((data) {
+  if (data == null) return Transaction.success(null);
+  final map = Map<String, dynamic>.from(data as Map);
+  final subs = (map['subscribersCount'] ?? 0) as int;
+  map['subscribersCount'] = subs + 1;
+  return Transaction.success(map);
+});
 
         await sendNotification(
           toUid: channelUid,
