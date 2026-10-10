@@ -33,6 +33,17 @@ jobs:
           mkdir -p android/app
           cp mayajaal-release.jks android/app/mayajaal-release.jks
 
+      - name: Verify google-services.json
+        run: |
+          echo "=== Checking google-services.json ==="
+          if [ -f android/app/google-services.json ]; then
+            echo "✅ google-services.json found in android/app/"
+            head -30 android/app/google-services.json
+          else
+            echo "❌ ERROR: google-services.json NOT found in android/app/"
+            exit 1
+          fi
+
       - name: Create Android Folder Structure
         run: |
           mkdir -p android/app/src/main/kotlin/com/mayajaal/online
@@ -124,27 +135,24 @@ jobs:
                           <category android:name="android.intent.category.LAUNCHER"/>
                       </intent-filter>
 
-                      <!-- 🌟 Auto-Verify with pathPrefix: Only video/stream links open in app -->
+                      <!-- 🌟 Auto-Verify: Only video/stream links open in app -->
                       <intent-filter android:autoVerify="true">
                           <action android:name="android.intent.action.VIEW" />
                           <category android:name="android.intent.category.DEFAULT" />
                           <category android:name="android.intent.category.BROWSABLE" />
 
-                          <!-- Video / Stream / Terabox links (mayajaal.online) -->
                           <data android:scheme="https" android:host="mayajaal.online" android:pathPrefix="/v/" />
                           <data android:scheme="https" android:host="mayajaal.online" android:pathPrefix="/stream/" />
                           <data android:scheme="https" android:host="mayajaal.online" android:pathPrefix="/api/v/" />
                           <data android:scheme="https" android:host="mayajaal.online" android:pathPrefix="/tb/" />
                           <data android:scheme="https" android:host="mayajaal.online" android:pathPrefix="/s/" />
 
-                          <!-- Video / Stream / Terabox links (www.mayajaal.online) -->
                           <data android:scheme="https" android:host="www.mayajaal.online" android:pathPrefix="/v/" />
                           <data android:scheme="https" android:host="www.mayajaal.online" android:pathPrefix="/stream/" />
                           <data android:scheme="https" android:host="www.mayajaal.online" android:pathPrefix="/api/v/" />
                           <data android:scheme="https" android:host="www.mayajaal.online" android:pathPrefix="/tb/" />
                           <data android:scheme="https" android:host="www.mayajaal.online" android:pathPrefix="/s/" />
 
-                          <!-- Short links (m.mayajaal.online) -->
                           <data android:scheme="https" android:host="m.mayajaal.online" />
                       </intent-filter>
 
@@ -179,6 +187,7 @@ jobs:
 
           apply plugin: 'com.android.application'
           apply plugin: 'kotlin-android'
+          apply plugin: 'com.google.gms.google-services'
           apply from: "$flutterRoot/packages/flutter_tools/gradle/flutter.gradle"
 
           android {
@@ -197,6 +206,7 @@ jobs:
                   targetSdkVersion 34
                   versionCode flutterVersionCode.toInteger()
                   versionName flutterVersionName
+                  multiDexEnabled true
               }
               signingConfigs {
                   release {
@@ -226,6 +236,7 @@ jobs:
               dependencies {
                   classpath 'com.android.tools.build:gradle:7.3.0'
                   classpath "org.jetbrains.kotlin:kotlin-gradle-plugin:$kotlin_version"
+                  classpath 'com.google.gms:google-services:4.4.0'
               }
           }
           allprojects { repositories { google(); mavenCentral() } }
@@ -256,7 +267,7 @@ jobs:
           apply from: "$flutterSdkPath/packages/flutter_tools/gradle/app_plugin_loader.gradle"
           EOF
 
-      # 🌟 YEH STEP SHA1 aur SHA256 DIKHAYEGA
+      # 🌟 SHA1 and SHA256 Fingerprints
       - name: Get SHA1 and SHA256 Fingerprints
         run: |
           echo "=========================================="
