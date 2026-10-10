@@ -46,32 +46,31 @@
                 <category android:name="android.intent.category.LAUNCHER"/>
             </intent-filter>
 
-            <!-- ⭐ Auto-Verify: video/stream/short links app me khulenge -->
-            <!-- API pages (index.html etc.) browser me hi khulenge -->
+            <!-- Auto-Verify: video/stream/short links app me khulenge -->
             <intent-filter android:autoVerify="true">
                 <action android:name="android.intent.action.VIEW" />
                 <category android:name="android.intent.category.DEFAULT" />
                 <category android:name="android.intent.category.BROWSABLE" />
 
-                <!-- ✅ mayajaal.online (no www) -->
+                <!-- mayajaal.online (no www) -->
                 <data android:scheme="https" android:host="mayajaal.online" android:pathPrefix="/v/" />
                 <data android:scheme="https" android:host="mayajaal.online" android:pathPrefix="/stream/" />
                 <data android:scheme="https" android:host="mayajaal.online" android:pathPrefix="/api/v/" />
                 <data android:scheme="https" android:host="mayajaal.online" android:pathPrefix="/tb/" />
                 <data android:scheme="https" android:host="mayajaal.online" android:pathPrefix="/s/" />
 
-                <!-- ✅ www.mayajaal.online -->
+                <!-- www.mayajaal.online -->
                 <data android:scheme="https" android:host="www.mayajaal.online" android:pathPrefix="/v/" />
                 <data android:scheme="https" android:host="www.mayajaal.online" android:pathPrefix="/stream/" />
                 <data android:scheme="https" android:host="www.mayajaal.online" android:pathPrefix="/api/v/" />
                 <data android:scheme="https" android:host="www.mayajaal.online" android:pathPrefix="/tb/" />
                 <data android:scheme="https" android:host="www.mayajaal.online" android:pathPrefix="/s/" />
 
-                <!-- ✅ Short links subdomain (saare short links app me khulenge) -->
+                <!-- Short links subdomain -->
                 <data android:scheme="https" android:host="m.mayajaal.online" />
             </intent-filter>
 
-            <!-- ⭐ Custom scheme fallback (deep link via mayajaall://) -->
+            <!-- Custom scheme fallback -->
             <intent-filter>
                 <action android:name="android.intent.action.VIEW" />
                 <category android:name="android.intent.category.DEFAULT" />
