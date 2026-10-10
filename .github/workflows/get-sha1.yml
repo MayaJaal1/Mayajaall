@@ -1,10 +1,10 @@
-name: Get SHA1 Key
+name: Setup Keystore (One Time)
 
 on:
   workflow_dispatch:
 
 jobs:
-  get-sha1:
+  setup:
     runs-on: ubuntu-latest
     steps:
       - name: Checkout repository
@@ -15,6 +15,10 @@ jobs:
         with:
           distribution: 'zulu'
           java-version: '17'
+
+      - name: Delete old temp keystore
+        run: |
+          rm -f mayajaal-new.jks
 
       - name: Generate New Keystore
         run: |
@@ -32,12 +36,12 @@ jobs:
       - name: Get SHA1 and SHA256 Fingerprints
         run: |
           echo "=========================================="
-          echo "SHA FINGERPRINTS:"
+          echo "SHA1 AND SHA256 FINGERPRINTS:"
           echo "=========================================="
           keytool -list -v -keystore mayajaal-new.jks \
             -alias newkey2024 \
             -storepass MayajaalRelease2024 \
-            -keypass MayajaalRelease2024 | grep -iE "sha1|sha-1|sha256|sha-256"
+            -keypass MayajaalRelease2024 | grep -iE "SHA1:|SHA256:"
           echo "=========================================="
 
       - name: Upload New Keystore
