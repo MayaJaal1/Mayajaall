@@ -406,60 +406,56 @@ class FirebaseService {
   }
 
   // ──────────── SUBSCRIPTIONS ────────────
-  static Future<bool> isSubscribed(String subscriberUid, String channelUid) async {
-    try {
-      final snap = await _rtdb.child('subscriptions/$channelUid/$subscriberUid').once();
-      return snap.snapshot.value != null;
-    } catch (_) {
-      return false;
-    }
-  }
-
   static Future<bool> toggleSubscription(String subscriberUid, String channelUid) async {
-    try {
-      final ref = _rtdb.child('subscriptions/$channelUid/$subscriberUid');
-      final snap = await ref.once();
-      final isSubbed = snap.snapshot.value != null;
+  try {
+    final ref = _rtdb.child('subscriptions/$channelUid/$subscriberUid');
+    final snap = await ref.once();
+    final isSubbed = snap.snapshot.value != null;
 
-      if (isSubbed) {
-        await ref.remove();
-        await _rtdb.child('userSubs/$subscriberUid/$channelUid').remove();
+    if (isSubbed) {
+      // Unsubscribe
+      await ref.remove();
+      await _rtdb.child('userSubs/$subscriberUid/$channelUid').remove();
 
-        await _rtdb.child('users/$channelUid').runTransaction((data) {
-  if (data == null) return Transaction.success(null);
-  final map = Map<String, dynamic>.from(data as Map);
-  final subs = (map['subscribersCount'] ?? 0) as int;
-  map['subscribersCount'] = math.max(0, subs - 1);
-  return Transaction.success(map);
- });
+      // Update counter using runTransaction
+      await _rtdb.child('users/$channelUid').runTransaction((data) {
+        if (data == null) return Transaction.success(null);
+        final map = Map<String, dynamic>.from(data as Map);
+        final subs = (map['subscribersCount'] ?? 0) as int;
+        map['subscribersCount'] = math.max(0, subs - 1);
+        return Transaction.success(map);
+      });
 
-        return false;
-      } else {
-        await ref.set(DateTime.now().millisecondsSinceEpoch);
-        await _rtdb.child('userSubs/$subscriberUid/$channelUid').set(DateTime.now().millisecondsSinceEpoch);
-
-        await _rtdb.child('users/$channelUid').runTransaction((data) {
-  if (data == null) return Transaction.success(null);
-  final map = Map<String, dynamic>.from(data as Map);
-  final subs = (map['subscribersCount'] ?? 0) as int;
-  map['subscribersCount'] = subs + 1;
-  return Transaction.success(map);
-});
-
-        await sendNotification(
-          toUid: channelUid,
-          title: '🔔 New Subscriber!',
-          message: 'Someone subscribed to your channel.',
-          type: 'subscribe',
-        );
-
-        return true;
-      }
-    } catch (e) {
-      debugPrint('toggleSubscription error: $e');
       return false;
+    } else {
+      // Subscribe
+      await ref.set(DateTime.now().millisecondsSinceEpoch);
+      await _rtdb.child('userSubs/$subscriberUid/$channelUid').set(DateTime.now().millisecondsSinceEpoch);
+
+      // Update counter using runTransaction
+      await _rtdb.child('users/$channelUid').runTransaction((data) {
+        if (data == null) return Transaction.success(null);
+        final map = Map<String, dynamic>.from(data as Map);
+        final subs = (map['subscribersCount'] ?? 0) as int;
+        map['subscribersCount'] = subs + 1;
+        return Transaction.success(map);
+      });
+
+      // Notify owner
+      await sendNotification(
+        toUid: channelUid,
+        title: '🔔 New Subscriber!',
+        message: 'Someone subscribed to your channel.',
+        type: 'subscribe',
+      );
+
+      return true;
     }
+  } catch (e) {
+    debugPrint('toggleSubscription error: $e');
+    return false;
   }
+}
 
   static Stream<int> getSubscriberCount(String channelUid) {
     return _rtdb.child('users/$channelUid/subscribersCount').onValue.map((e) {
