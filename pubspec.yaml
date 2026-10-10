@@ -12,33 +12,21 @@ dependencies:
   cupertino_icons: ^1.0.6
   app_links: ^6.3.2
   webview_flutter: ^4.7.0
-  supabase_flutter: ^2.0.0
   google_sign_in: ^6.2.1
   shared_preferences: ^2.2.2
   url_launcher: ^6.2.2
-  permission_handler: ^11.3.0
 
-  # 🌟 Video Player aur Stream ke liye zaroori packages
   video_player: ^2.8.2
   chewie: ^1.8.1
   http: ^1.2.1
   share_plus: ^9.0.0
-
-  # 🔔 Push Notification Package
   onesignal_flutter: ^5.2.0
 
-  # 🔥 Firebase Packages (View tracking aur Database ke liye)
   firebase_core: ^3.0.0
-  cloud_firestore: ^5.0.0
+  firebase_auth: ^5.0.0
+  firebase_database: ^11.0.0
 
-  # ⭐ NEW: Realtime Database (website dashboard + links sync)
-  firebase_database: ^11.1.0
-  firebase_auth: ^5.3.1
-
-  # ⭐ NEW: Device ID (view counting ke liye unique device)
   device_info_plus: ^10.1.2
-
-  # ⭐ NEW: Path provider (cache/temp files ke liye)
   path_provider: ^2.1.4
 
 dev_dependencies:
