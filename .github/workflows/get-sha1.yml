@@ -1,51 +1,15 @@
-name: Setup Keystore (One Time)
+- name: Delete old keystore
+  run: rm -f mayajaal-new.jks
 
-on:
-  workflow_dispatch:
-
-jobs:
-  setup:
-    runs-on: ubuntu-latest
-    steps:
-      - name: Checkout repository
-        uses: actions/checkout@v4
-
-      - name: Set up Java
-        uses: actions/setup-java@v4
-        with:
-          distribution: 'zulu'
-          java-version: '17'
-
-      - name: Delete old temp keystore
-        run: |
-          rm -f mayajaal-new.jks
-
-      - name: Generate New Keystore
-        run: |
-          keytool -genkeypair -v \
-            -keystore mayajaal-new.jks \
-            -alias newkey2024 \
-            -keyalg RSA \
-            -keysize 2048 \
-            -validity 10000 \
-            -storepass MayajaalRelease2024 \
-            -keypass MayajaalRelease2024 \
-            -dname "CN=MayaJaal, OU=Dev, O=MayaJaal, L=Delhi, S=Delhi, C=IN" \
-            -noprompt
-
-      - name: Get SHA1 and SHA256 Fingerprints
-        run: |
-          echo "=========================================="
-          echo "SHA1 AND SHA256 FINGERPRINTS:"
-          echo "=========================================="
-          keytool -list -v -keystore mayajaal-new.jks \
-            -alias newkey2024 \
-            -storepass MayajaalRelease2024 \
-            -keypass MayajaalRelease2024 | grep -iE "SHA1:|SHA256:"
-          echo "=========================================="
-
-      - name: Upload New Keystore
-        uses: actions/upload-artifact@v4
-        with:
-          name: mayajaal-new-keystore
-          path: mayajaal-new.jks
+- name: Generate New Keystore
+  run: |
+    keytool -genkeypair -v \
+      -keystore mayajaal-new.jks \
+      -alias newkey2024 \
+      -keyalg RSA \
+      -keysize 2048 \
+      -validity 10000 \
+      -storepass MayajaalRelease2024 \
+      -keypass MayajaalRelease2024 \
+      -dname "CN=MayaJaal, OU=Dev, O=MayaJaal, L=Delhi, S=Delhi, C=IN" \
+      -noprompt
