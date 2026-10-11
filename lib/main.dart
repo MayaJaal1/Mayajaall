@@ -88,9 +88,7 @@ class MayaJaalAccount {
   static DatabaseReference get _rtdb => FirebaseDatabase.instance.ref();
 
   static Future<void> init() async {
-    await GoogleSignIn.instance.initialize(
-     serverClientId: webClientId,
-   );
+  
     final user = FirebaseAuth.instance.currentUser;
     if (user != null) {
       cachedUid = user.uid;
@@ -655,7 +653,6 @@ Future<void> main() async {
         storageBucket: "mayajaal-app.firebasestorage.app",
         messagingSenderId: "96139047750",
         appId: "1:96139047750:android:b2bfa8b843d71a32012b47",
-        clientId: "96139047750-1m9qioft7q7drtfta7491jt9c6c692d3.apps.googleusercontent.com", 
        ),
       ),
     );
