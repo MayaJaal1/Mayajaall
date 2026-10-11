@@ -16,8 +16,6 @@ import 'package:firebase_core/firebase_core.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:firebase_database/firebase_database.dart';
 import 'package:device_info_plus/device_info_plus.dart';
-import 'package:screen_brightness/screen_brightness.dart';
-import 'package:floating/floating.dart';
 
 // ═══════════════════════════════════════════════════════
 // CONFIG
@@ -4226,7 +4224,10 @@ class ChannelScreen extends StatelessWidget {
               leading: Icon(Icons.bolt, color: kGreen, size: 32),
               title: Text(
                 'Quantum Streaming Node',
-                style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold),
+                style: TextStyle(
+                  color: Colors.white,
+                  fontWeight: FontWeight.bold,
+                ),
               ),
               subtitle: Text(
                 'Direct hardware pipeline active',
@@ -4246,7 +4247,10 @@ class ChannelScreen extends StatelessWidget {
               leading: Icon(Icons.cloud_done, color: kNeonCyan, size: 32),
               title: Text(
                 'High Speed CDN Node',
-                style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold),
+                style: TextStyle(
+                  color: Colors.white,
+                  fontWeight: FontWeight.bold,
+                ),
               ),
               subtitle: Text(
                 'Buffer acceleration: ENABLED',
@@ -4322,7 +4326,11 @@ class _HistoryScreenState extends State<HistoryScreen> {
               child: Column(
                 mainAxisAlignment: MainAxisAlignment.center,
                 children: [
-                  Icon(Icons.history, size: 60, color: kGreen.withOpacity(0.4)),
+                  Icon(
+                    Icons.history,
+                    size: 60,
+                    color: kGreen.withOpacity(0.4),
+                  ),
                   const SizedBox(height: 12),
                   Text(
                     tr('no_history'),
@@ -4461,7 +4469,10 @@ class _SettingsScreenState extends State<SettingsScreen> {
         children: [
           ListTile(
             leading: const Icon(Icons.palette_outlined, color: kGreen),
-            title: Text(tr('dark_theme'), style: const TextStyle(color: kGreen)),
+            title: Text(
+              tr('dark_theme'),
+              style: const TextStyle(color: kGreen),
+            ),
             subtitle: Text(
               _darkTheme ? 'Matrix Cyber Neon' : 'Standard Light',
               style: TextStyle(color: kGreen.withOpacity(0.6), fontSize: 12),
@@ -4475,7 +4486,10 @@ class _SettingsScreenState extends State<SettingsScreen> {
           Divider(color: kGreen.withOpacity(0.2)),
           ListTile(
             leading: const Icon(Icons.language, color: kGreen),
-            title: Text(tr('language'), style: const TextStyle(color: kGreen)),
+            title: Text(
+              tr('language'),
+              style: const TextStyle(color: kGreen),
+            ),
             subtitle: Text(
               _language,
               style: TextStyle(color: kGreen.withOpacity(0.6), fontSize: 12),
@@ -4867,7 +4881,9 @@ class _StreamPreviewScreenState extends State<StreamPreviewScreen>
                                 fontSize: 19,
                                 fontWeight: FontWeight.w900,
                                 letterSpacing: 2,
-                                shadows: [Shadow(color: kGreen, blurRadius: 12)],
+                                shadows: [
+                                  Shadow(color: kGreen, blurRadius: 12),
+                                ],
                               ),
                             ),
                             Text(
@@ -5097,7 +5113,9 @@ class _StreamPreviewScreenState extends State<StreamPreviewScreen>
                               ),
                               const SizedBox(width: 8),
                               Text(
-                                _canProceed ? 'OPEN PLAYER NOW' : 'PLEASE WAIT...',
+                                _canProceed
+                                    ? 'OPEN PLAYER NOW'
+                                    : 'PLEASE WAIT...',
                                 style: TextStyle(
                                   color: _canProceed
                                       ? Colors.black
@@ -5229,7 +5247,8 @@ class _StreamPreviewScreenState extends State<StreamPreviewScreen>
 }
 
 // ═══════════════════════════════════════════════════════
-// NATIVE VIDEO PLAYER — FULL UPGRADE
+// NATIVE VIDEO PLAYER — Full Upgrade
+// No external packages — Manual implementation
 // ═══════════════════════════════════════════════════════
 class NativeVideoPlayerScreen extends StatefulWidget {
   final String videoUrl;
@@ -5254,8 +5273,6 @@ class NativeVideoPlayerScreen extends StatefulWidget {
 
 class _NativeVideoPlayerScreenState extends State<NativeVideoPlayerScreen> {
   late VideoPlayerController _controller;
-  PiPStatus _pipStatus = PiPStatus.disabled;
-  final Floating _floating = Floating();
 
   bool _isInitialized = false;
   bool _hasError = false;
@@ -5283,9 +5300,9 @@ class _NativeVideoPlayerScreenState extends State<NativeVideoPlayerScreen> {
   bool _isDownloading = false;
   double _downloadProgress = 0.0;
 
-  // Volume & Brightness
+  // Volume & Brightness (Manual — no external packages)
   double _volume = 1.0;
-  double _brightness = 1.0;
+  double _brightness = 1.0; // 0.1 to 1.0 overlay dimming
   double _brightnessStart = 1.0;
   double _volumeStart = 1.0;
   double _dragStartY = 0;
@@ -5311,26 +5328,16 @@ class _NativeVideoPlayerScreenState extends State<NativeVideoPlayerScreen> {
   List<Map<String, dynamic>> _relatedVideos = [];
   bool _relatedLoading = true;
 
-  // Double-tap seek indicator
-  String _doubleTapFeedback = '';
-
   @override
   void initState() {
     super.initState();
     _loadUserPrefs();
     _initVideo();
     _startStatsListeners();
-    _initPiP();
     _fetchOwner().then((_) => _loadRelatedVideos());
   }
 
-  Future<void> _initPiP() async {
-    try {
-      _pipStatus = await _floating.pipStatus;
-    } catch (_) {}
-  }
-
-  // ═══════════ VIEW REPORT ═══════════
+  // ═══════════ VIEW REPORT (only after 10s actual playback) ═══════════
   Future<void> _reportViewToBackend() async {
     if (_viewReported) return;
     _viewReported = true;
@@ -5452,14 +5459,6 @@ class _NativeVideoPlayerScreenState extends State<NativeVideoPlayerScreen> {
       _controller.setPlaybackSpeed(_playbackSpeed);
       _controller.setVolume(_volume);
 
-      // Load device brightness
-      try {
-        _brightness = await ScreenBrightness().application;
-        if (_brightness <= 0) _brightness = 1.0;
-      } catch (_) {
-        _brightness = 1.0;
-      }
-
       _controller.addListener(() {
         if (mounted) setState(() {});
       });
@@ -5481,9 +5480,6 @@ class _NativeVideoPlayerScreenState extends State<NativeVideoPlayerScreen> {
     _feedbackTimer?.cancel();
     _watchTimer?.cancel();
     _controller.dispose();
-    try {
-      ScreenBrightness().resetApplicationScreenBrightness();
-    } catch (_) {}
     SystemChrome.setPreferredOrientations([DeviceOrientation.portraitUp]);
     super.dispose();
   }
@@ -5532,20 +5528,17 @@ class _NativeVideoPlayerScreenState extends State<NativeVideoPlayerScreen> {
   void _onDoubleTap(TapDownDetails details, double width) {
     final dx = details.localPosition.dx;
     if (dx < width * 0.35) {
-      // Left — back 10s
       final newPos = _controller.value.position - const Duration(seconds: 10);
       _controller.seekTo(newPos < Duration.zero ? Duration.zero : newPos);
       Haptic.medium();
       _showFeedback('◀◀ 10s');
     } else if (dx > width * 0.65) {
-      // Right — forward 10s
       final newPos = _controller.value.position + const Duration(seconds: 10);
       final maxPos = _controller.value.duration;
       _controller.seekTo(newPos > maxPos ? maxPos : newPos);
       Haptic.medium();
       _showFeedback('10s ▶▶');
     } else {
-      // Center — toggle play
       setState(() {
         _controller.value.isPlaying ? _controller.pause() : _controller.play();
       });
@@ -5586,30 +5579,6 @@ class _NativeVideoPlayerScreenState extends State<NativeVideoPlayerScreen> {
     }
   }
 
-  Future<void> _enablePiP() async {
-    Haptic.medium();
-    try {
-      final isAvailable = await _floating.isPipAvailable;
-      if (!isAvailable) {
-        if (mounted) {
-          ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(
-              backgroundColor: kCardBg,
-              content: Text(
-                'PiP is not supported on this device',
-                style: TextStyle(color: Colors.orangeAccent),
-              ),
-            ),
-          );
-        }
-        return;
-      }
-      await _floating.enable(const AspectRatio(16 / 9));
-    } catch (e) {
-      debugPrint('PiP error: $e');
-    }
-  }
-
   String _formatDuration(Duration d) {
     final m = d.inMinutes.remainder(60).toString().padLeft(2, '0');
     final s = d.inSeconds.remainder(60).toString().padLeft(2, '0');
@@ -5621,7 +5590,12 @@ class _NativeVideoPlayerScreenState extends State<NativeVideoPlayerScreen> {
     Haptic.medium();
     final uid = MayaJaalAccount.cachedUid;
     if (uid == null) return;
-    await FirebaseService.toggleLike(widget.videoId, uid, _ownerUid, widget.title);
+    await FirebaseService.toggleLike(
+      widget.videoId,
+      uid,
+      _ownerUid,
+      widget.title,
+    );
   }
 
   Future<void> _handleDislike() async {
@@ -5957,7 +5931,7 @@ class _NativeVideoPlayerScreenState extends State<NativeVideoPlayerScreen> {
     );
   }
 
-  // ═══════════ REAL VERTICAL DRAG (Volume/Brightness) ═══════════
+  // ═══════════ VERTICAL DRAG (Volume / Brightness) ═══════════
   void _onVerticalDragStart(DragStartDetails details, double width) {
     _dragStartY = details.localPosition.dy;
     final dx = details.localPosition.dx;
@@ -5981,11 +5955,8 @@ class _NativeVideoPlayerScreenState extends State<NativeVideoPlayerScreen> {
       _controller.setVolume(newVol);
       _showFeedback('🔊 ${(newVol * 100).toInt()}%');
     } else if (_isAdjustingBrightness) {
-      final newBright = (_brightnessStart + delta).clamp(0.05, 1.0);
+      final newBright = (_brightnessStart + delta).clamp(0.1, 1.0);
       setState(() => _brightness = newBright);
-      try {
-        ScreenBrightness().setApplicationScreenBrightness(newBright);
-      } catch (_) {}
       _showFeedback('☀️ ${(newBright * 100).toInt()}%');
     }
   }
@@ -6145,6 +6116,16 @@ class _NativeVideoPlayerScreenState extends State<NativeVideoPlayerScreen> {
                                       alignment: Alignment.center,
                                       children: [
                                         _buildScaledVideo(),
+                                        // ⭐ Brightness Dimming Overlay
+                                        if (_brightness < 1.0)
+                                          Positioned.fill(
+                                            child: IgnorePointer(
+                                              child: Container(
+                                                color: Colors.black
+                                                    .withOpacity(1.0 - _brightness),
+                                              ),
+                                            ),
+                                          ),
                                         // Quality Badge
                                         Positioned(
                                           top: 10,
@@ -6193,71 +6174,37 @@ class _NativeVideoPlayerScreenState extends State<NativeVideoPlayerScreen> {
                                             ),
                                           ),
                                         ),
-                                        // Speed + PiP Badges
+                                        // Speed Badge
                                         Positioned(
                                           top: 10,
                                           right: 10,
-                                          child: Row(
-                                            children: [
-                                              GestureDetector(
-                                                onTap: _enablePiP,
-                                                child: Container(
-                                                  padding: const EdgeInsets
-                                                      .symmetric(
-                                                    horizontal: 6,
-                                                    vertical: 5,
-                                                  ),
-                                                  margin: const EdgeInsets
-                                                      .only(right: 6),
-                                                  decoration: BoxDecoration(
-                                                    color: Colors.black
-                                                        .withOpacity(0.7),
-                                                    borderRadius:
-                                                        BorderRadius.circular(
-                                                            6),
-                                                    border: Border.all(
-                                                      color: kNeonPurple,
-                                                      width: 1,
-                                                    ),
-                                                  ),
-                                                  child: const Icon(
-                                                    Icons.picture_in_picture_alt,
-                                                    color: kNeonPurple,
-                                                    size: 16,
-                                                  ),
+                                          child: GestureDetector(
+                                            onTap: _showSpeedDialog,
+                                            child: Container(
+                                              padding:
+                                                  const EdgeInsets.symmetric(
+                                                horizontal: 7,
+                                                vertical: 4,
+                                              ),
+                                              decoration: BoxDecoration(
+                                                color: Colors.black
+                                                    .withOpacity(0.7),
+                                                borderRadius:
+                                                    BorderRadius.circular(6),
+                                                border: Border.all(
+                                                  color: kNeonCyan,
+                                                  width: 1,
                                                 ),
                                               ),
-                                              GestureDetector(
-                                                onTap: _showSpeedDialog,
-                                                child: Container(
-                                                  padding: const EdgeInsets
-                                                      .symmetric(
-                                                    horizontal: 7,
-                                                    vertical: 4,
-                                                  ),
-                                                  decoration: BoxDecoration(
-                                                    color: Colors.black
-                                                        .withOpacity(0.7),
-                                                    borderRadius:
-                                                        BorderRadius.circular(
-                                                            6),
-                                                    border: Border.all(
-                                                      color: kNeonCyan,
-                                                      width: 1,
-                                                    ),
-                                                  ),
-                                                  child: Text(
-                                                    '${_playbackSpeed}x',
-                                                    style: const TextStyle(
-                                                      color: kNeonCyan,
-                                                      fontSize: 10,
-                                                      fontWeight:
-                                                          FontWeight.bold,
-                                                    ),
-                                                  ),
+                                              child: Text(
+                                                '${_playbackSpeed}x',
+                                                style: const TextStyle(
+                                                  color: kNeonCyan,
+                                                  fontSize: 10,
+                                                  fontWeight: FontWeight.bold,
                                                 ),
                                               ),
-                                            ],
+                                            ),
                                           ),
                                         ),
                                         // Center Play/Pause
@@ -6322,7 +6269,7 @@ class _NativeVideoPlayerScreenState extends State<NativeVideoPlayerScreen> {
                                               ),
                                             ),
                                           ),
-                                        // Bottom bar
+                                        // Progress Bar
                                         Positioned(
                                           bottom: 6,
                                           left: 10,
@@ -6383,7 +6330,8 @@ class _NativeVideoPlayerScreenState extends State<NativeVideoPlayerScreen> {
                                                     onChanged: (val) {
                                                       _controller.seekTo(
                                                         Duration(
-                                                            seconds: val.toInt()),
+                                                            seconds:
+                                                                val.toInt()),
                                                       );
                                                     },
                                                   ),
@@ -6464,7 +6412,8 @@ class _NativeVideoPlayerScreenState extends State<NativeVideoPlayerScreen> {
             if (!_isFullscreen)
               Expanded(
                 child: SingleChildScrollView(
-                  padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+                  padding:
+                      const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
                   child: Column(
                     children: [
                       // Video Info Card
@@ -7070,7 +7019,9 @@ class UserSearchDelegate extends SearchDelegate {
         future: FirebaseService.searchUsers(query),
         builder: (context, snapshot) {
           if (snapshot.connectionState == ConnectionState.waiting) {
-            return const Center(child: CircularProgressIndicator(color: kGreen));
+            return const Center(
+              child: CircularProgressIndicator(color: kGreen),
+            );
           }
           final users = snapshot.data ?? [];
           if (users.isEmpty) {
@@ -7086,7 +7037,10 @@ class UserSearchDelegate extends SearchDelegate {
                   const SizedBox(height: 12),
                   Text(
                     'No user found for "$query"',
-                    style: const TextStyle(color: Colors.white54, fontSize: 14),
+                    style: const TextStyle(
+                      color: Colors.white54,
+                      fontSize: 14,
+                    ),
                   ),
                 ],
               ),
@@ -7175,9 +7129,11 @@ class _UserProfileScreenState extends State<UserProfileScreen> {
   bool _loading = true;
 
   String get _channelUid => widget.channelProfile['uid']?.toString() ?? '';
-  String get _channelName => widget.channelProfile['name']?.toString() ?? 'User';
+  String get _channelName =>
+      widget.channelProfile['name']?.toString() ?? 'User';
   String get _channelEmail => widget.channelProfile['email']?.toString() ?? '';
-  String get _channelPhoto => widget.channelProfile['photoURL']?.toString() ?? '';
+  String get _channelPhoto =>
+      widget.channelProfile['photoURL']?.toString() ?? '';
 
   @override
   void initState() {
@@ -7203,7 +7159,8 @@ class _UserProfileScreenState extends State<UserProfileScreen> {
     Haptic.medium();
     final myUid = MayaJaalAccount.cachedUid;
     if (myUid == null) return;
-    final newState = await FirebaseService.toggleSubscription(myUid, _channelUid);
+    final newState =
+        await FirebaseService.toggleSubscription(myUid, _channelUid);
     if (mounted) {
       setState(() => _isSubscribed = newState);
       ScaffoldMessenger.of(context).showSnackBar(
@@ -7789,7 +7746,9 @@ class _EarningsScreenState extends State<EarningsScreen>
                   const Divider(color: Colors.white24, height: 28),
                   Row(
                     children: [
-                      Expanded(child: _statChip('👁 Total Views', '$totalViews')),
+                      Expanded(
+                        child: _statChip('👁 Total Views', '$totalViews'),
+                      ),
                       const SizedBox(width: 8),
                       Expanded(child: _statChip('📅 Today', '$todayViews')),
                       const SizedBox(width: 8),
@@ -7879,7 +7838,10 @@ class _EarningsScreenState extends State<EarningsScreen>
                       child: Text(
                         'No links yet. Bot me video upload karke start karein.',
                         textAlign: TextAlign.center,
-                        style: TextStyle(color: Colors.white54, fontSize: 12),
+                        style: TextStyle(
+                          color: Colors.white54,
+                          fontSize: 12,
+                        ),
                       ),
                     ),
                   )
