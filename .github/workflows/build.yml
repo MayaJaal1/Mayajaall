@@ -212,7 +212,7 @@ jobs:
                   release {
                       storeFile file('mayajaal-release.jks')
                       storePassword 'MayajaalRelease2024'
-                      keyAlias 'mayajaal'
+                      keyAlias 'newkey2024'
                       keyPassword 'MayajaalRelease2024'
                   }
               }
@@ -267,14 +267,14 @@ jobs:
           apply from: "$flutterSdkPath/packages/flutter_tools/gradle/app_plugin_loader.gradle"
           EOF
 
-      # 🌟 SHA1 and SHA256 Fingerprints
+      # 🌟 SHA1 and SHA256 Fingerprints (Alias updated to newkey2024)
       - name: Get SHA1 and SHA256 Fingerprints
         run: |
           echo "=========================================="
           echo "SHA FINGERPRINTS (YEH COPY KAREIN):"
           echo "=========================================="
           keytool -list -v -keystore android/app/mayajaal-release.jks \
-            -alias mayajaal \
+            -alias newkey2024 \
             -storepass MayajaalRelease2024 \
             -keypass MayajaalRelease2024 | grep -iE "sha1|sha-1|sha256|sha-256"
           echo "=========================================="
