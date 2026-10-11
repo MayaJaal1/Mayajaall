@@ -16,6 +16,8 @@ import 'package:firebase_core/firebase_core.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:firebase_database/firebase_database.dart';
 import 'package:device_info_plus/device_info_plus.dart';
+import 'package:screen_brightness/screen_brightness.dart';
+import 'package:floating/floating.dart';
 
 // ═══════════════════════════════════════════════════════
 // CONFIG
@@ -23,7 +25,7 @@ import 'package:device_info_plus/device_info_plus.dart';
 const String webClientId = '96139047750-5ooi0pbvch98qu447somuurh6k6fmhcj.apps.googleusercontent.com';
 const String oneSignalAppId = '06b99c2b-b3b4-413b-b6cc-480a624f4e25';
 const String kBackendBaseUrl = 'https://www.mayajaal.online';
-const int kAppCurrentVersionCode = 4;
+const int kAppCurrentVersionCode = 2;
 
 const Color kGreen = Color(0xFF00FF66);
 const Color kNeonCyan = Color(0xFF00F0FF);
@@ -79,7 +81,25 @@ String tr(String key) {
 }
 
 // ═══════════════════════════════════════════════════════
-// RANK SYSTEM (NEW)
+// HAPTIC HELPER
+// ═══════════════════════════════════════════════════════
+class Haptic {
+  static Future<void> light() async {
+    try { await HapticFeedback.lightImpact(); } catch (_) {}
+  }
+  static Future<void> medium() async {
+    try { await HapticFeedback.mediumImpact(); } catch (_) {}
+  }
+  static Future<void> heavy() async {
+    try { await HapticFeedback.heavyImpact(); } catch (_) {}
+  }
+  static Future<void> selection() async {
+    try { await HapticFeedback.selectionClick(); } catch (_) {}
+  }
+}
+
+// ═══════════════════════════════════════════════════════
+// CYBER RANK SYSTEM
 // ═══════════════════════════════════════════════════════
 class CyberRank {
   static const List<Map<String, dynamic>> ranks = [
@@ -103,6 +123,14 @@ class CyberRank {
       if (views < (r['min'] as int)) return r;
     }
     return null;
+  }
+
+  static int getIndex(int views) {
+    int idx = 0;
+    for (int i = 0; i < ranks.length; i++) {
+      if (views >= (ranks[i]['min'] as int)) idx = i;
+    }
+    return idx;
   }
 }
 
@@ -247,6 +275,15 @@ class MayaJaalAccount {
     } catch (e) {
       return {};
     }
+  }
+
+  static Stream<Map<String, dynamic>> getDashboardStream() {
+    if (cachedUid == null) return const Stream.empty();
+    return _rtdb.child('users/$cachedUid/dashboard').onValue.map((event) {
+      final val = event.snapshot.value;
+      if (val == null || val is! Map) return <String, dynamic>{};
+      return Map<String, dynamic>.from(val);
+    });
   }
 
   static Future<List<Map<String, dynamic>>> getUserLinks({int limit = 20}) async {
@@ -547,16 +584,19 @@ class FirebaseService {
       final result = <Map<String, dynamic>>[];
       final seenIds = <String>{};
 
-      // Priority 1: Recent videos (last watched)
+      // Priority 1: Recently watched
       for (final id in recentIds) {
-        final found = all.firstWhere((v) => v['id'] == id, orElse: () => {});
-        if (found.isNotEmpty && !seenIds.contains(found['id'])) {
-          result.add(found);
-          seenIds.add(found['id'] as String);
-        }
+        if (result.length >= limit) break;
+        try {
+          final found = all.firstWhere((v) => v['id'] == id);
+          if (!seenIds.contains(found['id'])) {
+            result.add(found);
+            seenIds.add(found['id'] as String);
+          }
+        } catch (_) {}
       }
 
-      // Priority 2: Same uploader's videos
+      // Priority 2: Same uploader
       if (currentOwnerUid != null && currentOwnerUid.isNotEmpty) {
         for (final v in all) {
           if (result.length >= limit) break;
@@ -722,7 +762,7 @@ class DeviceIdHelper {
 }
 
 // ═══════════════════════════════════════════════════════
-// WATCH HISTORY HELPER (For Related Videos)
+// WATCH HISTORY HELPER
 // ═══════════════════════════════════════════════════════
 class WatchHistory {
   static Future<List<String>> getRecentIds({int limit = 10}) async {
@@ -830,31 +870,33 @@ class _MatrixRainState extends State<MatrixRain> {
 
   @override
   Widget build(BuildContext context) {
-    return LayoutBuilder(builder: (context, c) {
-      final colWidth = c.maxWidth / _yPositions.length;
-      return Stack(
-        children: List.generate(_yPositions.length, (i) {
-          return Positioned(
-            left: i * colWidth,
-            top: _yPositions[i],
-            child: Text(
-              _letters[i],
-              style: TextStyle(
-                color: kGreen.withOpacity(widget.opacity),
-                fontSize: 13,
-                fontFamily: 'monospace',
-                shadows: const [Shadow(color: kGreen, blurRadius: 6)],
+    return RepaintBoundary(
+      child: LayoutBuilder(builder: (context, c) {
+        final colWidth = c.maxWidth / _yPositions.length;
+        return Stack(
+          children: List.generate(_yPositions.length, (i) {
+            return Positioned(
+              left: i * colWidth,
+              top: _yPositions[i],
+              child: Text(
+                _letters[i],
+                style: TextStyle(
+                  color: kGreen.withOpacity(widget.opacity),
+                  fontSize: 13,
+                  fontFamily: 'monospace',
+                  shadows: const [Shadow(color: kGreen, blurRadius: 6)],
+                ),
               ),
-            ),
-          );
-        }),
-      );
-    });
+            );
+          }),
+        );
+      }),
+    );
   }
 }
 
 // ═══════════════════════════════════════════════════════
-// PROFESSIONAL LOADING SCREEN (NEW)
+// PROFESSIONAL LOADING SCREEN
 // ═══════════════════════════════════════════════════════
 class ProfessionalLoader extends StatefulWidget {
   final String message;
@@ -1545,6 +1587,7 @@ class _LoginScreenState extends State<LoginScreen>
                           children: [
                             Expanded(
                               child: _tab('LOGIN', _isLoginTab, () {
+                                Haptic.selection();
                                 setState(() {
                                   _isLoginTab = true;
                                   _error = '';
@@ -1554,6 +1597,7 @@ class _LoginScreenState extends State<LoginScreen>
                             ),
                             Expanded(
                               child: _tab('SIGN UP', !_isLoginTab, () {
+                                Haptic.selection();
                                 setState(() {
                                   _isLoginTab = false;
                                   _error = '';
@@ -1795,8 +1839,10 @@ class _LoginScreenState extends State<LoginScreen>
                     color: kGreen,
                     size: 19,
                   ),
-                  onPressed: () =>
-                      setState(() => _obscurePassword = !_obscurePassword),
+                  onPressed: () {
+                    Haptic.light();
+                    setState(() => _obscurePassword = !_obscurePassword);
+                  },
                 )
               : null,
           hintText: hint,
@@ -1812,7 +1858,7 @@ class _LoginScreenState extends State<LoginScreen>
 }
 
 // ═══════════════════════════════════════════════════════
-// MAIN NAVIGATION HOLDER
+// MAIN NAVIGATION HOLDER (with notification badge on nav)
 // ═══════════════════════════════════════════════════════
 class MainNavigationHolder extends StatefulWidget {
   const MainNavigationHolder({super.key});
@@ -1851,33 +1897,104 @@ class _MainNavigationHolderState extends State<MainNavigationHolder> {
             ),
           ],
         ),
-        child: BottomNavigationBar(
-          currentIndex: _currentIndex,
-          backgroundColor: Colors.transparent,
-          elevation: 0,
-          selectedItemColor: kGreen,
-          unselectedItemColor: Colors.white54,
-          type: BottomNavigationBarType.fixed,
-          selectedFontSize: 11,
-          unselectedFontSize: 11,
-          onTap: (index) => setState(() => _currentIndex = index),
-          items: const [
-            BottomNavigationBarItem(
-              icon: Icon(Icons.home_outlined),
-              activeIcon: Icon(Icons.home, color: kGreen),
-              label: 'Home',
-            ),
-            BottomNavigationBarItem(
-              icon: Icon(Icons.ondemand_video_outlined),
-              activeIcon: Icon(Icons.ondemand_video, color: kGreen),
-              label: 'Channel',
-            ),
-            BottomNavigationBarItem(
-              icon: Icon(Icons.history_outlined),
-              activeIcon: Icon(Icons.history, color: kGreen),
-              label: 'History',
-            ),
-          ],
+        child: StreamBuilder<int>(
+          stream: MayaJaalAccount.cachedUid != null
+              ? FirebaseService.getUnreadCount(MayaJaalAccount.cachedUid!)
+              : Stream.value(0),
+          builder: (context, snapshot) {
+            final unread = snapshot.data ?? 0;
+            return BottomNavigationBar(
+              currentIndex: _currentIndex,
+              backgroundColor: Colors.transparent,
+              elevation: 0,
+              selectedItemColor: kGreen,
+              unselectedItemColor: Colors.white54,
+              type: BottomNavigationBarType.fixed,
+              selectedFontSize: 11,
+              unselectedFontSize: 11,
+              onTap: (index) {
+                Haptic.selection();
+                setState(() => _currentIndex = index);
+              },
+              items: [
+                const BottomNavigationBarItem(
+                  icon: Icon(Icons.home_outlined),
+                  activeIcon: Icon(Icons.home, color: kGreen),
+                  label: 'Home',
+                ),
+                const BottomNavigationBarItem(
+                  icon: Icon(Icons.ondemand_video_outlined),
+                  activeIcon: Icon(Icons.ondemand_video, color: kGreen),
+                  label: 'Channel',
+                ),
+                BottomNavigationBarItem(
+                  icon: Stack(
+                    clipBehavior: Clip.none,
+                    children: [
+                      const Icon(Icons.history_outlined),
+                      if (unread > 0)
+                        Positioned(
+                          right: -4,
+                          top: -4,
+                          child: Container(
+                            padding: const EdgeInsets.symmetric(
+                              horizontal: 4,
+                              vertical: 1,
+                            ),
+                            decoration: BoxDecoration(
+                              color: Colors.redAccent,
+                              borderRadius: BorderRadius.circular(8),
+                            ),
+                            constraints: const BoxConstraints(minWidth: 14),
+                            child: Text(
+                              unread > 9 ? '9+' : '$unread',
+                              style: const TextStyle(
+                                color: Colors.white,
+                                fontSize: 8,
+                                fontWeight: FontWeight.bold,
+                              ),
+                              textAlign: TextAlign.center,
+                            ),
+                          ),
+                        ),
+                    ],
+                  ),
+                  activeIcon: Stack(
+                    clipBehavior: Clip.none,
+                    children: [
+                      const Icon(Icons.history, color: kGreen),
+                      if (unread > 0)
+                        Positioned(
+                          right: -4,
+                          top: -4,
+                          child: Container(
+                            padding: const EdgeInsets.symmetric(
+                              horizontal: 4,
+                              vertical: 1,
+                            ),
+                            decoration: BoxDecoration(
+                              color: Colors.redAccent,
+                              borderRadius: BorderRadius.circular(8),
+                            ),
+                            constraints: const BoxConstraints(minWidth: 14),
+                            child: Text(
+                              unread > 9 ? '9+' : '$unread',
+                              style: const TextStyle(
+                                color: Colors.white,
+                                fontSize: 8,
+                                fontWeight: FontWeight.bold,
+                              ),
+                              textAlign: TextAlign.center,
+                            ),
+                          ),
+                        ),
+                    ],
+                  ),
+                  label: 'History',
+                ),
+              ],
+            );
+          },
         ),
       ),
     );
@@ -1887,7 +2004,7 @@ class _MainNavigationHolderState extends State<MainNavigationHolder> {
 // ============ PART 1 END ============
 
 // ═══════════════════════════════════════════════════════
-// HOME SCREEN — Real notifications
+// HOME SCREEN — Real notifications + Paste Button
 // ═══════════════════════════════════════════════════════
 class HomeScreen extends StatefulWidget {
   final VoidCallback? onMenuTap;
@@ -1899,6 +2016,7 @@ class HomeScreen extends StatefulWidget {
 class _HomeScreenState extends State<HomeScreen>
     with SingleTickerProviderStateMixin {
   final TextEditingController _linkController = TextEditingController();
+  final FocusNode _linkFocus = FocusNode();
   late AnimationController _pulseController;
   late Animation<double> _pulseAnimation;
 
@@ -1917,7 +2035,58 @@ class _HomeScreenState extends State<HomeScreen>
   void dispose() {
     _pulseController.dispose();
     _linkController.dispose();
+    _linkFocus.dispose();
     super.dispose();
+  }
+
+  // ══════════ PASTE FROM CLIPBOARD (FIXED) ══════════
+  Future<void> _pasteFromClipboard() async {
+    Haptic.medium();
+    try {
+      final data = await Clipboard.getData(Clipboard.kTextPlain);
+      final text = data?.text?.trim() ?? '';
+      if (text.isEmpty) {
+        if (!mounted) return;
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            backgroundColor: kCardBg,
+            content: Text(
+              '❌ Clipboard khaali hai',
+              style: TextStyle(color: Colors.orangeAccent),
+            ),
+            duration: Duration(seconds: 2),
+          ),
+        );
+        return;
+      }
+      _linkController.text = text;
+      _linkController.selection = TextSelection.fromPosition(
+        TextPosition(offset: text.length),
+      );
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          backgroundColor: kCardBg,
+          content: Text(
+            '✅ Link pasted',
+            style: TextStyle(color: kGreen),
+          ),
+          duration: Duration(seconds: 1),
+        ),
+      );
+    } catch (e) {
+      debugPrint('Paste error: $e');
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          backgroundColor: kCardBg,
+          content: Text(
+            '❌ Paste failed: $e',
+            style: const TextStyle(color: Colors.redAccent),
+          ),
+        ),
+      );
+    }
   }
 
   void _showNotificationsSheet(BuildContext context) {
@@ -2013,7 +2182,9 @@ class _HomeScreenState extends State<HomeScreen>
                             onTap: () {
                               if (!isRead) {
                                 FirebaseService.markNotificationRead(
-                                    uid, n['id'] as String);
+                                  uid,
+                                  n['id'] as String,
+                                );
                               }
                             },
                             child: Container(
@@ -2043,7 +2214,9 @@ class _HomeScreenState extends State<HomeScreen>
                                       ),
                                     ),
                                     child: Icon(
-                                      _notifIcon(n['type']?.toString() ?? 'general'),
+                                      _notifIcon(
+                                        n['type']?.toString() ?? 'general',
+                                      ),
                                       color: kGreen,
                                       size: 18,
                                     ),
@@ -2051,7 +2224,8 @@ class _HomeScreenState extends State<HomeScreen>
                                   const SizedBox(width: 12),
                                   Expanded(
                                     child: Column(
-                                      crossAxisAlignment: CrossAxisAlignment.start,
+                                      crossAxisAlignment:
+                                          CrossAxisAlignment.start,
                                       children: [
                                         Text(
                                           n['title'] ?? '',
@@ -2133,8 +2307,9 @@ class _HomeScreenState extends State<HomeScreen>
   }
 
   void _searchAndPlay() {
-    String input = _linkController.text.trim();
+    final input = _linkController.text.trim();
     if (input.isEmpty) {
+      Haptic.heavy();
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(
           content: Text('Please paste a stream URL first!'),
@@ -2143,7 +2318,9 @@ class _HomeScreenState extends State<HomeScreen>
       );
       return;
     }
+    Haptic.medium();
     _linkController.clear();
+    _linkFocus.unfocus();
     Navigator.push(
       context,
       MaterialPageRoute(
@@ -2153,41 +2330,44 @@ class _HomeScreenState extends State<HomeScreen>
   }
 
   Widget _catCard(IconData icon, String title, String subtitle) {
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 12),
-      decoration: BoxDecoration(
-        color: kCardBg,
-        borderRadius: BorderRadius.circular(14),
-        border: Border.all(color: kGreen.withOpacity(0.4), width: 1.2),
-        boxShadow: [
-          BoxShadow(color: kGreen.withOpacity(0.08), blurRadius: 10),
-        ],
-      ),
-      child: Column(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          Icon(icon, color: kGreen, size: 26),
-          const SizedBox(height: 6),
-          Text(
-            title,
-            style: const TextStyle(
-              color: Colors.white,
-              fontSize: 12,
-              fontWeight: FontWeight.bold,
+    return GestureDetector(
+      onTap: () => Haptic.light(),
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 12),
+        decoration: BoxDecoration(
+          color: kCardBg,
+          borderRadius: BorderRadius.circular(14),
+          border: Border.all(color: kGreen.withOpacity(0.4), width: 1.2),
+          boxShadow: [
+            BoxShadow(color: kGreen.withOpacity(0.08), blurRadius: 10),
+          ],
+        ),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Icon(icon, color: kGreen, size: 26),
+            const SizedBox(height: 6),
+            Text(
+              title,
+              style: const TextStyle(
+                color: Colors.white,
+                fontSize: 12,
+                fontWeight: FontWeight.bold,
+              ),
             ),
-          ),
-          const SizedBox(height: 2),
-          Text(
-            subtitle,
-            style: TextStyle(
-              color: Colors.white.withOpacity(0.55),
-              fontSize: 9,
+            const SizedBox(height: 2),
+            Text(
+              subtitle,
+              style: TextStyle(
+                color: Colors.white.withOpacity(0.55),
+                fontSize: 9,
+              ),
+              textAlign: TextAlign.center,
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
             ),
-            textAlign: TextAlign.center,
-            maxLines: 1,
-            overflow: TextOverflow.ellipsis,
-          ),
-        ],
+          ],
+        ),
       ),
     );
   }
@@ -2200,13 +2380,17 @@ class _HomeScreenState extends State<HomeScreen>
         child: SingleChildScrollView(
           child: Column(
             children: [
+              // ══════ TOP BAR ══════
               Padding(
                 padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
                 child: Row(
                   children: [
                     IconButton(
                       icon: const Icon(Icons.menu, color: kGreen, size: 26),
-                      onPressed: widget.onMenuTap,
+                      onPressed: () {
+                        Haptic.light();
+                        widget.onMenuTap?.call();
+                      },
                     ),
                     Expanded(
                       child: Column(
@@ -2249,12 +2433,17 @@ class _HomeScreenState extends State<HomeScreen>
                     IconButton(
                       icon: const Icon(Icons.search, color: kGreen, size: 24),
                       onPressed: () {
-                        showSearch(context: context, delegate: UserSearchDelegate());
+                        Haptic.light();
+                        showSearch(
+                          context: context,
+                          delegate: UserSearchDelegate(),
+                        );
                       },
                     ),
                     StreamBuilder<int>(
                       stream: MayaJaalAccount.cachedUid != null
-                          ? FirebaseService.getUnreadCount(MayaJaalAccount.cachedUid!)
+                          ? FirebaseService.getUnreadCount(
+                              MayaJaalAccount.cachedUid!)
                           : Stream.value(0),
                       builder: (context, snapshot) {
                         final unread = snapshot.data ?? 0;
@@ -2265,7 +2454,10 @@ class _HomeScreenState extends State<HomeScreen>
                               color: kGreen,
                               size: 24,
                             ),
-                            onPressed: () => _showNotificationsSheet(context),
+                            onPressed: () {
+                              Haptic.light();
+                              _showNotificationsSheet(context);
+                            },
                           ),
                           if (unread > 0)
                             Positioned(
@@ -2302,6 +2494,8 @@ class _HomeScreenState extends State<HomeScreen>
                   ],
                 ),
               ),
+
+              // ══════ HERO / LOGO ══════
               Container(
                 width: double.infinity,
                 padding: const EdgeInsets.symmetric(vertical: 20),
@@ -2402,6 +2596,8 @@ class _HomeScreenState extends State<HomeScreen>
                   ],
                 ),
               ),
+
+              // ══════ SEARCH / PASTE BAR ══════
               Padding(
                 padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
                 child: Container(
@@ -2451,8 +2647,8 @@ class _HomeScreenState extends State<HomeScreen>
                         padding: const EdgeInsets.all(12),
                         child: Container(
                           padding: const EdgeInsets.symmetric(
-                            horizontal: 14,
-                            vertical: 8,
+                            horizontal: 12,
+                            vertical: 6,
                           ),
                           decoration: BoxDecoration(
                             color: const Color(0xFF031A0B),
@@ -2464,18 +2660,19 @@ class _HomeScreenState extends State<HomeScreen>
                               const Icon(
                                 Icons.link_rounded,
                                 color: kGreen,
-                                size: 28,
+                                size: 24,
                               ),
-                              const SizedBox(width: 12),
+                              const SizedBox(width: 8),
                               Expanded(
                                 child: Column(
                                   crossAxisAlignment: CrossAxisAlignment.start,
                                   children: [
                                     TextField(
                                       controller: _linkController,
+                                      focusNode: _linkFocus,
                                       style: const TextStyle(
                                         color: Colors.white,
-                                        fontSize: 14,
+                                        fontSize: 13,
                                         fontWeight: FontWeight.bold,
                                       ),
                                       decoration: const InputDecoration(
@@ -2484,7 +2681,7 @@ class _HomeScreenState extends State<HomeScreen>
                                         hintText: 'Paste Stream URL',
                                         hintStyle: TextStyle(
                                           color: Colors.white,
-                                          fontSize: 14,
+                                          fontSize: 13,
                                           fontWeight: FontWeight.bold,
                                         ),
                                         border: InputBorder.none,
@@ -2492,20 +2689,43 @@ class _HomeScreenState extends State<HomeScreen>
                                     ),
                                     const SizedBox(height: 2),
                                     Text(
-                                      'Enter your link and start streaming securely',
+                                      'Tap paste or enter link',
                                       style: TextStyle(
                                         color: Colors.white.withOpacity(0.5),
-                                        fontSize: 10,
+                                        fontSize: 9.5,
                                       ),
                                     ),
                                   ],
                                 ),
                               ),
+                              // PASTE BUTTON
+                              GestureDetector(
+                                onTap: _pasteFromClipboard,
+                                child: Container(
+                                  width: 40,
+                                  height: 40,
+                                  margin: const EdgeInsets.only(right: 4),
+                                  decoration: BoxDecoration(
+                                    color: Colors.black,
+                                    shape: BoxShape.circle,
+                                    border: Border.all(
+                                      color: kGreen.withOpacity(0.6),
+                                      width: 1.2,
+                                    ),
+                                  ),
+                                  child: const Icon(
+                                    Icons.content_paste_rounded,
+                                    color: kGreen,
+                                    size: 20,
+                                  ),
+                                ),
+                              ),
+                              // PLAY BUTTON
                               GestureDetector(
                                 onTap: _searchAndPlay,
                                 child: Container(
-                                  width: 48,
-                                  height: 48,
+                                  width: 46,
+                                  height: 46,
                                   decoration: BoxDecoration(
                                     color: kGreen,
                                     shape: BoxShape.circle,
@@ -2519,7 +2739,7 @@ class _HomeScreenState extends State<HomeScreen>
                                   child: const Icon(
                                     Icons.play_arrow_rounded,
                                     color: Colors.black,
-                                    size: 32,
+                                    size: 28,
                                   ),
                                 ),
                               ),
@@ -2531,6 +2751,8 @@ class _HomeScreenState extends State<HomeScreen>
                   ),
                 ),
               ),
+
+              // ══════ CATEGORY CARDS ══════
               Padding(
                 padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
                 child: Row(
@@ -2565,6 +2787,8 @@ class _HomeScreenState extends State<HomeScreen>
                   ],
                 ),
               ),
+
+              // ══════ STATUS BAR ══════
               Padding(
                 padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 6),
                 child: Container(
@@ -2600,7 +2824,8 @@ class _HomeScreenState extends State<HomeScreen>
                   ),
                 ),
               ),
-              // ═══ AD SLOT (Home) ═══
+
+              // ══════ AD SLOT ══════
               Padding(
                 padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
                 child: Container(
@@ -2662,6 +2887,7 @@ class _HomeScreenState extends State<HomeScreen>
                   ),
                 ),
               ),
+
               const Padding(
                 padding: EdgeInsets.symmetric(vertical: 18),
                 child: Text(
@@ -2683,7 +2909,7 @@ class _HomeScreenState extends State<HomeScreen>
 }
 
 // ═══════════════════════════════════════════════════════
-// MORE DRAWER — Redesigned with Snake Animation
+// MORE DRAWER — Redesigned with Live Pulse + Snake
 // ═══════════════════════════════════════════════════════
 class MoreDrawer extends StatefulWidget {
   const MoreDrawer({super.key});
@@ -2693,25 +2919,32 @@ class MoreDrawer extends StatefulWidget {
 }
 
 class _MoreDrawerState extends State<MoreDrawer>
-    with SingleTickerProviderStateMixin {
+    with TickerProviderStateMixin {
   late AnimationController _snakeController;
+  late AnimationController _slideController;
 
   @override
   void initState() {
     super.initState();
     _snakeController = AnimationController(
       vsync: this,
-      duration: const Duration(seconds: 3),
+      duration: const Duration(seconds: 4),
     )..repeat();
+    _slideController = AnimationController(
+      vsync: this,
+      duration: const Duration(milliseconds: 900),
+    )..forward();
   }
 
   @override
   void dispose() {
     _snakeController.dispose();
+    _slideController.dispose();
     super.dispose();
   }
 
   Future<void> _logout(BuildContext context) async {
+    Haptic.heavy();
     await MayaJaalAccount.signOut();
     if (context.mounted) {
       Navigator.of(context).popUntil((route) => route.isFirst);
@@ -2719,6 +2952,7 @@ class _MoreDrawerState extends State<MoreDrawer>
   }
 
   Future<void> _launchURL(String url) async {
+    Haptic.light();
     try {
       final target = Uri.parse(url);
       if (!await launchUrl(target, mode: LaunchMode.externalApplication)) {
@@ -2733,6 +2967,7 @@ class _MoreDrawerState extends State<MoreDrawer>
   }
 
   void _shareApp() {
+    Haptic.light();
     Share.share(
       '🚀 Experience Matrix-speed streaming on MayaJaal App!\nDownload: https://www.mayajaal.online/download.html',
     );
@@ -2815,17 +3050,25 @@ class _MoreDrawerState extends State<MoreDrawer>
               SizedBox(height: 4),
               Text(
                 '— STREAM BEYOND LIMITS —',
-                style: TextStyle(color: kDimGreen, fontSize: 10, letterSpacing: 2),
+                style: TextStyle(
+                  color: kDimGreen,
+                  fontSize: 10,
+                  letterSpacing: 2,
+                ),
               ),
               SizedBox(height: 14),
               Text(
-                'Version: v1.2.0 (Build 4)',
+                'Version: v1.2.0 (Build 2)',
                 style: TextStyle(color: Colors.white70, fontSize: 12),
               ),
               SizedBox(height: 6),
               Text(
                 'MayaJaal is a next-generation video streaming platform that lets you convert, share, and monetize links effortlessly. Built with Matrix-grade encryption and quantum-speed streaming.',
-                style: TextStyle(color: Colors.white70, fontSize: 12, height: 1.5),
+                style: TextStyle(
+                  color: Colors.white70,
+                  fontSize: 12,
+                  height: 1.5,
+                ),
               ),
               SizedBox(height: 14),
               Divider(color: Colors.white24),
@@ -2915,6 +3158,7 @@ class _MoreDrawerState extends State<MoreDrawer>
             onPressed: () async {
               final key = MayaJaalAccount.cachedApiKey ?? '';
               if (key.isNotEmpty) {
+                Haptic.medium();
                 await Clipboard.setData(ClipboardData(text: key));
                 if (context.mounted) {
                   ScaffoldMessenger.of(context).showSnackBar(
@@ -2974,7 +3218,10 @@ class _MoreDrawerState extends State<MoreDrawer>
             const SizedBox(height: 6),
             Text(
               'Choose a bot to start earning',
-              style: TextStyle(color: Colors.white.withOpacity(0.6), fontSize: 11),
+              style: TextStyle(
+                color: Colors.white.withOpacity(0.6),
+                fontSize: 11,
+              ),
             ),
             const SizedBox(height: 18),
             _botCard(
@@ -3011,6 +3258,7 @@ class _MoreDrawerState extends State<MoreDrawer>
   }) {
     return InkWell(
       onTap: () {
+        Haptic.medium();
         Navigator.pop(context);
         _launchURL(url);
       },
@@ -3032,7 +3280,9 @@ class _MoreDrawerState extends State<MoreDrawer>
                 color: Colors.black,
                 borderRadius: BorderRadius.circular(12),
                 border: Border.all(color: color, width: 1.5),
-                boxShadow: [BoxShadow(color: color.withOpacity(0.5), blurRadius: 12)],
+                boxShadow: [
+                  BoxShadow(color: color.withOpacity(0.5), blurRadius: 12),
+                ],
               ),
               child: Icon(icon, color: color, size: 24),
             ),
@@ -3064,6 +3314,26 @@ class _MoreDrawerState extends State<MoreDrawer>
           ],
         ),
       ),
+    );
+  }
+
+  // ══════════ STAGGERED SLIDE-IN WRAPPER ══════════
+  Widget _staggered({required int index, required Widget child}) {
+    final start = (index * 0.06).clamp(0.0, 0.6);
+    return AnimatedBuilder(
+      animation: _slideController,
+      builder: (c, _) {
+        final raw = (_slideController.value - start) / (1 - start);
+        final v = raw.clamp(0.0, 1.0);
+        final curve = Curves.easeOutCubic.transform(v);
+        return Opacity(
+          opacity: curve,
+          child: Transform.translate(
+            offset: Offset(-20 * (1 - curve), 0),
+            child: child,
+          ),
+        );
+      },
     );
   }
 
@@ -3131,7 +3401,9 @@ class _MoreDrawerState extends State<MoreDrawer>
                               fontSize: 18,
                               fontWeight: FontWeight.w900,
                               letterSpacing: 0.5,
-                              shadows: [Shadow(color: kGreen, blurRadius: 10)],
+                              shadows: [
+                                Shadow(color: kGreen, blurRadius: 10),
+                              ],
                             ),
                           ),
                           Text(
@@ -3158,7 +3430,10 @@ class _MoreDrawerState extends State<MoreDrawer>
                   ),
                   IconButton(
                     icon: const Icon(Icons.close, color: kGreen, size: 22),
-                    onPressed: () => Navigator.pop(context),
+                    onPressed: () {
+                      Haptic.light();
+                      Navigator.pop(context);
+                    },
                   ),
                 ],
               ),
@@ -3169,361 +3444,434 @@ class _MoreDrawerState extends State<MoreDrawer>
               child: ListView(
                 padding: const EdgeInsets.symmetric(vertical: 8),
                 children: [
-                  // ═══ USER CARD ═══
-                  Container(
-                    margin: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
-                    padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
-                    decoration: BoxDecoration(
-                      color: kCardBg,
-                      borderRadius: BorderRadius.circular(12),
-                      border: Border.all(color: kGreen.withOpacity(0.4)),
-                    ),
-                    child: Row(
-                      children: [
-                        Container(
-                          width: 38,
-                          height: 38,
-                          decoration: BoxDecoration(
-                            shape: BoxShape.circle,
-                            border: Border.all(color: kGreen, width: 1.5),
-                          ),
-                          child: user?.photoURL != null
-                              ? ClipOval(
-                                  child: Image.network(
-                                    user!.photoURL!,
-                                    fit: BoxFit.cover,
-                                    errorBuilder: (c, e, s) => const Icon(
-                                      Icons.person,
-                                      color: kGreen,
-                                      size: 22,
+                  // ══════ LIVE PULSE ══════
+                  _staggered(
+                    index: 0,
+                    child: _LivePulseCard(),
+                  ),
+
+                  // ══════ USER CARD ══════
+                  _staggered(
+                    index: 1,
+                    child: Container(
+                      margin: const EdgeInsets.symmetric(
+                        horizontal: 12,
+                        vertical: 6,
+                      ),
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 12,
+                        vertical: 10,
+                      ),
+                      decoration: BoxDecoration(
+                        color: kCardBg,
+                        borderRadius: BorderRadius.circular(12),
+                        border: Border.all(color: kGreen.withOpacity(0.4)),
+                      ),
+                      child: Row(
+                        children: [
+                          Container(
+                            width: 38,
+                            height: 38,
+                            decoration: BoxDecoration(
+                              shape: BoxShape.circle,
+                              border: Border.all(color: kGreen, width: 1.5),
+                            ),
+                            child: user?.photoURL != null
+                                ? ClipOval(
+                                    child: Image.network(
+                                      user!.photoURL!,
+                                      fit: BoxFit.cover,
+                                      errorBuilder: (c, e, s) => const Icon(
+                                        Icons.person,
+                                        color: kGreen,
+                                        size: 22,
+                                      ),
                                     ),
+                                  )
+                                : const Icon(
+                                    Icons.person,
+                                    color: kGreen,
+                                    size: 22,
                                   ),
-                                )
-                              : const Icon(Icons.person, color: kGreen, size: 22),
-                        ),
-                        const SizedBox(width: 10),
-                        Expanded(
-                          child: Column(
-                            crossAxisAlignment: CrossAxisAlignment.start,
-                            children: [
-                              Text(
-                                user?.displayName ?? user?.email ?? 'User',
-                                style: const TextStyle(
-                                  color: kGreen,
-                                  fontSize: 12,
-                                  fontWeight: FontWeight.bold,
+                          ),
+                          const SizedBox(width: 10),
+                          Expanded(
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                Text(
+                                  user?.displayName ?? user?.email ?? 'User',
+                                  style: const TextStyle(
+                                    color: kGreen,
+                                    fontSize: 12,
+                                    fontWeight: FontWeight.bold,
+                                  ),
+                                  overflow: TextOverflow.ellipsis,
                                 ),
-                                overflow: TextOverflow.ellipsis,
-                              ),
-                              const SizedBox(height: 2),
-                              Row(
-                                children: [
-                                  Icon(
-                                    Icons.verified,
-                                    color: kGreen.withOpacity(0.7),
-                                    size: 10,
-                                  ),
-                                  const SizedBox(width: 3),
-                                  Text(
-                                    'MayaJaal Verified',
-                                    style: TextStyle(
+                                const SizedBox(height: 2),
+                                Row(
+                                  children: [
+                                    Icon(
+                                      Icons.verified,
                                       color: kGreen.withOpacity(0.7),
-                                      fontSize: 9,
+                                      size: 10,
                                     ),
-                                  ),
-                                  const SizedBox(width: 8),
-                                  Container(
-                                    width: 6,
-                                    height: 6,
-                                    decoration: const BoxDecoration(
-                                      color: kGreen,
-                                      shape: BoxShape.circle,
+                                    const SizedBox(width: 3),
+                                    Text(
+                                      'MayaJaal Verified',
+                                      style: TextStyle(
+                                        color: kGreen.withOpacity(0.7),
+                                        fontSize: 9,
+                                      ),
                                     ),
-                                  ),
-                                  const SizedBox(width: 3),
-                                  Text(
-                                    'Connected',
-                                    style: TextStyle(
-                                      color: kGreen.withOpacity(0.9),
-                                      fontSize: 9,
+                                    const SizedBox(width: 8),
+                                    Container(
+                                      width: 6,
+                                      height: 6,
+                                      decoration: const BoxDecoration(
+                                        color: kGreen,
+                                        shape: BoxShape.circle,
+                                      ),
                                     ),
-                                  ),
-                                ],
-                              ),
-                            ],
+                                    const SizedBox(width: 3),
+                                    Text(
+                                      'Connected',
+                                      style: TextStyle(
+                                        color: kGreen.withOpacity(0.9),
+                                        fontSize: 9,
+                                      ),
+                                    ),
+                                  ],
+                                ),
+                              ],
+                            ),
                           ),
-                        ),
-                      ],
+                        ],
+                      ),
                     ),
                   ),
 
-                  // ═══ EARNINGS DASHBOARD ═══
-                  _snakeItem(
-                    context,
-                    icon: Icons.account_balance_wallet,
-                    color: kGold,
-                    title: 'Earnings Dashboard',
-                    subtitle: 'View your earnings and links',
-                    onTap: () {
-                      Navigator.pop(context);
-                      Navigator.push(
-                        context,
-                        MaterialPageRoute(
-                          builder: (_) => const EarningsScreen(),
-                        ),
-                      );
-                    },
+                  // ══════ EARNINGS DASHBOARD ══════
+                  _staggered(
+                    index: 2,
+                    child: _snakeItem(
+                      context,
+                      icon: Icons.account_balance_wallet,
+                      color: kGold,
+                      title: 'Earnings Dashboard',
+                      subtitle: 'View your earnings and links',
+                      onTap: () {
+                        Haptic.medium();
+                        Navigator.pop(context);
+                        Navigator.push(
+                          context,
+                          MaterialPageRoute(
+                            builder: (_) => const EarningsScreen(),
+                          ),
+                        );
+                      },
+                    ),
                   ),
 
-                  // ═══ API KEY ═══
-                  _snakeItem(
-                    context,
-                    icon: Icons.vpn_key,
-                    color: kNeonCyan,
-                    title: 'My API Key',
-                    subtitle: 'View & copy for bot',
-                    onTap: () {
-                      Navigator.pop(context);
-                      _showApiKeyDialog(context);
-                    },
+                  // ══════ API KEY ══════
+                  _staggered(
+                    index: 3,
+                    child: _snakeItem(
+                      context,
+                      icon: Icons.vpn_key,
+                      color: kNeonCyan,
+                      title: 'My API Key',
+                      subtitle: 'View & copy for bot',
+                      onTap: () {
+                        Haptic.medium();
+                        Navigator.pop(context);
+                        _showApiKeyDialog(context);
+                      },
+                    ),
                   ),
 
-                  // ═══ BOTS ═══
-                  _snakeItem(
-                    context,
-                    icon: Icons.smart_toy,
-                    color: kNeonPurple,
-                    title: 'MayaJaal Bots',
-                    subtitle: 'Upload & Converter bots',
-                    onTap: () {
-                      Navigator.pop(context);
-                      _showBotsDialog(context);
-                    },
+                  // ══════ BOTS ══════
+                  _staggered(
+                    index: 4,
+                    child: _snakeItem(
+                      context,
+                      icon: Icons.smart_toy,
+                      color: kNeonPurple,
+                      title: 'MayaJaal Bots',
+                      subtitle: 'Upload & Converter bots',
+                      onTap: () {
+                        Haptic.medium();
+                        Navigator.pop(context);
+                        _showBotsDialog(context);
+                      },
+                    ),
                   ),
 
-                  // ═══ SHARE APP ═══
-                  _snakeItem(
-                    context,
-                    icon: Icons.share,
-                    color: kNeonCyan,
-                    title: 'Share MayaJaal App',
-                    subtitle: 'Invite your friends',
-                    onTap: () {
-                      Navigator.pop(context);
-                      _shareApp();
-                    },
+                  // ══════ SHARE APP ══════
+                  _staggered(
+                    index: 5,
+                    child: _snakeItem(
+                      context,
+                      icon: Icons.share,
+                      color: kNeonCyan,
+                      title: 'Share MayaJaal App',
+                      subtitle: 'Invite your friends',
+                      onTap: () {
+                        Navigator.pop(context);
+                        _shareApp();
+                      },
+                    ),
                   ),
 
-                  // ═══ APP SETTINGS ═══
-                  _snakeItem(
-                    context,
-                    icon: Icons.settings,
-                    color: kGreen,
-                    title: 'App Settings',
-                    subtitle: 'Customize your experience',
-                    onTap: () {
-                      Navigator.pop(context);
-                      Navigator.push(
-                        context,
-                        MaterialPageRoute(
-                          builder: (_) => const SettingsScreen(),
-                        ),
-                      );
-                    },
+                  // ══════ APP SETTINGS ══════
+                  _staggered(
+                    index: 6,
+                    child: _snakeItem(
+                      context,
+                      icon: Icons.settings,
+                      color: kGreen,
+                      title: 'App Settings',
+                      subtitle: 'Customize your experience',
+                      onTap: () {
+                        Haptic.medium();
+                        Navigator.pop(context);
+                        Navigator.push(
+                          context,
+                          MaterialPageRoute(
+                            builder: (_) => const SettingsScreen(),
+                          ),
+                        );
+                      },
+                    ),
                   ),
 
-                  // ═══ HELP & SUPPORT ═══
-                  _snakeItem(
-                    context,
-                    icon: Icons.support_agent,
-                    color: Colors.amberAccent,
-                    title: 'Help & Support',
-                    subtitle: 'mayajaalsupport@gmail.com',
-                    onTap: () {
-                      Navigator.pop(context);
-                      _launchURL(
-                        'mailto:mayajaalsupport@gmail.com?subject=MayaJaal%20Support',
-                      );
-                    },
+                  // ══════ HELP & SUPPORT ══════
+                  _staggered(
+                    index: 7,
+                    child: _snakeItem(
+                      context,
+                      icon: Icons.support_agent,
+                      color: Colors.amberAccent,
+                      title: 'Help & Support',
+                      subtitle: 'mayajaalsupport@gmail.com',
+                      onTap: () {
+                        Navigator.pop(context);
+                        _launchURL(
+                          'mailto:mayajaalsupport@gmail.com?subject=MayaJaal%20Support',
+                        );
+                      },
+                    ),
                   ),
 
                   // ══════ JOIN US SECTION ══════
-                  Padding(
-                    padding: const EdgeInsets.only(left: 16, top: 18, bottom: 8),
-                    child: Row(
-                      children: [
-                        Container(width: 14, height: 1.5, color: kGreen),
-                        const SizedBox(width: 6),
-                        const Text(
-                          'JOIN US',
-                          style: TextStyle(
-                            color: kGreen,
-                            fontSize: 11,
-                            fontWeight: FontWeight.bold,
-                            letterSpacing: 2,
+                  _staggered(
+                    index: 8,
+                    child: Padding(
+                      padding:
+                          const EdgeInsets.only(left: 16, top: 18, bottom: 8),
+                      child: Row(
+                        children: [
+                          Container(width: 14, height: 1.5, color: kGreen),
+                          const SizedBox(width: 6),
+                          const Text(
+                            'JOIN US',
+                            style: TextStyle(
+                              color: kGreen,
+                              fontSize: 11,
+                              fontWeight: FontWeight.bold,
+                              letterSpacing: 2,
+                            ),
                           ),
-                        ),
-                        const SizedBox(width: 6),
-                        Expanded(
-                          child: Container(
-                            height: 1,
-                            color: kGreen.withOpacity(0.3),
+                          const SizedBox(width: 6),
+                          Expanded(
+                            child: Container(
+                              height: 1,
+                              color: kGreen.withOpacity(0.3),
+                            ),
                           ),
-                        ),
-                      ],
+                        ],
+                      ),
                     ),
                   ),
 
                   // INSTAGRAM
-                  _socialItem(
-                    context,
-                    imageUrl:
-                        'https://upload.wikimedia.org/wikipedia/commons/thumb/e/e7/Instagram_logo_2016.svg/240px-Instagram_logo_2016.svg.png',
-                    fallbackIcon: Icons.camera_alt,
-                    color: const Color(0xFFE1306C),
-                    title: 'Instagram Official',
-                    subtitle: '@maya_jaal_official',
-                    onTap: () {
-                      Navigator.pop(context);
-                      _launchURL('https://www.instagram.com/maya_jaal_official');
-                    },
+                  _staggered(
+                    index: 9,
+                    child: _socialItem(
+                      context,
+                      imageUrl:
+                          'https://upload.wikimedia.org/wikipedia/commons/thumb/e/e7/Instagram_logo_2016.svg/240px-Instagram_logo_2016.svg.png',
+                      fallbackIcon: Icons.camera_alt,
+                      color: const Color(0xFFE1306C),
+                      title: 'Instagram Official',
+                      subtitle: '@maya_jaal_official',
+                      onTap: () {
+                        Navigator.pop(context);
+                        _launchURL('https://www.instagram.com/maya_jaal_official');
+                      },
+                    ),
                   ),
 
                   // YOUTUBE
-                  _socialItem(
-                    context,
-                    imageUrl:
-                        'https://upload.wikimedia.org/wikipedia/commons/thumb/0/09/YouTube_full-color_icon_%282017%29.svg/240px-YouTube_full-color_icon_%282017%29.svg.png',
-                    fallbackIcon: Icons.play_circle_fill,
-                    color: Colors.redAccent,
-                    title: 'YouTube Channel',
-                    subtitle: '@MayaJaalOfficial00',
-                    onTap: () {
-                      Navigator.pop(context);
-                      _launchURL('https://www.youtube.com/@MayaJaalOfficial00');
-                    },
+                  _staggered(
+                    index: 10,
+                    child: _socialItem(
+                      context,
+                      imageUrl:
+                          'https://upload.wikimedia.org/wikipedia/commons/thumb/0/09/YouTube_full-color_icon_%282017%29.svg/240px-YouTube_full-color_icon_%282017%29.svg.png',
+                      fallbackIcon: Icons.play_circle_fill,
+                      color: Colors.redAccent,
+                      title: 'YouTube Channel',
+                      subtitle: '@MayaJaalOfficial00',
+                      onTap: () {
+                        Navigator.pop(context);
+                        _launchURL('https://www.youtube.com/@MayaJaalOfficial00');
+                      },
+                    ),
                   ),
 
                   // TELEGRAM
-                  _socialItem(
-                    context,
-                    imageUrl:
-                        'https://upload.wikimedia.org/wikipedia/commons/thumb/8/82/Telegram_logo.svg/240px-Telegram_logo.svg.png',
-                    fallbackIcon: Icons.send_rounded,
-                    color: const Color(0xFF229ED9),
-                    title: 'Telegram Channel',
-                    subtitle: '@MayaJaalOfficial',
-                    onTap: () {
-                      Navigator.pop(context);
-                      _launchURL('https://t.me/MayaJaalOfficial');
-                    },
+                  _staggered(
+                    index: 11,
+                    child: _socialItem(
+                      context,
+                      imageUrl:
+                          'https://upload.wikimedia.org/wikipedia/commons/thumb/8/82/Telegram_logo.svg/240px-Telegram_logo.svg.png',
+                      fallbackIcon: Icons.send_rounded,
+                      color: const Color(0xFF229ED9),
+                      title: 'Telegram Channel',
+                      subtitle: '@MayaJaalOfficial',
+                      onTap: () {
+                        Navigator.pop(context);
+                        _launchURL('https://t.me/MayaJaalOfficial');
+                      },
+                    ),
                   ),
 
                   // ══════ INFORMATION SECTION ══════
-                  Padding(
-                    padding: const EdgeInsets.only(left: 16, top: 18, bottom: 8),
-                    child: Row(
-                      children: [
-                        Container(width: 14, height: 1.5, color: kNeonCyan),
-                        const SizedBox(width: 6),
-                        const Text(
-                          'INFORMATION',
-                          style: TextStyle(
-                            color: kNeonCyan,
-                            fontSize: 11,
-                            fontWeight: FontWeight.bold,
-                            letterSpacing: 2,
+                  _staggered(
+                    index: 12,
+                    child: Padding(
+                      padding:
+                          const EdgeInsets.only(left: 16, top: 18, bottom: 8),
+                      child: Row(
+                        children: [
+                          Container(width: 14, height: 1.5, color: kNeonCyan),
+                          const SizedBox(width: 6),
+                          const Text(
+                            'INFORMATION',
+                            style: TextStyle(
+                              color: kNeonCyan,
+                              fontSize: 11,
+                              fontWeight: FontWeight.bold,
+                              letterSpacing: 2,
+                            ),
                           ),
-                        ),
-                        const SizedBox(width: 6),
-                        Expanded(
-                          child: Container(
-                            height: 1,
-                            color: kNeonCyan.withOpacity(0.3),
+                          const SizedBox(width: 6),
+                          Expanded(
+                            child: Container(
+                              height: 1,
+                              color: kNeonCyan.withOpacity(0.3),
+                            ),
                           ),
-                        ),
-                      ],
+                        ],
+                      ),
                     ),
                   ),
 
                   // ABOUT
-                  _snakeItem(
-                    context,
-                    icon: Icons.info_outline,
-                    color: kNeonCyan,
-                    title: 'About MayaJaal',
-                    subtitle: 'Version & info',
-                    onTap: () {
-                      Navigator.pop(context);
-                      _showAboutDialog(context);
-                    },
+                  _staggered(
+                    index: 13,
+                    child: _snakeItem(
+                      context,
+                      icon: Icons.info_outline,
+                      color: kNeonCyan,
+                      title: 'About MayaJaal',
+                      subtitle: 'Version & info',
+                      onTap: () {
+                        Haptic.medium();
+                        Navigator.pop(context);
+                        _showAboutDialog(context);
+                      },
+                    ),
                   ),
 
                   // PRIVACY
-                  _snakeItem(
-                    context,
-                    icon: Icons.privacy_tip_outlined,
-                    color: kDimGreen,
-                    title: 'Privacy Policy',
-                    subtitle: 'Your data, our priority',
-                    onTap: () {
-                      Navigator.pop(context);
-                      _showPolicyDialog(
-                        context,
-                        'PRIVACY POLICY',
-                        'MayaJaal respects user privacy. No private credentials are sold or stored inappropriately. Stream decryption occurs locally on your hardware. Logins are handled securely via Firebase Google OAuth integration.',
-                      );
-                    },
+                  _staggered(
+                    index: 14,
+                    child: _snakeItem(
+                      context,
+                      icon: Icons.privacy_tip_outlined,
+                      color: kDimGreen,
+                      title: 'Privacy Policy',
+                      subtitle: 'Your data, our priority',
+                      onTap: () {
+                        Haptic.medium();
+                        Navigator.pop(context);
+                        _showPolicyDialog(
+                          context,
+                          'PRIVACY POLICY',
+                          'MayaJaal respects user privacy. No private credentials are sold or stored inappropriately. Stream decryption occurs locally on your hardware. Logins are handled securely via Firebase Google OAuth integration.',
+                        );
+                      },
+                    ),
                   ),
 
                   // TERMS
-                  _snakeItem(
-                    context,
-                    icon: Icons.description_outlined,
-                    color: kDimGreen,
-                    title: 'Terms & Conditions',
-                    subtitle: 'Read before you continue',
-                    onTap: () {
-                      Navigator.pop(context);
-                      _showPolicyDialog(
-                        context,
-                        'TERMS AND CONDITIONS',
-                        'By utilizing MayaJaal, you agree to access encrypted streaming endpoints responsibly. Users are personally responsible for streams parsed through node references.',
-                      );
-                    },
+                  _staggered(
+                    index: 15,
+                    child: _snakeItem(
+                      context,
+                      icon: Icons.description_outlined,
+                      color: kDimGreen,
+                      title: 'Terms & Conditions',
+                      subtitle: 'Read before you continue',
+                      onTap: () {
+                        Haptic.medium();
+                        Navigator.pop(context);
+                        _showPolicyDialog(
+                          context,
+                          'TERMS AND CONDITIONS',
+                          'By utilizing MayaJaal, you agree to access encrypted streaming endpoints responsibly. Users are personally responsible for streams parsed through node references.',
+                        );
+                      },
+                    ),
                   ),
 
-                  // ═══ LOGOUT ═══
-                  Padding(
-                    padding: const EdgeInsets.symmetric(
-                      horizontal: 12,
-                      vertical: 16,
-                    ),
-                    child: Container(
-                      decoration: BoxDecoration(
-                        color: Colors.red.withOpacity(0.08),
-                        borderRadius: BorderRadius.circular(12),
-                        border: Border.all(
-                          color: Colors.redAccent.withOpacity(0.4),
-                        ),
+                  // ══════ LOGOUT ══════
+                  _staggered(
+                    index: 16,
+                    child: Padding(
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 12,
+                        vertical: 16,
                       ),
-                      child: ListTile(
-                        leading: const Icon(
-                          Icons.logout,
-                          color: Colors.redAccent,
-                        ),
-                        title: const Text(
-                          'Logout Session',
-                          style: TextStyle(
-                            color: Colors.redAccent,
-                            fontWeight: FontWeight.bold,
-                            fontSize: 13,
+                      child: Container(
+                        decoration: BoxDecoration(
+                          color: Colors.red.withOpacity(0.08),
+                          borderRadius: BorderRadius.circular(12),
+                          border: Border.all(
+                            color: Colors.redAccent.withOpacity(0.4),
                           ),
                         ),
-                        onTap: () {
-                          Navigator.pop(context);
-                          _logout(context);
-                        },
+                        child: ListTile(
+                          leading: const Icon(
+                            Icons.logout,
+                            color: Colors.redAccent,
+                          ),
+                          title: const Text(
+                            'Logout Session',
+                            style: TextStyle(
+                              color: Colors.redAccent,
+                              fontWeight: FontWeight.bold,
+                              fontSize: 13,
+                            ),
+                          ),
+                          onTap: () {
+                            Navigator.pop(context);
+                            _logout(context);
+                          },
+                        ),
                       ),
                     ),
                   ),
@@ -3536,7 +3884,7 @@ class _MoreDrawerState extends State<MoreDrawer>
     );
   }
 
-  // ═══════════ SNAKE ANIMATION ITEM ═══════════
+  // ══════════ SNAKE ANIMATION ITEM ══════════
   Widget _snakeItem(
     BuildContext context, {
     required IconData icon,
@@ -3552,7 +3900,6 @@ class _MoreDrawerState extends State<MoreDrawer>
         builder: (c, _) {
           return Stack(
             children: [
-              // Base container
               ListTile(
                 shape: RoundedRectangleBorder(
                   borderRadius: BorderRadius.circular(10),
@@ -3589,7 +3936,6 @@ class _MoreDrawerState extends State<MoreDrawer>
                 ),
                 onTap: onTap,
               ),
-              // Snake light overlay
               Positioned.fill(
                 child: IgnorePointer(
                   child: ClipRRect(
@@ -3610,7 +3956,7 @@ class _MoreDrawerState extends State<MoreDrawer>
     );
   }
 
-  // ═══════════ SOCIAL MEDIA ITEM ═══════════
+  // ══════════ SOCIAL MEDIA ITEM ══════════
   Widget _socialItem(
     BuildContext context, {
     required String imageUrl,
@@ -3636,7 +3982,8 @@ class _MoreDrawerState extends State<MoreDrawer>
           child: Image.network(
             imageUrl,
             fit: BoxFit.contain,
-            errorBuilder: (c, e, s) => Icon(fallbackIcon, color: color, size: 22),
+            errorBuilder: (c, e, s) =>
+                Icon(fallbackIcon, color: color, size: 22),
           ),
         ),
         title: Text(
@@ -3662,6 +4009,134 @@ class _MoreDrawerState extends State<MoreDrawer>
 }
 
 // ═══════════════════════════════════════════════════════
+// LIVE PULSE CARD (Real-time earnings ticker)
+// ═══════════════════════════════════════════════════════
+class _LivePulseCard extends StatefulWidget {
+  @override
+  State<_LivePulseCard> createState() => _LivePulseCardState();
+}
+
+class _LivePulseCardState extends State<_LivePulseCard>
+    with SingleTickerProviderStateMixin {
+  late AnimationController _blink;
+  double _currentEarning = 0;
+  double _prevEarning = 0;
+  bool _hasData = false;
+
+  @override
+  void initState() {
+    super.initState();
+    _blink = AnimationController(
+      vsync: this,
+      duration: const Duration(milliseconds: 1000),
+    )..repeat(reverse: true);
+  }
+
+  @override
+  void dispose() {
+    _blink.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    if (MayaJaalAccount.cachedUid == null) return const SizedBox.shrink();
+
+    return StreamBuilder<Map<String, dynamic>>(
+      stream: MayaJaalAccount.getDashboardStream(),
+      builder: (context, snapshot) {
+        final data = snapshot.data ?? {};
+        final totalViews = (data['totalViews'] ?? 0) as int;
+        final earning = MayaJaalAccount.calcEarnings(totalViews);
+        if (earning != _currentEarning) {
+          _prevEarning = _currentEarning;
+          _currentEarning = earning;
+          _hasData = true;
+        }
+        final up = _currentEarning >= _prevEarning;
+
+        return Container(
+          margin: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+          decoration: BoxDecoration(
+            gradient: LinearGradient(
+              colors: [
+                kGreen.withOpacity(0.12),
+                Colors.black,
+              ],
+              begin: Alignment.topLeft,
+              end: Alignment.bottomRight,
+            ),
+            borderRadius: BorderRadius.circular(12),
+            border: Border.all(color: kGreen.withOpacity(0.5), width: 1.2),
+            boxShadow: [
+              BoxShadow(color: kGreen.withOpacity(0.15), blurRadius: 12),
+            ],
+          ),
+          child: Row(
+            children: [
+              AnimatedBuilder(
+                animation: _blink,
+                builder: (c, _) => Container(
+                  width: 10,
+                  height: 10,
+                  decoration: BoxDecoration(
+                    shape: BoxShape.circle,
+                    color: kGreen,
+                    boxShadow: [
+                      BoxShadow(
+                        color: kGreen.withOpacity(0.7 * _blink.value),
+                        blurRadius: 12,
+                        spreadRadius: 2,
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+              const SizedBox(width: 10),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      'LIVE PULSE',
+                      style: TextStyle(
+                        color: kGreen.withOpacity(0.8),
+                        fontSize: 9,
+                        fontWeight: FontWeight.bold,
+                        letterSpacing: 2,
+                      ),
+                    ),
+                    const SizedBox(height: 2),
+                    Text(
+                      _hasData
+                          ? '\$${_currentEarning.toStringAsFixed(2)}'
+                          : '—',
+                      style: TextStyle(
+                        color: kGreen,
+                        fontSize: 18,
+                        fontWeight: FontWeight.w900,
+                        shadows: const [Shadow(color: kGreen, blurRadius: 10)],
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+              if (_hasData)
+                Icon(
+                  up ? Icons.trending_up : Icons.trending_down,
+                  color: up ? kGreen : Colors.orangeAccent,
+                  size: 22,
+                ),
+            ],
+          ),
+        );
+      },
+    );
+  }
+}
+
+// ═══════════════════════════════════════════════════════
 // SNAKE BORDER PAINTER (Moving Light Effect)
 // ═══════════════════════════════════════════════════════
 class _SnakeBorderPainter extends CustomPainter {
@@ -3675,19 +4150,14 @@ class _SnakeBorderPainter extends CustomPainter {
     final rect = Rect.fromLTWH(0, 0, size.width, size.height);
     final rrect = RRect.fromRectAndRadius(rect, const Radius.circular(10));
 
-    // Calculate path length
     final path = Path()..addRRect(rrect);
     final metrics = path.computeMetrics().first;
     final totalLength = metrics.length;
 
-    // Snake length: 20% of total
-    final snakeLength = totalLength * 0.2;
-
-    // Moving start position
+    final snakeLength = totalLength * 0.25;
     final startPos = (progress * totalLength) % totalLength;
     final endPos = startPos + snakeLength;
 
-    // Draw snake segment
     final extractPath = Path();
     if (endPos <= totalLength) {
       extractPath.addPath(
@@ -3705,7 +4175,6 @@ class _SnakeBorderPainter extends CustomPainter {
       );
     }
 
-    // Glow effect
     final paint = Paint()
       ..color = color
       ..style = PaintingStyle.stroke
@@ -3715,7 +4184,6 @@ class _SnakeBorderPainter extends CustomPainter {
 
     canvas.drawPath(extractPath, paint);
 
-    // Bright core
     final corePaint = Paint()
       ..color = Colors.white.withOpacity(0.9)
       ..style = PaintingStyle.stroke
@@ -3731,7 +4199,7 @@ class _SnakeBorderPainter extends CustomPainter {
   }
 }
 
-// ============ PART 2 CONTINUES in Part 3 ============
+// ============ PART 2 END ============
 
 // ═══════════════════════════════════════════════════════
 // CHANNEL SCREEN
@@ -3822,12 +4290,14 @@ class _HistoryScreenState extends State<HistoryScreen> {
   }
 
   Future<void> _deleteItem(int index) async {
+    Haptic.light();
     final prefs = await SharedPreferences.getInstance();
     setState(() => _history.removeAt(index));
     await prefs.setString('watch_history_v2', jsonEncode(_history));
   }
 
   Future<void> _clearAll() async {
+    Haptic.medium();
     final prefs = await SharedPreferences.getInstance();
     await prefs.remove('watch_history_v2');
     setState(() => _history = []);
@@ -3904,6 +4374,7 @@ class _HistoryScreenState extends State<HistoryScreen> {
                       onPressed: () => _deleteItem(i),
                     ),
                     onTap: () {
+                      Haptic.light();
                       Navigator.push(
                         context,
                         MaterialPageRoute(
@@ -3959,6 +4430,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
   }
 
   Future<void> _saveDarkTheme(bool value) async {
+    Haptic.selection();
     final prefs = await SharedPreferences.getInstance();
     await prefs.setBool('dark_theme', value);
     themeNotifier.value = value ? ThemeMode.dark : ThemeMode.light;
@@ -3966,6 +4438,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
   }
 
   Future<void> _saveLanguage(String value) async {
+    Haptic.selection();
     final prefs = await SharedPreferences.getInstance();
     await prefs.setString('language', value);
     languageNotifier.value = value;
@@ -3973,6 +4446,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
   }
 
   Future<void> _saveDownloadLocation(String value) async {
+    Haptic.selection();
     final prefs = await SharedPreferences.getInstance();
     await prefs.setString('download_location', value);
     setState(() => _downloadLocation = value);
@@ -4159,7 +4633,9 @@ class _StreamPreviewScreenState extends State<StreamPreviewScreen>
       setState(() {
         if (_countdown > 0) {
           _countdown--;
+          if (_countdown <= 3 && _countdown > 0) Haptic.light();
         } else {
+          Haptic.medium();
           _countdownTimer?.cancel();
         }
       });
@@ -4194,8 +4670,9 @@ class _StreamPreviewScreenState extends State<StreamPreviewScreen>
           ? '$kBackendBaseUrl/api/stream-info/$_rawId?t=$_token'
           : '$kBackendBaseUrl/api/stream-info/$_rawId';
 
-      final res =
-          await http.get(Uri.parse(apiUrl)).timeout(const Duration(seconds: 8));
+      final res = await http
+          .get(Uri.parse(apiUrl))
+          .timeout(const Duration(seconds: 8));
       if (res.statusCode == 200) {
         final data = jsonDecode(res.body);
         if (data['success'] == true &&
@@ -4240,6 +4717,7 @@ class _StreamPreviewScreenState extends State<StreamPreviewScreen>
   }
 
   void _shareStreamDirect() {
+    Haptic.light();
     Share.share('🚀 Watch this stream on MayaJaal:\n${widget.targetUrl}');
   }
 
@@ -4271,6 +4749,7 @@ class _StreamPreviewScreenState extends State<StreamPreviewScreen>
 
   void _launchNativePlayer() {
     if (!_canProceed) return;
+    Haptic.heavy();
     _saveWatchRecord();
     Navigator.pushReplacement(
       context,
@@ -4350,7 +4829,6 @@ class _StreamPreviewScreenState extends State<StreamPreviewScreen>
 
   @override
   Widget build(BuildContext context) {
-    // Professional loading screen instead of white
     if (_loading) {
       return const ProfessionalLoader(message: 'DECRYPTING STREAM...');
     }
@@ -4373,7 +4851,10 @@ class _StreamPreviewScreenState extends State<StreamPreviewScreen>
                           color: kGreen,
                           size: 22,
                         ),
-                        onPressed: () => Navigator.pop(context),
+                        onPressed: () {
+                          Haptic.light();
+                          Navigator.pop(context);
+                        },
                       ),
                       Expanded(
                         child: Column(
@@ -4441,7 +4922,9 @@ class _StreamPreviewScreenState extends State<StreamPreviewScreen>
                         _buildCountdownCircle(),
                         const SizedBox(height: 20),
                         Text(
-                          _canProceed ? '🚀 VIDEO READY TO PLAY' : '⏱ PLEASE WAIT',
+                          _canProceed
+                              ? '🚀 VIDEO READY TO PLAY'
+                              : '⏱ PLEASE WAIT',
                           style: TextStyle(
                             color: _canProceed ? kGreen : Colors.orangeAccent,
                             fontSize: 16,
@@ -4677,7 +5160,6 @@ class _StreamPreviewScreenState extends State<StreamPreviewScreen>
                     ],
                   ),
                   const SizedBox(height: 14),
-                  // AD Slot
                   Container(
                     padding: const EdgeInsets.all(12),
                     decoration: BoxDecoration(
@@ -4747,8 +5229,7 @@ class _StreamPreviewScreenState extends State<StreamPreviewScreen>
 }
 
 // ═══════════════════════════════════════════════════════
-// NATIVE VIDEO PLAYER — Full Upgrade
-// Volume (Right Swipe) · Brightness (Left Swipe) · Quality · PiP
+// NATIVE VIDEO PLAYER — FULL UPGRADE
 // ═══════════════════════════════════════════════════════
 class NativeVideoPlayerScreen extends StatefulWidget {
   final String videoUrl;
@@ -4773,6 +5254,9 @@ class NativeVideoPlayerScreen extends StatefulWidget {
 
 class _NativeVideoPlayerScreenState extends State<NativeVideoPlayerScreen> {
   late VideoPlayerController _controller;
+  PiPStatus _pipStatus = PiPStatus.disabled;
+  final Floating _floating = Floating();
+
   bool _isInitialized = false;
   bool _hasError = false;
 
@@ -4785,6 +5269,7 @@ class _NativeVideoPlayerScreenState extends State<NativeVideoPlayerScreen> {
 
   double _playbackSpeed = 1.0;
   final List<double> _speeds = [0.5, 0.75, 1.0, 1.25, 1.5, 2.0];
+  bool _isLongPressBoost = false;
 
   String _selectedQuality = 'Auto (1080p)';
   final List<String> _qualities = [
@@ -4792,18 +5277,20 @@ class _NativeVideoPlayerScreenState extends State<NativeVideoPlayerScreen> {
     '1080p FHD',
     '720p HD',
     '480p SD',
-    '360p Low'
+    '360p Low',
   ];
 
   bool _isDownloading = false;
   double _downloadProgress = 0.0;
 
-  // Volume & Brightness (new)
+  // Volume & Brightness
   double _volume = 1.0;
   double _brightness = 1.0;
-  double _horizontalDragStart = 0;
-  double _verticalDragStartValue = 0;
-  String _activeDragMode = ''; // 'volume', 'brightness', 'seek'
+  double _brightnessStart = 1.0;
+  double _volumeStart = 1.0;
+  double _dragStartY = 0;
+  bool _isAdjustingVolume = false;
+  bool _isAdjustingBrightness = false;
 
   // Real-time Stats
   Map<String, int> _stats = {'views': 0, 'likes': 0, 'unlikes': 0, 'shares': 0};
@@ -4817,15 +5304,33 @@ class _NativeVideoPlayerScreenState extends State<NativeVideoPlayerScreen> {
   StreamSubscription? _unlikeSub;
 
   bool _viewReported = false;
-  Timer? _viewReportTimer;
-  int _watchedSeconds = 0;
   Timer? _watchTimer;
+  int _watchedSeconds = 0;
 
   // Related videos
   List<Map<String, dynamic>> _relatedVideos = [];
   bool _relatedLoading = true;
 
-  // ═══════════ VIEW REPORT (only after 10 sec played) ═══════════
+  // Double-tap seek indicator
+  String _doubleTapFeedback = '';
+
+  @override
+  void initState() {
+    super.initState();
+    _loadUserPrefs();
+    _initVideo();
+    _startStatsListeners();
+    _initPiP();
+    _fetchOwner().then((_) => _loadRelatedVideos());
+  }
+
+  Future<void> _initPiP() async {
+    try {
+      _pipStatus = await _floating.pipStatus;
+    } catch (_) {}
+  }
+
+  // ═══════════ VIEW REPORT ═══════════
   Future<void> _reportViewToBackend() async {
     if (_viewReported) return;
     _viewReported = true;
@@ -4863,7 +5368,6 @@ class _NativeVideoPlayerScreenState extends State<NativeVideoPlayerScreen> {
       if (!mounted) return;
       if (_controller.value.isInitialized && _controller.value.isPlaying) {
         _watchedSeconds++;
-        // Report view only after 10 seconds of actual playback
         if (_watchedSeconds == 10 && !_viewReported) {
           _reportViewToBackend();
         }
@@ -4918,15 +5422,6 @@ class _NativeVideoPlayerScreenState extends State<NativeVideoPlayerScreen> {
     }
   }
 
-  @override
-  void initState() {
-    super.initState();
-    _loadUserPrefs();
-    _initVideo();
-    _startStatsListeners();
-    _fetchOwner().then((_) => _loadRelatedVideos());
-  }
-
   Future<void> _loadUserPrefs() async {
     try {
       final prefs = await SharedPreferences.getInstance();
@@ -4957,6 +5452,14 @@ class _NativeVideoPlayerScreenState extends State<NativeVideoPlayerScreen> {
       _controller.setPlaybackSpeed(_playbackSpeed);
       _controller.setVolume(_volume);
 
+      // Load device brightness
+      try {
+        _brightness = await ScreenBrightness().application;
+        if (_brightness <= 0) _brightness = 1.0;
+      } catch (_) {
+        _brightness = 1.0;
+      }
+
       _controller.addListener(() {
         if (mounted) setState(() {});
       });
@@ -4976,9 +5479,11 @@ class _NativeVideoPlayerScreenState extends State<NativeVideoPlayerScreen> {
     _unlikeSub?.cancel();
     _controlsTimer?.cancel();
     _feedbackTimer?.cancel();
-    _viewReportTimer?.cancel();
     _watchTimer?.cancel();
     _controller.dispose();
+    try {
+      ScreenBrightness().resetApplicationScreenBrightness();
+    } catch (_) {}
     SystemChrome.setPreferredOrientations([DeviceOrientation.portraitUp]);
     super.dispose();
   }
@@ -5005,7 +5510,65 @@ class _NativeVideoPlayerScreenState extends State<NativeVideoPlayerScreen> {
     });
   }
 
+  // ═══════════ LONG PRESS 2X BOOST ═══════════
+  void _onLongPressStart() {
+    Haptic.light();
+    setState(() {
+      _isLongPressBoost = true;
+      _controller.setPlaybackSpeed(2.0);
+    });
+    _showFeedback('▶▶ 2x');
+  }
+
+  void _onLongPressEnd() {
+    if (_isLongPressBoost) {
+      _controller.setPlaybackSpeed(_playbackSpeed);
+      setState(() => _isLongPressBoost = false);
+      _resetControlTimer();
+    }
+  }
+
+  // ═══════════ DOUBLE TAP SEEK ═══════════
+  void _onDoubleTap(TapDownDetails details, double width) {
+    final dx = details.localPosition.dx;
+    if (dx < width * 0.35) {
+      // Left — back 10s
+      final newPos = _controller.value.position - const Duration(seconds: 10);
+      _controller.seekTo(newPos < Duration.zero ? Duration.zero : newPos);
+      Haptic.medium();
+      _showFeedback('◀◀ 10s');
+    } else if (dx > width * 0.65) {
+      // Right — forward 10s
+      final newPos = _controller.value.position + const Duration(seconds: 10);
+      final maxPos = _controller.value.duration;
+      _controller.seekTo(newPos > maxPos ? maxPos : newPos);
+      Haptic.medium();
+      _showFeedback('10s ▶▶');
+    } else {
+      // Center — toggle play
+      setState(() {
+        _controller.value.isPlaying ? _controller.pause() : _controller.play();
+      });
+      Haptic.light();
+      _resetControlTimer();
+    }
+  }
+
+  void _seekRelative(int seconds) {
+    Haptic.medium();
+    final newPos = _controller.value.position + Duration(seconds: seconds);
+    final clamped = newPos < Duration.zero
+        ? Duration.zero
+        : (newPos > _controller.value.duration
+            ? _controller.value.duration
+            : newPos);
+    _controller.seekTo(clamped);
+    _showFeedback(seconds > 0 ? '+${seconds}s' : '${seconds}s');
+    _resetControlTimer();
+  }
+
   void _toggleSmartFullscreen() {
+    Haptic.light();
     setState(() => _isFullscreen = !_isFullscreen);
     final isWide = _controller.value.aspectRatio >= 1.2;
 
@@ -5023,6 +5586,30 @@ class _NativeVideoPlayerScreenState extends State<NativeVideoPlayerScreen> {
     }
   }
 
+  Future<void> _enablePiP() async {
+    Haptic.medium();
+    try {
+      final isAvailable = await _floating.isPipAvailable;
+      if (!isAvailable) {
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(
+              backgroundColor: kCardBg,
+              content: Text(
+                'PiP is not supported on this device',
+                style: TextStyle(color: Colors.orangeAccent),
+              ),
+            ),
+          );
+        }
+        return;
+      }
+      await _floating.enable(const AspectRatio(16 / 9));
+    } catch (e) {
+      debugPrint('PiP error: $e');
+    }
+  }
+
   String _formatDuration(Duration d) {
     final m = d.inMinutes.remainder(60).toString().padLeft(2, '0');
     final s = d.inSeconds.remainder(60).toString().padLeft(2, '0');
@@ -5031,12 +5618,14 @@ class _NativeVideoPlayerScreenState extends State<NativeVideoPlayerScreen> {
   }
 
   Future<void> _handleLike() async {
+    Haptic.medium();
     final uid = MayaJaalAccount.cachedUid;
     if (uid == null) return;
     await FirebaseService.toggleLike(widget.videoId, uid, _ownerUid, widget.title);
   }
 
   Future<void> _handleDislike() async {
+    Haptic.medium();
     final uid = MayaJaalAccount.cachedUid;
     if (uid == null) return;
     await FirebaseService.toggleDislike(widget.videoId, uid);
@@ -5044,6 +5633,7 @@ class _NativeVideoPlayerScreenState extends State<NativeVideoPlayerScreen> {
 
   // ═══════════ PROFESSIONAL SHARE SHEET ═══════════
   Future<void> _shareVideoLink() async {
+    Haptic.light();
     await FirebaseService.recordShare(widget.videoId);
     if (!mounted) return;
 
@@ -5092,6 +5682,7 @@ class _NativeVideoPlayerScreenState extends State<NativeVideoPlayerScreen> {
                   'Copy Link',
                   kNeonCyan,
                   () async {
+                    Haptic.medium();
                     await Clipboard.setData(
                       ClipboardData(text: widget.sourcePageUrl),
                     );
@@ -5104,6 +5695,7 @@ class _NativeVideoPlayerScreenState extends State<NativeVideoPlayerScreen> {
                   'Share Now',
                   kGreen,
                   () {
+                    Haptic.medium();
                     Navigator.pop(c);
                     Share.share(
                       '🎬 Watch "${widget.title}" on MayaJaal:\n${widget.sourcePageUrl}',
@@ -5115,6 +5707,7 @@ class _NativeVideoPlayerScreenState extends State<NativeVideoPlayerScreen> {
                   'Telegram',
                   const Color(0xFF229ED9),
                   () {
+                    Haptic.medium();
                     Navigator.pop(c);
                     Share.share(
                       '🎬 Watch "${widget.title}" on MayaJaal:\n${widget.sourcePageUrl}',
@@ -5148,7 +5741,9 @@ class _NativeVideoPlayerScreenState extends State<NativeVideoPlayerScreen> {
               color: Colors.black,
               shape: BoxShape.circle,
               border: Border.all(color: color, width: 1.5),
-              boxShadow: [BoxShadow(color: color.withOpacity(0.4), blurRadius: 12)],
+              boxShadow: [
+                BoxShadow(color: color.withOpacity(0.4), blurRadius: 12),
+              ],
             ),
             child: Icon(icon, color: color, size: 26),
           ),
@@ -5164,6 +5759,7 @@ class _NativeVideoPlayerScreenState extends State<NativeVideoPlayerScreen> {
 
   Future<void> _startInAppDownload() async {
     if (_isDownloading) return;
+    Haptic.medium();
 
     setState(() {
       _isDownloading = true;
@@ -5230,6 +5826,7 @@ class _NativeVideoPlayerScreenState extends State<NativeVideoPlayerScreen> {
   }
 
   Future<void> _toggleSave() async {
+    Haptic.medium();
     final prefs = await SharedPreferences.getInstance();
     setState(() {
       _isSaved = !_isSaved;
@@ -5246,6 +5843,7 @@ class _NativeVideoPlayerScreenState extends State<NativeVideoPlayerScreen> {
   }
 
   void _showQualityDialog() {
+    Haptic.light();
     showDialog(
       context: context,
       builder: (c) => AlertDialog(
@@ -5285,6 +5883,7 @@ class _NativeVideoPlayerScreenState extends State<NativeVideoPlayerScreen> {
               ),
               onChanged: (val) {
                 if (val != null) {
+                  Haptic.selection();
                   setState(() => _selectedQuality = val);
                   Navigator.pop(c);
                   _showFeedback('Quality: $val');
@@ -5298,6 +5897,7 @@ class _NativeVideoPlayerScreenState extends State<NativeVideoPlayerScreen> {
   }
 
   void _showSpeedDialog() {
+    Haptic.light();
     showDialog(
       context: context,
       builder: (c) => AlertDialog(
@@ -5323,6 +5923,7 @@ class _NativeVideoPlayerScreenState extends State<NativeVideoPlayerScreen> {
               ),
               onChanged: (val) {
                 if (val != null) {
+                  Haptic.selection();
                   setState(() => _playbackSpeed = val);
                   _controller.setPlaybackSpeed(val);
                   Navigator.pop(c);
@@ -5356,40 +5957,43 @@ class _NativeVideoPlayerScreenState extends State<NativeVideoPlayerScreen> {
     );
   }
 
-  // ═══════════ GESTURE HANDLERS ═══════════
-  void _onVerticalDragStart(DragStartDetails details, Size size) {
-    _horizontalDragStart = details.localPosition.dx;
-    if (details.localPosition.dx > size.width / 2) {
-      _activeDragMode = 'volume';
-      _verticalDragStartValue = _volume;
+  // ═══════════ REAL VERTICAL DRAG (Volume/Brightness) ═══════════
+  void _onVerticalDragStart(DragStartDetails details, double width) {
+    _dragStartY = details.localPosition.dy;
+    final dx = details.localPosition.dx;
+    if (dx > width / 2) {
+      _isAdjustingVolume = true;
+      _isAdjustingBrightness = false;
+      _volumeStart = _volume;
     } else {
-      _activeDragMode = 'brightness';
-      _verticalDragStartValue = _brightness;
+      _isAdjustingBrightness = true;
+      _isAdjustingVolume = false;
+      _brightnessStart = _brightness;
     }
   }
 
-  void _onVerticalDragUpdate(DragUpdateDetails details, Size size) {
-    final dy = details.localPosition.dy;
-    final delta = (_horizontalDragStart == 0)
-        ? 0.0
-        : -((dy - size.height / 2) / (size.height / 2)) * 0.01;
+  void _onVerticalDragUpdate(DragUpdateDetails details, double height) {
+    final delta = (_dragStartY - details.localPosition.dy) / height;
 
-    if (_activeDragMode == 'volume') {
-      setState(() {
-        _volume = (_verticalDragStartValue + delta).clamp(0.0, 1.0);
-      });
-      _controller.setVolume(_volume);
-      _showFeedback('🔊 ${(_volume * 100).toInt()}%');
-    } else if (_activeDragMode == 'brightness') {
-      setState(() {
-        _brightness = (_verticalDragStartValue + delta).clamp(0.2, 1.0);
-      });
-      _showFeedback('☀️ ${(_brightness * 100).toInt()}%');
+    if (_isAdjustingVolume) {
+      final newVol = (_volumeStart + delta).clamp(0.0, 1.0);
+      setState(() => _volume = newVol);
+      _controller.setVolume(newVol);
+      _showFeedback('🔊 ${(newVol * 100).toInt()}%');
+    } else if (_isAdjustingBrightness) {
+      final newBright = (_brightnessStart + delta).clamp(0.05, 1.0);
+      setState(() => _brightness = newBright);
+      try {
+        ScreenBrightness().setApplicationScreenBrightness(newBright);
+      } catch (_) {}
+      _showFeedback('☀️ ${(newBright * 100).toInt()}%');
     }
   }
 
   void _onVerticalDragEnd(DragEndDetails details) {
-    _activeDragMode = '';
+    _isAdjustingVolume = false;
+    _isAdjustingBrightness = false;
+    _resetControlTimer();
   }
 
   @override
@@ -5410,7 +6014,10 @@ class _NativeVideoPlayerScreenState extends State<NativeVideoPlayerScreen> {
                         color: kGreen,
                         size: 22,
                       ),
-                      onPressed: () => Navigator.pop(context),
+                      onPressed: () {
+                        Haptic.light();
+                        Navigator.pop(context);
+                      },
                     ),
                     Expanded(
                       child: Column(
@@ -5519,12 +6126,19 @@ class _NativeVideoPlayerScreenState extends State<NativeVideoPlayerScreen> {
                               )
                             : LayoutBuilder(
                                 builder: (context, constraints) {
+                                  final w = constraints.maxWidth;
+                                  final h = constraints.maxHeight;
                                   return GestureDetector(
                                     onTap: _onScreenTapped,
+                                    onDoubleTapDown: (d) => _onDoubleTap(d, w),
+                                    onDoubleTap: () {},
+                                    onLongPressStart: (_) =>
+                                        _onLongPressStart(),
+                                    onLongPressEnd: (_) => _onLongPressEnd(),
                                     onVerticalDragStart: (d) =>
-                                        _onVerticalDragStart(d, constraints.biggest),
+                                        _onVerticalDragStart(d, w),
                                     onVerticalDragUpdate: (d) =>
-                                        _onVerticalDragUpdate(d, constraints.biggest),
+                                        _onVerticalDragUpdate(d, h),
                                     onVerticalDragEnd: _onVerticalDragEnd,
                                     behavior: HitTestBehavior.opaque,
                                     child: Stack(
@@ -5579,43 +6193,78 @@ class _NativeVideoPlayerScreenState extends State<NativeVideoPlayerScreen> {
                                             ),
                                           ),
                                         ),
-                                        // Speed Badge
+                                        // Speed + PiP Badges
                                         Positioned(
                                           top: 10,
                                           right: 10,
-                                          child: GestureDetector(
-                                            onTap: _showSpeedDialog,
-                                            child: Container(
-                                              padding:
-                                                  const EdgeInsets.symmetric(
-                                                horizontal: 7,
-                                                vertical: 4,
-                                              ),
-                                              decoration: BoxDecoration(
-                                                color: Colors.black
-                                                    .withOpacity(0.7),
-                                                borderRadius:
-                                                    BorderRadius.circular(6),
-                                                border: Border.all(
-                                                  color: kNeonCyan,
-                                                  width: 1,
+                                          child: Row(
+                                            children: [
+                                              GestureDetector(
+                                                onTap: _enablePiP,
+                                                child: Container(
+                                                  padding: const EdgeInsets
+                                                      .symmetric(
+                                                    horizontal: 6,
+                                                    vertical: 5,
+                                                  ),
+                                                  margin: const EdgeInsets
+                                                      .only(right: 6),
+                                                  decoration: BoxDecoration(
+                                                    color: Colors.black
+                                                        .withOpacity(0.7),
+                                                    borderRadius:
+                                                        BorderRadius.circular(
+                                                            6),
+                                                    border: Border.all(
+                                                      color: kNeonPurple,
+                                                      width: 1,
+                                                    ),
+                                                  ),
+                                                  child: const Icon(
+                                                    Icons.picture_in_picture_alt,
+                                                    color: kNeonPurple,
+                                                    size: 16,
+                                                  ),
                                                 ),
                                               ),
-                                              child: Text(
-                                                '${_playbackSpeed}x',
-                                                style: const TextStyle(
-                                                  color: kNeonCyan,
-                                                  fontSize: 10,
-                                                  fontWeight: FontWeight.bold,
+                                              GestureDetector(
+                                                onTap: _showSpeedDialog,
+                                                child: Container(
+                                                  padding: const EdgeInsets
+                                                      .symmetric(
+                                                    horizontal: 7,
+                                                    vertical: 4,
+                                                  ),
+                                                  decoration: BoxDecoration(
+                                                    color: Colors.black
+                                                        .withOpacity(0.7),
+                                                    borderRadius:
+                                                        BorderRadius.circular(
+                                                            6),
+                                                    border: Border.all(
+                                                      color: kNeonCyan,
+                                                      width: 1,
+                                                    ),
+                                                  ),
+                                                  child: Text(
+                                                    '${_playbackSpeed}x',
+                                                    style: const TextStyle(
+                                                      color: kNeonCyan,
+                                                      fontSize: 10,
+                                                      fontWeight:
+                                                          FontWeight.bold,
+                                                    ),
+                                                  ),
                                                 ),
                                               ),
-                                            ),
+                                            ],
                                           ),
                                         ),
-                                        // Play/Pause Center Button
-                                        if (_showControls)
+                                        // Center Play/Pause
+                                        if (_showControls && !_isLongPressBoost)
                                           GestureDetector(
                                             onTap: () {
+                                              Haptic.light();
                                               setState(() {
                                                 _controller.value.isPlaying
                                                     ? _controller.pause()
@@ -5658,6 +6307,10 @@ class _NativeVideoPlayerScreenState extends State<NativeVideoPlayerScreen> {
                                                     .withOpacity(0.8),
                                                 borderRadius:
                                                     BorderRadius.circular(10),
+                                                border: Border.all(
+                                                  color: kGreen,
+                                                  width: 1,
+                                                ),
                                               ),
                                               child: Text(
                                                 _flashFeedback,
@@ -5669,7 +6322,7 @@ class _NativeVideoPlayerScreenState extends State<NativeVideoPlayerScreen> {
                                               ),
                                             ),
                                           ),
-                                        // Progress Bar Bottom
+                                        // Bottom bar
                                         Positioned(
                                           bottom: 6,
                                           left: 10,
@@ -5711,24 +6364,26 @@ class _NativeVideoPlayerScreenState extends State<NativeVideoPlayerScreen> {
                                                                   .toDouble() <=
                                                               0
                                                           ? 1.0
-                                                          : _controller.value
-                                                              .duration.inSeconds
+                                                          : _controller
+                                                              .value.duration
+                                                              .inSeconds
                                                               .toDouble(),
                                                     ),
                                                     min: 0.0,
-                                                    max: _controller.value.duration
+                                                    max: _controller.value
+                                                                .duration
                                                                 .inSeconds
                                                                 .toDouble() >
                                                             0
                                                         ? _controller
-                                                            .value.duration.inSeconds
+                                                            .value.duration
+                                                            .inSeconds
                                                             .toDouble()
                                                         : 1.0,
                                                     onChanged: (val) {
                                                       _controller.seekTo(
                                                         Duration(
-                                                          seconds: val.toInt(),
-                                                        ),
+                                                            seconds: val.toInt()),
                                                       );
                                                     },
                                                   ),
@@ -5767,6 +6422,45 @@ class _NativeVideoPlayerScreenState extends State<NativeVideoPlayerScreen> {
                 ),
               ),
             ),
+            // 10 sec Forward/Back Buttons
+            if (!_isFullscreen && _isInitialized)
+              Padding(
+                padding: const EdgeInsets.symmetric(vertical: 8, horizontal: 12),
+                child: Row(
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  children: [
+                    _seekButton(
+                      icon: Icons.replay_10,
+                      label: '10s',
+                      onTap: () => _seekRelative(-10),
+                    ),
+                    const SizedBox(width: 20),
+                    _seekButton(
+                      icon: _controller.value.isPlaying
+                          ? Icons.pause_circle_filled
+                          : Icons.play_circle_fill,
+                      label: _controller.value.isPlaying ? 'PAUSE' : 'PLAY',
+                      color: kGreen,
+                      size: 40,
+                      onTap: () {
+                        Haptic.medium();
+                        setState(() {
+                          _controller.value.isPlaying
+                              ? _controller.pause()
+                              : _controller.play();
+                        });
+                        _resetControlTimer();
+                      },
+                    ),
+                    const SizedBox(width: 20),
+                    _seekButton(
+                      icon: Icons.forward_10,
+                      label: '10s',
+                      onTap: () => _seekRelative(10),
+                    ),
+                  ],
+                ),
+              ),
             if (!_isFullscreen)
               Expanded(
                 child: SingleChildScrollView(
@@ -6172,7 +6866,28 @@ class _NativeVideoPlayerScreenState extends State<NativeVideoPlayerScreen> {
     );
   }
 
-  // ═══════════ REAL RELATED VIDEO CARD ═══════════
+  Widget _seekButton({
+    required IconData icon,
+    required String label,
+    required VoidCallback onTap,
+    Color color = kGreen,
+    double size = 30,
+  }) {
+    return GestureDetector(
+      onTap: onTap,
+      child: Column(
+        children: [
+          Icon(icon, color: color, size: size),
+          const SizedBox(height: 2),
+          Text(
+            label,
+            style: TextStyle(color: color, fontSize: 9, letterSpacing: 1),
+          ),
+        ],
+      ),
+    );
+  }
+
   Widget _buildRelatedCard(Map<String, dynamic> v) {
     final id = v['id']?.toString() ?? '';
     final title = (v['filename'] ?? v['originalUrl'] ?? 'Video').toString();
@@ -6183,6 +6898,7 @@ class _NativeVideoPlayerScreenState extends State<NativeVideoPlayerScreen> {
       padding: const EdgeInsets.only(right: 10),
       child: InkWell(
         onTap: () {
+          Haptic.medium();
           final url = '$kBackendBaseUrl/v/$id';
           Navigator.pushReplacement(
             context,
@@ -6202,7 +6918,6 @@ class _NativeVideoPlayerScreenState extends State<NativeVideoPlayerScreen> {
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              // Thumbnail gradient
               Container(
                 height: 90,
                 decoration: BoxDecoration(
@@ -6425,6 +7140,7 @@ class UserSearchDelegate extends SearchDelegate {
                   size: 14,
                 ),
                 onTap: () {
+                  Haptic.light();
                   close(context, null);
                   Navigator.push(
                     context,
@@ -6484,6 +7200,7 @@ class _UserProfileScreenState extends State<UserProfileScreen> {
   }
 
   Future<void> _toggleSub() async {
+    Haptic.medium();
     final myUid = MayaJaalAccount.cachedUid;
     if (myUid == null) return;
     final newState = await FirebaseService.toggleSubscription(myUid, _channelUid);
@@ -6706,6 +7423,7 @@ class _UserProfileScreenState extends State<UserProfileScreen> {
                                   ],
                                 ),
                                 onTap: () {
+                                  Haptic.light();
                                   Navigator.push(
                                     context,
                                     MaterialPageRoute(
@@ -6727,7 +7445,7 @@ class _UserProfileScreenState extends State<UserProfileScreen> {
 }
 
 // ═══════════════════════════════════════════════════════
-// EARNINGS SCREEN
+// EARNINGS SCREEN — With Rank Animation
 // ═══════════════════════════════════════════════════════
 class EarningsScreen extends StatefulWidget {
   const EarningsScreen({super.key});
@@ -6735,7 +7453,8 @@ class EarningsScreen extends StatefulWidget {
   State<EarningsScreen> createState() => _EarningsScreenState();
 }
 
-class _EarningsScreenState extends State<EarningsScreen> {
+class _EarningsScreenState extends State<EarningsScreen>
+    with SingleTickerProviderStateMixin {
   bool _loading = true;
   Map<String, dynamic> _dashboard = {};
   List<Map<String, dynamic>> _links = [];
@@ -6743,11 +7462,29 @@ class _EarningsScreenState extends State<EarningsScreen> {
   int _currentTier = 1;
   double _currentRate = 1.0;
   int _nextBoost = 1000;
+  int _rankIndex = 0;
+
+  late AnimationController _rankAnimCtrl;
+  late Animation<double> _rankScale;
 
   @override
   void initState() {
     super.initState();
+    _rankAnimCtrl = AnimationController(
+      vsync: this,
+      duration: const Duration(milliseconds: 1200),
+    );
+    _rankScale = TweenSequence<double>([
+      TweenSequenceItem(tween: Tween(begin: 1.0, end: 1.15), weight: 40),
+      TweenSequenceItem(tween: Tween(begin: 1.15, end: 1.0), weight: 60),
+    ]).animate(CurvedAnimation(parent: _rankAnimCtrl, curve: Curves.easeOut));
     _loadData();
+  }
+
+  @override
+  void dispose() {
+    _rankAnimCtrl.dispose();
+    super.dispose();
   }
 
   Future<void> _loadData() async {
@@ -6763,6 +7500,11 @@ class _EarningsScreenState extends State<EarningsScreen> {
       final views = (dash['totalViews'] ?? 0) as int;
       final income = MayaJaalAccount.calcEarnings(views);
       final tierInfo = MayaJaalAccount.getTierInfo(views);
+      final newRankIndex = CyberRank.getIndex(views);
+
+      if (newRankIndex != _rankIndex && _rankIndex != 0) {
+        _rankAnimCtrl.forward(from: 0);
+      }
 
       if (mounted) {
         setState(() {
@@ -6772,6 +7514,7 @@ class _EarningsScreenState extends State<EarningsScreen> {
           _currentTier = (tierInfo['tier'] ?? 1) as int;
           _currentRate = (tierInfo['rate'] ?? 1.0) as double;
           _nextBoost = (tierInfo['next'] ?? 0) as int;
+          _rankIndex = newRankIndex;
           _loading = false;
         });
       }
@@ -6794,6 +7537,7 @@ class _EarningsScreenState extends State<EarningsScreen> {
           IconButton(
             icon: const Icon(Icons.refresh, color: kGreen),
             onPressed: () {
+              Haptic.light();
               setState(() => _loading = true);
               _loadData();
             },
@@ -6848,6 +7592,7 @@ class _EarningsScreenState extends State<EarningsScreen> {
     final totalLinks = (_dashboard['totalLinks'] ?? 0) as int;
     final rank = CyberRank.get(totalViews);
     final nextRank = CyberRank.next(totalViews);
+    final rankColor = rank['color'] as Color;
 
     return RefreshIndicator(
       onRefresh: _loadData,
@@ -6900,81 +7645,100 @@ class _EarningsScreenState extends State<EarningsScreen> {
             ),
             const SizedBox(height: 16),
 
-            // ═══ RANK CARD (NEW) ═══
-            Container(
-              padding: const EdgeInsets.all(16),
-              decoration: BoxDecoration(
-                gradient: LinearGradient(
-                  colors: [
-                    (rank['color'] as Color).withOpacity(0.15),
-                    Colors.black,
-                  ],
-                  begin: Alignment.topLeft,
-                  end: Alignment.bottomRight,
-                ),
-                borderRadius: BorderRadius.circular(14),
-                border: Border.all(
-                  color: (rank['color'] as Color).withOpacity(0.5),
-                  width: 1.5,
-                ),
+            // ═══ RANK CARD with animation ═══
+            AnimatedBuilder(
+              animation: _rankScale,
+              builder: (c, child) => Transform.scale(
+                scale: _rankScale.value,
+                child: child,
               ),
-              child: Row(
-                children: [
-                  Container(
-                    width: 50,
-                    height: 50,
-                    decoration: BoxDecoration(
-                      shape: BoxShape.circle,
-                      border: Border.all(color: rank['color'] as Color, width: 2),
+              child: Container(
+                padding: const EdgeInsets.all(16),
+                decoration: BoxDecoration(
+                  gradient: LinearGradient(
+                    colors: [
+                      rankColor.withOpacity(0.15),
+                      Colors.black,
+                    ],
+                    begin: Alignment.topLeft,
+                    end: Alignment.bottomRight,
+                  ),
+                  borderRadius: BorderRadius.circular(14),
+                  border: Border.all(
+                    color: rankColor.withOpacity(0.5),
+                    width: 1.5,
+                  ),
+                  boxShadow: [
+                    BoxShadow(
+                      color: rankColor.withOpacity(0.25),
+                      blurRadius: 18,
                     ),
-                    child: Center(
-                      child: Text(
-                        rank['emoji'] as String,
-                        style: const TextStyle(fontSize: 24),
+                  ],
+                ),
+                child: Row(
+                  children: [
+                    Container(
+                      width: 54,
+                      height: 54,
+                      decoration: BoxDecoration(
+                        shape: BoxShape.circle,
+                        border: Border.all(color: rankColor, width: 2),
+                        boxShadow: [
+                          BoxShadow(
+                            color: rankColor.withOpacity(0.5),
+                            blurRadius: 15,
+                          ),
+                        ],
+                      ),
+                      child: Center(
+                        child: Text(
+                          rank['emoji'] as String,
+                          style: const TextStyle(fontSize: 26),
+                        ),
                       ),
                     ),
-                  ),
-                  const SizedBox(width: 14),
-                  Expanded(
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Text(
-                          'CYBER RANK',
-                          style: TextStyle(
-                            color: rank['color'] as Color,
-                            fontSize: 9,
-                            letterSpacing: 2,
-                            fontWeight: FontWeight.bold,
-                          ),
-                        ),
-                        const SizedBox(height: 3),
-                        Text(
-                          rank['name'] as String,
-                          style: TextStyle(
-                            color: rank['color'] as Color,
-                            fontSize: 18,
-                            fontWeight: FontWeight.w900,
-                            shadows: [
-                              Shadow(
-                                color: (rank['color'] as Color).withOpacity(0.6),
-                                blurRadius: 12,
-                              ),
-                            ],
-                          ),
-                        ),
-                        if (nextRank != null)
+                    const SizedBox(width: 14),
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
                           Text(
-                            '${nextRank['min'] - totalViews} views to ${nextRank['name']}',
-                            style: const TextStyle(
-                              color: Colors.white54,
-                              fontSize: 10,
+                            'CYBER RANK',
+                            style: TextStyle(
+                              color: rankColor,
+                              fontSize: 9,
+                              letterSpacing: 2,
+                              fontWeight: FontWeight.bold,
                             ),
                           ),
-                      ],
+                          const SizedBox(height: 3),
+                          Text(
+                            rank['name'] as String,
+                            style: TextStyle(
+                              color: rankColor,
+                              fontSize: 18,
+                              fontWeight: FontWeight.w900,
+                              shadows: [
+                                Shadow(
+                                  color: rankColor.withOpacity(0.6),
+                                  blurRadius: 12,
+                                ),
+                              ],
+                            ),
+                          ),
+                          if (nextRank != null)
+                            Text(
+                              '${(nextRank['min'] as int) - totalViews} views to ${nextRank['name']}',
+                              style: const TextStyle(
+                                color: Colors.white54,
+                                fontSize: 10,
+                              ),
+                            ),
+                        ],
+                      ),
                     ),
-                  ),
-                ],
+                  ],
+                ),
               ),
             ),
             const SizedBox(height: 16),
