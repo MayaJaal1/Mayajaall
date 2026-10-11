@@ -88,6 +88,9 @@ class MayaJaalAccount {
   static DatabaseReference get _rtdb => FirebaseDatabase.instance.ref();
 
   static Future<void> init() async {
+    await GoogleSignIn.instance.initialize(
+     serverClientId: webClientId,
+   );
     final user = FirebaseAuth.instance.currentUser;
     if (user != null) {
       cachedUid = user.uid;
