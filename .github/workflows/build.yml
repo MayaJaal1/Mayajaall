@@ -79,7 +79,7 @@ jobs:
             path_provider: ^2.1.4
 
             screen_brightness: ^1.0.1
-            floating: ^2.1.0
+            floating: ^6.0.0
 
           dev_dependencies:
             flutter_test:
