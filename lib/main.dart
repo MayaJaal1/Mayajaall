@@ -23,7 +23,7 @@ import 'package:device_info_plus/device_info_plus.dart';
 const String webClientId = '96139047750-5ooi0pbvch98qu447somuurh6k6fmhcj.apps.googleusercontent.com';
 const String oneSignalAppId = '06b99c2b-b3b4-413b-b6cc-480a624f4e25';
 const String kBackendBaseUrl = 'https://www.mayajaal.online';
-const int kAppCurrentVersionCode = 3;
+const int kAppCurrentVersionCode = 4;
 
 const Color kGreen = Color(0xFF00FF66);
 const Color kNeonCyan = Color(0xFF00F0FF);
@@ -31,6 +31,9 @@ const Color kNeonPurple = Color(0xFF9D00FF);
 const Color kBg = Color(0xFF000000);
 const Color kCardBg = Color(0xFF031408);
 const Color kDimGreen = Color(0xFF4FBF8B);
+const Color kGold = Color(0xFFFFD700);
+const Color kSilver = Color(0xFFC0C0C0);
+const Color kBronze = Color(0xFFCD7F32);
 
 final ValueNotifier<ThemeMode> themeNotifier = ValueNotifier(ThemeMode.dark);
 final ValueNotifier<String> languageNotifier = ValueNotifier('English');
@@ -76,6 +79,34 @@ String tr(String key) {
 }
 
 // ═══════════════════════════════════════════════════════
+// RANK SYSTEM (NEW)
+// ═══════════════════════════════════════════════════════
+class CyberRank {
+  static const List<Map<String, dynamic>> ranks = [
+    {'name': 'Neon Rookie', 'emoji': '🥉', 'color': kSilver, 'min': 0},
+    {'name': 'Cyber Trader', 'emoji': '🥈', 'color': kNeonCyan, 'min': 1000},
+    {'name': 'Matrix Master', 'emoji': '🥇', 'color': kGreen, 'min': 10000},
+    {'name': 'Quantum Elite', 'emoji': '💎', 'color': kNeonPurple, 'min': 100000},
+    {'name': 'MayaJaal Legend', 'emoji': '👑', 'color': kGold, 'min': 1000000},
+  ];
+
+  static Map<String, dynamic> get(int views) {
+    Map<String, dynamic> current = ranks[0];
+    for (final r in ranks) {
+      if (views >= (r['min'] as int)) current = r;
+    }
+    return current;
+  }
+
+  static Map<String, dynamic>? next(int views) {
+    for (final r in ranks) {
+      if (views < (r['min'] as int)) return r;
+    }
+    return null;
+  }
+}
+
+// ═══════════════════════════════════════════════════════
 // MAYAJAAL FIREBASE ACCOUNT SERVICE
 // ═══════════════════════════════════════════════════════
 class MayaJaalAccount {
@@ -88,7 +119,6 @@ class MayaJaalAccount {
   static DatabaseReference get _rtdb => FirebaseDatabase.instance.ref();
 
   static Future<void> init() async {
-  
     final user = FirebaseAuth.instance.currentUser;
     if (user != null) {
       cachedUid = user.uid;
@@ -406,77 +436,78 @@ class FirebaseService {
   }
 
   // ──────────── SUBSCRIPTIONS ────────────
-static Future<bool> isSubscribed(String subscriberUid, String channelUid) async {
-  try {
-    final snap = await _rtdb.child('subscriptions/$channelUid/$subscriberUid').once();
-    return snap.snapshot.value != null;
-  } catch (_) {
-    return false;
-  }
-}
-
-static Future<bool> toggleSubscription(String subscriberUid, String channelUid) async {
-  try {
-    final ref = _rtdb.child('subscriptions/$channelUid/$subscriberUid');
-    final snap = await ref.once();
-    final isSubbed = snap.snapshot.value != null;
-
-    if (isSubbed) {
-      await ref.remove();
-      await _rtdb.child('userSubs/$subscriberUid/$channelUid').remove();
-
-      await _rtdb.child('users/$channelUid').runTransaction((data) {
-        if (data == null) return Transaction.success(null);
-        final map = Map<String, dynamic>.from(data as Map);
-        final subs = (map['subscribersCount'] ?? 0) as int;
-        map['subscribersCount'] = math.max(0, subs - 1);
-        return Transaction.success(map);
-      });
-
+  static Future<bool> isSubscribed(String subscriberUid, String channelUid) async {
+    try {
+      final snap = await _rtdb.child('subscriptions/$channelUid/$subscriberUid').once();
+      return snap.snapshot.value != null;
+    } catch (_) {
       return false;
-    } else {
-      await ref.set(DateTime.now().millisecondsSinceEpoch);
-      await _rtdb.child('userSubs/$subscriberUid/$channelUid').set(DateTime.now().millisecondsSinceEpoch);
-
-      await _rtdb.child('users/$channelUid').runTransaction((data) {
-        if (data == null) return Transaction.success(null);
-        final map = Map<String, dynamic>.from(data as Map);
-        final subs = (map['subscribersCount'] ?? 0) as int;
-        map['subscribersCount'] = subs + 1;
-        return Transaction.success(map);
-      });
-
-      await sendNotification(
-        toUid: channelUid,
-        title: '🔔 New Subscriber!',
-        message: 'Someone subscribed to your channel.',
-        type: 'subscribe',
-      );
-
-      return true;
     }
-  } catch (e) {
-    debugPrint('toggleSubscription error: $e');
-    return false;
   }
-}
 
-static Stream<int> getSubscriberCount(String channelUid) {
-  return _rtdb.child('users/$channelUid/subscribersCount').onValue.map((e) {
-    return (e.snapshot.value ?? 0) as int;
-  });
-}
+  static Future<bool> toggleSubscription(String subscriberUid, String channelUid) async {
+    try {
+      final ref = _rtdb.child('subscriptions/$channelUid/$subscriberUid');
+      final snap = await ref.once();
+      final isSubbed = snap.snapshot.value != null;
 
-static Future<List<String>> getUserSubscriptions(String subscriberUid) async {
-  try {
-    final snap = await _rtdb.child('userSubs/$subscriberUid').once();
-    final val = snap.snapshot.value;
-    if (val == null) return [];
-    return (val as Map).keys.map((k) => k.toString()).toList();
-  } catch (_) {
-    return [];
+      if (isSubbed) {
+        await ref.remove();
+        await _rtdb.child('userSubs/$subscriberUid/$channelUid').remove();
+
+        await _rtdb.child('users/$channelUid').runTransaction((data) {
+          if (data == null) return Transaction.success(null);
+          final map = Map<String, dynamic>.from(data as Map);
+          final subs = (map['subscribersCount'] ?? 0) as int;
+          map['subscribersCount'] = math.max(0, subs - 1);
+          return Transaction.success(map);
+        });
+
+        return false;
+      } else {
+        await ref.set(DateTime.now().millisecondsSinceEpoch);
+        await _rtdb.child('userSubs/$subscriberUid/$channelUid').set(DateTime.now().millisecondsSinceEpoch);
+
+        await _rtdb.child('users/$channelUid').runTransaction((data) {
+          if (data == null) return Transaction.success(null);
+          final map = Map<String, dynamic>.from(data as Map);
+          final subs = (map['subscribersCount'] ?? 0) as int;
+          map['subscribersCount'] = subs + 1;
+          return Transaction.success(map);
+        });
+
+        await sendNotification(
+          toUid: channelUid,
+          title: '🔔 New Subscriber!',
+          message: 'Someone subscribed to your channel.',
+          type: 'subscribe',
+        );
+
+        return true;
+      }
+    } catch (e) {
+      debugPrint('toggleSubscription error: $e');
+      return false;
+    }
   }
-}
+
+  static Stream<int> getSubscriberCount(String channelUid) {
+    return _rtdb.child('users/$channelUid/subscribersCount').onValue.map((e) {
+      return (e.snapshot.value ?? 0) as int;
+    });
+  }
+
+  static Future<List<String>> getUserSubscriptions(String subscriberUid) async {
+    try {
+      final snap = await _rtdb.child('userSubs/$subscriberUid').once();
+      final val = snap.snapshot.value;
+      if (val == null) return [];
+      return (val as Map).keys.map((k) => k.toString()).toList();
+    } catch (_) {
+      return [];
+    }
+  }
+
   // ──────────── VIDEOS (Links) ────────────
   static Future<List<Map<String, dynamic>>> getUserVideos(String uid, {int limit = 30}) async {
     try {
@@ -492,6 +523,64 @@ static Future<List<String>> getUserSubscriptions(String subscriberUid) async {
       list.sort((a, b) => (b['createdAt'] ?? 0).compareTo(a['createdAt'] ?? 0));
       return list.take(limit).toList();
     } catch (_) {
+      return [];
+    }
+  }
+
+  static Future<List<Map<String, dynamic>>> getRelatedVideos({
+    required String currentVideoId,
+    String? currentOwnerUid,
+    List<String> recentIds = const [],
+    int limit = 10,
+  }) async {
+    try {
+      final snap = await _rtdb.child('links').once();
+      final val = snap.snapshot.value;
+      if (val == null) return [];
+      final map = Map<String, dynamic>.from(val as Map);
+      final all = map.entries.map((e) {
+        final d = Map<String, dynamic>.from(e.value as Map);
+        d['id'] = e.key;
+        return d;
+      }).where((v) => v['id'] != currentVideoId).toList();
+
+      final result = <Map<String, dynamic>>[];
+      final seenIds = <String>{};
+
+      // Priority 1: Recent videos (last watched)
+      for (final id in recentIds) {
+        final found = all.firstWhere((v) => v['id'] == id, orElse: () => {});
+        if (found.isNotEmpty && !seenIds.contains(found['id'])) {
+          result.add(found);
+          seenIds.add(found['id'] as String);
+        }
+      }
+
+      // Priority 2: Same uploader's videos
+      if (currentOwnerUid != null && currentOwnerUid.isNotEmpty) {
+        for (final v in all) {
+          if (result.length >= limit) break;
+          if (v['ownerUid'] == currentOwnerUid && !seenIds.contains(v['id'])) {
+            result.add(v);
+            seenIds.add(v['id'] as String);
+          }
+        }
+      }
+
+      // Priority 3: Trending (highest views)
+      final sorted = List<Map<String, dynamic>>.from(all)
+        ..sort((a, b) => ((b['views'] ?? 0) as int).compareTo((a['views'] ?? 0) as int));
+      for (final v in sorted) {
+        if (result.length >= limit) break;
+        if (!seenIds.contains(v['id'])) {
+          result.add(v);
+          seenIds.add(v['id'] as String);
+        }
+      }
+
+      return result.take(limit).toList();
+    } catch (e) {
+      debugPrint('getRelatedVideos error: $e');
       return [];
     }
   }
@@ -633,6 +722,27 @@ class DeviceIdHelper {
 }
 
 // ═══════════════════════════════════════════════════════
+// WATCH HISTORY HELPER (For Related Videos)
+// ═══════════════════════════════════════════════════════
+class WatchHistory {
+  static Future<List<String>> getRecentIds({int limit = 10}) async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      final raw = prefs.getString('watch_history_v2');
+      if (raw == null) return [];
+      final List decoded = jsonDecode(raw);
+      return decoded
+          .take(limit)
+          .map((e) => (e['id'] ?? '').toString())
+          .where((s) => s.isNotEmpty)
+          .toList();
+    } catch (_) {
+      return [];
+    }
+  }
+}
+
+// ═══════════════════════════════════════════════════════
 // MAIN
 // ═══════════════════════════════════════════════════════
 Future<void> main() async {
@@ -653,7 +763,7 @@ Future<void> main() async {
         storageBucket: "mayajaal-app.firebasestorage.app",
         messagingSenderId: "96139047750",
         appId: "1:96139047750:android:b2bfa8b843d71a32012b47",
-       ),
+      ),
     );
     debugPrint("✅ Firebase Initialized");
     await MayaJaalAccount.init();
@@ -744,6 +854,145 @@ class _MatrixRainState extends State<MatrixRain> {
 }
 
 // ═══════════════════════════════════════════════════════
+// PROFESSIONAL LOADING SCREEN (NEW)
+// ═══════════════════════════════════════════════════════
+class ProfessionalLoader extends StatefulWidget {
+  final String message;
+  const ProfessionalLoader({super.key, this.message = 'LOADING...'});
+
+  @override
+  State<ProfessionalLoader> createState() => _ProfessionalLoaderState();
+}
+
+class _ProfessionalLoaderState extends State<ProfessionalLoader>
+    with SingleTickerProviderStateMixin {
+  late AnimationController _c;
+  late Animation<double> _pulse;
+  late Animation<double> _rotate;
+
+  @override
+  void initState() {
+    super.initState();
+    _c = AnimationController(
+      vsync: this,
+      duration: const Duration(milliseconds: 1600),
+    )..repeat();
+    _pulse = Tween<double>(begin: 0.85, end: 1.1)
+        .animate(CurvedAnimation(parent: _c, curve: Curves.easeInOut));
+    _rotate = Tween<double>(begin: 0, end: 1)
+        .animate(CurvedAnimation(parent: _c, curve: Curves.linear));
+  }
+
+  @override
+  void dispose() {
+    _c.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Scaffold(
+      backgroundColor: Colors.black,
+      body: Stack(
+        children: [
+          const MatrixRain(opacity: 0.35),
+          Center(
+            child: Column(
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: [
+                Stack(
+                  alignment: Alignment.center,
+                  children: [
+                    AnimatedBuilder(
+                      animation: _rotate,
+                      builder: (c, _) => Transform.rotate(
+                        angle: _rotate.value * 2 * math.pi,
+                        child: Container(
+                          width: 130,
+                          height: 130,
+                          decoration: BoxDecoration(
+                            shape: BoxShape.circle,
+                            gradient: SweepGradient(
+                              colors: [
+                                kGreen.withOpacity(0.0),
+                                kGreen,
+                                kNeonCyan,
+                                kGreen.withOpacity(0.0),
+                              ],
+                            ),
+                          ),
+                        ),
+                      ),
+                    ),
+                    AnimatedBuilder(
+                      animation: _pulse,
+                      builder: (c, _) => Transform.scale(
+                        scale: _pulse.value,
+                        child: Container(
+                          width: 100,
+                          height: 100,
+                          decoration: BoxDecoration(
+                            shape: BoxShape.circle,
+                            color: Colors.black,
+                            border: Border.all(color: kGreen, width: 2),
+                            boxShadow: [
+                              BoxShadow(
+                                color: kGreen.withOpacity(0.6),
+                                blurRadius: 25,
+                                spreadRadius: 3,
+                              ),
+                            ],
+                          ),
+                          child: ClipOval(
+                            child: Image.asset(
+                              'assets/icon/logo.png',
+                              fit: BoxFit.cover,
+                              errorBuilder: (c, e, s) => const Icon(
+                                Icons.change_history,
+                                color: kGreen,
+                                size: 50,
+                              ),
+                            ),
+                          ),
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 32),
+                Text(
+                  widget.message,
+                  style: const TextStyle(
+                    color: kGreen,
+                    fontSize: 14,
+                    fontFamily: 'monospace',
+                    letterSpacing: 3,
+                    fontWeight: FontWeight.bold,
+                    shadows: [Shadow(color: kGreen, blurRadius: 10)],
+                  ),
+                ),
+                const SizedBox(height: 12),
+                SizedBox(
+                  width: 180,
+                  child: ClipRRect(
+                    borderRadius: BorderRadius.circular(99),
+                    child: LinearProgressIndicator(
+                      minHeight: 3,
+                      backgroundColor: Colors.white12,
+                      valueColor: const AlwaysStoppedAnimation<Color>(kGreen),
+                    ),
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+// ═══════════════════════════════════════════════════════
 // SPLASH SCREEN
 // ═══════════════════════════════════════════════════════
 class SplashScreen extends StatefulWidget {
@@ -752,15 +1001,20 @@ class SplashScreen extends StatefulWidget {
   State<SplashScreen> createState() => _SplashScreenState();
 }
 
-class _SplashScreenState extends State<SplashScreen> with SingleTickerProviderStateMixin {
+class _SplashScreenState extends State<SplashScreen>
+    with SingleTickerProviderStateMixin {
   late AnimationController _c;
   late Animation<double> _a;
 
   @override
   void initState() {
     super.initState();
-    _c = AnimationController(vsync: this, duration: const Duration(milliseconds: 900))..repeat(reverse: true);
-    _a = Tween<double>(begin: 0.9, end: 1.1).animate(CurvedAnimation(parent: _c, curve: Curves.easeInOut));
+    _c = AnimationController(
+      vsync: this,
+      duration: const Duration(milliseconds: 900),
+    )..repeat(reverse: true);
+    _a = Tween<double>(begin: 0.9, end: 1.1)
+        .animate(CurvedAnimation(parent: _c, curve: Curves.easeInOut));
   }
 
   @override
@@ -785,17 +1039,31 @@ class _SplashScreenState extends State<SplashScreen> with SingleTickerProviderSt
                   builder: (c, _) => Transform.scale(
                     scale: _a.value,
                     child: Container(
-                      width: 125, height: 125,
+                      width: 125,
+                      height: 125,
                       decoration: BoxDecoration(
                         borderRadius: BorderRadius.circular(24),
-                        boxShadow: [BoxShadow(color: kGreen.withOpacity(0.6), blurRadius: 28, spreadRadius: 6)],
+                        boxShadow: [
+                          BoxShadow(
+                            color: kGreen.withOpacity(0.6),
+                            blurRadius: 28,
+                            spreadRadius: 6,
+                          ),
+                        ],
                       ),
                       child: ClipRRect(
                         borderRadius: BorderRadius.circular(24),
                         child: Image.asset(
                           'assets/icon/logo.png',
                           fit: BoxFit.cover,
-                          errorBuilder: (c, e, s) => Container(color: Colors.black, child: const Icon(Icons.movie_filter, size: 70, color: kGreen)),
+                          errorBuilder: (c, e, s) => Container(
+                            color: Colors.black,
+                            child: const Icon(
+                              Icons.movie_filter,
+                              size: 70,
+                              color: kGreen,
+                            ),
+                          ),
                         ),
                       ),
                     ),
@@ -805,15 +1073,25 @@ class _SplashScreenState extends State<SplashScreen> with SingleTickerProviderSt
                 Text(
                   'MAYA JAAL LOADING...',
                   style: TextStyle(
-                    fontSize: 21, fontWeight: FontWeight.bold, color: kGreen,
-                    fontFamily: 'monospace', letterSpacing: 4,
-                    shadows: [Shadow(color: kGreen.withOpacity(0.85), blurRadius: 16)],
+                    fontSize: 21,
+                    fontWeight: FontWeight.bold,
+                    color: kGreen,
+                    fontFamily: 'monospace',
+                    letterSpacing: 4,
+                    shadows: [
+                      Shadow(color: kGreen.withOpacity(0.85), blurRadius: 16)
+                    ],
                   ),
                 ),
                 const SizedBox(height: 10),
                 Text(
                   '> initializing quantum cipher...',
-                  style: TextStyle(fontSize: 11, color: kGreen.withOpacity(0.7), fontFamily: 'monospace', letterSpacing: 2),
+                  style: TextStyle(
+                    fontSize: 11,
+                    color: kGreen.withOpacity(0.7),
+                    fontFamily: 'monospace',
+                    letterSpacing: 2,
+                  ),
                 ),
               ],
             ),
@@ -869,11 +1147,15 @@ class _MyAppState extends State<MyApp> {
     final navigator = navigatorKey.currentState;
     if (navigator == null) return;
 
-    if (uri.path.startsWith('/v/') || uri.host == 'watch' || uri.scheme == 'mayajaall') {
+    if (uri.path.startsWith('/v/') ||
+        uri.path.startsWith('/s/') ||
+        uri.host == 'watch' ||
+        uri.scheme == 'mayajaall') {
       String videoId = '';
-      final token = uri.queryParameters['t'] ?? uri.queryParameters['s'] ?? '';
+      final token =
+          uri.queryParameters['t'] ?? uri.queryParameters['s'] ?? '';
 
-      if (uri.path.startsWith('/v/')) {
+      if (uri.path.startsWith('/v/') || uri.path.startsWith('/s/')) {
         videoId = uri.pathSegments.isNotEmpty ? uri.pathSegments.last : '';
       } else if (uri.queryParameters['v'] != null) {
         videoId = uri.queryParameters['v']!;
@@ -899,7 +1181,7 @@ class _MyAppState extends State<MyApp> {
   String _buildUrlFromLink(Uri uri) {
     String videoId = '';
     final token = uri.queryParameters['t'] ?? uri.queryParameters['s'] ?? '';
-    if (uri.path.startsWith('/v/')) {
+    if (uri.path.startsWith('/v/') || uri.path.startsWith('/s/')) {
       videoId = uri.pathSegments.isNotEmpty ? uri.pathSegments.last : '';
     } else if (uri.queryParameters['v'] != null) {
       videoId = uri.queryParameters['v']!;
@@ -912,7 +1194,10 @@ class _MyAppState extends State<MyApp> {
   @override
   Widget build(BuildContext context) {
     if (!_linkReady) {
-      return MaterialApp(home: const SplashScreen(), debugShowCheckedModeBanner: false);
+      return const MaterialApp(
+        home: SplashScreen(),
+        debugShowCheckedModeBanner: false,
+      );
     }
 
     return ValueListenableBuilder<String>(
@@ -929,7 +1214,8 @@ class _MyAppState extends State<MyApp> {
               theme: _buildPureDarkTheme(),
               darkTheme: _buildPureDarkTheme(),
               home: _initialLink != null
-                  ? StreamPreviewScreen(targetUrl: _buildUrlFromLink(_initialLink!))
+                  ? StreamPreviewScreen(
+                      targetUrl: _buildUrlFromLink(_initialLink!))
                   : const AuthGate(),
             );
           },
@@ -944,10 +1230,18 @@ class _MyAppState extends State<MyApp> {
       scaffoldBackgroundColor: Colors.black,
       canvasColor: Colors.black,
       dialogBackgroundColor: const Color(0xFF021206),
-      colorScheme: const ColorScheme.dark(primary: kGreen, surface: Color(0xFF021206)),
+      colorScheme: const ColorScheme.dark(
+        primary: kGreen,
+        surface: Color(0xFF021206),
+      ),
       useMaterial3: true,
       fontFamily: 'monospace',
-      appBarTheme: const AppBarTheme(backgroundColor: Colors.black, foregroundColor: kGreen, elevation: 0, centerTitle: true),
+      appBarTheme: const AppBarTheme(
+        backgroundColor: Colors.black,
+        foregroundColor: kGreen,
+        elevation: 0,
+        centerTitle: true,
+      ),
     );
   }
 }
@@ -993,7 +1287,8 @@ class LoginScreen extends StatefulWidget {
   State<LoginScreen> createState() => _LoginScreenState();
 }
 
-class _LoginScreenState extends State<LoginScreen> with SingleTickerProviderStateMixin {
+class _LoginScreenState extends State<LoginScreen>
+    with SingleTickerProviderStateMixin {
   bool _isLoginTab = true;
   bool _loading = false;
   bool _obscurePassword = true;
@@ -1011,9 +1306,16 @@ class _LoginScreenState extends State<LoginScreen> with SingleTickerProviderStat
   @override
   void initState() {
     super.initState();
-    _magicController = AnimationController(vsync: this, duration: const Duration(milliseconds: 1200));
-    _glowAnimation = Tween<double>(begin: 0.0, end: 40.0).animate(CurvedAnimation(parent: _magicController, curve: Curves.easeInOut));
-    _scaleAnimation = Tween<double>(begin: 1.0, end: 1.04).animate(CurvedAnimation(parent: _magicController, curve: Curves.easeInOut));
+    _magicController = AnimationController(
+      vsync: this,
+      duration: const Duration(milliseconds: 1200),
+    );
+    _glowAnimation = Tween<double>(begin: 0.0, end: 40.0).animate(
+      CurvedAnimation(parent: _magicController, curve: Curves.easeInOut),
+    );
+    _scaleAnimation = Tween<double>(begin: 1.0, end: 1.04).animate(
+      CurvedAnimation(parent: _magicController, curve: Curves.easeInOut),
+    );
   }
 
   @override
@@ -1043,7 +1345,11 @@ class _LoginScreenState extends State<LoginScreen> with SingleTickerProviderStat
       return;
     }
 
-    setState(() { _loading = true; _error = ''; _successMsg = ''; });
+    setState(() {
+      _loading = true;
+      _error = '';
+      _successMsg = '';
+    });
 
     try {
       await MayaJaalAccount.signInWithEmail(email, pass);
@@ -1067,7 +1373,11 @@ class _LoginScreenState extends State<LoginScreen> with SingleTickerProviderStat
       return;
     }
 
-    setState(() { _loading = true; _error = ''; _successMsg = ''; });
+    setState(() {
+      _loading = true;
+      _error = '';
+      _successMsg = '';
+    });
 
     try {
       await MayaJaalAccount.signUpWithEmail(email, pass, name);
@@ -1082,7 +1392,10 @@ class _LoginScreenState extends State<LoginScreen> with SingleTickerProviderStat
   }
 
   Future<void> _handleGoogle() async {
-    setState(() { _loading = true; _error = ''; });
+    setState(() {
+      _loading = true;
+      _error = '';
+    });
     try {
       final result = await MayaJaalAccount.signInWithGoogle();
       if (result == null) {
@@ -1115,15 +1428,24 @@ class _LoginScreenState extends State<LoginScreen> with SingleTickerProviderStat
 
   String _fbError(String code) {
     switch (code) {
-      case 'user-not-found': return 'Is email ka koi account nahi hai';
-      case 'wrong-password': return 'Password galat hai';
-      case 'invalid-email': return 'Email galat format me hai';
-      case 'email-already-in-use': return 'Ye email already registered hai';
-      case 'weak-password': return 'Password kam se kam 6 character ka ho';
-      case 'invalid-credential': return 'Email ya password galat hai';
-      case 'too-many-requests': return 'Bohot zyada attempts, thodi der baad try karein';
-      case 'network-request-failed': return 'Internet connection check karein';
-      default: return code.replaceAll('-', ' ');
+      case 'user-not-found':
+        return 'Is email ka koi account nahi hai';
+      case 'wrong-password':
+        return 'Password galat hai';
+      case 'invalid-email':
+        return 'Email galat format me hai';
+      case 'email-already-in-use':
+        return 'Ye email already registered hai';
+      case 'weak-password':
+        return 'Password kam se kam 6 character ka ho';
+      case 'invalid-credential':
+        return 'Email ya password galat hai';
+      case 'too-many-requests':
+        return 'Bohot zyada attempts, thodi der baad try karein';
+      case 'network-request-failed':
+        return 'Internet connection check karein';
+      default:
+        return code.replaceAll('-', ' ');
     }
   }
 
@@ -1148,7 +1470,13 @@ class _LoginScreenState extends State<LoginScreen> with SingleTickerProviderStat
                         color: const Color(0xFF021206).withOpacity(0.9),
                         borderRadius: BorderRadius.circular(22),
                         border: Border.all(color: kGreen, width: 1.5),
-                        boxShadow: [BoxShadow(color: kGreen.withOpacity(0.2), blurRadius: _glowAnimation.value + 15, spreadRadius: 2)],
+                        boxShadow: [
+                          BoxShadow(
+                            color: kGreen.withOpacity(0.2),
+                            blurRadius: _glowAnimation.value + 15,
+                            spreadRadius: 2,
+                          ),
+                        ],
                       ),
                       child: child,
                     ),
@@ -1157,31 +1485,55 @@ class _LoginScreenState extends State<LoginScreen> with SingleTickerProviderStat
                     mainAxisSize: MainAxisSize.min,
                     children: [
                       Container(
-                        width: 78, height: 78, padding: const EdgeInsets.all(4),
+                        width: 78,
+                        height: 78,
+                        padding: const EdgeInsets.all(4),
                         decoration: BoxDecoration(
                           color: Colors.black,
                           borderRadius: BorderRadius.circular(22),
                           border: Border.all(color: kGreen, width: 1.8),
-                          boxShadow: [BoxShadow(color: kGreen.withOpacity(0.5), blurRadius: 18)],
+                          boxShadow: [
+                            BoxShadow(color: kGreen.withOpacity(0.5), blurRadius: 18),
+                          ],
                         ),
                         child: ClipRRect(
                           borderRadius: BorderRadius.circular(18),
-                          child: Image.asset('assets/icon/logo.png', fit: BoxFit.cover,
-                            errorBuilder: (c, e, s) => const Icon(Icons.change_history, size: 42, color: kGreen)),
+                          child: Image.asset(
+                            'assets/icon/logo.png',
+                            fit: BoxFit.cover,
+                            errorBuilder: (c, e, s) => const Icon(
+                              Icons.change_history,
+                              size: 42,
+                              color: kGreen,
+                            ),
+                          ),
                         ),
                       ),
                       const SizedBox(height: 16),
-                      const Text('MAYA JAAL',
-                        style: TextStyle(fontSize: 26, fontWeight: FontWeight.w900, color: kGreen,
-                          fontFamily: 'monospace', letterSpacing: 5,
-                          shadows: [Shadow(color: kGreen, blurRadius: 16)])),
+                      const Text(
+                        'MAYA JAAL',
+                        style: TextStyle(
+                          fontSize: 26,
+                          fontWeight: FontWeight.w900,
+                          color: kGreen,
+                          fontFamily: 'monospace',
+                          letterSpacing: 5,
+                          shadows: [Shadow(color: kGreen, blurRadius: 16)],
+                        ),
+                      ),
                       const SizedBox(height: 6),
-                      Text('> Enter the real world behind\n   the digital veil _',
+                      Text(
+                        '> Enter the real world behind\n   the digital veil _',
                         textAlign: TextAlign.center,
-                        style: TextStyle(fontSize: 11, color: kGreen.withOpacity(0.85),
-                          fontFamily: 'monospace', letterSpacing: 1.5, height: 1.3)),
+                        style: TextStyle(
+                          fontSize: 11,
+                          color: kGreen.withOpacity(0.85),
+                          fontFamily: 'monospace',
+                          letterSpacing: 1.5,
+                          height: 1.3,
+                        ),
+                      ),
                       const SizedBox(height: 20),
-
                       Container(
                         height: 44,
                         decoration: BoxDecoration(
@@ -1191,13 +1543,28 @@ class _LoginScreenState extends State<LoginScreen> with SingleTickerProviderStat
                         ),
                         child: Row(
                           children: [
-                            Expanded(child: _tab('LOGIN', _isLoginTab, () => setState(() { _isLoginTab = true; _error = ''; _successMsg = ''; }))),
-                            Expanded(child: _tab('SIGN UP', !_isLoginTab, () => setState(() { _isLoginTab = false; _error = ''; _successMsg = ''; }))),
+                            Expanded(
+                              child: _tab('LOGIN', _isLoginTab, () {
+                                setState(() {
+                                  _isLoginTab = true;
+                                  _error = '';
+                                  _successMsg = '';
+                                });
+                              }),
+                            ),
+                            Expanded(
+                              child: _tab('SIGN UP', !_isLoginTab, () {
+                                setState(() {
+                                  _isLoginTab = false;
+                                  _error = '';
+                                  _successMsg = '';
+                                });
+                              }),
+                            ),
                           ],
                         ),
                       ),
                       const SizedBox(height: 16),
-
                       Container(
                         padding: const EdgeInsets.all(14),
                         decoration: BoxDecoration(
@@ -1216,87 +1583,150 @@ class _LoginScreenState extends State<LoginScreen> with SingleTickerProviderStat
                             _inputField(_passCtrl, Icons.lock_outline, 'Password', true),
                             const SizedBox(height: 16),
                             SizedBox(
-                              width: double.infinity, height: 48,
+                              width: double.infinity,
+                              height: 48,
                               child: ElevatedButton(
-                                onPressed: _loading ? null : (_isLoginTab ? _handleLogin : _handleSignup),
+                                onPressed: _loading
+                                    ? null
+                                    : (_isLoginTab ? _handleLogin : _handleSignup),
                                 style: ElevatedButton.styleFrom(
-                                  backgroundColor: kGreen, foregroundColor: Colors.black,
-                                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+                                  backgroundColor: kGreen,
+                                  foregroundColor: Colors.black,
+                                  shape: RoundedRectangleBorder(
+                                    borderRadius: BorderRadius.circular(10),
+                                  ),
                                   elevation: 8,
                                 ),
                                 child: _loading
-                                    ? const SizedBox(width: 22, height: 22, child: CircularProgressIndicator(color: Colors.black, strokeWidth: 2.2))
+                                    ? const SizedBox(
+                                        width: 22,
+                                        height: 22,
+                                        child: CircularProgressIndicator(
+                                          color: Colors.black,
+                                          strokeWidth: 2.2,
+                                        ),
+                                      )
                                     : Text(
                                         _isLoginTab ? 'LOGIN' : 'CREATE ACCOUNT',
-                                        style: const TextStyle(fontWeight: FontWeight.w900, letterSpacing: 1.5, fontSize: 12.5),
+                                        style: const TextStyle(
+                                          fontWeight: FontWeight.w900,
+                                          letterSpacing: 1.5,
+                                          fontSize: 12.5,
+                                        ),
                                       ),
                               ),
                             ),
                           ],
                         ),
                       ),
-
                       const SizedBox(height: 16),
                       Row(children: [
                         Expanded(child: Divider(color: kGreen.withOpacity(0.3))),
                         Padding(
                           padding: const EdgeInsets.symmetric(horizontal: 10),
-                          child: Text('OR', style: TextStyle(color: kGreen.withOpacity(0.7), fontSize: 11, fontWeight: FontWeight.bold)),
+                          child: Text(
+                            'OR',
+                            style: TextStyle(
+                              color: kGreen.withOpacity(0.7),
+                              fontSize: 11,
+                              fontWeight: FontWeight.bold,
+                            ),
+                          ),
                         ),
                         Expanded(child: Divider(color: kGreen.withOpacity(0.3))),
                       ]),
                       const SizedBox(height: 16),
-
                       SizedBox(
-                        width: double.infinity, height: 48,
+                        width: double.infinity,
+                        height: 48,
                         child: ElevatedButton(
                           onPressed: _loading ? null : _handleGoogle,
                           style: ElevatedButton.styleFrom(
-                            backgroundColor: Colors.white, foregroundColor: Colors.black87,
-                            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(24)),
+                            backgroundColor: Colors.white,
+                            foregroundColor: Colors.black87,
+                            shape: RoundedRectangleBorder(
+                              borderRadius: BorderRadius.circular(24),
+                            ),
                           ),
                           child: Row(
                             mainAxisAlignment: MainAxisAlignment.center,
                             children: [
-                              Image.network('https://developers.google.com/identity/images/g-logo.png',
+                              Image.network(
+                                'https://developers.google.com/identity/images/g-logo.png',
                                 height: 20,
-                                errorBuilder: (c, e, s) => const Icon(Icons.g_mobiledata, color: Colors.red, size: 24)),
+                                errorBuilder: (c, e, s) => const Icon(
+                                  Icons.g_mobiledata,
+                                  color: Colors.red,
+                                  size: 24,
+                                ),
+                              ),
                               const SizedBox(width: 10),
-                              const Text('Sign in with Google', style: TextStyle(fontSize: 14, fontWeight: FontWeight.w700)),
+                              const Text(
+                                'Sign in with Google',
+                                style: TextStyle(
+                                  fontSize: 14,
+                                  fontWeight: FontWeight.w700,
+                                ),
+                              ),
                             ],
                           ),
                         ),
                       ),
-
                       const SizedBox(height: 12),
                       if (_isLoginTab)
                         TextButton(
                           onPressed: _handleForgot,
-                          child: Text('Forgot Password?', style: TextStyle(color: kGreen.withOpacity(0.9), fontSize: 12.5, fontWeight: FontWeight.w600)),
+                          child: Text(
+                            'Forgot Password?',
+                            style: TextStyle(
+                              color: kGreen.withOpacity(0.9),
+                              fontSize: 12.5,
+                              fontWeight: FontWeight.w600,
+                            ),
+                          ),
                         ),
-
                       if (_successMsg.isNotEmpty) ...[
                         const SizedBox(height: 12),
                         Container(
-                          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                          padding: const EdgeInsets.symmetric(
+                            horizontal: 12,
+                            vertical: 8,
+                          ),
                           decoration: BoxDecoration(
                             color: Colors.green.withOpacity(0.2),
                             border: Border.all(color: kGreen),
                             borderRadius: BorderRadius.circular(8),
                           ),
-                          child: Text(_successMsg, style: const TextStyle(color: kGreen, fontSize: 11.5), textAlign: TextAlign.center),
+                          child: Text(
+                            _successMsg,
+                            style: const TextStyle(
+                              color: kGreen,
+                              fontSize: 11.5,
+                            ),
+                            textAlign: TextAlign.center,
+                          ),
                         ),
                       ],
                       if (_error.isNotEmpty) ...[
                         const SizedBox(height: 12),
                         Container(
-                          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                          padding: const EdgeInsets.symmetric(
+                            horizontal: 12,
+                            vertical: 8,
+                          ),
                           decoration: BoxDecoration(
                             color: Colors.red.withOpacity(0.15),
                             border: Border.all(color: Colors.redAccent),
                             borderRadius: BorderRadius.circular(8),
                           ),
-                          child: Text(_error, style: const TextStyle(color: Colors.redAccent, fontSize: 11), textAlign: TextAlign.center),
+                          child: Text(
+                            _error,
+                            style: const TextStyle(
+                              color: Colors.redAccent,
+                              fontSize: 11,
+                            ),
+                            textAlign: TextAlign.center,
+                          ),
                         ),
                       ],
                     ],
@@ -1320,13 +1750,25 @@ class _LoginScreenState extends State<LoginScreen> with SingleTickerProviderStat
           border: active ? Border.all(color: kGreen, width: 1.6) : null,
         ),
         alignment: Alignment.center,
-        child: Text(label,
-          style: TextStyle(color: active ? kGreen : Colors.white60, fontWeight: FontWeight.bold, letterSpacing: 1.5, fontSize: 12.5)),
+        child: Text(
+          label,
+          style: TextStyle(
+            color: active ? kGreen : Colors.white60,
+            fontWeight: FontWeight.bold,
+            letterSpacing: 1.5,
+            fontSize: 12.5,
+          ),
+        ),
       ),
     );
   }
 
-  Widget _inputField(TextEditingController ctrl, IconData icon, String hint, bool isPassword) {
+  Widget _inputField(
+    TextEditingController ctrl,
+    IconData icon,
+    String hint,
+    bool isPassword,
+  ) {
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 4),
       decoration: BoxDecoration(
@@ -1337,17 +1779,31 @@ class _LoginScreenState extends State<LoginScreen> with SingleTickerProviderStat
       child: TextField(
         controller: ctrl,
         obscureText: isPassword ? _obscurePassword : false,
-        style: const TextStyle(color: Colors.white, fontSize: 13, fontFamily: 'monospace'),
+        style: const TextStyle(
+          color: Colors.white,
+          fontSize: 13,
+          fontFamily: 'monospace',
+        ),
         decoration: InputDecoration(
           icon: Icon(icon, color: kGreen, size: 20),
           suffixIcon: isPassword
               ? IconButton(
-                  icon: Icon(_obscurePassword ? Icons.visibility_off_outlined : Icons.visibility_outlined, color: kGreen, size: 19),
-                  onPressed: () => setState(() => _obscurePassword = !_obscurePassword),
+                  icon: Icon(
+                    _obscurePassword
+                        ? Icons.visibility_off_outlined
+                        : Icons.visibility_outlined,
+                    color: kGreen,
+                    size: 19,
+                  ),
+                  onPressed: () =>
+                      setState(() => _obscurePassword = !_obscurePassword),
                 )
               : null,
           hintText: hint,
-          hintStyle: TextStyle(color: Colors.white.withOpacity(0.4), fontSize: 12),
+          hintStyle: TextStyle(
+            color: Colors.white.withOpacity(0.4),
+            fontSize: 12,
+          ),
           border: InputBorder.none,
         ),
       ),
@@ -1384,8 +1840,16 @@ class _MainNavigationHolderState extends State<MainNavigationHolder> {
       bottomNavigationBar: Container(
         decoration: BoxDecoration(
           color: const Color(0xFF000803),
-          border: Border(top: BorderSide(color: kGreen.withOpacity(0.35), width: 1.2)),
-          boxShadow: [BoxShadow(color: kGreen.withOpacity(0.1), blurRadius: 15, offset: const Offset(0, -3))],
+          border: Border(
+            top: BorderSide(color: kGreen.withOpacity(0.35), width: 1.2),
+          ),
+          boxShadow: [
+            BoxShadow(
+              color: kGreen.withOpacity(0.1),
+              blurRadius: 15,
+              offset: const Offset(0, -3),
+            ),
+          ],
         ),
         child: BottomNavigationBar(
           currentIndex: _currentIndex,
@@ -1398,15 +1862,29 @@ class _MainNavigationHolderState extends State<MainNavigationHolder> {
           unselectedFontSize: 11,
           onTap: (index) => setState(() => _currentIndex = index),
           items: const [
-            BottomNavigationBarItem(icon: Icon(Icons.home_outlined), activeIcon: Icon(Icons.home, color: kGreen), label: 'Home'),
-            BottomNavigationBarItem(icon: Icon(Icons.ondemand_video_outlined), activeIcon: Icon(Icons.ondemand_video, color: kGreen), label: 'Channel'),
-            BottomNavigationBarItem(icon: Icon(Icons.history_outlined), activeIcon: Icon(Icons.history, color: kGreen), label: 'History'),
+            BottomNavigationBarItem(
+              icon: Icon(Icons.home_outlined),
+              activeIcon: Icon(Icons.home, color: kGreen),
+              label: 'Home',
+            ),
+            BottomNavigationBarItem(
+              icon: Icon(Icons.ondemand_video_outlined),
+              activeIcon: Icon(Icons.ondemand_video, color: kGreen),
+              label: 'Channel',
+            ),
+            BottomNavigationBarItem(
+              icon: Icon(Icons.history_outlined),
+              activeIcon: Icon(Icons.history, color: kGreen),
+              label: 'History',
+            ),
           ],
         ),
       ),
     );
   }
 }
+
+// ============ PART 1 END ============
 
 // ═══════════════════════════════════════════════════════
 // HOME SCREEN — Real notifications
@@ -1418,7 +1896,8 @@ class HomeScreen extends StatefulWidget {
   State<HomeScreen> createState() => _HomeScreenState();
 }
 
-class _HomeScreenState extends State<HomeScreen> with SingleTickerProviderStateMixin {
+class _HomeScreenState extends State<HomeScreen>
+    with SingleTickerProviderStateMixin {
   final TextEditingController _linkController = TextEditingController();
   late AnimationController _pulseController;
   late Animation<double> _pulseAnimation;
@@ -1426,8 +1905,12 @@ class _HomeScreenState extends State<HomeScreen> with SingleTickerProviderStateM
   @override
   void initState() {
     super.initState();
-    _pulseController = AnimationController(vsync: this, duration: const Duration(milliseconds: 1600))..repeat(reverse: true);
-    _pulseAnimation = Tween<double>(begin: 0.95, end: 1.05).animate(CurvedAnimation(parent: _pulseController, curve: Curves.easeInOut));
+    _pulseController = AnimationController(
+      vsync: this,
+      duration: const Duration(milliseconds: 1600),
+    )..repeat(reverse: true);
+    _pulseAnimation = Tween<double>(begin: 0.95, end: 1.05)
+        .animate(CurvedAnimation(parent: _pulseController, curve: Curves.easeInOut));
   }
 
   @override
@@ -1445,7 +1928,9 @@ class _HomeScreenState extends State<HomeScreen> with SingleTickerProviderStateM
       context: context,
       backgroundColor: const Color(0xFF111714),
       isScrollControlled: true,
-      shape: const RoundedRectangleBorder(borderRadius: BorderRadius.vertical(top: Radius.circular(20))),
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
+      ),
       builder: (ctx) {
         return DraggableScrollableSheet(
           initialChildSize: 0.6,
@@ -1461,11 +1946,21 @@ class _HomeScreenState extends State<HomeScreen> with SingleTickerProviderStateM
                     children: [
                       const Icon(Icons.notifications_active, color: kGreen),
                       const SizedBox(width: 8),
-                      const Text('Notifications', style: TextStyle(color: kGreen, fontSize: 18, fontWeight: FontWeight.bold)),
+                      const Text(
+                        'Notifications',
+                        style: TextStyle(
+                          color: kGreen,
+                          fontSize: 18,
+                          fontWeight: FontWeight.bold,
+                        ),
+                      ),
                       const Spacer(),
                       TextButton(
                         onPressed: () => FirebaseService.markAllRead(uid),
-                        child: const Text('Mark all read', style: TextStyle(color: kGreen, fontSize: 12)),
+                        child: const Text(
+                          'Mark all read',
+                          style: TextStyle(color: kGreen, fontSize: 12),
+                        ),
                       ),
                     ],
                   ),
@@ -1476,7 +1971,9 @@ class _HomeScreenState extends State<HomeScreen> with SingleTickerProviderStateM
                     stream: FirebaseService.getNotifications(uid),
                     builder: (context, snapshot) {
                       if (snapshot.connectionState == ConnectionState.waiting) {
-                        return const Center(child: CircularProgressIndicator(color: kGreen));
+                        return const Center(
+                          child: CircularProgressIndicator(color: kGreen),
+                        );
                       }
                       final list = snapshot.data ?? [];
                       if (list.isEmpty) {
@@ -1484,9 +1981,19 @@ class _HomeScreenState extends State<HomeScreen> with SingleTickerProviderStateM
                           child: Column(
                             mainAxisAlignment: MainAxisAlignment.center,
                             children: [
-                              Icon(Icons.notifications_off_outlined, size: 60, color: kGreen.withOpacity(0.4)),
+                              Icon(
+                                Icons.notifications_off_outlined,
+                                size: 60,
+                                color: kGreen.withOpacity(0.4),
+                              ),
                               const SizedBox(height: 12),
-                              Text('Koi notification nahi hai', style: TextStyle(color: kGreen.withOpacity(0.6), fontSize: 14)),
+                              Text(
+                                'Koi notification nahi hai',
+                                style: TextStyle(
+                                  color: kGreen.withOpacity(0.6),
+                                  fontSize: 14,
+                                ),
+                              ),
                             ],
                           ),
                         );
@@ -1504,15 +2011,24 @@ class _HomeScreenState extends State<HomeScreen> with SingleTickerProviderStateM
 
                           return GestureDetector(
                             onTap: () {
-                              if (!isRead) FirebaseService.markNotificationRead(uid, n['id'] as String);
+                              if (!isRead) {
+                                FirebaseService.markNotificationRead(
+                                    uid, n['id'] as String);
+                              }
                             },
                             child: Container(
                               margin: const EdgeInsets.symmetric(vertical: 4),
                               padding: const EdgeInsets.all(12),
                               decoration: BoxDecoration(
-                                color: isRead ? Colors.black.withOpacity(0.3) : const Color(0xFF03220E),
+                                color: isRead
+                                    ? Colors.black.withOpacity(0.3)
+                                    : const Color(0xFF03220E),
                                 borderRadius: BorderRadius.circular(10),
-                                border: Border.all(color: isRead ? kGreen.withOpacity(0.2) : kGreen.withOpacity(0.5)),
+                                border: Border.all(
+                                  color: isRead
+                                      ? kGreen.withOpacity(0.2)
+                                      : kGreen.withOpacity(0.5),
+                                ),
                               ),
                               child: Row(
                                 crossAxisAlignment: CrossAxisAlignment.start,
@@ -1522,27 +2038,59 @@ class _HomeScreenState extends State<HomeScreen> with SingleTickerProviderStateM
                                     decoration: BoxDecoration(
                                       color: Colors.black,
                                       shape: BoxShape.circle,
-                                      border: Border.all(color: kGreen.withOpacity(0.5)),
+                                      border: Border.all(
+                                        color: kGreen.withOpacity(0.5),
+                                      ),
                                     ),
-                                    child: Icon(_notifIcon(n['type']?.toString() ?? 'general'), color: kGreen, size: 18),
+                                    child: Icon(
+                                      _notifIcon(n['type']?.toString() ?? 'general'),
+                                      color: kGreen,
+                                      size: 18,
+                                    ),
                                   ),
                                   const SizedBox(width: 12),
                                   Expanded(
                                     child: Column(
                                       crossAxisAlignment: CrossAxisAlignment.start,
                                       children: [
-                                        Text(n['title'] ?? '',
-                                          style: TextStyle(color: kGreen, fontSize: 13.5,
-                                            fontWeight: isRead ? FontWeight.w500 : FontWeight.bold)),
+                                        Text(
+                                          n['title'] ?? '',
+                                          style: TextStyle(
+                                            color: kGreen,
+                                            fontSize: 13.5,
+                                            fontWeight: isRead
+                                                ? FontWeight.w500
+                                                : FontWeight.bold,
+                                          ),
+                                        ),
                                         const SizedBox(height: 4),
-                                        Text(n['message'] ?? '', style: const TextStyle(color: Colors.white70, fontSize: 12)),
+                                        Text(
+                                          n['message'] ?? '',
+                                          style: const TextStyle(
+                                            color: Colors.white70,
+                                            fontSize: 12,
+                                          ),
+                                        ),
                                         const SizedBox(height: 4),
-                                        Text(ago, style: TextStyle(color: kGreen.withOpacity(0.5), fontSize: 10)),
+                                        Text(
+                                          ago,
+                                          style: TextStyle(
+                                            color: kGreen.withOpacity(0.5),
+                                            fontSize: 10,
+                                          ),
+                                        ),
                                       ],
                                     ),
                                   ),
                                   if (!isRead)
-                                    Container(width: 8, height: 8, decoration: const BoxDecoration(color: Colors.redAccent, shape: BoxShape.circle)),
+                                    Container(
+                                      width: 8,
+                                      height: 8,
+                                      decoration: const BoxDecoration(
+                                        color: Colors.redAccent,
+                                        shape: BoxShape.circle,
+                                      ),
+                                    ),
                                 ],
                               ),
                             ),
@@ -1562,11 +2110,16 @@ class _HomeScreenState extends State<HomeScreen> with SingleTickerProviderStateM
 
   IconData _notifIcon(String type) {
     switch (type) {
-      case 'like': return Icons.favorite;
-      case 'subscribe': return Icons.person_add;
-      case 'share': return Icons.share;
-      case 'upload': return Icons.upload;
-      default: return Icons.notifications;
+      case 'like':
+        return Icons.favorite;
+      case 'subscribe':
+        return Icons.person_add;
+      case 'share':
+        return Icons.share;
+      case 'upload':
+        return Icons.upload;
+      default:
+        return Icons.notifications;
     }
   }
 
@@ -1583,12 +2136,20 @@ class _HomeScreenState extends State<HomeScreen> with SingleTickerProviderStateM
     String input = _linkController.text.trim();
     if (input.isEmpty) {
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Please paste a stream URL first!'), backgroundColor: kCardBg),
+        const SnackBar(
+          content: Text('Please paste a stream URL first!'),
+          backgroundColor: kCardBg,
+        ),
       );
       return;
     }
     _linkController.clear();
-    Navigator.push(context, MaterialPageRoute(builder: (_) => StreamPreviewScreen(targetUrl: input)));
+    Navigator.push(
+      context,
+      MaterialPageRoute(
+        builder: (_) => StreamPreviewScreen(targetUrl: input),
+      ),
+    );
   }
 
   Widget _catCard(IconData icon, String title, String subtitle) {
@@ -1598,16 +2159,34 @@ class _HomeScreenState extends State<HomeScreen> with SingleTickerProviderStateM
         color: kCardBg,
         borderRadius: BorderRadius.circular(14),
         border: Border.all(color: kGreen.withOpacity(0.4), width: 1.2),
-        boxShadow: [BoxShadow(color: kGreen.withOpacity(0.08), blurRadius: 10)],
+        boxShadow: [
+          BoxShadow(color: kGreen.withOpacity(0.08), blurRadius: 10),
+        ],
       ),
       child: Column(
         mainAxisSize: MainAxisSize.min,
         children: [
           Icon(icon, color: kGreen, size: 26),
           const SizedBox(height: 6),
-          Text(title, style: const TextStyle(color: Colors.white, fontSize: 12, fontWeight: FontWeight.bold)),
+          Text(
+            title,
+            style: const TextStyle(
+              color: Colors.white,
+              fontSize: 12,
+              fontWeight: FontWeight.bold,
+            ),
+          ),
           const SizedBox(height: 2),
-          Text(subtitle, style: TextStyle(color: Colors.white.withOpacity(0.55), fontSize: 9), textAlign: TextAlign.center, maxLines: 1, overflow: TextOverflow.ellipsis),
+          Text(
+            subtitle,
+            style: TextStyle(
+              color: Colors.white.withOpacity(0.55),
+              fontSize: 9,
+            ),
+            textAlign: TextAlign.center,
+            maxLines: 1,
+            overflow: TextOverflow.ellipsis,
+          ),
         ],
       ),
     );
@@ -1635,10 +2214,35 @@ class _HomeScreenState extends State<HomeScreen> with SingleTickerProviderStateM
                         mainAxisSize: MainAxisSize.min,
                         children: [
                           Row(children: [
-                            const Text('maya', style: TextStyle(color: kGreen, fontSize: 22, fontWeight: FontWeight.w900, letterSpacing: 1, shadows: [Shadow(color: kGreen, blurRadius: 12)])),
-                            Text('Jaal', style: TextStyle(color: Colors.white.withOpacity(0.9), fontSize: 22, fontWeight: FontWeight.w400, letterSpacing: 1)),
+                            const Text(
+                              'maya',
+                              style: TextStyle(
+                                color: kGreen,
+                                fontSize: 22,
+                                fontWeight: FontWeight.w900,
+                                letterSpacing: 1,
+                                shadows: [Shadow(color: kGreen, blurRadius: 12)],
+                              ),
+                            ),
+                            Text(
+                              'Jaal',
+                              style: TextStyle(
+                                color: Colors.white.withOpacity(0.9),
+                                fontSize: 22,
+                                fontWeight: FontWeight.w400,
+                                letterSpacing: 1,
+                              ),
+                            ),
                           ]),
-                          Text('VIDEOS  |  LINKS  |  BEYOND', style: TextStyle(color: kGreen.withOpacity(0.7), fontSize: 8, letterSpacing: 1.5, fontWeight: FontWeight.w600)),
+                          Text(
+                            'VIDEOS  |  LINKS  |  BEYOND',
+                            style: TextStyle(
+                              color: kGreen.withOpacity(0.7),
+                              fontSize: 8,
+                              letterSpacing: 1.5,
+                              fontWeight: FontWeight.w600,
+                            ),
+                          ),
                         ],
                       ),
                     ),
@@ -1656,24 +2260,39 @@ class _HomeScreenState extends State<HomeScreen> with SingleTickerProviderStateM
                         final unread = snapshot.data ?? 0;
                         return Stack(children: [
                           IconButton(
-                            icon: const Icon(Icons.notifications_none, color: kGreen, size: 24),
+                            icon: const Icon(
+                              Icons.notifications_none,
+                              color: kGreen,
+                              size: 24,
+                            ),
                             onPressed: () => _showNotificationsSheet(context),
                           ),
                           if (unread > 0)
                             Positioned(
-                              right: 8, top: 8,
+                              right: 8,
+                              top: 8,
                               child: Container(
-                                padding: const EdgeInsets.symmetric(horizontal: 5, vertical: 2),
+                                padding: const EdgeInsets.symmetric(
+                                  horizontal: 5,
+                                  vertical: 2,
+                                ),
                                 decoration: BoxDecoration(
                                   color: Colors.redAccent,
                                   borderRadius: BorderRadius.circular(10),
-                                  border: Border.all(color: Colors.black, width: 1.5),
+                                  border: Border.all(
+                                    color: Colors.black,
+                                    width: 1.5,
+                                  ),
                                 ),
                                 constraints: const BoxConstraints(minWidth: 18),
                                 child: Text(
                                   unread > 99 ? '99+' : '$unread',
                                   textAlign: TextAlign.center,
-                                  style: const TextStyle(color: Colors.white, fontSize: 9, fontWeight: FontWeight.bold),
+                                  style: const TextStyle(
+                                    color: Colors.white,
+                                    fontSize: 9,
+                                    fontWeight: FontWeight.bold,
+                                  ),
                                 ),
                               ),
                             ),
@@ -1691,37 +2310,88 @@ class _HomeScreenState extends State<HomeScreen> with SingleTickerProviderStateM
                   children: [
                     Positioned(
                       left: 18,
-                      child: Text('MOVIES\nWEB SERIES\nLIVE TV\n& MORE', style: TextStyle(color: Colors.white.withOpacity(0.7), fontSize: 11, fontWeight: FontWeight.w700, letterSpacing: 1.5, height: 1.5)),
+                      child: Text(
+                        'MOVIES\nWEB SERIES\nLIVE TV\n& MORE',
+                        style: TextStyle(
+                          color: Colors.white.withOpacity(0.7),
+                          fontSize: 11,
+                          fontWeight: FontWeight.w700,
+                          letterSpacing: 1.5,
+                          height: 1.5,
+                        ),
+                      ),
                     ),
                     Positioned(
                       right: 18,
-                      child: Text('Your\nStreaming\nUniverse', style: TextStyle(color: const Color(0xFF66FF99).withOpacity(0.85), fontSize: 16, fontWeight: FontWeight.w700, fontStyle: FontStyle.italic, height: 1.2)),
+                      child: Text(
+                        'Your\nStreaming\nUniverse',
+                        style: TextStyle(
+                          color: const Color(0xFF66FF99).withOpacity(0.85),
+                          fontSize: 16,
+                          fontWeight: FontWeight.w700,
+                          fontStyle: FontStyle.italic,
+                          height: 1.2,
+                        ),
+                      ),
                     ),
                     AnimatedBuilder(
                       animation: _pulseAnimation,
                       builder: (c, _) => Transform.scale(
                         scale: _pulseAnimation.value,
                         child: Container(
-                          width: 140, height: 140,
+                          width: 140,
+                          height: 140,
                           decoration: BoxDecoration(
                             shape: BoxShape.circle,
-                            boxShadow: [BoxShadow(color: kGreen.withOpacity(0.25), blurRadius: 40, spreadRadius: 10)],
+                            boxShadow: [
+                              BoxShadow(
+                                color: kGreen.withOpacity(0.25),
+                                blurRadius: 40,
+                                spreadRadius: 10,
+                              ),
+                            ],
                           ),
                           child: Stack(
                             alignment: Alignment.center,
                             children: [
-                              Container(width: 130, height: 130, decoration: BoxDecoration(shape: BoxShape.circle, border: Border.all(color: kGreen.withOpacity(0.6), width: 1.5))),
                               Container(
-                                width: 95, height: 95,
+                                width: 130,
+                                height: 130,
+                                decoration: BoxDecoration(
+                                  shape: BoxShape.circle,
+                                  border: Border.all(
+                                    color: kGreen.withOpacity(0.6),
+                                    width: 1.5,
+                                  ),
+                                ),
+                              ),
+                              Container(
+                                width: 95,
+                                height: 95,
                                 decoration: BoxDecoration(
                                   borderRadius: BorderRadius.circular(22),
                                   border: Border.all(color: kGreen, width: 2),
-                                  boxShadow: [BoxShadow(color: kGreen.withOpacity(0.5), blurRadius: 20)],
+                                  boxShadow: [
+                                    BoxShadow(
+                                      color: kGreen.withOpacity(0.5),
+                                      blurRadius: 20,
+                                    ),
+                                  ],
                                 ),
                                 child: ClipRRect(
                                   borderRadius: BorderRadius.circular(20),
-                                  child: Image.asset('assets/icon/logo.png', fit: BoxFit.cover,
-                                    errorBuilder: (c, e, s) => Container(color: Colors.black, child: const Icon(Icons.movie_filter, size: 50, color: kGreen))),
+                                  child: Image.asset(
+                                    'assets/icon/logo.png',
+                                    fit: BoxFit.cover,
+                                    errorBuilder: (c, e, s) => Container(
+                                      color: Colors.black,
+                                      child: const Icon(
+                                        Icons.movie_filter,
+                                        size: 50,
+                                        color: kGreen,
+                                      ),
+                                    ),
+                                  ),
                                 ),
                               ),
                             ],
@@ -1739,7 +2409,9 @@ class _HomeScreenState extends State<HomeScreen> with SingleTickerProviderStateM
                     color: const Color(0xFF011206),
                     borderRadius: BorderRadius.circular(22),
                     border: Border.all(color: kGreen.withOpacity(0.6), width: 1.5),
-                    boxShadow: [BoxShadow(color: kGreen.withOpacity(0.2), blurRadius: 25)],
+                    boxShadow: [
+                      BoxShadow(color: kGreen.withOpacity(0.2), blurRadius: 25),
+                    ],
                   ),
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
@@ -1747,7 +2419,10 @@ class _HomeScreenState extends State<HomeScreen> with SingleTickerProviderStateM
                       Padding(
                         padding: const EdgeInsets.only(left: 14, top: 12),
                         child: Container(
-                          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 5),
+                          padding: const EdgeInsets.symmetric(
+                            horizontal: 12,
+                            vertical: 5,
+                          ),
                           decoration: BoxDecoration(
                             color: const Color(0xFF03220E),
                             borderRadius: BorderRadius.circular(20),
@@ -1758,7 +2433,15 @@ class _HomeScreenState extends State<HomeScreen> with SingleTickerProviderStateM
                             children: [
                               Icon(Icons.link, color: kGreen, size: 14),
                               SizedBox(width: 6),
-                              Text('MATRIX NEURAL STREAM NODE', style: TextStyle(color: kGreen, fontSize: 10, fontWeight: FontWeight.bold, letterSpacing: 1.5)),
+                              Text(
+                                'MATRIX NEURAL STREAM NODE',
+                                style: TextStyle(
+                                  color: kGreen,
+                                  fontSize: 10,
+                                  fontWeight: FontWeight.bold,
+                                  letterSpacing: 1.5,
+                                ),
+                              ),
                             ],
                           ),
                         ),
@@ -1767,7 +2450,10 @@ class _HomeScreenState extends State<HomeScreen> with SingleTickerProviderStateM
                       Padding(
                         padding: const EdgeInsets.all(12),
                         child: Container(
-                          padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
+                          padding: const EdgeInsets.symmetric(
+                            horizontal: 14,
+                            vertical: 8,
+                          ),
                           decoration: BoxDecoration(
                             color: const Color(0xFF031A0B),
                             borderRadius: BorderRadius.circular(16),
@@ -1775,7 +2461,11 @@ class _HomeScreenState extends State<HomeScreen> with SingleTickerProviderStateM
                           ),
                           child: Row(
                             children: [
-                              const Icon(Icons.link_rounded, color: kGreen, size: 28),
+                              const Icon(
+                                Icons.link_rounded,
+                                color: kGreen,
+                                size: 28,
+                              ),
                               const SizedBox(width: 12),
                               Expanded(
                                 child: Column(
@@ -1783,28 +2473,54 @@ class _HomeScreenState extends State<HomeScreen> with SingleTickerProviderStateM
                                   children: [
                                     TextField(
                                       controller: _linkController,
-                                      style: const TextStyle(color: Colors.white, fontSize: 14, fontWeight: FontWeight.bold),
+                                      style: const TextStyle(
+                                        color: Colors.white,
+                                        fontSize: 14,
+                                        fontWeight: FontWeight.bold,
+                                      ),
                                       decoration: const InputDecoration(
-                                        isDense: true, contentPadding: EdgeInsets.zero,
+                                        isDense: true,
+                                        contentPadding: EdgeInsets.zero,
                                         hintText: 'Paste Stream URL',
-                                        hintStyle: TextStyle(color: Colors.white, fontSize: 14, fontWeight: FontWeight.bold),
+                                        hintStyle: TextStyle(
+                                          color: Colors.white,
+                                          fontSize: 14,
+                                          fontWeight: FontWeight.bold,
+                                        ),
                                         border: InputBorder.none,
                                       ),
                                     ),
                                     const SizedBox(height: 2),
-                                    Text('Enter your link and start streaming securely', style: TextStyle(color: Colors.white.withOpacity(0.5), fontSize: 10)),
+                                    Text(
+                                      'Enter your link and start streaming securely',
+                                      style: TextStyle(
+                                        color: Colors.white.withOpacity(0.5),
+                                        fontSize: 10,
+                                      ),
+                                    ),
                                   ],
                                 ),
                               ),
                               GestureDetector(
                                 onTap: _searchAndPlay,
                                 child: Container(
-                                  width: 48, height: 48,
+                                  width: 48,
+                                  height: 48,
                                   decoration: BoxDecoration(
-                                    color: kGreen, shape: BoxShape.circle,
-                                    boxShadow: [BoxShadow(color: kGreen.withOpacity(0.6), blurRadius: 16)],
+                                    color: kGreen,
+                                    shape: BoxShape.circle,
+                                    boxShadow: [
+                                      BoxShadow(
+                                        color: kGreen.withOpacity(0.6),
+                                        blurRadius: 16,
+                                      ),
+                                    ],
                                   ),
-                                  child: const Icon(Icons.play_arrow_rounded, color: Colors.black, size: 32),
+                                  child: const Icon(
+                                    Icons.play_arrow_rounded,
+                                    color: Colors.black,
+                                    size: 32,
+                                  ),
                                 ),
                               ),
                             ],
@@ -1819,20 +2535,43 @@ class _HomeScreenState extends State<HomeScreen> with SingleTickerProviderStateM
                 padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
                 child: Row(
                   children: [
-                    Expanded(child: _catCard(Icons.movie_creation_outlined, 'Movies', 'Latest')),
+                    Expanded(
+                      child: _catCard(
+                        Icons.movie_creation_outlined,
+                        'Movies',
+                        'Latest',
+                      ),
+                    ),
                     const SizedBox(width: 10),
-                    Expanded(child: _catCard(Icons.live_tv_rounded, 'Web Series', 'Binge')),
+                    Expanded(
+                      child: _catCard(
+                        Icons.live_tv_rounded,
+                        'Web Series',
+                        'Binge',
+                      ),
+                    ),
                     const SizedBox(width: 10),
-                    Expanded(child: _catCard(Icons.tv_rounded, 'Live TV', 'Sports')),
+                    Expanded(
+                      child: _catCard(Icons.tv_rounded, 'Live TV', 'Sports'),
+                    ),
                     const SizedBox(width: 10),
-                    Expanded(child: _catCard(Icons.star_rounded, 'Favorites', 'Saved')),
+                    Expanded(
+                      child: _catCard(
+                        Icons.star_rounded,
+                        'Favorites',
+                        'Saved',
+                      ),
+                    ),
                   ],
                 ),
               ),
               Padding(
                 padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 6),
                 child: Container(
-                  padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 14,
+                    vertical: 12,
+                  ),
                   decoration: BoxDecoration(
                     color: const Color(0xFF031A0B),
                     borderRadius: BorderRadius.circular(14),
@@ -1840,18 +2579,100 @@ class _HomeScreenState extends State<HomeScreen> with SingleTickerProviderStateM
                   ),
                   child: const Row(
                     children: [
-                      Icon(Icons.verified_user_rounded, color: kGreen, size: 20),
+                      Icon(
+                        Icons.verified_user_rounded,
+                        color: kGreen,
+                        size: 20,
+                      ),
                       SizedBox(width: 10),
-                      Expanded(child: Text('Secure Quantum Stream Pipeline Active', style: TextStyle(color: Colors.white, fontSize: 12, fontWeight: FontWeight.bold))),
+                      Expanded(
+                        child: Text(
+                          'Secure Quantum Stream Pipeline Active',
+                          style: TextStyle(
+                            color: Colors.white,
+                            fontSize: 12,
+                            fontWeight: FontWeight.bold,
+                          ),
+                        ),
+                      ),
                       Icon(Icons.arrow_forward_ios, color: kGreen, size: 14),
+                    ],
+                  ),
+                ),
+              ),
+              // ═══ AD SLOT (Home) ═══
+              Padding(
+                padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
+                child: Container(
+                  padding: const EdgeInsets.all(14),
+                  decoration: BoxDecoration(
+                    color: const Color(0xFF031A0B),
+                    borderRadius: BorderRadius.circular(14),
+                    border: Border.all(color: kGreen.withOpacity(0.4)),
+                  ),
+                  child: Row(
+                    children: [
+                      Container(
+                        padding: const EdgeInsets.symmetric(
+                          horizontal: 6,
+                          vertical: 3,
+                        ),
+                        decoration: BoxDecoration(
+                          color: kGreen,
+                          borderRadius: BorderRadius.circular(4),
+                        ),
+                        child: const Text(
+                          'AD',
+                          style: TextStyle(
+                            color: Colors.black,
+                            fontSize: 9,
+                            fontWeight: FontWeight.bold,
+                          ),
+                        ),
+                      ),
+                      const SizedBox(width: 10),
+                      Expanded(
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            const Text(
+                              'YOUR AD HERE',
+                              style: TextStyle(
+                                color: Colors.white,
+                                fontSize: 12,
+                                fontWeight: FontWeight.bold,
+                              ),
+                            ),
+                            Text(
+                              'Grow Your Brand with Us',
+                              style: TextStyle(
+                                color: Colors.white.withOpacity(0.6),
+                                fontSize: 10,
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                      const Icon(
+                        Icons.campaign_outlined,
+                        color: kGreen,
+                        size: 26,
+                      ),
                     ],
                   ),
                 ),
               ),
               const Padding(
                 padding: EdgeInsets.symmetric(vertical: 18),
-                child: Text('>   CONNECT   •   STREAM   •   ENJOY   <',
-                  style: TextStyle(color: Color(0xBF00FF66), fontSize: 10.5, letterSpacing: 2, fontWeight: FontWeight.w700)),
+                child: Text(
+                  '>   CONNECT   •   STREAM   •   ENJOY   <',
+                  style: TextStyle(
+                    color: Color(0xBF00FF66),
+                    fontSize: 10.5,
+                    letterSpacing: 2,
+                    fontWeight: FontWeight.w700,
+                  ),
+                ),
               ),
             ],
           ),
@@ -1861,13 +2682,34 @@ class _HomeScreenState extends State<HomeScreen> with SingleTickerProviderStateM
   }
 }
 
-// ============ PART 1 END ============
-
 // ═══════════════════════════════════════════════════════
-// MORE DRAWER
+// MORE DRAWER — Redesigned with Snake Animation
 // ═══════════════════════════════════════════════════════
-class MoreDrawer extends StatelessWidget {
+class MoreDrawer extends StatefulWidget {
   const MoreDrawer({super.key});
+
+  @override
+  State<MoreDrawer> createState() => _MoreDrawerState();
+}
+
+class _MoreDrawerState extends State<MoreDrawer>
+    with SingleTickerProviderStateMixin {
+  late AnimationController _snakeController;
+
+  @override
+  void initState() {
+    super.initState();
+    _snakeController = AnimationController(
+      vsync: this,
+      duration: const Duration(seconds: 3),
+    )..repeat();
+  }
+
+  @override
+  void dispose() {
+    _snakeController.dispose();
+    super.dispose();
+  }
 
   Future<void> _logout(BuildContext context) async {
     await MayaJaalAccount.signOut();
@@ -1884,12 +2726,16 @@ class MoreDrawer extends StatelessWidget {
       }
     } catch (e) {
       debugPrint('Launch error: $e');
-      try { await launchUrl(Uri.parse(url)); } catch (_) {}
+      try {
+        await launchUrl(Uri.parse(url));
+      } catch (_) {}
     }
   }
 
   void _shareApp() {
-    Share.share('🚀 Experience Matrix-speed streaming on MayaJaal App!\nDownload: https://www.mayajaal.online/download.html');
+    Share.share(
+      '🚀 Experience Matrix-speed streaming on MayaJaal App!\nDownload: https://www.mayajaal.online/download.html',
+    );
   }
 
   void _showPolicyDialog(BuildContext context, String title, String content) {
@@ -1897,10 +2743,106 @@ class MoreDrawer extends StatelessWidget {
       context: context,
       builder: (c) => AlertDialog(
         backgroundColor: kCardBg,
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14), side: const BorderSide(color: kGreen, width: 1.5)),
-        title: Text(title, style: const TextStyle(color: kGreen, fontSize: 15, fontWeight: FontWeight.bold)),
-        content: SingleChildScrollView(child: Text(content, style: const TextStyle(color: Colors.white70, fontSize: 12, height: 1.4))),
-        actions: [TextButton(onPressed: () => Navigator.pop(c), child: const Text('CLOSE', style: TextStyle(color: kGreen)))],
+        shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.circular(14),
+          side: const BorderSide(color: kGreen, width: 1.5),
+        ),
+        title: Text(
+          title,
+          style: const TextStyle(
+            color: kGreen,
+            fontSize: 15,
+            fontWeight: FontWeight.bold,
+          ),
+        ),
+        content: SingleChildScrollView(
+          child: Text(
+            content,
+            style: const TextStyle(
+              color: Colors.white70,
+              fontSize: 12,
+              height: 1.4,
+            ),
+          ),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(c),
+            child: const Text('CLOSE', style: TextStyle(color: kGreen)),
+          ),
+        ],
+      ),
+    );
+  }
+
+  void _showAboutDialog(BuildContext context) {
+    showDialog(
+      context: context,
+      builder: (c) => AlertDialog(
+        backgroundColor: kCardBg,
+        shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.circular(14),
+          side: const BorderSide(color: kGreen, width: 1.5),
+        ),
+        title: Row(
+          children: const [
+            Icon(Icons.info_outline, color: kGreen, size: 22),
+            SizedBox(width: 8),
+            Text(
+              'ABOUT MAYAJAAL',
+              style: TextStyle(
+                color: kGreen,
+                fontSize: 14,
+                fontWeight: FontWeight.bold,
+              ),
+            ),
+          ],
+        ),
+        content: const SingleChildScrollView(
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Text(
+                'MAYA JAAL',
+                style: TextStyle(
+                  color: kGreen,
+                  fontSize: 18,
+                  fontWeight: FontWeight.bold,
+                  letterSpacing: 2,
+                ),
+              ),
+              SizedBox(height: 4),
+              Text(
+                '— STREAM BEYOND LIMITS —',
+                style: TextStyle(color: kDimGreen, fontSize: 10, letterSpacing: 2),
+              ),
+              SizedBox(height: 14),
+              Text(
+                'Version: v1.2.0 (Build 4)',
+                style: TextStyle(color: Colors.white70, fontSize: 12),
+              ),
+              SizedBox(height: 6),
+              Text(
+                'MayaJaal is a next-generation video streaming platform that lets you convert, share, and monetize links effortlessly. Built with Matrix-grade encryption and quantum-speed streaming.',
+                style: TextStyle(color: Colors.white70, fontSize: 12, height: 1.5),
+              ),
+              SizedBox(height: 14),
+              Divider(color: Colors.white24),
+              SizedBox(height: 8),
+              Text(
+                '© 2026 MayaJaal. All rights reserved.',
+                style: TextStyle(color: kDimGreen, fontSize: 11),
+              ),
+            ],
+          ),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(c),
+            child: const Text('CLOSE', style: TextStyle(color: kGreen)),
+          ),
+        ],
       ),
     );
   }
@@ -1910,12 +2852,22 @@ class MoreDrawer extends StatelessWidget {
       context: context,
       builder: (c) => AlertDialog(
         backgroundColor: kCardBg,
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14), side: const BorderSide(color: kGreen, width: 1.5)),
+        shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.circular(14),
+          side: const BorderSide(color: kGreen, width: 1.5),
+        ),
         title: Row(
           children: const [
             Icon(Icons.vpn_key, color: kGreen, size: 22),
             SizedBox(width: 8),
-            Text('YOUR API KEY', style: TextStyle(color: kGreen, fontSize: 14, fontWeight: FontWeight.bold)),
+            Text(
+              'YOUR API KEY',
+              style: TextStyle(
+                color: kGreen,
+                fontSize: 14,
+                fontWeight: FontWeight.bold,
+              ),
+            ),
           ],
         ),
         content: SingleChildScrollView(
@@ -1923,8 +2875,14 @@ class MoreDrawer extends StatelessWidget {
             mainAxisSize: MainAxisSize.min,
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              const Text('Ye API key Telegram bot me use karein — /api YOUR_KEY',
-                style: TextStyle(color: Colors.white70, fontSize: 12, height: 1.4)),
+              const Text(
+                'Ye API key Telegram bot me use karein — /api YOUR_KEY',
+                style: TextStyle(
+                  color: Colors.white70,
+                  fontSize: 12,
+                  height: 1.4,
+                ),
+              ),
               const SizedBox(height: 14),
               Container(
                 padding: const EdgeInsets.all(12),
@@ -1935,12 +2893,20 @@ class MoreDrawer extends StatelessWidget {
                 ),
                 child: SelectableText(
                   MayaJaalAccount.cachedApiKey ?? 'Loading...',
-                  style: const TextStyle(color: kGreen, fontFamily: 'monospace', fontSize: 13, letterSpacing: 1.5, fontWeight: FontWeight.bold),
+                  style: const TextStyle(
+                    color: kGreen,
+                    fontFamily: 'monospace',
+                    fontSize: 13,
+                    letterSpacing: 1.5,
+                    fontWeight: FontWeight.bold,
+                  ),
                 ),
               ),
               const SizedBox(height: 10),
-              Text('Email: ${MayaJaalAccount.cachedEmail ?? 'N/A'}',
-                style: const TextStyle(color: Colors.white54, fontSize: 11)),
+              Text(
+                'Email: ${MayaJaalAccount.cachedEmail ?? 'N/A'}',
+                style: const TextStyle(color: Colors.white54, fontSize: 11),
+              ),
             ],
           ),
         ),
@@ -1952,15 +2918,151 @@ class MoreDrawer extends StatelessWidget {
                 await Clipboard.setData(ClipboardData(text: key));
                 if (context.mounted) {
                   ScaffoldMessenger.of(context).showSnackBar(
-                    const SnackBar(backgroundColor: kCardBg, content: Text('✅ API Key copied', style: TextStyle(color: kGreen))),
+                    const SnackBar(
+                      backgroundColor: kCardBg,
+                      content: Text(
+                        '✅ API Key copied',
+                        style: TextStyle(color: kGreen),
+                      ),
+                    ),
                   );
                 }
               }
             },
             child: const Text('COPY', style: TextStyle(color: kGreen)),
           ),
-          TextButton(onPressed: () => Navigator.pop(c), child: const Text('CLOSE', style: TextStyle(color: Colors.white54))),
+          TextButton(
+            onPressed: () => Navigator.pop(c),
+            child: const Text(
+              'CLOSE',
+              style: TextStyle(color: Colors.white54),
+            ),
+          ),
         ],
+      ),
+    );
+  }
+
+  void _showBotsDialog(BuildContext context) {
+    showModalBottomSheet(
+      context: context,
+      backgroundColor: const Color(0xFF021206),
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
+      ),
+      builder: (c) => Padding(
+        padding: const EdgeInsets.all(20),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            const Row(
+              children: [
+                Icon(Icons.smart_toy, color: kGreen, size: 24),
+                SizedBox(width: 10),
+                Text(
+                  'MAYAJAAL BOTS',
+                  style: TextStyle(
+                    color: kGreen,
+                    fontSize: 16,
+                    fontWeight: FontWeight.bold,
+                    letterSpacing: 1.5,
+                  ),
+                ),
+              ],
+            ),
+            const SizedBox(height: 6),
+            Text(
+              'Choose a bot to start earning',
+              style: TextStyle(color: Colors.white.withOpacity(0.6), fontSize: 11),
+            ),
+            const SizedBox(height: 18),
+            _botCard(
+              context,
+              icon: Icons.upload_rounded,
+              color: kNeonCyan,
+              title: 'Upload Bot',
+              subtitle: 'Upload videos & get your own link',
+              url: 'https://t.me/Mayajaalfilebot',
+            ),
+            const SizedBox(height: 12),
+            _botCard(
+              context,
+              icon: Icons.link_rounded,
+              color: kNeonPurple,
+              title: 'Converter Bot',
+              subtitle: 'Convert links & earn from sharing',
+              url: 'https://t.me/MayaJaalBulkConverterbot',
+            ),
+            const SizedBox(height: 20),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _botCard(
+    BuildContext context, {
+    required IconData icon,
+    required Color color,
+    required String title,
+    required String subtitle,
+    required String url,
+  }) {
+    return InkWell(
+      onTap: () {
+        Navigator.pop(context);
+        _launchURL(url);
+      },
+      borderRadius: BorderRadius.circular(14),
+      child: Container(
+        padding: const EdgeInsets.all(14),
+        decoration: BoxDecoration(
+          color: kCardBg,
+          borderRadius: BorderRadius.circular(14),
+          border: Border.all(color: color.withOpacity(0.5)),
+          boxShadow: [BoxShadow(color: color.withOpacity(0.1), blurRadius: 10)],
+        ),
+        child: Row(
+          children: [
+            Container(
+              width: 46,
+              height: 46,
+              decoration: BoxDecoration(
+                color: Colors.black,
+                borderRadius: BorderRadius.circular(12),
+                border: Border.all(color: color, width: 1.5),
+                boxShadow: [BoxShadow(color: color.withOpacity(0.5), blurRadius: 12)],
+              ),
+              child: Icon(icon, color: color, size: 24),
+            ),
+            const SizedBox(width: 12),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    title,
+                    style: const TextStyle(
+                      color: Colors.white,
+                      fontSize: 14,
+                      fontWeight: FontWeight.bold,
+                    ),
+                  ),
+                  const SizedBox(height: 3),
+                  Text(
+                    subtitle,
+                    style: TextStyle(
+                      color: Colors.white.withOpacity(0.6),
+                      fontSize: 10.5,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+            Icon(Icons.arrow_forward_ios, color: color, size: 14),
+          ],
+        ),
       ),
     );
   }
@@ -1974,26 +3076,45 @@ class MoreDrawer extends StatelessWidget {
       child: SafeArea(
         child: Column(
           children: [
+            // ══════ HEADER ══════
             Container(
               padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 14),
               decoration: BoxDecoration(
                 color: const Color(0xFF011206),
-                border: Border(bottom: BorderSide(color: kGreen.withOpacity(0.4), width: 1.2)),
+                border: Border(
+                  bottom: BorderSide(
+                    color: kGreen.withOpacity(0.4),
+                    width: 1.2,
+                  ),
+                ),
               ),
               child: Row(
                 children: [
                   Container(
-                    width: 42, height: 42,
+                    width: 42,
+                    height: 42,
                     decoration: BoxDecoration(
                       color: Colors.black,
                       borderRadius: BorderRadius.circular(12),
                       border: Border.all(color: kGreen, width: 1.5),
-                      boxShadow: [BoxShadow(color: kGreen.withOpacity(0.5), blurRadius: 12)],
+                      boxShadow: [
+                        BoxShadow(
+                          color: kGreen.withOpacity(0.5),
+                          blurRadius: 12,
+                        ),
+                      ],
                     ),
                     child: ClipRRect(
                       borderRadius: BorderRadius.circular(10),
-                      child: Image.asset('assets/icon/logo.png', fit: BoxFit.cover,
-                        errorBuilder: (c, e, s) => const Icon(Icons.change_history, color: kGreen, size: 22)),
+                      child: Image.asset(
+                        'assets/icon/logo.png',
+                        fit: BoxFit.cover,
+                        errorBuilder: (c, e, s) => const Icon(
+                          Icons.change_history,
+                          color: kGreen,
+                          size: 22,
+                        ),
+                      ),
                     ),
                   ),
                   const SizedBox(width: 10),
@@ -2003,10 +3124,35 @@ class MoreDrawer extends StatelessWidget {
                       mainAxisSize: MainAxisSize.min,
                       children: [
                         Row(children: const [
-                          Text('maya', style: TextStyle(color: kGreen, fontSize: 18, fontWeight: FontWeight.w900, letterSpacing: 0.5, shadows: [Shadow(color: kGreen, blurRadius: 10)])),
-                          Text('Jaal', style: TextStyle(color: Colors.white, fontSize: 18, fontWeight: FontWeight.w400, letterSpacing: 0.5)),
+                          Text(
+                            'maya',
+                            style: TextStyle(
+                              color: kGreen,
+                              fontSize: 18,
+                              fontWeight: FontWeight.w900,
+                              letterSpacing: 0.5,
+                              shadows: [Shadow(color: kGreen, blurRadius: 10)],
+                            ),
+                          ),
+                          Text(
+                            'Jaal',
+                            style: TextStyle(
+                              color: Colors.white,
+                              fontSize: 18,
+                              fontWeight: FontWeight.w400,
+                              letterSpacing: 0.5,
+                            ),
+                          ),
                         ]),
-                        Text('MORE OPTIONS', style: TextStyle(color: kGreen.withOpacity(0.7), fontSize: 8.5, letterSpacing: 2, fontWeight: FontWeight.bold)),
+                        Text(
+                          'MORE OPTIONS',
+                          style: TextStyle(
+                            color: kGreen.withOpacity(0.7),
+                            fontSize: 8.5,
+                            letterSpacing: 2,
+                            fontWeight: FontWeight.bold,
+                          ),
+                        ),
                       ],
                     ),
                   ),
@@ -2017,10 +3163,13 @@ class MoreDrawer extends StatelessWidget {
                 ],
               ),
             ),
+
+            // ══════ BODY ══════
             Expanded(
               child: ListView(
                 padding: const EdgeInsets.symmetric(vertical: 8),
                 children: [
+                  // ═══ USER CARD ═══
                   Container(
                     margin: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
                     padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
@@ -2032,11 +3181,24 @@ class MoreDrawer extends StatelessWidget {
                     child: Row(
                       children: [
                         Container(
-                          width: 38, height: 38,
-                          decoration: BoxDecoration(shape: BoxShape.circle, border: Border.all(color: kGreen, width: 1.5)),
+                          width: 38,
+                          height: 38,
+                          decoration: BoxDecoration(
+                            shape: BoxShape.circle,
+                            border: Border.all(color: kGreen, width: 1.5),
+                          ),
                           child: user?.photoURL != null
-                              ? ClipOval(child: Image.network(user!.photoURL!, fit: BoxFit.cover,
-                                  errorBuilder: (c, e, s) => const Icon(Icons.person, color: kGreen, size: 22)))
+                              ? ClipOval(
+                                  child: Image.network(
+                                    user!.photoURL!,
+                                    fit: BoxFit.cover,
+                                    errorBuilder: (c, e, s) => const Icon(
+                                      Icons.person,
+                                      color: kGreen,
+                                      size: 22,
+                                    ),
+                                  ),
+                                )
                               : const Icon(Icons.person, color: kGreen, size: 22),
                         ),
                         const SizedBox(width: 10),
@@ -2046,19 +3208,46 @@ class MoreDrawer extends StatelessWidget {
                             children: [
                               Text(
                                 user?.displayName ?? user?.email ?? 'User',
-                                style: const TextStyle(color: kGreen, fontSize: 12, fontWeight: FontWeight.bold),
+                                style: const TextStyle(
+                                  color: kGreen,
+                                  fontSize: 12,
+                                  fontWeight: FontWeight.bold,
+                                ),
                                 overflow: TextOverflow.ellipsis,
                               ),
                               const SizedBox(height: 2),
                               Row(
                                 children: [
-                                  Icon(Icons.verified, color: kGreen.withOpacity(0.7), size: 10),
+                                  Icon(
+                                    Icons.verified,
+                                    color: kGreen.withOpacity(0.7),
+                                    size: 10,
+                                  ),
                                   const SizedBox(width: 3),
-                                  Text('Firebase Account', style: TextStyle(color: kGreen.withOpacity(0.7), fontSize: 9)),
+                                  Text(
+                                    'MayaJaal Verified',
+                                    style: TextStyle(
+                                      color: kGreen.withOpacity(0.7),
+                                      fontSize: 9,
+                                    ),
+                                  ),
                                   const SizedBox(width: 8),
-                                  Container(width: 6, height: 6, decoration: const BoxDecoration(color: kGreen, shape: BoxShape.circle)),
+                                  Container(
+                                    width: 6,
+                                    height: 6,
+                                    decoration: const BoxDecoration(
+                                      color: kGreen,
+                                      shape: BoxShape.circle,
+                                    ),
+                                  ),
                                   const SizedBox(width: 3),
-                                  Text('Connected', style: TextStyle(color: kGreen.withOpacity(0.9), fontSize: 9)),
+                                  Text(
+                                    'Connected',
+                                    style: TextStyle(
+                                      color: kGreen.withOpacity(0.9),
+                                      fontSize: 9,
+                                    ),
+                                  ),
                                 ],
                               ),
                             ],
@@ -2068,96 +3257,269 @@ class MoreDrawer extends StatelessWidget {
                     ),
                   ),
 
-                  _drawerItem(context, icon: Icons.vpn_key, color: kNeonCyan,
-                    title: 'My API Key', subtitle: 'View & copy for bot',
+                  // ═══ EARNINGS DASHBOARD ═══
+                  _snakeItem(
+                    context,
+                    icon: Icons.account_balance_wallet,
+                    color: kGold,
+                    title: 'Earnings Dashboard',
+                    subtitle: 'View your earnings and links',
+                    onTap: () {
+                      Navigator.pop(context);
+                      Navigator.push(
+                        context,
+                        MaterialPageRoute(
+                          builder: (_) => const EarningsScreen(),
+                        ),
+                      );
+                    },
+                  ),
+
+                  // ═══ API KEY ═══
+                  _snakeItem(
+                    context,
+                    icon: Icons.vpn_key,
+                    color: kNeonCyan,
+                    title: 'My API Key',
+                    subtitle: 'View & copy for bot',
                     onTap: () {
                       Navigator.pop(context);
                       _showApiKeyDialog(context);
-                    }),
+                    },
+                  ),
 
-                  _drawerItem(context, icon: Icons.share, color: kNeonCyan,
-                    title: 'Share MayaJaal App', subtitle: 'Invite your friends',
+                  // ═══ BOTS ═══
+                  _snakeItem(
+                    context,
+                    icon: Icons.smart_toy,
+                    color: kNeonPurple,
+                    title: 'MayaJaal Bots',
+                    subtitle: 'Upload & Converter bots',
+                    onTap: () {
+                      Navigator.pop(context);
+                      _showBotsDialog(context);
+                    },
+                  ),
+
+                  // ═══ SHARE APP ═══
+                  _snakeItem(
+                    context,
+                    icon: Icons.share,
+                    color: kNeonCyan,
+                    title: 'Share MayaJaal App',
+                    subtitle: 'Invite your friends',
                     onTap: () {
                       Navigator.pop(context);
                       _shareApp();
-                    }),
+                    },
+                  ),
 
-                  _drawerItem(context, icon: Icons.settings, color: kGreen,
-                    title: 'App Settings', subtitle: 'Customize your experience',
+                  // ═══ APP SETTINGS ═══
+                  _snakeItem(
+                    context,
+                    icon: Icons.settings,
+                    color: kGreen,
+                    title: 'App Settings',
+                    subtitle: 'Customize your experience',
                     onTap: () {
                       Navigator.pop(context);
-                      Navigator.push(context, MaterialPageRoute(builder: (_) => const SettingsScreen()));
-                    }),
+                      Navigator.push(
+                        context,
+                        MaterialPageRoute(
+                          builder: (_) => const SettingsScreen(),
+                        ),
+                      );
+                    },
+                  ),
 
-                  _drawerItem(context, icon: Icons.support_agent, color: Colors.amberAccent,
-                    title: 'Help & Support', subtitle: 'mayajaalsupport@gmail.com',
+                  // ═══ HELP & SUPPORT ═══
+                  _snakeItem(
+                    context,
+                    icon: Icons.support_agent,
+                    color: Colors.amberAccent,
+                    title: 'Help & Support',
+                    subtitle: 'mayajaalsupport@gmail.com',
                     onTap: () {
                       Navigator.pop(context);
-                      _launchURL('mailto:mayajaalsupport@gmail.com?subject=MayaJaal%20Support');
-                    }),
+                      _launchURL(
+                        'mailto:mayajaalsupport@gmail.com?subject=MayaJaal%20Support',
+                      );
+                    },
+                  ),
 
-                  _drawerItem(context, icon: Icons.privacy_tip_outlined, color: kDimGreen,
-                    title: 'Privacy Policy', subtitle: 'Your data, our priority',
-                    onTap: () {
-                      Navigator.pop(context);
-                      _showPolicyDialog(context, 'PRIVACY POLICY',
-                        'MayaJaal respects user privacy. No private credentials are sold or stored inappropriately. Stream decryption occurs locally on your hardware. Logins are handled securely via Firebase Google OAuth integration.');
-                    }),
-
-                  _drawerItem(context, icon: Icons.description_outlined, color: kDimGreen,
-                    title: 'Terms & Conditions', subtitle: 'Read before you continue',
-                    onTap: () {
-                      Navigator.pop(context);
-                      _showPolicyDialog(context, 'TERMS AND CONDITIONS',
-                        'By utilizing MayaJaal, you agree to access encrypted streaming endpoints responsibly. Users are personally responsible for streams parsed through node references.');
-                    }),
-
-                  _drawerItem(context, icon: Icons.account_balance_wallet, color: kGreen,
-                    title: 'Earnings Dashboard', subtitle: 'View your earnings and links',
-                    onTap: () {
-                      Navigator.pop(context);
-                      Navigator.push(context, MaterialPageRoute(builder: (_) => const EarningsScreen()));
-                    }),
-
+                  // ══════ JOIN US SECTION ══════
                   Padding(
                     padding: const EdgeInsets.only(left: 16, top: 18, bottom: 8),
                     child: Row(
                       children: [
                         Container(width: 14, height: 1.5, color: kGreen),
                         const SizedBox(width: 6),
-                        const Text('JOIN US', style: TextStyle(color: kGreen, fontSize: 11, fontWeight: FontWeight.bold, letterSpacing: 2)),
+                        const Text(
+                          'JOIN US',
+                          style: TextStyle(
+                            color: kGreen,
+                            fontSize: 11,
+                            fontWeight: FontWeight.bold,
+                            letterSpacing: 2,
+                          ),
+                        ),
                         const SizedBox(width: 6),
-                        Expanded(child: Container(height: 1, color: kGreen.withOpacity(0.3))),
+                        Expanded(
+                          child: Container(
+                            height: 1,
+                            color: kGreen.withOpacity(0.3),
+                          ),
+                        ),
                       ],
                     ),
                   ),
 
-                  _drawerItem(context, icon: Icons.camera_alt, color: const Color(0xFFE1306C),
-                    title: 'Instagram Official', subtitle: '@maya_jaal_official',
+                  // INSTAGRAM
+                  _socialItem(
+                    context,
+                    imageUrl:
+                        'https://upload.wikimedia.org/wikipedia/commons/thumb/e/e7/Instagram_logo_2016.svg/240px-Instagram_logo_2016.svg.png',
+                    fallbackIcon: Icons.camera_alt,
+                    color: const Color(0xFFE1306C),
+                    title: 'Instagram Official',
+                    subtitle: '@maya_jaal_official',
                     onTap: () {
                       Navigator.pop(context);
                       _launchURL('https://www.instagram.com/maya_jaal_official');
-                    }),
+                    },
+                  ),
 
-                  _drawerItem(context, icon: Icons.play_circle_fill, color: Colors.redAccent,
-                    title: 'YouTube Channel', subtitle: '@MayaJaalOfficial00',
+                  // YOUTUBE
+                  _socialItem(
+                    context,
+                    imageUrl:
+                        'https://upload.wikimedia.org/wikipedia/commons/thumb/0/09/YouTube_full-color_icon_%282017%29.svg/240px-YouTube_full-color_icon_%282017%29.svg.png',
+                    fallbackIcon: Icons.play_circle_fill,
+                    color: Colors.redAccent,
+                    title: 'YouTube Channel',
+                    subtitle: '@MayaJaalOfficial00',
                     onTap: () {
                       Navigator.pop(context);
                       _launchURL('https://www.youtube.com/@MayaJaalOfficial00');
-                    }),
+                    },
+                  ),
 
+                  // TELEGRAM
+                  _socialItem(
+                    context,
+                    imageUrl:
+                        'https://upload.wikimedia.org/wikipedia/commons/thumb/8/82/Telegram_logo.svg/240px-Telegram_logo.svg.png',
+                    fallbackIcon: Icons.send_rounded,
+                    color: const Color(0xFF229ED9),
+                    title: 'Telegram Channel',
+                    subtitle: '@MayaJaalOfficial',
+                    onTap: () {
+                      Navigator.pop(context);
+                      _launchURL('https://t.me/MayaJaalOfficial');
+                    },
+                  ),
+
+                  // ══════ INFORMATION SECTION ══════
                   Padding(
-                    padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 16),
+                    padding: const EdgeInsets.only(left: 16, top: 18, bottom: 8),
+                    child: Row(
+                      children: [
+                        Container(width: 14, height: 1.5, color: kNeonCyan),
+                        const SizedBox(width: 6),
+                        const Text(
+                          'INFORMATION',
+                          style: TextStyle(
+                            color: kNeonCyan,
+                            fontSize: 11,
+                            fontWeight: FontWeight.bold,
+                            letterSpacing: 2,
+                          ),
+                        ),
+                        const SizedBox(width: 6),
+                        Expanded(
+                          child: Container(
+                            height: 1,
+                            color: kNeonCyan.withOpacity(0.3),
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+
+                  // ABOUT
+                  _snakeItem(
+                    context,
+                    icon: Icons.info_outline,
+                    color: kNeonCyan,
+                    title: 'About MayaJaal',
+                    subtitle: 'Version & info',
+                    onTap: () {
+                      Navigator.pop(context);
+                      _showAboutDialog(context);
+                    },
+                  ),
+
+                  // PRIVACY
+                  _snakeItem(
+                    context,
+                    icon: Icons.privacy_tip_outlined,
+                    color: kDimGreen,
+                    title: 'Privacy Policy',
+                    subtitle: 'Your data, our priority',
+                    onTap: () {
+                      Navigator.pop(context);
+                      _showPolicyDialog(
+                        context,
+                        'PRIVACY POLICY',
+                        'MayaJaal respects user privacy. No private credentials are sold or stored inappropriately. Stream decryption occurs locally on your hardware. Logins are handled securely via Firebase Google OAuth integration.',
+                      );
+                    },
+                  ),
+
+                  // TERMS
+                  _snakeItem(
+                    context,
+                    icon: Icons.description_outlined,
+                    color: kDimGreen,
+                    title: 'Terms & Conditions',
+                    subtitle: 'Read before you continue',
+                    onTap: () {
+                      Navigator.pop(context);
+                      _showPolicyDialog(
+                        context,
+                        'TERMS AND CONDITIONS',
+                        'By utilizing MayaJaal, you agree to access encrypted streaming endpoints responsibly. Users are personally responsible for streams parsed through node references.',
+                      );
+                    },
+                  ),
+
+                  // ═══ LOGOUT ═══
+                  Padding(
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 12,
+                      vertical: 16,
+                    ),
                     child: Container(
                       decoration: BoxDecoration(
                         color: Colors.red.withOpacity(0.08),
                         borderRadius: BorderRadius.circular(12),
-                        border: Border.all(color: Colors.redAccent.withOpacity(0.4)),
+                        border: Border.all(
+                          color: Colors.redAccent.withOpacity(0.4),
+                        ),
                       ),
                       child: ListTile(
-                        leading: const Icon(Icons.logout, color: Colors.redAccent),
-                        title: const Text('Logout Session',
-                          style: TextStyle(color: Colors.redAccent, fontWeight: FontWeight.bold, fontSize: 13)),
+                        leading: const Icon(
+                          Icons.logout,
+                          color: Colors.redAccent,
+                        ),
+                        title: const Text(
+                          'Logout Session',
+                          style: TextStyle(
+                            color: Colors.redAccent,
+                            fontWeight: FontWeight.bold,
+                            fontSize: 13,
+                          ),
+                        ),
                         onTap: () {
                           Navigator.pop(context);
                           _logout(context);
@@ -2174,8 +3536,85 @@ class MoreDrawer extends StatelessWidget {
     );
   }
 
-  Widget _drawerItem(BuildContext context, {
+  // ═══════════ SNAKE ANIMATION ITEM ═══════════
+  Widget _snakeItem(
+    BuildContext context, {
     required IconData icon,
+    required Color color,
+    required String title,
+    required String subtitle,
+    required VoidCallback onTap,
+  }) {
+    return Padding(
+      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
+      child: AnimatedBuilder(
+        animation: _snakeController,
+        builder: (c, _) {
+          return Stack(
+            children: [
+              // Base container
+              ListTile(
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(10),
+                ),
+                leading: Container(
+                  width: 38,
+                  height: 38,
+                  decoration: BoxDecoration(
+                    color: Colors.black,
+                    borderRadius: BorderRadius.circular(10),
+                    border: Border.all(color: color.withOpacity(0.5)),
+                  ),
+                  child: Icon(icon, color: color, size: 20),
+                ),
+                title: Text(
+                  title,
+                  style: const TextStyle(
+                    color: Colors.white,
+                    fontSize: 13,
+                    fontWeight: FontWeight.bold,
+                  ),
+                ),
+                subtitle: Text(
+                  subtitle,
+                  style: TextStyle(
+                    color: Colors.white.withOpacity(0.5),
+                    fontSize: 10.5,
+                  ),
+                ),
+                trailing: Icon(
+                  Icons.arrow_forward_ios,
+                  color: color,
+                  size: 14,
+                ),
+                onTap: onTap,
+              ),
+              // Snake light overlay
+              Positioned.fill(
+                child: IgnorePointer(
+                  child: ClipRRect(
+                    borderRadius: BorderRadius.circular(10),
+                    child: CustomPaint(
+                      painter: _SnakeBorderPainter(
+                        progress: _snakeController.value,
+                        color: color,
+                      ),
+                    ),
+                  ),
+                ),
+              ),
+            ],
+          );
+        },
+      ),
+    );
+  }
+
+  // ═══════════ SOCIAL MEDIA ITEM ═══════════
+  Widget _socialItem(
+    BuildContext context, {
+    required String imageUrl,
+    required IconData fallbackIcon,
     required Color color,
     required String title,
     required String subtitle,
@@ -2186,22 +3625,113 @@ class MoreDrawer extends StatelessWidget {
       child: ListTile(
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
         leading: Container(
-          width: 38, height: 38,
+          width: 38,
+          height: 38,
           decoration: BoxDecoration(
-            color: Colors.black,
+            color: Colors.white,
             borderRadius: BorderRadius.circular(10),
-            border: Border.all(color: color.withOpacity(0.5)),
+            border: Border.all(color: color.withOpacity(0.7), width: 1.2),
           ),
-          child: Icon(icon, color: color, size: 20),
+          padding: const EdgeInsets.all(5),
+          child: Image.network(
+            imageUrl,
+            fit: BoxFit.contain,
+            errorBuilder: (c, e, s) => Icon(fallbackIcon, color: color, size: 22),
+          ),
         ),
-        title: Text(title, style: const TextStyle(color: Colors.white, fontSize: 13, fontWeight: FontWeight.bold)),
-        subtitle: Text(subtitle, style: TextStyle(color: Colors.white.withOpacity(0.5), fontSize: 10.5)),
+        title: Text(
+          title,
+          style: const TextStyle(
+            color: Colors.white,
+            fontSize: 13,
+            fontWeight: FontWeight.bold,
+          ),
+        ),
+        subtitle: Text(
+          subtitle,
+          style: TextStyle(
+            color: Colors.white.withOpacity(0.5),
+            fontSize: 10.5,
+          ),
+        ),
         trailing: Icon(Icons.arrow_forward_ios, color: color, size: 14),
         onTap: onTap,
       ),
     );
   }
 }
+
+// ═══════════════════════════════════════════════════════
+// SNAKE BORDER PAINTER (Moving Light Effect)
+// ═══════════════════════════════════════════════════════
+class _SnakeBorderPainter extends CustomPainter {
+  final double progress;
+  final Color color;
+
+  _SnakeBorderPainter({required this.progress, required this.color});
+
+  @override
+  void paint(Canvas canvas, Size size) {
+    final rect = Rect.fromLTWH(0, 0, size.width, size.height);
+    final rrect = RRect.fromRectAndRadius(rect, const Radius.circular(10));
+
+    // Calculate path length
+    final path = Path()..addRRect(rrect);
+    final metrics = path.computeMetrics().first;
+    final totalLength = metrics.length;
+
+    // Snake length: 20% of total
+    final snakeLength = totalLength * 0.2;
+
+    // Moving start position
+    final startPos = (progress * totalLength) % totalLength;
+    final endPos = startPos + snakeLength;
+
+    // Draw snake segment
+    final extractPath = Path();
+    if (endPos <= totalLength) {
+      extractPath.addPath(
+        metrics.extractPath(startPos, endPos),
+        Offset.zero,
+      );
+    } else {
+      extractPath.addPath(
+        metrics.extractPath(startPos, totalLength),
+        Offset.zero,
+      );
+      extractPath.addPath(
+        metrics.extractPath(0, endPos - totalLength),
+        Offset.zero,
+      );
+    }
+
+    // Glow effect
+    final paint = Paint()
+      ..color = color
+      ..style = PaintingStyle.stroke
+      ..strokeWidth = 2
+      ..strokeCap = StrokeCap.round
+      ..maskFilter = const MaskFilter.blur(BlurStyle.normal, 4);
+
+    canvas.drawPath(extractPath, paint);
+
+    // Bright core
+    final corePaint = Paint()
+      ..color = Colors.white.withOpacity(0.9)
+      ..style = PaintingStyle.stroke
+      ..strokeWidth = 1.2
+      ..strokeCap = StrokeCap.round;
+
+    canvas.drawPath(extractPath, corePaint);
+  }
+
+  @override
+  bool shouldRepaint(covariant _SnakeBorderPainter oldDelegate) {
+    return oldDelegate.progress != progress || oldDelegate.color != color;
+  }
+}
+
+// ============ PART 2 CONTINUES in Part 3 ============
 
 // ═══════════════════════════════════════════════════════
 // CHANNEL SCREEN
@@ -2226,8 +3756,14 @@ class ChannelScreen extends StatelessWidget {
             ),
             child: const ListTile(
               leading: Icon(Icons.bolt, color: kGreen, size: 32),
-              title: Text('Quantum Streaming Node', style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
-              subtitle: Text('Direct hardware pipeline active', style: TextStyle(color: kDimGreen, fontSize: 12)),
+              title: Text(
+                'Quantum Streaming Node',
+                style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold),
+              ),
+              subtitle: Text(
+                'Direct hardware pipeline active',
+                style: TextStyle(color: kDimGreen, fontSize: 12),
+              ),
             ),
           ),
           const SizedBox(height: 14),
@@ -2240,8 +3776,14 @@ class ChannelScreen extends StatelessWidget {
             ),
             child: const ListTile(
               leading: Icon(Icons.cloud_done, color: kNeonCyan, size: 32),
-              title: Text('High Speed CDN Node', style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
-              subtitle: Text('Buffer acceleration: ENABLED', style: TextStyle(color: kNeonCyan, fontSize: 12)),
+              title: Text(
+                'High Speed CDN Node',
+                style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold),
+              ),
+              subtitle: Text(
+                'Buffer acceleration: ENABLED',
+                style: TextStyle(color: kNeonCyan, fontSize: 12),
+              ),
             ),
           ),
         ],
@@ -2312,7 +3854,10 @@ class _HistoryScreenState extends State<HistoryScreen> {
                 children: [
                   Icon(Icons.history, size: 60, color: kGreen.withOpacity(0.4)),
                   const SizedBox(height: 12),
-                  Text(tr('no_history'), style: TextStyle(color: kGreen.withOpacity(0.6))),
+                  Text(
+                    tr('no_history'),
+                    style: TextStyle(color: kGreen.withOpacity(0.6)),
+                  ),
                 ],
               ),
             )
@@ -2329,23 +3874,43 @@ class _HistoryScreenState extends State<HistoryScreen> {
                     border: Border.all(color: kGreen.withOpacity(0.3)),
                   ),
                   child: ListTile(
-                    leading: const Icon(Icons.play_circle_outline, color: kGreen),
+                    leading: const Icon(
+                      Icons.play_circle_outline,
+                      color: kGreen,
+                    ),
                     title: Text(
                       item['title'] ?? 'Media Node',
-                      style: const TextStyle(fontSize: 13, color: kGreen, fontWeight: FontWeight.bold),
+                      style: const TextStyle(
+                        fontSize: 13,
+                        color: kGreen,
+                        fontWeight: FontWeight.bold,
+                      ),
                       maxLines: 1,
                       overflow: TextOverflow.ellipsis,
                     ),
-                    subtitle: Text('By: ${item['uploader'] ?? 'Node'}',
-                      style: TextStyle(fontSize: 11, color: kDimGreen.withOpacity(0.8))),
+                    subtitle: Text(
+                      'By: ${item['uploader'] ?? 'Node'}',
+                      style: TextStyle(
+                        fontSize: 11,
+                        color: kDimGreen.withOpacity(0.8),
+                      ),
+                    ),
                     trailing: IconButton(
-                      icon: const Icon(Icons.close, size: 16, color: Colors.redAccent),
+                      icon: const Icon(
+                        Icons.close,
+                        size: 16,
+                        color: Colors.redAccent,
+                      ),
                       onPressed: () => _deleteItem(i),
                     ),
                     onTap: () {
                       Navigator.push(
                         context,
-                        MaterialPageRoute(builder: (_) => StreamPreviewScreen(targetUrl: item['url'])),
+                        MaterialPageRoute(
+                          builder: (_) => StreamPreviewScreen(
+                            targetUrl: item['url'],
+                          ),
+                        ),
                       ).then((_) => _loadHistory());
                     },
                   ),
@@ -2388,7 +3953,8 @@ class _SettingsScreenState extends State<SettingsScreen> {
     setState(() {
       _darkTheme = prefs.getBool('dark_theme') ?? true;
       _language = prefs.getString('language') ?? 'English';
-      _downloadLocation = prefs.getString('download_location') ?? 'Internal Storage / Mayajaall';
+      _downloadLocation =
+          prefs.getString('download_location') ?? 'Internal Storage / Mayajaall';
     });
   }
 
@@ -2422,31 +3988,56 @@ class _SettingsScreenState extends State<SettingsScreen> {
           ListTile(
             leading: const Icon(Icons.palette_outlined, color: kGreen),
             title: Text(tr('dark_theme'), style: const TextStyle(color: kGreen)),
-            subtitle: Text(_darkTheme ? 'Matrix Cyber Neon' : 'Standard Light',
-              style: TextStyle(color: kGreen.withOpacity(0.6), fontSize: 12)),
-            trailing: Switch(value: _darkTheme, activeColor: kGreen, onChanged: _saveDarkTheme),
+            subtitle: Text(
+              _darkTheme ? 'Matrix Cyber Neon' : 'Standard Light',
+              style: TextStyle(color: kGreen.withOpacity(0.6), fontSize: 12),
+            ),
+            trailing: Switch(
+              value: _darkTheme,
+              activeColor: kGreen,
+              onChanged: _saveDarkTheme,
+            ),
           ),
           Divider(color: kGreen.withOpacity(0.2)),
           ListTile(
             leading: const Icon(Icons.language, color: kGreen),
             title: Text(tr('language'), style: const TextStyle(color: kGreen)),
-            subtitle: Text(_language, style: TextStyle(color: kGreen.withOpacity(0.6), fontSize: 12)),
-            trailing: const Icon(Icons.arrow_forward_ios, size: 14, color: kGreen),
+            subtitle: Text(
+              _language,
+              style: TextStyle(color: kGreen.withOpacity(0.6), fontSize: 12),
+            ),
+            trailing: const Icon(
+              Icons.arrow_forward_ios,
+              size: 14,
+              color: kGreen,
+            ),
             onTap: _showLanguageDialog,
           ),
           Divider(color: kGreen.withOpacity(0.2)),
           ListTile(
             leading: const Icon(Icons.download, color: kGreen),
-            title: Text(tr('download_location'), style: const TextStyle(color: kGreen)),
-            subtitle: Text(_downloadLocation, style: TextStyle(color: kGreen.withOpacity(0.6), fontSize: 12)),
-            trailing: const Icon(Icons.arrow_forward_ios, size: 14, color: kGreen),
+            title: Text(
+              tr('download_location'),
+              style: const TextStyle(color: kGreen),
+            ),
+            subtitle: Text(
+              _downloadLocation,
+              style: TextStyle(color: kGreen.withOpacity(0.6), fontSize: 12),
+            ),
+            trailing: const Icon(
+              Icons.arrow_forward_ios,
+              size: 14,
+              color: kGreen,
+            ),
             onTap: _showDownloadLocationDialog,
           ),
           Divider(color: kGreen.withOpacity(0.2)),
           const SizedBox(height: 30),
           Center(
-            child: Text('> MayaJaal v1.2.0 // Firebase Core Node',
-              style: TextStyle(color: kGreen.withOpacity(0.5), fontSize: 12)),
+            child: Text(
+              '> MayaJaal v1.2.0 // Quantum Core',
+              style: TextStyle(color: kGreen.withOpacity(0.5), fontSize: 12),
+            ),
           ),
         ],
       ),
@@ -2458,7 +4049,10 @@ class _SettingsScreenState extends State<SettingsScreen> {
       context: context,
       builder: (c) => AlertDialog(
         backgroundColor: kCardBg,
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12), side: BorderSide(color: kGreen.withOpacity(0.5))),
+        shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.circular(12),
+          side: BorderSide(color: kGreen.withOpacity(0.5)),
+        ),
         title: Text(tr('language'), style: const TextStyle(color: kGreen)),
         content: Column(
           mainAxisSize: MainAxisSize.min,
@@ -2486,13 +4080,22 @@ class _SettingsScreenState extends State<SettingsScreen> {
       context: context,
       builder: (c) => AlertDialog(
         backgroundColor: kCardBg,
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12), side: BorderSide(color: kGreen.withOpacity(0.5))),
-        title: Text(tr('download_location'), style: const TextStyle(color: kGreen)),
+        shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.circular(12),
+          side: BorderSide(color: kGreen.withOpacity(0.5)),
+        ),
+        title: Text(
+          tr('download_location'),
+          style: const TextStyle(color: kGreen),
+        ),
         content: Column(
           mainAxisSize: MainAxisSize.min,
           children: _downloadLocations.map((loc) {
             return RadioListTile<String>(
-              title: Text(loc, style: const TextStyle(color: kGreen, fontSize: 12)),
+              title: Text(
+                loc,
+                style: const TextStyle(color: kGreen, fontSize: 12),
+              ),
               value: loc,
               groupValue: _downloadLocation,
               activeColor: kGreen,
@@ -2511,7 +4114,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
 }
 
 // ═══════════════════════════════════════════════════════
-// STREAM PREVIEW SCREEN — 10 second countdown
+// STREAM PREVIEW SCREEN — Professional Loading + 10s countdown
 // ═══════════════════════════════════════════════════════
 class StreamPreviewScreen extends StatefulWidget {
   final String targetUrl;
@@ -2520,7 +4123,8 @@ class StreamPreviewScreen extends StatefulWidget {
   State<StreamPreviewScreen> createState() => _StreamPreviewScreenState();
 }
 
-class _StreamPreviewScreenState extends State<StreamPreviewScreen> with SingleTickerProviderStateMixin {
+class _StreamPreviewScreenState extends State<StreamPreviewScreen>
+    with SingleTickerProviderStateMixin {
   bool _loading = true;
   String _streamUrl = '';
   String _videoTitle = 'MayaJaal Video';
@@ -2538,8 +4142,12 @@ class _StreamPreviewScreenState extends State<StreamPreviewScreen> with SingleTi
   @override
   void initState() {
     super.initState();
-    _pulseController = AnimationController(vsync: this, duration: const Duration(milliseconds: 1400))..repeat(reverse: true);
-    _pulseAnimation = Tween<double>(begin: 0.95, end: 1.05).animate(CurvedAnimation(parent: _pulseController, curve: Curves.easeInOut));
+    _pulseController = AnimationController(
+      vsync: this,
+      duration: const Duration(milliseconds: 1400),
+    )..repeat(reverse: true);
+    _pulseAnimation = Tween<double>(begin: 0.95, end: 1.05)
+        .animate(CurvedAnimation(parent: _pulseController, curve: Curves.easeInOut));
     _fetchStreamMetadata();
   }
 
@@ -2571,7 +4179,8 @@ class _StreamPreviewScreenState extends State<StreamPreviewScreen> with SingleTi
       _rawId = uri.pathSegments.isNotEmpty ? uri.pathSegments.last : 'stream';
       _token = uri.queryParameters['t'] ?? uri.queryParameters['s'] ?? '';
 
-      if (widget.targetUrl.endsWith('.mp4') || widget.targetUrl.endsWith('.m3u8')) {
+      if (widget.targetUrl.endsWith('.mp4') ||
+          widget.targetUrl.endsWith('.m3u8')) {
         setState(() {
           _streamUrl = widget.targetUrl;
           _videoTitle = _rawId;
@@ -2585,10 +4194,12 @@ class _StreamPreviewScreenState extends State<StreamPreviewScreen> with SingleTi
           ? '$kBackendBaseUrl/api/stream-info/$_rawId?t=$_token'
           : '$kBackendBaseUrl/api/stream-info/$_rawId';
 
-      final res = await http.get(Uri.parse(apiUrl)).timeout(const Duration(seconds: 8));
+      final res =
+          await http.get(Uri.parse(apiUrl)).timeout(const Duration(seconds: 8));
       if (res.statusCode == 200) {
         final data = jsonDecode(res.body);
-        if (data['success'] == true && (data['url'] != null || data['video_url'] != null)) {
+        if (data['success'] == true &&
+            (data['url'] != null || data['video_url'] != null)) {
           setState(() {
             _streamUrl = data['url'] ?? data['video_url'];
             _videoTitle = data['title'] ?? data['file_name'] ?? _rawId;
@@ -2600,7 +4211,9 @@ class _StreamPreviewScreenState extends State<StreamPreviewScreen> with SingleTi
         }
       }
 
-      final res2 = await http.get(Uri.parse('$kBackendBaseUrl/api/v/$_rawId?t=$_token')).timeout(const Duration(seconds: 8));
+      final res2 = await http
+          .get(Uri.parse('$kBackendBaseUrl/api/v/$_rawId?t=$_token'))
+          .timeout(const Duration(seconds: 8));
       if (res2.statusCode == 200) {
         final data = jsonDecode(res2.body);
         setState(() {
@@ -2676,24 +4289,31 @@ class _StreamPreviewScreenState extends State<StreamPreviewScreen> with SingleTi
   Widget _buildCountdownCircle() {
     final progress = 1.0 - (_countdown / 10.0);
     return SizedBox(
-      width: 140, height: 140,
+      width: 140,
+      height: 140,
       child: Stack(
         alignment: Alignment.center,
         children: [
           SizedBox(
-            width: 140, height: 140,
+            width: 140,
+            height: 140,
             child: CircularProgressIndicator(
               value: progress,
               strokeWidth: 7,
               backgroundColor: Colors.white12,
-              valueColor: AlwaysStoppedAnimation<Color>(_canProceed ? kGreen : Colors.orangeAccent),
+              valueColor: AlwaysStoppedAnimation<Color>(
+                _canProceed ? kGreen : Colors.orangeAccent,
+              ),
             ),
           ),
           Column(
             mainAxisAlignment: MainAxisAlignment.center,
             children: [
-              Icon(_canProceed ? Icons.play_arrow_rounded : Icons.timer,
-                color: _canProceed ? kGreen : Colors.orangeAccent, size: 44),
+              Icon(
+                _canProceed ? Icons.play_arrow_rounded : Icons.timer,
+                color: _canProceed ? kGreen : Colors.orangeAccent,
+                size: 44,
+              ),
               const SizedBox(height: 4),
               Text(
                 _canProceed ? 'READY' : '$_countdown',
@@ -2702,12 +4322,25 @@ class _StreamPreviewScreenState extends State<StreamPreviewScreen> with SingleTi
                   fontSize: _canProceed ? 20 : 38,
                   fontWeight: FontWeight.w900,
                   letterSpacing: 2,
-                  shadows: [Shadow(color: (_canProceed ? kGreen : Colors.orangeAccent).withOpacity(0.7), blurRadius: 15)],
+                  shadows: [
+                    Shadow(
+                      color: (_canProceed ? kGreen : Colors.orangeAccent)
+                          .withOpacity(0.7),
+                      blurRadius: 15,
+                    ),
+                  ],
                 ),
               ),
               if (!_canProceed)
-                Text('SEC',
-                  style: TextStyle(color: Colors.orangeAccent.withOpacity(0.8), fontSize: 11, letterSpacing: 3, fontWeight: FontWeight.bold)),
+                Text(
+                  'SEC',
+                  style: TextStyle(
+                    color: Colors.orangeAccent.withOpacity(0.8),
+                    fontSize: 11,
+                    letterSpacing: 3,
+                    fontWeight: FontWeight.bold,
+                  ),
+                ),
             ],
           ),
         ],
@@ -2717,6 +4350,11 @@ class _StreamPreviewScreenState extends State<StreamPreviewScreen> with SingleTi
 
   @override
   Widget build(BuildContext context) {
+    // Professional loading screen instead of white
+    if (_loading) {
+      return const ProfessionalLoader(message: 'DECRYPTING STREAM...');
+    }
+
     return Scaffold(
       backgroundColor: Colors.black,
       body: Stack(
@@ -2730,37 +4368,73 @@ class _StreamPreviewScreenState extends State<StreamPreviewScreen> with SingleTi
                   Row(
                     children: [
                       IconButton(
-                        icon: const Icon(Icons.arrow_back_ios_new, color: kGreen, size: 22),
+                        icon: const Icon(
+                          Icons.arrow_back_ios_new,
+                          color: kGreen,
+                          size: 22,
+                        ),
                         onPressed: () => Navigator.pop(context),
                       ),
                       Expanded(
                         child: Column(
                           mainAxisSize: MainAxisSize.min,
                           children: [
-                            const Text('STREAM READY',
-                              style: TextStyle(color: kGreen, fontSize: 19, fontWeight: FontWeight.w900, letterSpacing: 2,
-                                shadows: [Shadow(color: kGreen, blurRadius: 12)])),
-                            Text('MATRIX NEURAL STREAM',
-                              style: TextStyle(color: kGreen.withOpacity(0.7), fontSize: 9, letterSpacing: 2.5, fontWeight: FontWeight.w600)),
+                            const Text(
+                              'STREAM READY',
+                              style: TextStyle(
+                                color: kGreen,
+                                fontSize: 19,
+                                fontWeight: FontWeight.w900,
+                                letterSpacing: 2,
+                                shadows: [Shadow(color: kGreen, blurRadius: 12)],
+                              ),
+                            ),
+                            Text(
+                              'MATRIX NEURAL STREAM',
+                              style: TextStyle(
+                                color: kGreen.withOpacity(0.7),
+                                fontSize: 9,
+                                letterSpacing: 2.5,
+                                fontWeight: FontWeight.w600,
+                              ),
+                            ),
                           ],
                         ),
                       ),
                       Container(
                         padding: const EdgeInsets.all(7),
-                        decoration: BoxDecoration(shape: BoxShape.circle, border: Border.all(color: kGreen.withOpacity(0.6))),
-                        child: const Icon(Icons.verified_user_rounded, color: kGreen, size: 18),
+                        decoration: BoxDecoration(
+                          shape: BoxShape.circle,
+                          border: Border.all(color: kGreen.withOpacity(0.6)),
+                        ),
+                        child: const Icon(
+                          Icons.verified_user_rounded,
+                          color: kGreen,
+                          size: 18,
+                        ),
                       ),
                     ],
                   ),
                   const SizedBox(height: 15),
-
                   Container(
-                    padding: const EdgeInsets.symmetric(vertical: 26, horizontal: 16),
+                    padding:
+                        const EdgeInsets.symmetric(vertical: 26, horizontal: 16),
                     decoration: BoxDecoration(
                       color: const Color(0xFF011206),
                       borderRadius: BorderRadius.circular(24),
-                      border: Border.all(color: _canProceed ? kGreen : Colors.orangeAccent.withOpacity(0.6), width: 1.8),
-                      boxShadow: [BoxShadow(color: (_canProceed ? kGreen : Colors.orangeAccent).withOpacity(0.25), blurRadius: 30)],
+                      border: Border.all(
+                        color: _canProceed
+                            ? kGreen
+                            : Colors.orangeAccent.withOpacity(0.6),
+                        width: 1.8,
+                      ),
+                      boxShadow: [
+                        BoxShadow(
+                          color: (_canProceed ? kGreen : Colors.orangeAccent)
+                              .withOpacity(0.25),
+                          blurRadius: 30,
+                        ),
+                      ],
                     ),
                     child: Column(
                       children: [
@@ -2768,8 +4442,12 @@ class _StreamPreviewScreenState extends State<StreamPreviewScreen> with SingleTi
                         const SizedBox(height: 20),
                         Text(
                           _canProceed ? '🚀 VIDEO READY TO PLAY' : '⏱ PLEASE WAIT',
-                          style: TextStyle(color: _canProceed ? kGreen : Colors.orangeAccent,
-                            fontSize: 16, fontWeight: FontWeight.w900, letterSpacing: 2),
+                          style: TextStyle(
+                            color: _canProceed ? kGreen : Colors.orangeAccent,
+                            fontSize: 16,
+                            fontWeight: FontWeight.w900,
+                            letterSpacing: 2,
+                          ),
                         ),
                         const SizedBox(height: 8),
                         Text(
@@ -2777,7 +4455,11 @@ class _StreamPreviewScreenState extends State<StreamPreviewScreen> with SingleTi
                               ? 'Tap the button below to start streaming'
                               : 'Video unlocks in $_countdown seconds',
                           textAlign: TextAlign.center,
-                          style: TextStyle(color: Colors.white.withOpacity(0.75), fontSize: 13, height: 1.5),
+                          style: TextStyle(
+                            color: Colors.white.withOpacity(0.75),
+                            fontSize: 13,
+                            height: 1.5,
+                          ),
                         ),
                         const SizedBox(height: 16),
                         ClipRRect(
@@ -2786,14 +4468,15 @@ class _StreamPreviewScreenState extends State<StreamPreviewScreen> with SingleTi
                             value: 1.0 - (_countdown / 10.0),
                             minHeight: 8,
                             backgroundColor: Colors.white12,
-                            valueColor: AlwaysStoppedAnimation<Color>(_canProceed ? kGreen : Colors.orangeAccent),
+                            valueColor: AlwaysStoppedAnimation<Color>(
+                              _canProceed ? kGreen : Colors.orangeAccent,
+                            ),
                           ),
                         ),
                       ],
                     ),
                   ),
                   const SizedBox(height: 16),
-
                   Container(
                     padding: const EdgeInsets.all(14),
                     decoration: BoxDecoration(
@@ -2807,45 +4490,91 @@ class _StreamPreviewScreenState extends State<StreamPreviewScreen> with SingleTi
                           children: [
                             Container(
                               padding: const EdgeInsets.all(10),
-                              decoration: BoxDecoration(shape: BoxShape.circle, color: Colors.black,
-                                border: Border.all(color: kGreen.withOpacity(0.5))),
-                              child: const Icon(Icons.video_collection_outlined, color: kGreen, size: 20),
+                              decoration: BoxDecoration(
+                                shape: BoxShape.circle,
+                                color: Colors.black,
+                                border: Border.all(
+                                  color: kGreen.withOpacity(0.5),
+                                ),
+                              ),
+                              child: const Icon(
+                                Icons.video_collection_outlined,
+                                color: kGreen,
+                                size: 20,
+                              ),
                             ),
                             const SizedBox(width: 14),
                             Expanded(
                               child: Column(
                                 crossAxisAlignment: CrossAxisAlignment.start,
                                 children: [
-                                  Text('FILE NAME',
-                                    style: TextStyle(color: Colors.white.withOpacity(0.5), fontSize: 9.5, letterSpacing: 1)),
+                                  Text(
+                                    'FILE NAME',
+                                    style: TextStyle(
+                                      color: Colors.white.withOpacity(0.5),
+                                      fontSize: 9.5,
+                                      letterSpacing: 1,
+                                    ),
+                                  ),
                                   const SizedBox(height: 2),
-                                  Text(_videoTitle,
-                                    style: const TextStyle(color: Colors.white, fontSize: 13.5, fontWeight: FontWeight.bold),
-                                    maxLines: 1, overflow: TextOverflow.ellipsis),
+                                  Text(
+                                    _videoTitle,
+                                    style: const TextStyle(
+                                      color: Colors.white,
+                                      fontSize: 13.5,
+                                      fontWeight: FontWeight.bold,
+                                    ),
+                                    maxLines: 1,
+                                    overflow: TextOverflow.ellipsis,
+                                  ),
                                 ],
                               ),
                             ),
                           ],
                         ),
-                        Padding(padding: const EdgeInsets.symmetric(vertical: 8), child: Divider(color: kGreen.withOpacity(0.15))),
+                        Padding(
+                          padding: const EdgeInsets.symmetric(vertical: 8),
+                          child: Divider(color: kGreen.withOpacity(0.15)),
+                        ),
                         Row(
                           children: [
                             Container(
                               padding: const EdgeInsets.all(10),
-                              decoration: BoxDecoration(shape: BoxShape.circle, color: Colors.black,
-                                border: Border.all(color: kGreen.withOpacity(0.5))),
-                              child: const Icon(Icons.person_outline, color: kGreen, size: 20),
+                              decoration: BoxDecoration(
+                                shape: BoxShape.circle,
+                                color: Colors.black,
+                                border: Border.all(
+                                  color: kGreen.withOpacity(0.5),
+                                ),
+                              ),
+                              child: const Icon(
+                                Icons.person_outline,
+                                color: kGreen,
+                                size: 20,
+                              ),
                             ),
                             const SizedBox(width: 14),
                             Expanded(
                               child: Column(
                                 crossAxisAlignment: CrossAxisAlignment.start,
                                 children: [
-                                  Text('UPLOADER',
-                                    style: TextStyle(color: Colors.white.withOpacity(0.5), fontSize: 9.5, letterSpacing: 1)),
+                                  Text(
+                                    'UPLOADER',
+                                    style: TextStyle(
+                                      color: Colors.white.withOpacity(0.5),
+                                      fontSize: 9.5,
+                                      letterSpacing: 1,
+                                    ),
+                                  ),
                                   const SizedBox(height: 2),
-                                  Text(_uploaderName,
-                                    style: const TextStyle(color: kGreen, fontSize: 13.5, fontWeight: FontWeight.bold)),
+                                  Text(
+                                    _uploaderName,
+                                    style: const TextStyle(
+                                      color: kGreen,
+                                      fontSize: 13.5,
+                                      fontWeight: FontWeight.bold,
+                                    ),
+                                  ),
                                 ],
                               ),
                             ),
@@ -2855,32 +4584,44 @@ class _StreamPreviewScreenState extends State<StreamPreviewScreen> with SingleTi
                     ),
                   ),
                   const SizedBox(height: 16),
-
                   AnimatedBuilder(
                     animation: _pulseAnimation,
                     builder: (context, child) => Transform.scale(
                       scale: _canProceed ? _pulseAnimation.value : 1.0,
                       child: SizedBox(
-                        width: double.infinity, height: 60,
+                        width: double.infinity,
+                        height: 60,
                         child: ElevatedButton(
                           onPressed: _canProceed ? _launchNativePlayer : null,
                           style: ElevatedButton.styleFrom(
-                            backgroundColor: _canProceed ? kGreen : Colors.grey[850],
+                            backgroundColor:
+                                _canProceed ? kGreen : Colors.grey[850],
                             foregroundColor: Colors.black,
-                            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
+                            shape: RoundedRectangleBorder(
+                              borderRadius: BorderRadius.circular(14),
+                            ),
                             elevation: _canProceed ? 15 : 0,
                           ),
                           child: Row(
                             mainAxisAlignment: MainAxisAlignment.center,
                             children: [
-                              Icon(Icons.play_arrow_rounded,
-                                color: _canProceed ? Colors.black : Colors.white38, size: 28),
+                              Icon(
+                                Icons.play_arrow_rounded,
+                                color: _canProceed
+                                    ? Colors.black
+                                    : Colors.white38,
+                                size: 28,
+                              ),
                               const SizedBox(width: 8),
                               Text(
                                 _canProceed ? 'OPEN PLAYER NOW' : 'PLEASE WAIT...',
                                 style: TextStyle(
-                                  color: _canProceed ? Colors.black : Colors.white38,
-                                  fontSize: 14, fontWeight: FontWeight.w900, letterSpacing: 1.5,
+                                  color: _canProceed
+                                      ? Colors.black
+                                      : Colors.white38,
+                                  fontSize: 14,
+                                  fontWeight: FontWeight.w900,
+                                  letterSpacing: 1.5,
                                 ),
                               ),
                             ],
@@ -2890,38 +4631,111 @@ class _StreamPreviewScreenState extends State<StreamPreviewScreen> with SingleTi
                     ),
                   ),
                   const SizedBox(height: 14),
-
                   SizedBox(
-                    width: double.infinity, height: 52,
+                    width: double.infinity,
+                    height: 52,
                     child: OutlinedButton(
                       onPressed: _shareStreamDirect,
                       style: OutlinedButton.styleFrom(
                         side: const BorderSide(color: kGreen, width: 1.5),
-                        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(26)),
+                        shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(26),
+                        ),
                       ),
                       child: Row(
                         mainAxisAlignment: MainAxisAlignment.center,
                         children: const [
                           Icon(Icons.share, color: kGreen, size: 20),
                           SizedBox(width: 10),
-                          Text('SHARE VIDEO',
-                            style: TextStyle(color: kGreen, fontSize: 12, fontWeight: FontWeight.bold, letterSpacing: 1.5)),
+                          Text(
+                            'SHARE VIDEO',
+                            style: TextStyle(
+                              color: kGreen,
+                              fontSize: 12,
+                              fontWeight: FontWeight.bold,
+                              letterSpacing: 1.5,
+                            ),
+                          ),
                         ],
                       ),
                     ),
                   ),
                   const SizedBox(height: 14),
-
                   Row(
                     mainAxisAlignment: MainAxisAlignment.center,
                     children: [
                       const Icon(Icons.lock_outline, color: kGreen, size: 14),
                       const SizedBox(width: 6),
-                      Text('SECURE STREAM PIPELINE ACTIVE',
-                        style: TextStyle(color: kGreen.withOpacity(0.75), fontSize: 9.5, letterSpacing: 1.2)),
+                      Text(
+                        'SECURE STREAM PIPELINE ACTIVE',
+                        style: TextStyle(
+                          color: kGreen.withOpacity(0.75),
+                          fontSize: 9.5,
+                          letterSpacing: 1.2,
+                        ),
+                      ),
                     ],
                   ),
                   const SizedBox(height: 14),
+                  // AD Slot
+                  Container(
+                    padding: const EdgeInsets.all(12),
+                    decoration: BoxDecoration(
+                      color: const Color(0xFF031408),
+                      borderRadius: BorderRadius.circular(16),
+                      border: Border.all(color: kGreen.withOpacity(0.4)),
+                    ),
+                    child: Row(
+                      children: [
+                        Container(
+                          padding: const EdgeInsets.symmetric(
+                            horizontal: 5,
+                            vertical: 2,
+                          ),
+                          decoration: BoxDecoration(
+                            color: kGreen,
+                            borderRadius: BorderRadius.circular(3),
+                          ),
+                          child: const Text(
+                            'AD',
+                            style: TextStyle(
+                              color: Colors.black,
+                              fontSize: 9,
+                              fontWeight: FontWeight.bold,
+                            ),
+                          ),
+                        ),
+                        const SizedBox(width: 10),
+                        Expanded(
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              const Text(
+                                'YOUR AD HERE',
+                                style: TextStyle(
+                                  color: Colors.white,
+                                  fontSize: 13,
+                                  fontWeight: FontWeight.bold,
+                                ),
+                              ),
+                              Text(
+                                'Grow Your Brand with Us',
+                                style: TextStyle(
+                                  color: Colors.white.withOpacity(0.6),
+                                  fontSize: 10,
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
+                        const Icon(
+                          Icons.campaign_outlined,
+                          color: kGreen,
+                          size: 28,
+                        ),
+                      ],
+                    ),
+                  ),
                 ],
               ),
             ),
@@ -2933,7 +4747,8 @@ class _StreamPreviewScreenState extends State<StreamPreviewScreen> with SingleTi
 }
 
 // ═══════════════════════════════════════════════════════
-// NATIVE VIDEO PLAYER — Real-time stats
+// NATIVE VIDEO PLAYER — Full Upgrade
+// Volume (Right Swipe) · Brightness (Left Swipe) · Quality · PiP
 // ═══════════════════════════════════════════════════════
 class NativeVideoPlayerScreen extends StatefulWidget {
   final String videoUrl;
@@ -2952,7 +4767,8 @@ class NativeVideoPlayerScreen extends StatefulWidget {
   });
 
   @override
-  State<NativeVideoPlayerScreen> createState() => _NativeVideoPlayerScreenState();
+  State<NativeVideoPlayerScreen> createState() =>
+      _NativeVideoPlayerScreenState();
 }
 
 class _NativeVideoPlayerScreenState extends State<NativeVideoPlayerScreen> {
@@ -2971,12 +4787,25 @@ class _NativeVideoPlayerScreenState extends State<NativeVideoPlayerScreen> {
   final List<double> _speeds = [0.5, 0.75, 1.0, 1.25, 1.5, 2.0];
 
   String _selectedQuality = 'Auto (1080p)';
-  final List<String> _qualities = ['Auto (1080p)', '1080p FHD', '720p HD', '480p SD', '360p Low'];
+  final List<String> _qualities = [
+    'Auto (1080p)',
+    '1080p FHD',
+    '720p HD',
+    '480p SD',
+    '360p Low'
+  ];
 
   bool _isDownloading = false;
   double _downloadProgress = 0.0;
 
-  // REAL-TIME STATS
+  // Volume & Brightness (new)
+  double _volume = 1.0;
+  double _brightness = 1.0;
+  double _horizontalDragStart = 0;
+  double _verticalDragStartValue = 0;
+  String _activeDragMode = ''; // 'volume', 'brightness', 'seek'
+
+  // Real-time Stats
   Map<String, int> _stats = {'views': 0, 'likes': 0, 'unlikes': 0, 'shares': 0};
   bool _isLiked = false;
   bool _isUnliked = false;
@@ -2989,8 +4818,14 @@ class _NativeVideoPlayerScreenState extends State<NativeVideoPlayerScreen> {
 
   bool _viewReported = false;
   Timer? _viewReportTimer;
+  int _watchedSeconds = 0;
+  Timer? _watchTimer;
 
-  // ═══════════ VIEW REPORT ═══════════
+  // Related videos
+  List<Map<String, dynamic>> _relatedVideos = [];
+  bool _relatedLoading = true;
+
+  // ═══════════ VIEW REPORT (only after 10 sec played) ═══════════
   Future<void> _reportViewToBackend() async {
     if (_viewReported) return;
     _viewReported = true;
@@ -3004,15 +4839,17 @@ class _NativeVideoPlayerScreenState extends State<NativeVideoPlayerScreen> {
           ? '$kBackendBaseUrl/api/view/${widget.videoId}?t=$token'
           : '$kBackendBaseUrl/api/view/${widget.videoId}';
 
-      final res = await http.post(
-        Uri.parse(url),
-        headers: {'Content-Type': 'application/json'},
-        body: jsonEncode({
-          'playedSeconds': 10,
-          'deviceId': deviceId,
-          'token': token,
-        }),
-      ).timeout(const Duration(seconds: 10));
+      final res = await http
+          .post(
+            Uri.parse(url),
+            headers: {'Content-Type': 'application/json'},
+            body: jsonEncode({
+              'playedSeconds': _watchedSeconds,
+              'deviceId': deviceId,
+              'token': token,
+            }),
+          )
+          .timeout(const Duration(seconds: 10));
 
       debugPrint('View report: ${res.statusCode} ${res.body}');
     } catch (e) {
@@ -3020,12 +4857,16 @@ class _NativeVideoPlayerScreenState extends State<NativeVideoPlayerScreen> {
     }
   }
 
-  void _startViewTrackingTimer() {
-    _viewReportTimer?.cancel();
-    _viewReportTimer = Timer(const Duration(seconds: 10), () async {
+  void _startWatchTracking() {
+    _watchTimer?.cancel();
+    _watchTimer = Timer.periodic(const Duration(seconds: 1), (t) {
       if (!mounted) return;
       if (_controller.value.isInitialized && _controller.value.isPlaying) {
-        await _reportViewToBackend();
+        _watchedSeconds++;
+        // Report view only after 10 seconds of actual playback
+        if (_watchedSeconds == 10 && !_viewReported) {
+          _reportViewToBackend();
+        }
       }
     });
   }
@@ -3042,16 +4883,39 @@ class _NativeVideoPlayerScreenState extends State<NativeVideoPlayerScreen> {
       if (mounted) setState(() => _isLiked = liked);
     });
 
-    _unlikeSub = FirebaseService.isUnlikedStream(widget.videoId, uid).listen((unliked) {
+    _unlikeSub =
+        FirebaseService.isUnlikedStream(widget.videoId, uid).listen((unliked) {
       if (mounted) setState(() => _isUnliked = unliked);
     });
   }
 
   Future<void> _fetchOwner() async {
     try {
-      final snap = await FirebaseDatabase.instance.ref('links/${widget.videoId}/ownerUid').once();
+      final snap = await FirebaseDatabase.instance
+          .ref('links/${widget.videoId}/ownerUid')
+          .once();
       _ownerUid = snap.snapshot.value?.toString() ?? '';
     } catch (_) {}
+  }
+
+  Future<void> _loadRelatedVideos() async {
+    try {
+      final recentIds = await WatchHistory.getRecentIds(limit: 5);
+      final related = await FirebaseService.getRelatedVideos(
+        currentVideoId: widget.videoId,
+        currentOwnerUid: _ownerUid,
+        recentIds: recentIds,
+        limit: 10,
+      );
+      if (mounted) {
+        setState(() {
+          _relatedVideos = related;
+          _relatedLoading = false;
+        });
+      }
+    } catch (_) {
+      if (mounted) setState(() => _relatedLoading = false);
+    }
   }
 
   @override
@@ -3060,7 +4924,7 @@ class _NativeVideoPlayerScreenState extends State<NativeVideoPlayerScreen> {
     _loadUserPrefs();
     _initVideo();
     _startStatsListeners();
-    _fetchOwner();
+    _fetchOwner().then((_) => _loadRelatedVideos());
   }
 
   Future<void> _loadUserPrefs() async {
@@ -3074,8 +4938,12 @@ class _NativeVideoPlayerScreenState extends State<NativeVideoPlayerScreen> {
 
   Future<void> _initVideo() async {
     final headers = {
-      'User-Agent': 'MayaJaalApp/1.0',
+      'User-Agent':
+          'Mozilla/5.0 (Linux; Android 10) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Mobile Safari/537.36',
       'Referer': 'https://www.mayajaal.online/',
+      'Accept': '*/*',
+      'Accept-Encoding': 'identity',
+      'Connection': 'keep-alive',
     };
 
     _controller = VideoPlayerController.networkUrl(
@@ -3087,13 +4955,14 @@ class _NativeVideoPlayerScreenState extends State<NativeVideoPlayerScreen> {
       await _controller.initialize();
       _controller.play();
       _controller.setPlaybackSpeed(_playbackSpeed);
+      _controller.setVolume(_volume);
 
       _controller.addListener(() {
         if (mounted) setState(() {});
       });
       setState(() => _isInitialized = true);
       _resetControlTimer();
-      _startViewTrackingTimer();
+      _startWatchTracking();
     } catch (e) {
       debugPrint("Player Init Error: $e");
       setState(() => _hasError = true);
@@ -3108,6 +4977,7 @@ class _NativeVideoPlayerScreenState extends State<NativeVideoPlayerScreen> {
     _controlsTimer?.cancel();
     _feedbackTimer?.cancel();
     _viewReportTimer?.cancel();
+    _watchTimer?.cancel();
     _controller.dispose();
     SystemChrome.setPreferredOrientations([DeviceOrientation.portraitUp]);
     super.dispose();
@@ -3130,7 +5000,7 @@ class _NativeVideoPlayerScreenState extends State<NativeVideoPlayerScreen> {
   void _showFeedback(String text) {
     _feedbackTimer?.cancel();
     setState(() => _flashFeedback = text);
-    _feedbackTimer = Timer(const Duration(milliseconds: 700), () {
+    _feedbackTimer = Timer(const Duration(milliseconds: 800), () {
       if (mounted) setState(() => _flashFeedback = '');
     });
   }
@@ -3141,7 +5011,10 @@ class _NativeVideoPlayerScreenState extends State<NativeVideoPlayerScreen> {
 
     if (_isFullscreen) {
       if (isWide) {
-        SystemChrome.setPreferredOrientations([DeviceOrientation.landscapeLeft, DeviceOrientation.landscapeRight]);
+        SystemChrome.setPreferredOrientations([
+          DeviceOrientation.landscapeLeft,
+          DeviceOrientation.landscapeRight,
+        ]);
       } else {
         SystemChrome.setPreferredOrientations([DeviceOrientation.portraitUp]);
       }
@@ -3169,9 +5042,124 @@ class _NativeVideoPlayerScreenState extends State<NativeVideoPlayerScreen> {
     await FirebaseService.toggleDislike(widget.videoId, uid);
   }
 
+  // ═══════════ PROFESSIONAL SHARE SHEET ═══════════
   Future<void> _shareVideoLink() async {
     await FirebaseService.recordShare(widget.videoId);
-    Share.share('🎬 Watch this video on MayaJaal:\n${widget.sourcePageUrl}');
+    if (!mounted) return;
+
+    showModalBottomSheet(
+      context: context,
+      backgroundColor: const Color(0xFF021206),
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
+      ),
+      builder: (c) => Padding(
+        padding: const EdgeInsets.all(20),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Container(
+              width: 40,
+              height: 4,
+              decoration: BoxDecoration(
+                color: kGreen.withOpacity(0.4),
+                borderRadius: BorderRadius.circular(2),
+              ),
+            ),
+            const SizedBox(height: 16),
+            const Text(
+              'SHARE VIDEO',
+              style: TextStyle(
+                color: kGreen,
+                fontSize: 16,
+                fontWeight: FontWeight.bold,
+                letterSpacing: 2,
+              ),
+            ),
+            const SizedBox(height: 6),
+            Text(
+              widget.title,
+              style: const TextStyle(color: Colors.white70, fontSize: 12),
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+            ),
+            const SizedBox(height: 20),
+            Row(
+              mainAxisAlignment: MainAxisAlignment.spaceEvenly,
+              children: [
+                _shareOption(
+                  Icons.link,
+                  'Copy Link',
+                  kNeonCyan,
+                  () async {
+                    await Clipboard.setData(
+                      ClipboardData(text: widget.sourcePageUrl),
+                    );
+                    if (c.mounted) Navigator.pop(c);
+                    _showFeedback('🔗 Link Copied!');
+                  },
+                ),
+                _shareOption(
+                  Icons.share,
+                  'Share Now',
+                  kGreen,
+                  () {
+                    Navigator.pop(c);
+                    Share.share(
+                      '🎬 Watch "${widget.title}" on MayaJaal:\n${widget.sourcePageUrl}',
+                    );
+                  },
+                ),
+                _shareOption(
+                  Icons.send_rounded,
+                  'Telegram',
+                  const Color(0xFF229ED9),
+                  () {
+                    Navigator.pop(c);
+                    Share.share(
+                      '🎬 Watch "${widget.title}" on MayaJaal:\n${widget.sourcePageUrl}',
+                    );
+                  },
+                ),
+              ],
+            ),
+            const SizedBox(height: 20),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _shareOption(
+    IconData icon,
+    String label,
+    Color color,
+    VoidCallback onTap,
+  ) {
+    return InkWell(
+      onTap: onTap,
+      borderRadius: BorderRadius.circular(12),
+      child: Column(
+        children: [
+          Container(
+            width: 56,
+            height: 56,
+            decoration: BoxDecoration(
+              color: Colors.black,
+              shape: BoxShape.circle,
+              border: Border.all(color: color, width: 1.5),
+              boxShadow: [BoxShadow(color: color.withOpacity(0.4), blurRadius: 12)],
+            ),
+            child: Icon(icon, color: color, size: 26),
+          ),
+          const SizedBox(height: 8),
+          Text(
+            label,
+            style: const TextStyle(color: Colors.white, fontSize: 11),
+          ),
+        ],
+      ),
+    );
   }
 
   Future<void> _startInAppDownload() async {
@@ -3185,6 +5173,7 @@ class _NativeVideoPlayerScreenState extends State<NativeVideoPlayerScreen> {
     try {
       final client = HttpClient();
       final request = await client.getUrl(Uri.parse(widget.videoUrl));
+      request.headers.set('User-Agent', 'Mozilla/5.0');
       final response = await request.close();
 
       final totalBytes = response.contentLength;
@@ -3198,8 +5187,10 @@ class _NativeVideoPlayerScreenState extends State<NativeVideoPlayerScreen> {
         baseDir = Directory.systemTemp;
       }
 
-      final safeName = widget.title.replaceAll(RegExp(r'[^a-zA-Z0-9._-]'), '_');
-      final savePath = '${baseDir.path}/${safeName}_${DateTime.now().millisecondsSinceEpoch}.mp4';
+      final safeName =
+          widget.title.replaceAll(RegExp(r'[^a-zA-Z0-9._-]'), '_');
+      final savePath =
+          '${baseDir.path}/${safeName}_${DateTime.now().millisecondsSinceEpoch}.mp4';
       final file = File(savePath);
       final sink = file.openWrite();
 
@@ -3219,13 +5210,21 @@ class _NativeVideoPlayerScreenState extends State<NativeVideoPlayerScreen> {
       if (mounted) {
         setState(() => _isDownloading = false);
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(backgroundColor: kCardBg, content: Text('✅ Video saved to:\n$savePath', style: const TextStyle(color: kGreen, fontSize: 11))),
+          SnackBar(
+            backgroundColor: kCardBg,
+            content: Text(
+              '✅ Video saved to:\n$savePath',
+              style: const TextStyle(color: kGreen, fontSize: 11),
+            ),
+          ),
         );
       }
     } catch (e) {
       if (mounted) {
         setState(() => _isDownloading = false);
-        ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Download status: $e')));
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Download status: $e')),
+        );
       }
     }
   }
@@ -3237,7 +5236,12 @@ class _NativeVideoPlayerScreenState extends State<NativeVideoPlayerScreen> {
       prefs.setBool('saved_${widget.videoId}', _isSaved);
     });
     ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(content: Text(_isSaved ? 'Video Saved to Favorites' : 'Removed from Favorites'), duration: const Duration(seconds: 1)),
+      SnackBar(
+        content: Text(
+          _isSaved ? 'Video Saved to Favorites' : 'Removed from Favorites',
+        ),
+        duration: const Duration(seconds: 1),
+      ),
     );
   }
 
@@ -3246,12 +5250,22 @@ class _NativeVideoPlayerScreenState extends State<NativeVideoPlayerScreen> {
       context: context,
       builder: (c) => AlertDialog(
         backgroundColor: const Color(0xFF031408),
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16), side: const BorderSide(color: kGreen, width: 1.5)),
+        shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.circular(16),
+          side: const BorderSide(color: kGreen, width: 1.5),
+        ),
         title: Row(
           children: const [
             Icon(Icons.hd, color: kGreen, size: 24),
             SizedBox(width: 8),
-            Text('SELECT QUALITY', style: TextStyle(color: kGreen, fontSize: 15, fontWeight: FontWeight.bold)),
+            Text(
+              'SELECT QUALITY',
+              style: TextStyle(
+                color: kGreen,
+                fontSize: 15,
+                fontWeight: FontWeight.bold,
+              ),
+            ),
           ],
         ),
         content: Column(
@@ -3261,11 +5275,19 @@ class _NativeVideoPlayerScreenState extends State<NativeVideoPlayerScreen> {
               value: q,
               groupValue: _selectedQuality,
               activeColor: kGreen,
-              title: Text(q, style: const TextStyle(color: Colors.white, fontSize: 13, fontWeight: FontWeight.w600)),
+              title: Text(
+                q,
+                style: const TextStyle(
+                  color: Colors.white,
+                  fontSize: 13,
+                  fontWeight: FontWeight.w600,
+                ),
+              ),
               onChanged: (val) {
                 if (val != null) {
                   setState(() => _selectedQuality = val);
                   Navigator.pop(c);
+                  _showFeedback('Quality: $val');
                 }
               },
             );
@@ -3280,8 +5302,14 @@ class _NativeVideoPlayerScreenState extends State<NativeVideoPlayerScreen> {
       context: context,
       builder: (c) => AlertDialog(
         backgroundColor: const Color(0xFF031408),
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16), side: const BorderSide(color: kGreen, width: 1.5)),
-        title: const Text('PLAYBACK SPEED', style: TextStyle(color: kGreen, fontSize: 14)),
+        shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.circular(16),
+          side: const BorderSide(color: kGreen, width: 1.5),
+        ),
+        title: const Text(
+          'PLAYBACK SPEED',
+          style: TextStyle(color: kGreen, fontSize: 14),
+        ),
         content: Column(
           mainAxisSize: MainAxisSize.min,
           children: _speeds.map((s) {
@@ -3289,7 +5317,10 @@ class _NativeVideoPlayerScreenState extends State<NativeVideoPlayerScreen> {
               value: s,
               groupValue: _playbackSpeed,
               activeColor: kGreen,
-              title: Text('${s}x', style: const TextStyle(color: Colors.white, fontSize: 13)),
+              title: Text(
+                '${s}x',
+                style: const TextStyle(color: Colors.white, fontSize: 13),
+              ),
               onChanged: (val) {
                 if (val != null) {
                   setState(() => _playbackSpeed = val);
@@ -3325,6 +5356,42 @@ class _NativeVideoPlayerScreenState extends State<NativeVideoPlayerScreen> {
     );
   }
 
+  // ═══════════ GESTURE HANDLERS ═══════════
+  void _onVerticalDragStart(DragStartDetails details, Size size) {
+    _horizontalDragStart = details.localPosition.dx;
+    if (details.localPosition.dx > size.width / 2) {
+      _activeDragMode = 'volume';
+      _verticalDragStartValue = _volume;
+    } else {
+      _activeDragMode = 'brightness';
+      _verticalDragStartValue = _brightness;
+    }
+  }
+
+  void _onVerticalDragUpdate(DragUpdateDetails details, Size size) {
+    final dy = details.localPosition.dy;
+    final delta = (_horizontalDragStart == 0)
+        ? 0.0
+        : -((dy - size.height / 2) / (size.height / 2)) * 0.01;
+
+    if (_activeDragMode == 'volume') {
+      setState(() {
+        _volume = (_verticalDragStartValue + delta).clamp(0.0, 1.0);
+      });
+      _controller.setVolume(_volume);
+      _showFeedback('🔊 ${(_volume * 100).toInt()}%');
+    } else if (_activeDragMode == 'brightness') {
+      setState(() {
+        _brightness = (_verticalDragStartValue + delta).clamp(0.2, 1.0);
+      });
+      _showFeedback('☀️ ${(_brightness * 100).toInt()}%');
+    }
+  }
+
+  void _onVerticalDragEnd(DragEndDetails details) {
+    _activeDragMode = '';
+  }
+
   @override
   Widget build(BuildContext context) {
     return Scaffold(
@@ -3338,7 +5405,11 @@ class _NativeVideoPlayerScreenState extends State<NativeVideoPlayerScreen> {
                 child: Row(
                   children: [
                     IconButton(
-                      icon: const Icon(Icons.arrow_back_ios_new, color: kGreen, size: 22),
+                      icon: const Icon(
+                        Icons.arrow_back_ios_new,
+                        color: kGreen,
+                        size: 22,
+                      ),
                       onPressed: () => Navigator.pop(context),
                     ),
                     Expanded(
@@ -3349,18 +5420,44 @@ class _NativeVideoPlayerScreenState extends State<NativeVideoPlayerScreen> {
                             mainAxisAlignment: MainAxisAlignment.center,
                             children: [
                               Container(
-                                width: 22, height: 22,
-                                decoration: BoxDecoration(shape: BoxShape.circle, border: Border.all(color: kGreen, width: 1.5)),
-                                child: const Center(child: Icon(Icons.change_history, color: kGreen, size: 14)),
+                                width: 22,
+                                height: 22,
+                                decoration: BoxDecoration(
+                                  shape: BoxShape.circle,
+                                  border: Border.all(color: kGreen, width: 1.5),
+                                ),
+                                child: const Center(
+                                  child: Icon(
+                                    Icons.change_history,
+                                    color: kGreen,
+                                    size: 14,
+                                  ),
+                                ),
                               ),
                               const SizedBox(width: 8),
-                              const Text('MAYA JAAL',
-                                style: TextStyle(color: kGreen, fontSize: 19, fontWeight: FontWeight.w900, letterSpacing: 2,
-                                  shadows: [Shadow(color: kGreen, blurRadius: 10)])),
+                              const Text(
+                                'MAYA JAAL',
+                                style: TextStyle(
+                                  color: kGreen,
+                                  fontSize: 19,
+                                  fontWeight: FontWeight.w900,
+                                  letterSpacing: 2,
+                                  shadows: [
+                                    Shadow(color: kGreen, blurRadius: 10),
+                                  ],
+                                ),
+                              ),
                             ],
                           ),
-                          Text('— STREAM BEYOND LIMITS —',
-                            style: TextStyle(color: kGreen.withOpacity(0.8), fontSize: 8.5, letterSpacing: 2, fontWeight: FontWeight.bold)),
+                          Text(
+                            '— STREAM BEYOND LIMITS —',
+                            style: TextStyle(
+                              color: kGreen.withOpacity(0.8),
+                              fontSize: 8.5,
+                              letterSpacing: 2,
+                              fontWeight: FontWeight.bold,
+                            ),
+                          ),
                         ],
                       ),
                     ),
@@ -3374,14 +5471,20 @@ class _NativeVideoPlayerScreenState extends State<NativeVideoPlayerScreen> {
             Expanded(
               flex: _isFullscreen ? 1 : 0,
               child: Padding(
-                padding: EdgeInsets.symmetric(horizontal: _isFullscreen ? 0 : 12, vertical: 4),
+                padding: EdgeInsets.symmetric(
+                  horizontal: _isFullscreen ? 0 : 12,
+                  vertical: 4,
+                ),
                 child: Container(
                   width: double.infinity,
                   height: _isFullscreen ? double.infinity : 225,
                   decoration: BoxDecoration(
                     color: Colors.black,
                     borderRadius: BorderRadius.circular(_isFullscreen ? 0 : 16),
-                    border: Border.all(color: kGreen.withOpacity(0.55), width: 1.5),
+                    border: Border.all(
+                      color: kGreen.withOpacity(0.55),
+                      width: 1.5,
+                    ),
                   ),
                   child: ClipRRect(
                     borderRadius: BorderRadius.circular(_isFullscreen ? 0 : 15),
@@ -3390,114 +5493,275 @@ class _NativeVideoPlayerScreenState extends State<NativeVideoPlayerScreen> {
                             child: Column(
                               mainAxisAlignment: MainAxisAlignment.center,
                               children: [
-                                const Icon(Icons.error_outline, color: Colors.redAccent, size: 45),
+                                const Icon(
+                                  Icons.error_outline,
+                                  color: Colors.redAccent,
+                                  size: 45,
+                                ),
                                 const SizedBox(height: 10),
-                                const Text('Stream Connection Error', style: TextStyle(color: Colors.redAccent)),
-                                TextButton(onPressed: _initVideo, child: const Text('RETRY', style: TextStyle(color: kGreen))),
+                                const Text(
+                                  'Stream Connection Error',
+                                  style: TextStyle(color: Colors.redAccent),
+                                ),
+                                TextButton(
+                                  onPressed: _initVideo,
+                                  child: const Text(
+                                    'RETRY',
+                                    style: TextStyle(color: kGreen),
+                                  ),
+                                ),
                               ],
                             ),
                           )
                         : !_isInitialized
-                            ? const Center(child: CircularProgressIndicator(color: kGreen))
-                            : GestureDetector(
-                                onTap: _onScreenTapped,
-                                behavior: HitTestBehavior.opaque,
-                                child: Stack(
-                                  alignment: Alignment.center,
-                                  children: [
-                                    _buildScaledVideo(),
-                                    Positioned(
-                                      top: 10, left: 10,
-                                      child: GestureDetector(
-                                        onTap: _showQualityDialog,
-                                        child: Container(
-                                          padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 3),
-                                          decoration: BoxDecoration(
-                                            color: Colors.black.withOpacity(0.7),
-                                            borderRadius: BorderRadius.circular(6),
-                                            border: Border.all(color: kGreen, width: 1),
-                                          ),
-                                          child: const Column(
-                                            mainAxisSize: MainAxisSize.min,
-                                            children: [
-                                              Text('HD', style: TextStyle(color: kGreen, fontSize: 10, fontWeight: FontWeight.bold)),
-                                              Text('1080p', style: TextStyle(color: kGreen, fontSize: 7, fontWeight: FontWeight.bold)),
-                                            ],
-                                          ),
-                                        ),
-                                      ),
-                                    ),
-                                    if (_showControls)
-                                      GestureDetector(
-                                        onTap: () {
-                                          setState(() {
-                                            _controller.value.isPlaying ? _controller.pause() : _controller.play();
-                                          });
-                                          _resetControlTimer();
-                                        },
-                                        child: Container(
-                                          width: 58, height: 58,
-                                          decoration: BoxDecoration(
-                                            color: Colors.black.withOpacity(0.55),
-                                            shape: BoxShape.circle,
-                                            border: Border.all(color: Colors.white, width: 2),
-                                          ),
-                                          child: Icon(
-                                            _controller.value.isPlaying ? Icons.pause : Icons.play_arrow,
-                                            color: Colors.white, size: 34,
-                                          ),
-                                        ),
-                                      ),
-                                    if (_flashFeedback.isNotEmpty)
-                                      Center(
-                                        child: Container(
-                                          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
-                                          decoration: BoxDecoration(color: Colors.black.withOpacity(0.8), borderRadius: BorderRadius.circular(10)),
-                                          child: Text(_flashFeedback, style: const TextStyle(color: kGreen, fontWeight: FontWeight.bold, fontSize: 20)),
-                                        ),
-                                      ),
-                                    Positioned(
-                                      bottom: 6, left: 10, right: 10,
-                                      child: Row(
-                                        children: [
-                                          Text(_formatDuration(_controller.value.position),
-                                            style: const TextStyle(color: Colors.white, fontSize: 10, fontFamily: 'monospace')),
-                                          const SizedBox(width: 6),
-                                          Expanded(
-                                            child: SliderTheme(
-                                              data: SliderTheme.of(context).copyWith(
-                                                trackHeight: 2.5,
-                                                activeTrackColor: kGreen,
-                                                inactiveTrackColor: Colors.white30,
-                                                thumbColor: kGreen,
-                                                thumbShape: const RoundSliderThumbShape(enabledThumbRadius: 4),
+                            ? const ProfessionalLoader(
+                                message: 'LOADING PLAYER...',
+                              )
+                            : LayoutBuilder(
+                                builder: (context, constraints) {
+                                  return GestureDetector(
+                                    onTap: _onScreenTapped,
+                                    onVerticalDragStart: (d) =>
+                                        _onVerticalDragStart(d, constraints.biggest),
+                                    onVerticalDragUpdate: (d) =>
+                                        _onVerticalDragUpdate(d, constraints.biggest),
+                                    onVerticalDragEnd: _onVerticalDragEnd,
+                                    behavior: HitTestBehavior.opaque,
+                                    child: Stack(
+                                      alignment: Alignment.center,
+                                      children: [
+                                        _buildScaledVideo(),
+                                        // Quality Badge
+                                        Positioned(
+                                          top: 10,
+                                          left: 10,
+                                          child: GestureDetector(
+                                            onTap: _showQualityDialog,
+                                            child: Container(
+                                              padding:
+                                                  const EdgeInsets.symmetric(
+                                                horizontal: 7,
+                                                vertical: 3,
                                               ),
-                                              child: Slider(
-                                                value: _controller.value.position.inSeconds.toDouble().clamp(
-                                                      0.0,
-                                                      _controller.value.duration.inSeconds.toDouble() <= 0 ? 1.0 : _controller.value.duration.inSeconds.toDouble(),
+                                              decoration: BoxDecoration(
+                                                color: Colors.black
+                                                    .withOpacity(0.7),
+                                                borderRadius:
+                                                    BorderRadius.circular(6),
+                                                border: Border.all(
+                                                  color: kGreen,
+                                                  width: 1,
+                                                ),
+                                              ),
+                                              child: const Column(
+                                                mainAxisSize: MainAxisSize.min,
+                                                children: [
+                                                  Text(
+                                                    'HD',
+                                                    style: TextStyle(
+                                                      color: kGreen,
+                                                      fontSize: 10,
+                                                      fontWeight:
+                                                          FontWeight.bold,
                                                     ),
-                                                min: 0.0,
-                                                max: _controller.value.duration.inSeconds.toDouble() > 0 ? _controller.value.duration.inSeconds.toDouble() : 1.0,
-                                                onChanged: (val) {
-                                                  _controller.seekTo(Duration(seconds: val.toInt()));
-                                                },
+                                                  ),
+                                                  Text(
+                                                    '1080p',
+                                                    style: TextStyle(
+                                                      color: kGreen,
+                                                      fontSize: 7,
+                                                      fontWeight:
+                                                          FontWeight.bold,
+                                                    ),
+                                                  ),
+                                                ],
                                               ),
                                             ),
                                           ),
-                                          const SizedBox(width: 6),
-                                          Text(_formatDuration(_controller.value.duration),
-                                            style: const TextStyle(color: Colors.white, fontSize: 10, fontFamily: 'monospace')),
-                                          const SizedBox(width: 8),
-                                          GestureDetector(
-                                            onTap: _toggleSmartFullscreen,
-                                            child: Icon(_isFullscreen ? Icons.fullscreen_exit : Icons.fullscreen, color: Colors.white, size: 20),
+                                        ),
+                                        // Speed Badge
+                                        Positioned(
+                                          top: 10,
+                                          right: 10,
+                                          child: GestureDetector(
+                                            onTap: _showSpeedDialog,
+                                            child: Container(
+                                              padding:
+                                                  const EdgeInsets.symmetric(
+                                                horizontal: 7,
+                                                vertical: 4,
+                                              ),
+                                              decoration: BoxDecoration(
+                                                color: Colors.black
+                                                    .withOpacity(0.7),
+                                                borderRadius:
+                                                    BorderRadius.circular(6),
+                                                border: Border.all(
+                                                  color: kNeonCyan,
+                                                  width: 1,
+                                                ),
+                                              ),
+                                              child: Text(
+                                                '${_playbackSpeed}x',
+                                                style: const TextStyle(
+                                                  color: kNeonCyan,
+                                                  fontSize: 10,
+                                                  fontWeight: FontWeight.bold,
+                                                ),
+                                              ),
+                                            ),
                                           ),
-                                        ],
-                                      ),
+                                        ),
+                                        // Play/Pause Center Button
+                                        if (_showControls)
+                                          GestureDetector(
+                                            onTap: () {
+                                              setState(() {
+                                                _controller.value.isPlaying
+                                                    ? _controller.pause()
+                                                    : _controller.play();
+                                              });
+                                              _resetControlTimer();
+                                            },
+                                            child: Container(
+                                              width: 58,
+                                              height: 58,
+                                              decoration: BoxDecoration(
+                                                color: Colors.black
+                                                    .withOpacity(0.55),
+                                                shape: BoxShape.circle,
+                                                border: Border.all(
+                                                  color: Colors.white,
+                                                  width: 2,
+                                                ),
+                                              ),
+                                              child: Icon(
+                                                _controller.value.isPlaying
+                                                    ? Icons.pause
+                                                    : Icons.play_arrow,
+                                                color: Colors.white,
+                                                size: 34,
+                                              ),
+                                            ),
+                                          ),
+                                        // Feedback Overlay
+                                        if (_flashFeedback.isNotEmpty)
+                                          Center(
+                                            child: Container(
+                                              padding:
+                                                  const EdgeInsets.symmetric(
+                                                horizontal: 16,
+                                                vertical: 10,
+                                              ),
+                                              decoration: BoxDecoration(
+                                                color: Colors.black
+                                                    .withOpacity(0.8),
+                                                borderRadius:
+                                                    BorderRadius.circular(10),
+                                              ),
+                                              child: Text(
+                                                _flashFeedback,
+                                                style: const TextStyle(
+                                                  color: kGreen,
+                                                  fontWeight: FontWeight.bold,
+                                                  fontSize: 18,
+                                                ),
+                                              ),
+                                            ),
+                                          ),
+                                        // Progress Bar Bottom
+                                        Positioned(
+                                          bottom: 6,
+                                          left: 10,
+                                          right: 10,
+                                          child: Row(
+                                            children: [
+                                              Text(
+                                                _formatDuration(
+                                                    _controller.value.position),
+                                                style: const TextStyle(
+                                                  color: Colors.white,
+                                                  fontSize: 10,
+                                                  fontFamily: 'monospace',
+                                                ),
+                                              ),
+                                              const SizedBox(width: 6),
+                                              Expanded(
+                                                child: SliderTheme(
+                                                  data: SliderTheme.of(context)
+                                                      .copyWith(
+                                                    trackHeight: 2.5,
+                                                    activeTrackColor: kGreen,
+                                                    inactiveTrackColor:
+                                                        Colors.white30,
+                                                    thumbColor: kGreen,
+                                                    thumbShape:
+                                                        const RoundSliderThumbShape(
+                                                      enabledThumbRadius: 4,
+                                                    ),
+                                                  ),
+                                                  child: Slider(
+                                                    value: _controller
+                                                        .value.position.inSeconds
+                                                        .toDouble()
+                                                        .clamp(
+                                                      0.0,
+                                                      _controller.value.duration
+                                                                  .inSeconds
+                                                                  .toDouble() <=
+                                                              0
+                                                          ? 1.0
+                                                          : _controller.value
+                                                              .duration.inSeconds
+                                                              .toDouble(),
+                                                    ),
+                                                    min: 0.0,
+                                                    max: _controller.value.duration
+                                                                .inSeconds
+                                                                .toDouble() >
+                                                            0
+                                                        ? _controller
+                                                            .value.duration.inSeconds
+                                                            .toDouble()
+                                                        : 1.0,
+                                                    onChanged: (val) {
+                                                      _controller.seekTo(
+                                                        Duration(
+                                                          seconds: val.toInt(),
+                                                        ),
+                                                      );
+                                                    },
+                                                  ),
+                                                ),
+                                              ),
+                                              const SizedBox(width: 6),
+                                              Text(
+                                                _formatDuration(
+                                                    _controller.value.duration),
+                                                style: const TextStyle(
+                                                  color: Colors.white,
+                                                  fontSize: 10,
+                                                  fontFamily: 'monospace',
+                                                ),
+                                              ),
+                                              const SizedBox(width: 8),
+                                              GestureDetector(
+                                                onTap: _toggleSmartFullscreen,
+                                                child: Icon(
+                                                  _isFullscreen
+                                                      ? Icons.fullscreen_exit
+                                                      : Icons.fullscreen,
+                                                  color: Colors.white,
+                                                  size: 20,
+                                                ),
+                                              ),
+                                            ],
+                                          ),
+                                        ),
+                                      ],
                                     ),
-                                  ],
-                                ),
+                                  );
+                                },
                               ),
                   ),
                 ),
@@ -3509,6 +5773,7 @@ class _NativeVideoPlayerScreenState extends State<NativeVideoPlayerScreen> {
                   padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
                   child: Column(
                     children: [
+                      // Video Info Card
                       Container(
                         padding: const EdgeInsets.all(12),
                         decoration: BoxDecoration(
@@ -3521,30 +5786,68 @@ class _NativeVideoPlayerScreenState extends State<NativeVideoPlayerScreen> {
                           children: [
                             Row(
                               children: [
-                                const Icon(Icons.play_circle_fill, color: kGreen, size: 26),
+                                const Icon(
+                                  Icons.play_circle_fill,
+                                  color: kGreen,
+                                  size: 26,
+                                ),
                                 const SizedBox(width: 8),
                                 Expanded(
-                                  child: Text(widget.title,
-                                    style: const TextStyle(color: Colors.white, fontSize: 14, fontWeight: FontWeight.bold),
-                                    maxLines: 1, overflow: TextOverflow.ellipsis),
+                                  child: Text(
+                                    widget.title,
+                                    style: const TextStyle(
+                                      color: Colors.white,
+                                      fontSize: 14,
+                                      fontWeight: FontWeight.bold,
+                                    ),
+                                    maxLines: 1,
+                                    overflow: TextOverflow.ellipsis,
+                                  ),
                                 ),
                                 Container(
-                                  padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 3),
-                                  decoration: BoxDecoration(borderRadius: BorderRadius.circular(6), border: Border.all(color: kGreen)),
-                                  child: const Text('HD', style: TextStyle(color: kGreen, fontSize: 10, fontWeight: FontWeight.bold)),
+                                  padding: const EdgeInsets.symmetric(
+                                    horizontal: 7,
+                                    vertical: 3,
+                                  ),
+                                  decoration: BoxDecoration(
+                                    borderRadius: BorderRadius.circular(6),
+                                    border: Border.all(color: kGreen),
+                                  ),
+                                  child: const Text(
+                                    'HD',
+                                    style: TextStyle(
+                                      color: kGreen,
+                                      fontSize: 10,
+                                      fontWeight: FontWeight.bold,
+                                    ),
+                                  ),
                                 ),
                               ],
                             ),
                             const SizedBox(height: 8),
                             Row(
                               children: [
-                                const Icon(Icons.account_circle, color: kGreen, size: 14),
+                                const Icon(
+                                  Icons.account_circle,
+                                  color: kGreen,
+                                  size: 14,
+                                ),
                                 const SizedBox(width: 4),
-                                Text('Uploaded by: ${widget.uploader}',
-                                  style: const TextStyle(color: kGreen, fontSize: 10)),
+                                Text(
+                                  'Uploaded by: ${widget.uploader}',
+                                  style: const TextStyle(
+                                    color: kGreen,
+                                    fontSize: 10,
+                                  ),
+                                ),
                                 const SizedBox(width: 8),
-                                Text('|   👁 ${_stats['views']} views',
-                                  style: TextStyle(color: Colors.white.withOpacity(0.6), fontSize: 10)),
+                                Text(
+                                  '|   👁 ${_stats['views']} views',
+                                  style: TextStyle(
+                                    color: Colors.white.withOpacity(0.6),
+                                    fontSize: 10,
+                                  ),
+                                ),
                               ],
                             ),
                             const SizedBox(height: 12),
@@ -3554,23 +5857,50 @@ class _NativeVideoPlayerScreenState extends State<NativeVideoPlayerScreen> {
                                   child: InkWell(
                                     onTap: _handleLike,
                                     child: Container(
-                                      padding: const EdgeInsets.symmetric(vertical: 8),
+                                      padding: const EdgeInsets.symmetric(
+                                        vertical: 8,
+                                      ),
                                       decoration: BoxDecoration(
                                         color: Colors.black,
                                         borderRadius: BorderRadius.circular(8),
-                                        border: Border.all(color: _isLiked ? kGreen : kGreen.withOpacity(0.4)),
+                                        border: Border.all(
+                                          color: _isLiked
+                                              ? kGreen
+                                              : kGreen.withOpacity(0.4),
+                                        ),
                                       ),
                                       child: Column(
                                         children: [
                                           Row(
-                                            mainAxisAlignment: MainAxisAlignment.center,
+                                            mainAxisAlignment:
+                                                MainAxisAlignment.center,
                                             children: [
-                                              Icon(_isLiked ? Icons.thumb_up : Icons.thumb_up_alt_outlined, color: kGreen, size: 14),
+                                              Icon(
+                                                _isLiked
+                                                    ? Icons.thumb_up
+                                                    : Icons
+                                                        .thumb_up_alt_outlined,
+                                                color: kGreen,
+                                                size: 14,
+                                              ),
                                               const SizedBox(width: 4),
-                                              Text('${_stats['likes']}', style: const TextStyle(color: Colors.white, fontSize: 11, fontWeight: FontWeight.bold)),
+                                              Text(
+                                                '${_stats['likes']}',
+                                                style: const TextStyle(
+                                                  color: Colors.white,
+                                                  fontSize: 11,
+                                                  fontWeight: FontWeight.bold,
+                                                ),
+                                              ),
                                             ],
                                           ),
-                                          const Text('Like', style: TextStyle(color: Colors.white54, fontSize: 9)),
+                                          const Text(
+                                            'Like',
+                                            style: TextStyle(
+                                              color: Colors.white54,
+                                              fontSize: 9,
+                                            ),
+                                          ),
                                         ],
                                       ),
                                     ),
@@ -3581,23 +5911,50 @@ class _NativeVideoPlayerScreenState extends State<NativeVideoPlayerScreen> {
                                   child: InkWell(
                                     onTap: _handleDislike,
                                     child: Container(
-                                      padding: const EdgeInsets.symmetric(vertical: 8),
+                                      padding: const EdgeInsets.symmetric(
+                                        vertical: 8,
+                                      ),
                                       decoration: BoxDecoration(
                                         color: Colors.black,
                                         borderRadius: BorderRadius.circular(8),
-                                        border: Border.all(color: _isUnliked ? Colors.redAccent : kGreen.withOpacity(0.4)),
+                                        border: Border.all(
+                                          color: _isUnliked
+                                              ? Colors.redAccent
+                                              : kGreen.withOpacity(0.4),
+                                        ),
                                       ),
                                       child: Column(
                                         children: [
                                           Row(
-                                            mainAxisAlignment: MainAxisAlignment.center,
+                                            mainAxisAlignment:
+                                                MainAxisAlignment.center,
                                             children: [
-                                              Icon(_isUnliked ? Icons.thumb_down : Icons.thumb_down_alt_outlined, color: Colors.redAccent, size: 14),
+                                              Icon(
+                                                _isUnliked
+                                                    ? Icons.thumb_down
+                                                    : Icons
+                                                        .thumb_down_alt_outlined,
+                                                color: Colors.redAccent,
+                                                size: 14,
+                                              ),
                                               const SizedBox(width: 4),
-                                              Text('${_stats['unlikes']}', style: const TextStyle(color: Colors.white, fontSize: 11, fontWeight: FontWeight.bold)),
+                                              Text(
+                                                '${_stats['unlikes']}',
+                                                style: const TextStyle(
+                                                  color: Colors.white,
+                                                  fontSize: 11,
+                                                  fontWeight: FontWeight.bold,
+                                                ),
+                                              ),
                                             ],
                                           ),
-                                          const Text('Dislike', style: TextStyle(color: Colors.white54, fontSize: 9)),
+                                          const Text(
+                                            'Dislike',
+                                            style: TextStyle(
+                                              color: Colors.white54,
+                                              fontSize: 9,
+                                            ),
+                                          ),
                                         ],
                                       ),
                                     ),
@@ -3608,16 +5965,36 @@ class _NativeVideoPlayerScreenState extends State<NativeVideoPlayerScreen> {
                                   child: InkWell(
                                     onTap: _toggleSave,
                                     child: Container(
-                                      padding: const EdgeInsets.symmetric(vertical: 8),
+                                      padding: const EdgeInsets.symmetric(
+                                        vertical: 8,
+                                      ),
                                       decoration: BoxDecoration(
                                         color: Colors.black,
                                         borderRadius: BorderRadius.circular(8),
-                                        border: Border.all(color: _isSaved ? kGreen : kGreen.withOpacity(0.4)),
+                                        border: Border.all(
+                                          color: _isSaved
+                                              ? kGreen
+                                              : kGreen.withOpacity(0.4),
+                                        ),
                                       ),
                                       child: Column(
                                         children: [
-                                          Icon(_isSaved ? Icons.bookmark : Icons.bookmark_border, color: _isSaved ? kGreen : Colors.white, size: 14),
-                                          const Text('Save', style: TextStyle(color: Colors.white54, fontSize: 9)),
+                                          Icon(
+                                            _isSaved
+                                                ? Icons.bookmark
+                                                : Icons.bookmark_border,
+                                            color: _isSaved
+                                                ? kGreen
+                                                : Colors.white,
+                                            size: 14,
+                                          ),
+                                          const Text(
+                                            'Save',
+                                            style: TextStyle(
+                                              color: Colors.white54,
+                                              fontSize: 9,
+                                            ),
+                                          ),
                                         ],
                                       ),
                                     ),
@@ -3627,15 +6004,31 @@ class _NativeVideoPlayerScreenState extends State<NativeVideoPlayerScreen> {
                                 InkWell(
                                   onTap: _startInAppDownload,
                                   child: Container(
-                                    padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
-                                    decoration: BoxDecoration(color: kGreen, borderRadius: BorderRadius.circular(10)),
+                                    padding: const EdgeInsets.symmetric(
+                                      horizontal: 14,
+                                      vertical: 12,
+                                    ),
+                                    decoration: BoxDecoration(
+                                      color: kGreen,
+                                      borderRadius: BorderRadius.circular(10),
+                                    ),
                                     child: Row(
                                       children: [
-                                        const Icon(Icons.download, color: Colors.black, size: 18),
+                                        const Icon(
+                                          Icons.download,
+                                          color: Colors.black,
+                                          size: 18,
+                                        ),
                                         const SizedBox(width: 4),
                                         Text(
-                                          _isDownloading ? '${(_downloadProgress * 100).toInt()}%' : 'Download',
-                                          style: const TextStyle(color: Colors.black, fontSize: 11, fontWeight: FontWeight.bold),
+                                          _isDownloading
+                                              ? '${(_downloadProgress * 100).toInt()}%'
+                                              : 'Download',
+                                          style: const TextStyle(
+                                            color: Colors.black,
+                                            fontSize: 11,
+                                            fontWeight: FontWeight.bold,
+                                          ),
                                         ),
                                       ],
                                     ),
@@ -3647,6 +6040,7 @@ class _NativeVideoPlayerScreenState extends State<NativeVideoPlayerScreen> {
                         ),
                       ),
                       const SizedBox(height: 12),
+                      // AD Slot
                       Container(
                         padding: const EdgeInsets.all(12),
                         decoration: BoxDecoration(
@@ -3657,46 +6051,116 @@ class _NativeVideoPlayerScreenState extends State<NativeVideoPlayerScreen> {
                         child: Row(
                           children: [
                             Container(
-                              padding: const EdgeInsets.symmetric(horizontal: 5, vertical: 2),
-                              decoration: BoxDecoration(color: kGreen, borderRadius: BorderRadius.circular(3)),
-                              child: const Text('AD', style: TextStyle(color: Colors.black, fontSize: 9, fontWeight: FontWeight.bold)),
+                              padding: const EdgeInsets.symmetric(
+                                horizontal: 5,
+                                vertical: 2,
+                              ),
+                              decoration: BoxDecoration(
+                                color: kGreen,
+                                borderRadius: BorderRadius.circular(3),
+                              ),
+                              child: const Text(
+                                'AD',
+                                style: TextStyle(
+                                  color: Colors.black,
+                                  fontSize: 9,
+                                  fontWeight: FontWeight.bold,
+                                ),
+                              ),
                             ),
                             const SizedBox(width: 10),
                             Expanded(
                               child: Column(
                                 crossAxisAlignment: CrossAxisAlignment.start,
                                 children: [
-                                  const Text('YOUR AD HERE', style: TextStyle(color: Colors.white, fontSize: 13, fontWeight: FontWeight.bold)),
-                                  Text('Grow Your Brand with Us', style: TextStyle(color: Colors.white.withOpacity(0.6), fontSize: 10)),
+                                  const Text(
+                                    'YOUR AD HERE',
+                                    style: TextStyle(
+                                      color: Colors.white,
+                                      fontSize: 13,
+                                      fontWeight: FontWeight.bold,
+                                    ),
+                                  ),
+                                  Text(
+                                    'Grow Your Brand with Us',
+                                    style: TextStyle(
+                                      color: Colors.white.withOpacity(0.6),
+                                      fontSize: 10,
+                                    ),
+                                  ),
                                 ],
                               ),
                             ),
-                            const Icon(Icons.campaign_outlined, color: kGreen, size: 28),
+                            const Icon(
+                              Icons.campaign_outlined,
+                              color: kGreen,
+                              size: 28,
+                            ),
                           ],
                         ),
                       ),
                       const SizedBox(height: 14),
-                      const Row(
-                        children: [
-                          Icon(Icons.play_circle_outline, color: kGreen, size: 18),
+                      // Related Videos
+                      Row(
+                        children: const [
+                          Icon(
+                            Icons.play_circle_outline,
+                            color: kGreen,
+                            size: 18,
+                          ),
                           SizedBox(width: 6),
-                          Text('Related Videos', style: TextStyle(color: Colors.white, fontSize: 13, fontWeight: FontWeight.bold)),
+                          Text(
+                            'Related Videos',
+                            style: TextStyle(
+                              color: Colors.white,
+                              fontSize: 13,
+                              fontWeight: FontWeight.bold,
+                            ),
+                          ),
                         ],
                       ),
                       const SizedBox(height: 10),
-                      SizedBox(
-                        height: 130,
-                        child: ListView(
-                          scrollDirection: Axis.horizontal,
-                          children: [
-                            _buildRelatedCard('Trending Video', '@user123', '05:42'),
-                            const SizedBox(width: 10),
-                            _buildRelatedCard('Top Picks Today', '@user456', '08:15'),
-                            const SizedBox(width: 10),
-                            _buildRelatedCard('New Uploads', '@user789', '06:30'),
-                          ],
-                        ),
-                      ),
+                      _relatedLoading
+                          ? const Center(
+                              child: Padding(
+                                padding: EdgeInsets.all(20),
+                                child: CircularProgressIndicator(
+                                  color: kGreen,
+                                  strokeWidth: 2,
+                                ),
+                              ),
+                            )
+                          : _relatedVideos.isEmpty
+                              ? Container(
+                                  padding: const EdgeInsets.all(20),
+                                  decoration: BoxDecoration(
+                                    color: const Color(0xFF031408),
+                                    borderRadius: BorderRadius.circular(12),
+                                    border: Border.all(
+                                      color: kGreen.withOpacity(0.3),
+                                    ),
+                                  ),
+                                  child: const Center(
+                                    child: Text(
+                                      'No related videos yet',
+                                      style: TextStyle(
+                                        color: Colors.white54,
+                                        fontSize: 12,
+                                      ),
+                                    ),
+                                  ),
+                                )
+                              : SizedBox(
+                                  height: 155,
+                                  child: ListView.builder(
+                                    scrollDirection: Axis.horizontal,
+                                    itemCount: _relatedVideos.length,
+                                    itemBuilder: (context, i) {
+                                      final v = _relatedVideos[i];
+                                      return _buildRelatedCard(v);
+                                    },
+                                  ),
+                                ),
                       const SizedBox(height: 16),
                     ],
                   ),
@@ -3708,48 +6172,120 @@ class _NativeVideoPlayerScreenState extends State<NativeVideoPlayerScreen> {
     );
   }
 
-  Widget _buildRelatedCard(String title, String user, String duration) {
-    return Container(
-      width: 160,
-      decoration: BoxDecoration(
-        color: const Color(0xFF031408),
+  // ═══════════ REAL RELATED VIDEO CARD ═══════════
+  Widget _buildRelatedCard(Map<String, dynamic> v) {
+    final id = v['id']?.toString() ?? '';
+    final title = (v['filename'] ?? v['originalUrl'] ?? 'Video').toString();
+    final uploader = (v['uploader'] ?? '@mayajaal').toString();
+    final views = (v['views'] ?? 0) as int;
+
+    return Padding(
+      padding: const EdgeInsets.only(right: 10),
+      child: InkWell(
+        onTap: () {
+          final url = '$kBackendBaseUrl/v/$id';
+          Navigator.pushReplacement(
+            context,
+            MaterialPageRoute(
+              builder: (_) => StreamPreviewScreen(targetUrl: url),
+            ),
+          );
+        },
         borderRadius: BorderRadius.circular(12),
-        border: Border.all(color: kGreen.withOpacity(0.35)),
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Stack(
+        child: Container(
+          width: 175,
+          decoration: BoxDecoration(
+            color: const Color(0xFF031408),
+            borderRadius: BorderRadius.circular(12),
+            border: Border.all(color: kGreen.withOpacity(0.35)),
+          ),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
             children: [
+              // Thumbnail gradient
               Container(
-                height: 80,
-                decoration: const BoxDecoration(
-                  color: Colors.black26,
-                  borderRadius: BorderRadius.vertical(top: Radius.circular(11)),
+                height: 90,
+                decoration: BoxDecoration(
+                  borderRadius: const BorderRadius.vertical(
+                    top: Radius.circular(11),
+                  ),
+                  gradient: LinearGradient(
+                    colors: [
+                      kGreen.withOpacity(0.15),
+                      kNeonCyan.withOpacity(0.1),
+                      Colors.black,
+                    ],
+                    begin: Alignment.topLeft,
+                    end: Alignment.bottomRight,
+                  ),
                 ),
-                child: const Center(child: Icon(Icons.image, color: Colors.white30, size: 30)),
+                child: Center(
+                  child: Container(
+                    width: 40,
+                    height: 40,
+                    decoration: BoxDecoration(
+                      shape: BoxShape.circle,
+                      color: Colors.black.withOpacity(0.6),
+                      border: Border.all(color: kGreen, width: 1.5),
+                    ),
+                    child: const Icon(
+                      Icons.play_arrow,
+                      color: kGreen,
+                      size: 22,
+                    ),
+                  ),
+                ),
               ),
-              Positioned(
-                bottom: 4, right: 4,
-                child: Container(
-                  padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 1),
-                  decoration: BoxDecoration(color: Colors.black87, borderRadius: BorderRadius.circular(4)),
-                  child: Text(duration, style: const TextStyle(color: Colors.white, fontSize: 8)),
+              Padding(
+                padding: const EdgeInsets.all(8),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      title,
+                      style: const TextStyle(
+                        color: Colors.white,
+                        fontSize: 11,
+                        fontWeight: FontWeight.bold,
+                      ),
+                      maxLines: 2,
+                      overflow: TextOverflow.ellipsis,
+                    ),
+                    const SizedBox(height: 4),
+                    Row(
+                      children: [
+                        Expanded(
+                          child: Text(
+                            uploader,
+                            style: TextStyle(
+                              color: kGreen.withOpacity(0.8),
+                              fontSize: 9.5,
+                            ),
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                          ),
+                        ),
+                        const Icon(
+                          Icons.visibility,
+                          color: Colors.white54,
+                          size: 10,
+                        ),
+                        const SizedBox(width: 2),
+                        Text(
+                          '$views',
+                          style: const TextStyle(
+                            color: Colors.white54,
+                            fontSize: 9,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ],
                 ),
               ),
             ],
           ),
-          Padding(
-            padding: const EdgeInsets.all(6),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(title, style: const TextStyle(color: Colors.white, fontSize: 10, fontWeight: FontWeight.bold), maxLines: 1),
-                Text(user, style: TextStyle(color: Colors.white.withOpacity(0.5), fontSize: 9)),
-              ],
-            ),
-          ),
-        ],
+        ),
       ),
     );
   }
@@ -3767,7 +6303,9 @@ class UserSearchDelegate extends SearchDelegate {
         hintStyle: TextStyle(color: Colors.white54),
         border: InputBorder.none,
       ),
-      textTheme: const TextTheme(titleLarge: TextStyle(color: Colors.white, fontSize: 16)),
+      textTheme: const TextTheme(
+        titleLarge: TextStyle(color: Colors.white, fontSize: 16),
+      ),
     );
   }
 
@@ -3801,8 +6339,10 @@ class UserSearchDelegate extends SearchDelegate {
             children: [
               Icon(Icons.search, color: kGreen.withOpacity(0.4), size: 60),
               const SizedBox(height: 12),
-              const Text('Search users by name or email',
-                style: TextStyle(color: Colors.white54, fontSize: 14)),
+              const Text(
+                'Search users by name or email',
+                style: TextStyle(color: Colors.white54, fontSize: 14),
+              ),
             ],
           ),
         ),
@@ -3823,10 +6363,16 @@ class UserSearchDelegate extends SearchDelegate {
               child: Column(
                 mainAxisAlignment: MainAxisAlignment.center,
                 children: [
-                  Icon(Icons.person_off_outlined, color: kGreen.withOpacity(0.4), size: 60),
+                  Icon(
+                    Icons.person_off_outlined,
+                    color: kGreen.withOpacity(0.4),
+                    size: 60,
+                  ),
                   const SizedBox(height: 12),
-                  Text('No user found for "$query"',
-                    style: const TextStyle(color: Colors.white54, fontSize: 14)),
+                  Text(
+                    'No user found for "$query"',
+                    style: const TextStyle(color: Colors.white54, fontSize: 14),
+                  ),
                 ],
               ),
             );
@@ -3841,24 +6387,51 @@ class UserSearchDelegate extends SearchDelegate {
 
               return ListTile(
                 leading: Container(
-                  width: 42, height: 42,
+                  width: 42,
+                  height: 42,
                   decoration: BoxDecoration(
                     shape: BoxShape.circle,
                     border: Border.all(color: kGreen, width: 1.5),
                   ),
                   child: photo.isNotEmpty
-                      ? ClipOval(child: Image.network(photo, fit: BoxFit.cover,
-                          errorBuilder: (c, e, s) => const Icon(Icons.person, color: kGreen)))
+                      ? ClipOval(
+                          child: Image.network(
+                            photo,
+                            fit: BoxFit.cover,
+                            errorBuilder: (c, e, s) =>
+                                const Icon(Icons.person, color: kGreen),
+                          ),
+                        )
                       : const Icon(Icons.person, color: kGreen),
                 ),
-                title: Text(name, style: const TextStyle(color: Colors.white, fontSize: 14, fontWeight: FontWeight.bold)),
-                subtitle: Text(email, style: TextStyle(color: kGreen.withOpacity(0.7), fontSize: 11.5)),
-                trailing: const Icon(Icons.arrow_forward_ios, color: kGreen, size: 14),
+                title: Text(
+                  name,
+                  style: const TextStyle(
+                    color: Colors.white,
+                    fontSize: 14,
+                    fontWeight: FontWeight.bold,
+                  ),
+                ),
+                subtitle: Text(
+                  email,
+                  style: TextStyle(
+                    color: kGreen.withOpacity(0.7),
+                    fontSize: 11.5,
+                  ),
+                ),
+                trailing: const Icon(
+                  Icons.arrow_forward_ios,
+                  color: kGreen,
+                  size: 14,
+                ),
                 onTap: () {
                   close(context, null);
-                  Navigator.push(context, MaterialPageRoute(
-                    builder: (_) => UserProfileScreen(channelProfile: u),
-                  ));
+                  Navigator.push(
+                    context,
+                    MaterialPageRoute(
+                      builder: (_) => UserProfileScreen(channelProfile: u),
+                    ),
+                  );
                 },
               );
             },
@@ -3919,8 +6492,10 @@ class _UserProfileScreenState extends State<UserProfileScreen> {
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
           backgroundColor: kCardBg,
-          content: Text(newState ? '✅ Subscribed!' : 'Unsubscribed',
-            style: const TextStyle(color: kGreen)),
+          content: Text(
+            newState ? '✅ Subscribed!' : 'Unsubscribed',
+            style: const TextStyle(color: kGreen),
+          ),
           duration: const Duration(seconds: 1),
         ),
       );
@@ -3940,74 +6515,131 @@ class _UserProfileScreenState extends State<UserProfileScreen> {
               children: [
                 const SizedBox(height: 20),
                 Container(
-                  width: 82, height: 82,
+                  width: 82,
+                  height: 82,
                   decoration: BoxDecoration(
                     shape: BoxShape.circle,
                     border: Border.all(color: kGreen, width: 2),
-                    boxShadow: [BoxShadow(color: kGreen.withOpacity(0.4), blurRadius: 20)],
+                    boxShadow: [
+                      BoxShadow(
+                        color: kGreen.withOpacity(0.4),
+                        blurRadius: 20,
+                      ),
+                    ],
                   ),
                   child: _channelPhoto.isNotEmpty
-                      ? ClipOval(child: Image.network(_channelPhoto, fit: BoxFit.cover,
-                          errorBuilder: (c, e, s) => const Icon(Icons.person, size: 45, color: kGreen)))
+                      ? ClipOval(
+                          child: Image.network(
+                            _channelPhoto,
+                            fit: BoxFit.cover,
+                            errorBuilder: (c, e, s) => const Icon(
+                              Icons.person,
+                              size: 45,
+                              color: kGreen,
+                            ),
+                          ),
+                        )
                       : const Icon(Icons.person, size: 45, color: kGreen),
                 ),
                 const SizedBox(height: 12),
-                Text(_channelName,
-                  style: const TextStyle(color: Colors.white, fontSize: 20, fontWeight: FontWeight.bold)),
+                Text(
+                  _channelName,
+                  style: const TextStyle(
+                    color: Colors.white,
+                    fontSize: 20,
+                    fontWeight: FontWeight.bold,
+                  ),
+                ),
                 const SizedBox(height: 3),
-                Text(_channelEmail,
-                  style: TextStyle(color: kGreen.withOpacity(0.7), fontSize: 12)),
+                Text(
+                  _channelEmail,
+                  style: TextStyle(
+                    color: kGreen.withOpacity(0.7),
+                    fontSize: 12,
+                  ),
+                ),
                 const SizedBox(height: 6),
                 StreamBuilder<int>(
                   stream: FirebaseService.getSubscriberCount(_channelUid),
                   builder: (c, s) {
                     final count = s.data ?? 0;
-                    return Text('$count subscribers',
-                      style: TextStyle(color: Colors.white.withOpacity(0.5), fontSize: 11));
+                    return Text(
+                      '$count subscribers',
+                      style: TextStyle(
+                        color: Colors.white.withOpacity(0.5),
+                        fontSize: 11,
+                      ),
+                    );
                   },
                 ),
                 const SizedBox(height: 16),
-
                 if (!isOwnProfile)
                   SizedBox(
                     width: 200,
                     child: ElevatedButton(
                       onPressed: _toggleSub,
                       style: ElevatedButton.styleFrom(
-                        backgroundColor: _isSubscribed ? Colors.grey[850] : kGreen,
-                        foregroundColor: _isSubscribed ? Colors.white : Colors.black,
-                        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+                        backgroundColor:
+                            _isSubscribed ? Colors.grey[850] : kGreen,
+                        foregroundColor:
+                            _isSubscribed ? Colors.white : Colors.black,
+                        shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(20),
+                        ),
                         padding: const EdgeInsets.symmetric(vertical: 12),
                       ),
-                      child: Text(_isSubscribed ? '✓ SUBSCRIBED' : '+ SUBSCRIBE',
-                        style: const TextStyle(fontWeight: FontWeight.bold, letterSpacing: 1.2)),
+                      child: Text(
+                        _isSubscribed ? '✓ SUBSCRIBED' : '+ SUBSCRIBE',
+                        style: const TextStyle(
+                          fontWeight: FontWeight.bold,
+                          letterSpacing: 1.2,
+                        ),
+                      ),
                     ),
                   ),
-
                 const Divider(color: Colors.white24, height: 30),
-
                 Padding(
                   padding: const EdgeInsets.symmetric(horizontal: 16),
                   child: Row(
                     children: [
-                      const Icon(Icons.video_library, color: kGreen, size: 18),
+                      const Icon(
+                        Icons.video_library,
+                        color: kGreen,
+                        size: 18,
+                      ),
                       const SizedBox(width: 6),
-                      Text('VIDEOS (${_videos.length})',
-                        style: const TextStyle(color: kGreen, fontSize: 12, fontWeight: FontWeight.bold, letterSpacing: 1.2)),
+                      Text(
+                        'VIDEOS (${_videos.length})',
+                        style: const TextStyle(
+                          color: kGreen,
+                          fontSize: 12,
+                          fontWeight: FontWeight.bold,
+                          letterSpacing: 1.2,
+                        ),
+                      ),
                     ],
                   ),
                 ),
                 const SizedBox(height: 10),
-
                 Expanded(
                   child: _videos.isEmpty
                       ? Center(
                           child: Column(
                             mainAxisAlignment: MainAxisAlignment.center,
                             children: [
-                              Icon(Icons.video_library_outlined, color: kGreen.withOpacity(0.4), size: 60),
+                              Icon(
+                                Icons.video_library_outlined,
+                                color: kGreen.withOpacity(0.4),
+                                size: 60,
+                              ),
                               const SizedBox(height: 12),
-                              const Text('No uploads yet', style: TextStyle(color: Colors.white54, fontSize: 14)),
+                              const Text(
+                                'No uploads yet',
+                                style: TextStyle(
+                                  color: Colors.white54,
+                                  fontSize: 14,
+                                ),
+                              ),
                             ],
                           ),
                         )
@@ -4025,35 +6657,63 @@ class _UserProfileScreenState extends State<UserProfileScreen> {
                               decoration: BoxDecoration(
                                 color: kCardBg,
                                 borderRadius: BorderRadius.circular(12),
-                                border: Border.all(color: kGreen.withOpacity(0.3)),
+                                border: Border.all(
+                                  color: kGreen.withOpacity(0.3),
+                                ),
                               ),
                               child: ListTile(
                                 leading: Container(
-                                  width: 40, height: 40,
+                                  width: 40,
+                                  height: 40,
                                   decoration: BoxDecoration(
                                     color: Colors.black,
                                     borderRadius: BorderRadius.circular(8),
-                                    border: Border.all(color: kGreen.withOpacity(0.5)),
+                                    border: Border.all(
+                                      color: kGreen.withOpacity(0.5),
+                                    ),
                                   ),
-                                  child: const Icon(Icons.play_circle_fill, color: kGreen, size: 22),
+                                  child: const Icon(
+                                    Icons.play_circle_fill,
+                                    color: kGreen,
+                                    size: 22,
+                                  ),
                                 ),
-                                title: Text(name,
-                                  style: const TextStyle(color: Colors.white, fontSize: 12.5, fontWeight: FontWeight.bold),
-                                  maxLines: 1, overflow: TextOverflow.ellipsis),
+                                title: Text(
+                                  name,
+                                  style: const TextStyle(
+                                    color: Colors.white,
+                                    fontSize: 12.5,
+                                    fontWeight: FontWeight.bold,
+                                  ),
+                                  maxLines: 1,
+                                  overflow: TextOverflow.ellipsis,
+                                ),
                                 subtitle: Row(
                                   children: [
-                                    const Icon(Icons.visibility, color: kGreen, size: 11),
+                                    const Icon(
+                                      Icons.visibility,
+                                      color: kGreen,
+                                      size: 11,
+                                    ),
                                     const SizedBox(width: 3),
-                                    Text('$views views',
-                                      style: TextStyle(color: kGreen.withOpacity(0.8), fontSize: 10.5)),
+                                    Text(
+                                      '$views views',
+                                      style: TextStyle(
+                                        color: kGreen.withOpacity(0.8),
+                                        fontSize: 10.5,
+                                      ),
+                                    ),
                                   ],
                                 ),
                                 onTap: () {
-                                  Navigator.push(context, MaterialPageRoute(
-                                    builder: (_) => StreamPreviewScreen(
-                                      targetUrl: '$kBackendBaseUrl/v/$id',
+                                  Navigator.push(
+                                    context,
+                                    MaterialPageRoute(
+                                      builder: (_) => StreamPreviewScreen(
+                                        targetUrl: '$kBackendBaseUrl/v/$id',
+                                      ),
                                     ),
-                                  ));
+                                  );
                                 },
                               ),
                             );
@@ -4126,7 +6786,10 @@ class _EarningsScreenState extends State<EarningsScreen> {
     return Scaffold(
       backgroundColor: Colors.black,
       appBar: AppBar(
-        title: const Text('EARNINGS DASHBOARD', style: TextStyle(letterSpacing: 1.5)),
+        title: const Text(
+          'EARNINGS DASHBOARD',
+          style: TextStyle(letterSpacing: 1.5),
+        ),
         actions: [
           IconButton(
             icon: const Icon(Icons.refresh, color: kGreen),
@@ -4154,11 +6817,25 @@ class _EarningsScreenState extends State<EarningsScreen> {
           children: [
             const Icon(Icons.link_off, color: Colors.orangeAccent, size: 60),
             const SizedBox(height: 16),
-            const Text('NOT LOGGED IN',
-              style: TextStyle(color: Colors.white, fontSize: 18, fontWeight: FontWeight.bold, letterSpacing: 1.5)),
+            const Text(
+              'NOT LOGGED IN',
+              style: TextStyle(
+                color: Colors.white,
+                fontSize: 18,
+                fontWeight: FontWeight.bold,
+                letterSpacing: 1.5,
+              ),
+            ),
             const SizedBox(height: 12),
-            const Text('Login karke earnings dekh sakte hain.',
-              textAlign: TextAlign.center, style: TextStyle(color: Colors.white70, fontSize: 13, height: 1.5)),
+            const Text(
+              'Login karke earnings dekh sakte hain.',
+              textAlign: TextAlign.center,
+              style: TextStyle(
+                color: Colors.white70,
+                fontSize: 13,
+                height: 1.5,
+              ),
+            ),
           ],
         ),
       ),
@@ -4169,6 +6846,8 @@ class _EarningsScreenState extends State<EarningsScreen> {
     final totalViews = (_dashboard['totalViews'] ?? 0) as int;
     final todayViews = (_dashboard['todayViews'] ?? 0) as int;
     final totalLinks = (_dashboard['totalLinks'] ?? 0) as int;
+    final rank = CyberRank.get(totalViews);
+    final nextRank = CyberRank.next(totalViews);
 
     return RefreshIndicator(
       onRefresh: _loadData,
@@ -4195,14 +6874,103 @@ class _EarningsScreenState extends State<EarningsScreen> {
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
-                        const Text('LOGGED IN AS',
-                          style: TextStyle(color: Colors.white54, fontSize: 9, letterSpacing: 1.5)),
+                        const Text(
+                          'LOGGED IN AS',
+                          style: TextStyle(
+                            color: Colors.white54,
+                            fontSize: 9,
+                            letterSpacing: 1.5,
+                          ),
+                        ),
                         const SizedBox(height: 2),
                         Text(
                           MayaJaalAccount.cachedEmail ?? 'N/A',
-                          style: const TextStyle(color: kGreen, fontSize: 13, fontWeight: FontWeight.bold),
+                          style: const TextStyle(
+                            color: kGreen,
+                            fontSize: 13,
+                            fontWeight: FontWeight.bold,
+                          ),
                           overflow: TextOverflow.ellipsis,
                         ),
+                      ],
+                    ),
+                  ),
+                ],
+              ),
+            ),
+            const SizedBox(height: 16),
+
+            // ═══ RANK CARD (NEW) ═══
+            Container(
+              padding: const EdgeInsets.all(16),
+              decoration: BoxDecoration(
+                gradient: LinearGradient(
+                  colors: [
+                    (rank['color'] as Color).withOpacity(0.15),
+                    Colors.black,
+                  ],
+                  begin: Alignment.topLeft,
+                  end: Alignment.bottomRight,
+                ),
+                borderRadius: BorderRadius.circular(14),
+                border: Border.all(
+                  color: (rank['color'] as Color).withOpacity(0.5),
+                  width: 1.5,
+                ),
+              ),
+              child: Row(
+                children: [
+                  Container(
+                    width: 50,
+                    height: 50,
+                    decoration: BoxDecoration(
+                      shape: BoxShape.circle,
+                      border: Border.all(color: rank['color'] as Color, width: 2),
+                    ),
+                    child: Center(
+                      child: Text(
+                        rank['emoji'] as String,
+                        style: const TextStyle(fontSize: 24),
+                      ),
+                    ),
+                  ),
+                  const SizedBox(width: 14),
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          'CYBER RANK',
+                          style: TextStyle(
+                            color: rank['color'] as Color,
+                            fontSize: 9,
+                            letterSpacing: 2,
+                            fontWeight: FontWeight.bold,
+                          ),
+                        ),
+                        const SizedBox(height: 3),
+                        Text(
+                          rank['name'] as String,
+                          style: TextStyle(
+                            color: rank['color'] as Color,
+                            fontSize: 18,
+                            fontWeight: FontWeight.w900,
+                            shadows: [
+                              Shadow(
+                                color: (rank['color'] as Color).withOpacity(0.6),
+                                blurRadius: 12,
+                              ),
+                            ],
+                          ),
+                        ),
+                        if (nextRank != null)
+                          Text(
+                            '${nextRank['min'] - totalViews} views to ${nextRank['name']}',
+                            style: const TextStyle(
+                              color: Colors.white54,
+                              fontSize: 10,
+                            ),
+                          ),
                       ],
                     ),
                   ),
@@ -4218,22 +6986,42 @@ class _EarningsScreenState extends State<EarningsScreen> {
                 color: const Color(0xFF031408),
                 borderRadius: BorderRadius.circular(16),
                 border: Border.all(color: kGreen, width: 1.5),
-                boxShadow: [BoxShadow(color: kGreen.withOpacity(0.15), blurRadius: 20)],
+                boxShadow: [
+                  BoxShadow(
+                    color: kGreen.withOpacity(0.15),
+                    blurRadius: 20,
+                  ),
+                ],
               ),
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  const Text('TOTAL BALANCE',
-                    style: TextStyle(color: Colors.white54, fontSize: 11, letterSpacing: 1.5)),
+                  const Text(
+                    'TOTAL BALANCE',
+                    style: TextStyle(
+                      color: Colors.white54,
+                      fontSize: 11,
+                      letterSpacing: 1.5,
+                    ),
+                  ),
                   const SizedBox(height: 8),
                   Text(
                     '\$${_totalIncome.toStringAsFixed(2)}',
-                    style: const TextStyle(color: kGreen, fontSize: 40, fontWeight: FontWeight.w900,
-                      shadows: [Shadow(color: kGreen, blurRadius: 20)]),
+                    style: const TextStyle(
+                      color: kGreen,
+                      fontSize: 40,
+                      fontWeight: FontWeight.w900,
+                      shadows: [Shadow(color: kGreen, blurRadius: 20)],
+                    ),
                   ),
                   const SizedBox(height: 4),
-                  Text('≈ ₹${(_totalIncome * 80).toStringAsFixed(0)} INR',
-                    style: TextStyle(color: Colors.white.withOpacity(0.5), fontSize: 12)),
+                  Text(
+                    '≈ ₹${(_totalIncome * 80).toStringAsFixed(0)} INR',
+                    style: TextStyle(
+                      color: Colors.white.withOpacity(0.5),
+                      fontSize: 12,
+                    ),
+                  ),
                   const Divider(color: Colors.white24, height: 28),
                   Row(
                     children: [
@@ -4254,36 +7042,66 @@ class _EarningsScreenState extends State<EarningsScreen> {
               decoration: BoxDecoration(
                 color: const Color(0xFF031408),
                 borderRadius: BorderRadius.circular(14),
-                border: Border.all(color: Colors.orangeAccent.withOpacity(0.5)),
+                border: Border.all(
+                  color: Colors.orangeAccent.withOpacity(0.5),
+                ),
               ),
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
                   Row(
                     children: [
-                      const Icon(Icons.local_fire_department, color: Colors.orangeAccent, size: 20),
+                      const Icon(
+                        Icons.local_fire_department,
+                        color: Colors.orangeAccent,
+                        size: 20,
+                      ),
                       const SizedBox(width: 8),
-                      Text('TIER $_currentTier',
-                        style: const TextStyle(color: Colors.orangeAccent, fontSize: 14, fontWeight: FontWeight.bold, letterSpacing: 1.5)),
+                      Text(
+                        'TIER $_currentTier',
+                        style: const TextStyle(
+                          color: Colors.orangeAccent,
+                          fontSize: 14,
+                          fontWeight: FontWeight.bold,
+                          letterSpacing: 1.5,
+                        ),
+                      ),
                     ],
                   ),
                   const SizedBox(height: 12),
                   Row(
                     children: [
-                      Expanded(child: _tierStat('Current Rate', '\$${_currentRate.toStringAsFixed(2)}/1K')),
+                      Expanded(
+                        child: _tierStat(
+                          'Current Rate',
+                          '\$${_currentRate.toStringAsFixed(2)}/1K',
+                        ),
+                      ),
                       const SizedBox(width: 8),
-                      Expanded(child: _tierStat('Next Boost', '$_nextBoost views')),
+                      Expanded(
+                        child: _tierStat('Next Boost', '$_nextBoost views'),
+                      ),
                     ],
                   ),
                   const SizedBox(height: 12),
-                  const Text('Base: 1K views = \$1 · Every 2K views → rate × 1.5',
-                    style: TextStyle(color: Colors.white54, fontSize: 10.5)),
+                  const Text(
+                    'Base: 1K views = \$1 · Every 2K views → rate × 1.5',
+                    style: TextStyle(color: Colors.white54, fontSize: 10.5),
+                  ),
                 ],
               ),
             ),
             const SizedBox(height: 20),
 
-            const Text('YOUR LINKS', style: TextStyle(color: kGreen, fontSize: 13, fontWeight: FontWeight.bold, letterSpacing: 1.5)),
+            const Text(
+              'YOUR LINKS',
+              style: TextStyle(
+                color: kGreen,
+                fontSize: 13,
+                fontWeight: FontWeight.bold,
+                letterSpacing: 1.5,
+              ),
+            ),
             const SizedBox(height: 10),
             _links.isEmpty
                 ? Container(
@@ -4294,15 +7112,20 @@ class _EarningsScreenState extends State<EarningsScreen> {
                       border: Border.all(color: kGreen.withOpacity(0.3)),
                     ),
                     child: const Center(
-                      child: Text('No links yet. Bot me video upload karke start karein.',
-                        textAlign: TextAlign.center, style: TextStyle(color: Colors.white54, fontSize: 12)),
+                      child: Text(
+                        'No links yet. Bot me video upload karke start karein.',
+                        textAlign: TextAlign.center,
+                        style: TextStyle(color: Colors.white54, fontSize: 12),
+                      ),
                     ),
                   )
                 : Column(
                     children: _links.map((link) {
                       final views = (link['views'] ?? 0) as int;
                       final earnings = MayaJaalAccount.calcEarnings(views);
-                      final name = (link['filename'] ?? link['originalUrl'] ?? 'link').toString();
+                      final name =
+                          (link['filename'] ?? link['originalUrl'] ?? 'link')
+                              .toString();
 
                       return Container(
                         margin: const EdgeInsets.only(bottom: 10),
@@ -4315,34 +7138,68 @@ class _EarningsScreenState extends State<EarningsScreen> {
                         child: Row(
                           children: [
                             Container(
-                              width: 38, height: 38,
+                              width: 38,
+                              height: 38,
                               decoration: BoxDecoration(
                                 color: Colors.black,
                                 borderRadius: BorderRadius.circular(10),
-                                border: Border.all(color: kGreen.withOpacity(0.5)),
+                                border: Border.all(
+                                  color: kGreen.withOpacity(0.5),
+                                ),
                               ),
-                              child: const Icon(Icons.play_circle_outline, color: kGreen, size: 20),
+                              child: const Icon(
+                                Icons.play_circle_outline,
+                                color: kGreen,
+                                size: 20,
+                              ),
                             ),
                             const SizedBox(width: 10),
                             Expanded(
                               child: Column(
                                 crossAxisAlignment: CrossAxisAlignment.start,
                                 children: [
-                                  Text(name,
-                                    style: const TextStyle(color: Colors.white, fontSize: 12, fontWeight: FontWeight.bold),
-                                    maxLines: 1, overflow: TextOverflow.ellipsis),
+                                  Text(
+                                    name,
+                                    style: const TextStyle(
+                                      color: Colors.white,
+                                      fontSize: 12,
+                                      fontWeight: FontWeight.bold,
+                                    ),
+                                    maxLines: 1,
+                                    overflow: TextOverflow.ellipsis,
+                                  ),
                                   const SizedBox(height: 3),
                                   Row(
                                     children: [
-                                      const Icon(Icons.visibility, color: kGreen, size: 11),
+                                      const Icon(
+                                        Icons.visibility,
+                                        color: kGreen,
+                                        size: 11,
+                                      ),
                                       const SizedBox(width: 3),
-                                      Text('$views',
-                                        style: TextStyle(color: kGreen.withOpacity(0.9), fontSize: 10.5, fontWeight: FontWeight.bold)),
+                                      Text(
+                                        '$views',
+                                        style: TextStyle(
+                                          color: kGreen.withOpacity(0.9),
+                                          fontSize: 10.5,
+                                          fontWeight: FontWeight.bold,
+                                        ),
+                                      ),
                                       const SizedBox(width: 10),
-                                      const Icon(Icons.attach_money, color: Colors.amberAccent, size: 11),
+                                      const Icon(
+                                        Icons.attach_money,
+                                        color: Colors.amberAccent,
+                                        size: 11,
+                                      ),
                                       const SizedBox(width: 2),
-                                      Text('\$${earnings.toStringAsFixed(2)}',
-                                        style: const TextStyle(color: Colors.amberAccent, fontSize: 10.5, fontWeight: FontWeight.bold)),
+                                      Text(
+                                        '\$${earnings.toStringAsFixed(2)}',
+                                        style: const TextStyle(
+                                          color: Colors.amberAccent,
+                                          fontSize: 10.5,
+                                          fontWeight: FontWeight.bold,
+                                        ),
+                                      ),
                                     ],
                                   ),
                                 ],
@@ -4369,14 +7226,30 @@ class _EarningsScreenState extends State<EarningsScreen> {
                     children: [
                       Icon(Icons.info_outline, color: kGreen, size: 16),
                       SizedBox(width: 6),
-                      Text('WITHDRAWAL INFO',
-                        style: TextStyle(color: kGreen, fontSize: 11, fontWeight: FontWeight.bold, letterSpacing: 1.2)),
+                      Text(
+                        'WITHDRAWAL INFO',
+                        style: TextStyle(
+                          color: kGreen,
+                          fontSize: 11,
+                          fontWeight: FontWeight.bold,
+                          letterSpacing: 1.2,
+                        ),
+                      ),
                     ],
                   ),
                   SizedBox(height: 8),
-                  Text('Minimum: \$20 (≈₹1,600)', style: TextStyle(color: Colors.white70, fontSize: 11.5)),
-                  Text('Methods: Bank Transfer · UPI · Any Bank', style: TextStyle(color: Colors.white70, fontSize: 11.5)),
-                  Text('Processing: 24–48 hours', style: TextStyle(color: Colors.white70, fontSize: 11.5)),
+                  Text(
+                    'Minimum: \$20 (≈₹1,600)',
+                    style: TextStyle(color: Colors.white70, fontSize: 11.5),
+                  ),
+                  Text(
+                    'Methods: Bank Transfer · UPI · Any Bank',
+                    style: TextStyle(color: Colors.white70, fontSize: 11.5),
+                  ),
+                  Text(
+                    'Processing: 24–48 hours',
+                    style: TextStyle(color: Colors.white70, fontSize: 11.5),
+                  ),
                 ],
               ),
             ),
@@ -4397,9 +7270,20 @@ class _EarningsScreenState extends State<EarningsScreen> {
       ),
       child: Column(
         children: [
-          Text(label, style: const TextStyle(color: Colors.white54, fontSize: 9.5), textAlign: TextAlign.center),
+          Text(
+            label,
+            style: const TextStyle(color: Colors.white54, fontSize: 9.5),
+            textAlign: TextAlign.center,
+          ),
           const SizedBox(height: 4),
-          Text(value, style: const TextStyle(color: Colors.white, fontSize: 15, fontWeight: FontWeight.bold)),
+          Text(
+            value,
+            style: const TextStyle(
+              color: Colors.white,
+              fontSize: 15,
+              fontWeight: FontWeight.bold,
+            ),
+          ),
         ],
       ),
     );
@@ -4415,9 +7299,19 @@ class _EarningsScreenState extends State<EarningsScreen> {
       ),
       child: Column(
         children: [
-          Text(label, style: const TextStyle(color: Colors.white54, fontSize: 9.5)),
+          Text(
+            label,
+            style: const TextStyle(color: Colors.white54, fontSize: 9.5),
+          ),
           const SizedBox(height: 4),
-          Text(value, style: const TextStyle(color: Colors.orangeAccent, fontSize: 13, fontWeight: FontWeight.bold)),
+          Text(
+            value,
+            style: const TextStyle(
+              color: Colors.orangeAccent,
+              fontSize: 13,
+              fontWeight: FontWeight.bold,
+            ),
+          ),
         ],
       ),
     );
