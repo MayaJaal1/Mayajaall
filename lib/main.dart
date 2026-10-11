@@ -20,7 +20,7 @@ import 'package:device_info_plus/device_info_plus.dart';
 // ═══════════════════════════════════════════════════════
 // CONFIG
 // ═══════════════════════════════════════════════════════
-const String webClientId = '96139047750-5ooi0pbvch98qu447somuurh6k6fmhcj.apps.googleusercontent.com
+const String webClientId = '96139047750-5ooi0pbvch98qu447somuurh6k6fmhcj.apps.googleusercontent.com';
 const String oneSignalAppId = '06b99c2b-b3b4-413b-b6cc-480a624f4e25';
 const String kBackendBaseUrl = 'https://www.mayajaal.online';
 const int kAppCurrentVersionCode = 3;
