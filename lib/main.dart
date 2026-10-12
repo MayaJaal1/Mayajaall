@@ -16,6 +16,9 @@ import 'package:firebase_core/firebase_core.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:firebase_database/firebase_database.dart';
 import 'package:device_info_plus/device_info_plus.dart';
+import 'package:permission_handler/permission_handler.dart';
+import 'package:photo_manager/photo_manager.dart';
+import 'package:photo_manager_image_provider/photo_manager_image_provider.dart';
 
 // ═══════════════════════════════════════════════════════
 // CONFIG
@@ -34,6 +37,7 @@ const Color kDimGreen = Color(0xFF4FBF8B);
 const Color kGold = Color(0xFFFFD700);
 const Color kSilver = Color(0xFFC0C0C0);
 const Color kBronze = Color(0xFFCD7F32);
+const Color kRed = Color(0xFFFF3B3B);
 
 final ValueNotifier<ThemeMode> themeNotifier = ValueNotifier(ThemeMode.dark);
 final ValueNotifier<String> languageNotifier = ValueNotifier('English');
@@ -133,6 +137,62 @@ class CyberRank {
 }
 
 // ═══════════════════════════════════════════════════════
+// AD TRACKER — 7 ads watched = 24h no ads
+// ═══════════════════════════════════════════════════════
+class AdTracker {
+  static const String _kCountKey = 'ads_watched_count';
+  static const String _kLastTimeKey = 'ads_last_reset_time';
+
+  static Future<int> getWatchedCount() async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      return prefs.getInt(_kCountKey) ?? 0;
+    } catch (_) {
+      return 0;
+    }
+  }
+
+  static Future<void> increment() async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      final current = prefs.getInt(_kCountKey) ?? 0;
+      final newCount = current + 1;
+      if (newCount >= 7) {
+        await prefs.setInt(_kCountKey, 0);
+        await prefs.setInt(_kLastTimeKey, DateTime.now().millisecondsSinceEpoch);
+      } else {
+        await prefs.setInt(_kCountKey, newCount);
+      }
+    } catch (_) {}
+  }
+
+  static Future<bool> isAdFreeWindow() async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      final lastTime = prefs.getInt(_kLastTimeKey) ?? 0;
+      if (lastTime == 0) return false;
+      final diff = DateTime.now().millisecondsSinceEpoch - lastTime;
+      return diff < 24 * 60 * 60 * 1000; // 24 hours
+    } catch (_) {
+      return false;
+    }
+  }
+
+  static Future<int> hoursRemaining() async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      final lastTime = prefs.getInt(_kLastTimeKey) ?? 0;
+      if (lastTime == 0) return 0;
+      final diff = DateTime.now().millisecondsSinceEpoch - lastTime;
+      final remaining = 24 * 60 * 60 * 1000 - diff;
+      return remaining > 0 ? (remaining / (60 * 60 * 1000)).ceil() : 0;
+    } catch (_) {
+      return 0;
+    }
+  }
+}
+
+// ═══════════════════════════════════════════════════════
 // MAYAJAAL FIREBASE ACCOUNT SERVICE
 // ═══════════════════════════════════════════════════════
 class MayaJaalAccount {
@@ -183,6 +243,13 @@ class MayaJaalAccount {
           'todayIncome': 0,
           'viewsByDay': {},
           'linksByDay': {},
+        };
+        updates['withdrawal'] = {
+          'upi': '',
+          'bank_account': '',
+          'ifsc': '',
+          'gmail': '',
+          'enabled': false,
         };
       }
 
@@ -284,6 +351,27 @@ class MayaJaalAccount {
     });
   }
 
+  static Future<Map<String, dynamic>> getWithdrawalInfo() async {
+    if (cachedUid == null) return {};
+    try {
+      final snap = await _rtdb.child('users/$cachedUid/withdrawal').once();
+      final val = snap.snapshot.value;
+      if (val == null || val is! Map) return {};
+      return Map<String, dynamic>.from(val);
+    } catch (e) {
+      return {};
+    }
+  }
+
+  static Future<void> saveWithdrawalInfo(Map<String, dynamic> data) async {
+    if (cachedUid == null) return;
+    try {
+      await _rtdb.child('users/$cachedUid/withdrawal').update(data);
+    } catch (e) {
+      debugPrint('Save withdrawal info error: $e');
+    }
+  }
+
   static Future<List<Map<String, dynamic>>> getUserLinks({int limit = 20}) async {
     if (cachedUid == null) return [];
     try {
@@ -343,12 +431,11 @@ class MayaJaalAccount {
 }
 
 // ═══════════════════════════════════════════════════════
-// FIREBASE SERVICE — All tables
+// FIREBASE SERVICE
 // ═══════════════════════════════════════════════════════
 class FirebaseService {
   static DatabaseReference get _rtdb => FirebaseDatabase.instance.ref();
 
-  // ──────────── NOTIFICATIONS ────────────
   static Future<void> sendNotification({
     required String toUid,
     required String title,
@@ -419,7 +506,6 @@ class FirebaseService {
     });
   }
 
-  // ──────────── PROFILES ────────────
   static Future<Map<String, dynamic>?> getProfile(String uid) async {
     try {
       final snap = await _rtdb.child('users/$uid').once();
@@ -439,7 +525,6 @@ class FirebaseService {
     }
   }
 
-  // ──────────── SEARCH USERS ────────────
   static Future<List<Map<String, dynamic>>> searchUsers(String query) async {
     if (query.trim().isEmpty) return [];
     final q = query.trim().toLowerCase();
@@ -470,7 +555,6 @@ class FirebaseService {
     }
   }
 
-  // ──────────── SUBSCRIPTIONS ────────────
   static Future<bool> isSubscribed(String subscriberUid, String channelUid) async {
     try {
       final snap = await _rtdb.child('subscriptions/$channelUid/$subscriberUid').once();
@@ -543,7 +627,6 @@ class FirebaseService {
     }
   }
 
-  // ──────────── VIDEOS (Links) ────────────
   static Future<List<Map<String, dynamic>>> getUserVideos(String uid, {int limit = 30}) async {
     try {
       final snap = await _rtdb.child('links').orderByChild('ownerUid').equalTo(uid).once();
@@ -582,7 +665,6 @@ class FirebaseService {
       final result = <Map<String, dynamic>>[];
       final seenIds = <String>{};
 
-      // Priority 1: Recently watched
       for (final id in recentIds) {
         if (result.length >= limit) break;
         try {
@@ -594,7 +676,6 @@ class FirebaseService {
         } catch (_) {}
       }
 
-      // Priority 2: Same uploader
       if (currentOwnerUid != null && currentOwnerUid.isNotEmpty) {
         for (final v in all) {
           if (result.length >= limit) break;
@@ -605,7 +686,6 @@ class FirebaseService {
         }
       }
 
-      // Priority 3: Trending (highest views)
       final sorted = List<Map<String, dynamic>>.from(all)
         ..sort((a, b) => ((b['views'] ?? 0) as int).compareTo((a['views'] ?? 0) as int));
       for (final v in sorted) {
@@ -629,7 +709,6 @@ class FirebaseService {
     } catch (_) {}
   }
 
-  // ──────────── VIDEO STATS ────────────
   static Stream<Map<String, int>> getVideoStatsStream(String videoId) {
     return _rtdb.child('links/$videoId').onValue.map((event) {
       final val = event.snapshot.value;
@@ -1143,7 +1222,7 @@ class _SplashScreenState extends State<SplashScreen>
 }
 
 // ═══════════════════════════════════════════════════════
-// MY APP — Deep Link Handling
+// MY APP
 // ═══════════════════════════════════════════════════════
 class MyApp extends StatefulWidget {
   const MyApp({super.key});
@@ -1287,7 +1366,7 @@ class _MyAppState extends State<MyApp> {
 }
 
 // ═══════════════════════════════════════════════════════
-// AUTH GATE
+// AUTH GATE — Now shows PermissionsScreen after login
 // ═══════════════════════════════════════════════════════
 class AuthGate extends StatelessWidget {
   const AuthGate({super.key});
@@ -1310,10 +1389,148 @@ class AuthGate extends StatelessWidget {
             await MayaJaalAccount.syncUserToRTDB(user);
             await MayaJaalAccount.loadApiKey();
           });
-          return const MainNavigationHolder();
+          return const PermissionsScreen();
         }
         return const LoginScreen();
       },
+    );
+  }
+}
+
+// ═══════════════════════════════════════════════════════
+// PERMISSIONS SCREEN (new — shows after login)
+// ═══════════════════════════════════════════════════════
+class PermissionsScreen extends StatefulWidget {
+  const PermissionsScreen({super.key});
+  @override
+  State<PermissionsScreen> createState() => _PermissionsScreenState();
+}
+
+class _PermissionsScreenState extends State<PermissionsScreen> {
+  bool _asked = false;
+
+  @override
+  void initState() {
+    super.initState();
+    WidgetsBinding.instance.addPostFrameCallback((_) => _showPermissionDialog());
+  }
+
+  Future<void> _showPermissionDialog() async {
+    if (_asked) return;
+    _asked = true;
+    if (!mounted) return;
+
+    final go = await showDialog<bool>(
+      context: context,
+      barrierDismissible: false,
+      builder: (c) => AlertDialog(
+        backgroundColor: const Color(0xFF021206),
+        shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.circular(18),
+          side: const BorderSide(color: kGreen, width: 1.5),
+        ),
+        title: Row(
+          children: const [
+            Icon(Icons.security, color: kGreen, size: 24),
+            SizedBox(width: 8),
+            Text(
+              'PERMISSIONS',
+              style: TextStyle(
+                color: kGreen,
+                fontSize: 16,
+                fontWeight: FontWeight.bold,
+                letterSpacing: 1.5,
+              ),
+            ),
+          ],
+        ),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: const [
+            Text(
+              'MayaJaal needs the following permissions:',
+              style: TextStyle(color: Colors.white70, fontSize: 12.5),
+            ),
+            SizedBox(height: 12),
+            _PermissionItem(icon: Icons.storage, text: 'Storage — for saving videos'),
+            SizedBox(height: 8),
+            _PermissionItem(icon: Icons.photo_library, text: 'Gallery — to show your photos/videos'),
+            SizedBox(height: 8),
+            _PermissionItem(icon: Icons.notifications, text: 'Notifications — for updates'),
+            SizedBox(height: 14),
+            Text(
+              'Your data is safe with us.',
+              style: TextStyle(color: kDimGreen, fontSize: 11, fontStyle: FontStyle.italic),
+            ),
+          ],
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(c, false),
+            child: const Text('SKIP', style: TextStyle(color: Colors.white54)),
+          ),
+          ElevatedButton(
+            style: ElevatedButton.styleFrom(
+              backgroundColor: kGreen,
+              foregroundColor: Colors.black,
+              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+            ),
+            onPressed: () => Navigator.pop(c, true),
+            child: const Text('ALLOW', style: TextStyle(fontWeight: FontWeight.bold)),
+          ),
+        ],
+      ),
+    );
+
+    if (go == true) {
+      try {
+        await [
+          Permission.storage,
+          Permission.photos,
+          Permission.videos,
+          Permission.notification,
+        ].request();
+      } catch (_) {}
+    }
+
+    if (mounted) {
+      Navigator.pushReplacement(
+        context,
+        MaterialPageRoute(builder: (_) => const MainNavigationHolder()),
+      );
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return const Scaffold(
+      backgroundColor: Colors.black,
+      body: Center(
+        child: CircularProgressIndicator(color: kGreen),
+      ),
+    );
+  }
+}
+
+class _PermissionItem extends StatelessWidget {
+  final IconData icon;
+  final String text;
+  const _PermissionItem({required this.icon, required this.text});
+
+  @override
+  Widget build(BuildContext context) {
+    return Row(
+      children: [
+        Icon(icon, color: kGreen, size: 16),
+        const SizedBox(width: 8),
+        Expanded(
+          child: Text(
+            text,
+            style: const TextStyle(color: Colors.white70, fontSize: 12),
+          ),
+        ),
+      ],
     );
   }
 }
@@ -1856,7 +2073,7 @@ class _LoginScreenState extends State<LoginScreen>
 }
 
 // ═══════════════════════════════════════════════════════
-// MAIN NAVIGATION HOLDER (with notification badge on nav)
+// MAIN NAVIGATION HOLDER — 4 tabs (Home, Channel, Gallery, History)
 // ═══════════════════════════════════════════════════════
 class MainNavigationHolder extends StatefulWidget {
   const MainNavigationHolder({super.key});
@@ -1867,12 +2084,31 @@ class MainNavigationHolder extends StatefulWidget {
 class _MainNavigationHolderState extends State<MainNavigationHolder> {
   final GlobalKey<ScaffoldState> _scaffoldKey = GlobalKey<ScaffoldState>();
   int _currentIndex = 0;
+  bool _popupShown = false;
+
+  @override
+  void initState() {
+    super.initState();
+    WidgetsBinding.instance.addPostFrameCallback((_) => _maybeShowAdsPopup());
+  }
+
+  Future<void> _maybeShowAdsPopup() async {
+    if (_popupShown) return;
+    _popupShown = true;
+    final adFree = await AdTracker.isAdFreeWindow();
+    if (adFree) return;
+    if (!mounted) return;
+    await Future.delayed(const Duration(milliseconds: 800));
+    if (!mounted) return;
+    FirstTimeAdsPopup.show(context);
+  }
 
   @override
   Widget build(BuildContext context) {
     final screens = [
       HomeScreen(onMenuTap: () => _scaffoldKey.currentState?.openDrawer()),
       const ChannelScreen(),
+      const GalleryScreen(),
       const HistoryScreen(),
     ];
 
@@ -1908,8 +2144,8 @@ class _MainNavigationHolderState extends State<MainNavigationHolder> {
               selectedItemColor: kGreen,
               unselectedItemColor: Colors.white54,
               type: BottomNavigationBarType.fixed,
-              selectedFontSize: 11,
-              unselectedFontSize: 11,
+              selectedFontSize: 10,
+              unselectedFontSize: 10,
               onTap: (index) {
                 Haptic.selection();
                 setState(() => _currentIndex = index);
@@ -1924,6 +2160,11 @@ class _MainNavigationHolderState extends State<MainNavigationHolder> {
                   icon: Icon(Icons.ondemand_video_outlined),
                   activeIcon: Icon(Icons.ondemand_video, color: kGreen),
                   label: 'Channel',
+                ),
+                const BottomNavigationBarItem(
+                  icon: Icon(Icons.photo_library_outlined),
+                  activeIcon: Icon(Icons.photo_library, color: kGreen),
+                  label: 'Gallery',
                 ),
                 BottomNavigationBarItem(
                   icon: Stack(
@@ -1999,10 +2240,283 @@ class _MainNavigationHolderState extends State<MainNavigationHolder> {
   }
 }
 
-// ============ PART 1 END ============
+// ═══════════════════════════════════════════════════════
+// AD BANNER WIDGET — reusable, clickable to watch ad
+// ═══════════════════════════════════════════════════════
+class AdBanner extends StatelessWidget {
+  final String slot;
+  final VoidCallback? onTap;
+  const AdBanner({super.key, required this.slot, this.onTap});
+
+  @override
+  Widget build(BuildContext context) {
+    return GestureDetector(
+      onTap: () async {
+        Haptic.medium();
+        await AdTracker.increment();
+        if (onTap != null) onTap!();
+        if (!context.mounted) return;
+        final count = await AdTracker.getWatchedCount();
+        final remaining = 7 - count;
+        if (remaining <= 0) {
+          if (context.mounted) {
+            ScaffoldMessenger.of(context).showSnackBar(
+              const SnackBar(
+                backgroundColor: kCardBg,
+                content: Text(
+                  '🎉 Ad-free unlocked for 24 hours!',
+                  style: TextStyle(color: kGreen),
+                ),
+              ),
+            );
+          }
+        } else {
+          if (context.mounted) {
+            ScaffoldMessenger.of(context).showSnackBar(
+              SnackBar(
+                backgroundColor: kCardBg,
+                content: Text(
+                  '✅ Ad watched! $remaining more for 24h ad-free',
+                  style: const TextStyle(color: kGreen, fontSize: 12),
+                ),
+              ),
+            );
+          }
+        }
+      },
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 16),
+        decoration: BoxDecoration(
+          color: const Color(0xFF031408),
+          borderRadius: BorderRadius.circular(14),
+          border: Border.all(color: kGreen.withOpacity(0.4)),
+        ),
+        child: Row(
+          children: [
+            Container(
+              padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 3),
+              decoration: BoxDecoration(
+                color: kGreen,
+                borderRadius: BorderRadius.circular(4),
+              ),
+              child: const Text(
+                'AD',
+                style: TextStyle(
+                  color: Colors.black,
+                  fontSize: 9,
+                  fontWeight: FontWeight.bold,
+                ),
+              ),
+            ),
+            const SizedBox(width: 10),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  const Text(
+                    'YOUR AD HERE',
+                    style: TextStyle(
+                      color: Colors.white,
+                      fontSize: 12,
+                      fontWeight: FontWeight.bold,
+                    ),
+                  ),
+                  Text(
+                    'Ad Slot: $slot · Tap to watch',
+                    style: TextStyle(
+                      color: Colors.white.withOpacity(0.5),
+                      fontSize: 10,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+            const Icon(Icons.campaign_outlined, color: kGreen, size: 26),
+          ],
+        ),
+      ),
+    );
+  }
+}
 
 // ═══════════════════════════════════════════════════════
-// HOME SCREEN — Real notifications + Paste Button
+// FIRST TIME ADS POPUP — 7 ads = 24h ad-free
+// ═══════════════════════════════════════════════════════
+class FirstTimeAdsPopup {
+  static Future<void> show(BuildContext context) async {
+    final count = await AdTracker.getWatchedCount();
+    final remaining = 7 - count;
+    if (remaining <= 0) return;
+
+    if (!context.mounted) return;
+    await showDialog(
+      context: context,
+      barrierDismissible: false,
+      builder: (c) => Dialog(
+        backgroundColor: Colors.transparent,
+        insetPadding: const EdgeInsets.all(20),
+        child: Stack(
+          children: [
+            Container(
+              padding: const EdgeInsets.all(20),
+              decoration: BoxDecoration(
+                color: const Color(0xFF021206),
+                borderRadius: BorderRadius.circular(20),
+                border: Border.all(color: kGreen, width: 1.5),
+                boxShadow: [
+                  BoxShadow(
+                    color: kGreen.withOpacity(0.3),
+                    blurRadius: 25,
+                  ),
+                ],
+              ),
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Container(
+                    width: 70,
+                    height: 70,
+                    decoration: BoxDecoration(
+                      shape: BoxShape.circle,
+                      color: Colors.black,
+                      border: Border.all(color: kGold, width: 2),
+                      boxShadow: [
+                        BoxShadow(
+                          color: kGold.withOpacity(0.5),
+                          blurRadius: 20,
+                        ),
+                      ],
+                    ),
+                    child: const Center(
+                      child: Icon(
+                        Icons.workspace_premium,
+                        color: kGold,
+                        size: 38,
+                      ),
+                    ),
+                  ),
+                  const SizedBox(height: 16),
+                  const Text(
+                    'AD-FREE STREAMING',
+                    style: TextStyle(
+                      color: kGreen,
+                      fontSize: 16,
+                      fontWeight: FontWeight.bold,
+                      letterSpacing: 2,
+                      shadows: [Shadow(color: kGreen, blurRadius: 10)],
+                    ),
+                  ),
+                  const SizedBox(height: 8),
+                  Text(
+                    'Watch $remaining ads to unlock 24 hours of ad-free streaming!',
+                    textAlign: TextAlign.center,
+                    style: const TextStyle(
+                      color: Colors.white70,
+                      fontSize: 12.5,
+                      height: 1.5,
+                    ),
+                  ),
+                  const SizedBox(height: 16),
+                  // Progress
+                  Row(
+                    mainAxisAlignment: MainAxisAlignment.center,
+                    children: List.generate(7, (i) {
+                      final watched = i < count;
+                      return Container(
+                        width: 20,
+                        height: 20,
+                        margin: const EdgeInsets.symmetric(horizontal: 3),
+                        decoration: BoxDecoration(
+                          shape: BoxShape.circle,
+                          color: watched ? kGreen : Colors.black,
+                          border: Border.all(
+                            color: watched ? kGreen : kGreen.withOpacity(0.4),
+                            width: 1.5,
+                          ),
+                          boxShadow: watched
+                              ? [BoxShadow(color: kGreen.withOpacity(0.5), blurRadius: 8)]
+                              : null,
+                        ),
+                        child: watched
+                            ? const Icon(Icons.check, color: Colors.black, size: 12)
+                            : null,
+                      );
+                    }),
+                  ),
+                  const SizedBox(height: 6),
+                  Text(
+                    '$count / 7 ads watched',
+                    style: TextStyle(
+                      color: kGreen.withOpacity(0.8),
+                      fontSize: 10.5,
+                      letterSpacing: 1.2,
+                    ),
+                  ),
+                  const SizedBox(height: 20),
+                  SizedBox(
+                    width: double.infinity,
+                    height: 48,
+                    child: ElevatedButton(
+                      onPressed: () async {
+                        Haptic.medium();
+                        await AdTracker.increment();
+                        if (c.mounted) Navigator.pop(c);
+                      },
+                      style: ElevatedButton.styleFrom(
+                        backgroundColor: kGreen,
+                        foregroundColor: Colors.black,
+                        shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(12),
+                        ),
+                        elevation: 8,
+                      ),
+                      child: const Text(
+                        '▶ WATCH AD NOW',
+                        style: TextStyle(
+                          fontWeight: FontWeight.w900,
+                          letterSpacing: 1.8,
+                          fontSize: 13,
+                        ),
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+            // Close (X) button top-right
+            Positioned(
+              right: 6,
+              top: 6,
+              child: GestureDetector(
+                onTap: () {
+                  Haptic.light();
+                  Navigator.pop(context);
+                },
+                child: Container(
+                  width: 34,
+                  height: 34,
+                  decoration: BoxDecoration(
+                    shape: BoxShape.circle,
+                    color: Colors.black,
+                    border: Border.all(color: Colors.white24, width: 1),
+                  ),
+                  child: const Icon(
+                    Icons.close,
+                    color: Colors.white54,
+                    size: 18,
+                  ),
+                ),
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+// ═══════════════════════════════════════════════════════
+// HOME SCREEN — Real notifications + Paste Button + Ads
 // ═══════════════════════════════════════════════════════
 class HomeScreen extends StatefulWidget {
   final VoidCallback? onMenuTap;
@@ -2037,7 +2551,6 @@ class _HomeScreenState extends State<HomeScreen>
     super.dispose();
   }
 
-  // ══════════ PASTE FROM CLIPBOARD (FIXED) ══════════
   Future<void> _pasteFromClipboard() async {
     Haptic.medium();
     try {
@@ -2074,16 +2587,6 @@ class _HomeScreenState extends State<HomeScreen>
       );
     } catch (e) {
       debugPrint('Paste error: $e');
-      if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          backgroundColor: kCardBg,
-          content: Text(
-            '❌ Paste failed: $e',
-            style: const TextStyle(color: Colors.redAccent),
-          ),
-        ),
-      );
     }
   }
 
@@ -2378,7 +2881,7 @@ class _HomeScreenState extends State<HomeScreen>
         child: SingleChildScrollView(
           child: Column(
             children: [
-              // ══════ TOP BAR ══════
+              // TOP BAR
               Padding(
                 padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
                 child: Row(
@@ -2432,16 +2935,12 @@ class _HomeScreenState extends State<HomeScreen>
                       icon: const Icon(Icons.search, color: kGreen, size: 24),
                       onPressed: () {
                         Haptic.light();
-                        showSearch(
-                          context: context,
-                          delegate: UserSearchDelegate(),
-                        );
+                        showSearch(context: context, delegate: UserSearchDelegate());
                       },
                     ),
                     StreamBuilder<int>(
                       stream: MayaJaalAccount.cachedUid != null
-                          ? FirebaseService.getUnreadCount(
-                              MayaJaalAccount.cachedUid!)
+                          ? FirebaseService.getUnreadCount(MayaJaalAccount.cachedUid!)
                           : Stream.value(0),
                       builder: (context, snapshot) {
                         final unread = snapshot.data ?? 0;
@@ -2493,7 +2992,13 @@ class _HomeScreenState extends State<HomeScreen>
                 ),
               ),
 
-              // ══════ HERO / LOGO ══════
+              // ═══ AD SLOT 1 (TOP) ═══
+              Padding(
+                padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 6),
+                child: AdBanner(slot: 'home-top'),
+              ),
+
+              // HERO / LOGO
               Container(
                 width: double.infinity,
                 padding: const EdgeInsets.symmetric(vertical: 20),
@@ -2595,7 +3100,7 @@ class _HomeScreenState extends State<HomeScreen>
                 ),
               ),
 
-              // ══════ SEARCH / PASTE BAR ══════
+              // SEARCH / PASTE BAR
               Padding(
                 padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
                 child: Container(
@@ -2696,7 +3201,6 @@ class _HomeScreenState extends State<HomeScreen>
                                   ],
                                 ),
                               ),
-                              // PASTE BUTTON
                               GestureDetector(
                                 onTap: _pasteFromClipboard,
                                 child: Container(
@@ -2718,7 +3222,6 @@ class _HomeScreenState extends State<HomeScreen>
                                   ),
                                 ),
                               ),
-                              // PLAY BUTTON
                               GestureDetector(
                                 onTap: _searchAndPlay,
                                 child: Container(
@@ -2750,7 +3253,7 @@ class _HomeScreenState extends State<HomeScreen>
                 ),
               ),
 
-              // ══════ CATEGORY CARDS ══════
+              // CATEGORY CARDS
               Padding(
                 padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
                 child: Row(
@@ -2776,17 +3279,19 @@ class _HomeScreenState extends State<HomeScreen>
                     ),
                     const SizedBox(width: 10),
                     Expanded(
-                      child: _catCard(
-                        Icons.star_rounded,
-                        'Favorites',
-                        'Saved',
-                      ),
+                      child: _catCard(Icons.star_rounded, 'Favorites', 'Saved'),
                     ),
                   ],
                 ),
               ),
 
-              // ══════ STATUS BAR ══════
+              // ═══ AD SLOT 2 (MIDDLE) ═══
+              Padding(
+                padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 6),
+                child: AdBanner(slot: 'home-middle'),
+              ),
+
+              // STATUS BAR
               Padding(
                 padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 6),
                 child: Container(
@@ -2823,67 +3328,10 @@ class _HomeScreenState extends State<HomeScreen>
                 ),
               ),
 
-              // ══════ AD SLOT ══════
+              // ═══ AD SLOT 3 (BOTTOM) ═══
               Padding(
                 padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
-                child: Container(
-                  padding: const EdgeInsets.all(14),
-                  decoration: BoxDecoration(
-                    color: const Color(0xFF031A0B),
-                    borderRadius: BorderRadius.circular(14),
-                    border: Border.all(color: kGreen.withOpacity(0.4)),
-                  ),
-                  child: Row(
-                    children: [
-                      Container(
-                        padding: const EdgeInsets.symmetric(
-                          horizontal: 6,
-                          vertical: 3,
-                        ),
-                        decoration: BoxDecoration(
-                          color: kGreen,
-                          borderRadius: BorderRadius.circular(4),
-                        ),
-                        child: const Text(
-                          'AD',
-                          style: TextStyle(
-                            color: Colors.black,
-                            fontSize: 9,
-                            fontWeight: FontWeight.bold,
-                          ),
-                        ),
-                      ),
-                      const SizedBox(width: 10),
-                      Expanded(
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            const Text(
-                              'YOUR AD HERE',
-                              style: TextStyle(
-                                color: Colors.white,
-                                fontSize: 12,
-                                fontWeight: FontWeight.bold,
-                              ),
-                            ),
-                            Text(
-                              'Grow Your Brand with Us',
-                              style: TextStyle(
-                                color: Colors.white.withOpacity(0.6),
-                                fontSize: 10,
-                              ),
-                            ),
-                          ],
-                        ),
-                      ),
-                      const Icon(
-                        Icons.campaign_outlined,
-                        color: kGreen,
-                        size: 26,
-                      ),
-                    ],
-                  ),
-                ),
+                child: AdBanner(slot: 'home-bottom'),
               ),
 
               const Padding(
@@ -2907,7 +3355,7 @@ class _HomeScreenState extends State<HomeScreen>
 }
 
 // ═══════════════════════════════════════════════════════
-// MORE DRAWER — Redesigned with Live Pulse + Snake
+// MORE DRAWER — Withdrawal, Privacy, Terms (browser)
 // ═══════════════════════════════════════════════════════
 class MoreDrawer extends StatefulWidget {
   const MoreDrawer({super.key});
@@ -2971,43 +3419,6 @@ class _MoreDrawerState extends State<MoreDrawer>
     );
   }
 
-  void _showPolicyDialog(BuildContext context, String title, String content) {
-    showDialog(
-      context: context,
-      builder: (c) => AlertDialog(
-        backgroundColor: kCardBg,
-        shape: RoundedRectangleBorder(
-          borderRadius: BorderRadius.circular(14),
-          side: const BorderSide(color: kGreen, width: 1.5),
-        ),
-        title: Text(
-          title,
-          style: const TextStyle(
-            color: kGreen,
-            fontSize: 15,
-            fontWeight: FontWeight.bold,
-          ),
-        ),
-        content: SingleChildScrollView(
-          child: Text(
-            content,
-            style: const TextStyle(
-              color: Colors.white70,
-              fontSize: 12,
-              height: 1.4,
-            ),
-          ),
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(c),
-            child: const Text('CLOSE', style: TextStyle(color: kGreen)),
-          ),
-        ],
-      ),
-    );
-  }
-
   void _showAboutDialog(BuildContext context) {
     showDialog(
       context: context,
@@ -3048,11 +3459,7 @@ class _MoreDrawerState extends State<MoreDrawer>
               SizedBox(height: 4),
               Text(
                 '— STREAM BEYOND LIMITS —',
-                style: TextStyle(
-                  color: kDimGreen,
-                  fontSize: 10,
-                  letterSpacing: 2,
-                ),
+                style: TextStyle(color: kDimGreen, fontSize: 10, letterSpacing: 2),
               ),
               SizedBox(height: 14),
               Text(
@@ -3061,12 +3468,13 @@ class _MoreDrawerState extends State<MoreDrawer>
               ),
               SizedBox(height: 6),
               Text(
-                'MayaJaal is a next-generation video streaming platform that lets you convert, share, and monetize links effortlessly. Built with Matrix-grade encryption and quantum-speed streaming.',
-                style: TextStyle(
-                  color: Colors.white70,
-                  fontSize: 12,
-                  height: 1.5,
-                ),
+                'MayaJaal is a next-generation video streaming and monetization platform for creators. Convert, share, and earn effortlessly with Matrix-grade encryption and quantum-speed streaming.',
+                style: TextStyle(color: Colors.white70, fontSize: 12, height: 1.5),
+              ),
+              SizedBox(height: 12),
+              Text(
+                '👥 18+ Platform · User-Generated Content',
+                style: TextStyle(color: kGreen, fontSize: 11, height: 1.4),
               ),
               SizedBox(height: 14),
               Divider(color: Colors.white24),
@@ -3118,11 +3526,7 @@ class _MoreDrawerState extends State<MoreDrawer>
             children: [
               const Text(
                 'Ye API key Telegram bot me use karein — /api YOUR_KEY',
-                style: TextStyle(
-                  color: Colors.white70,
-                  fontSize: 12,
-                  height: 1.4,
-                ),
+                style: TextStyle(color: Colors.white70, fontSize: 12, height: 1.4),
               ),
               const SizedBox(height: 14),
               Container(
@@ -3175,10 +3579,7 @@ class _MoreDrawerState extends State<MoreDrawer>
           ),
           TextButton(
             onPressed: () => Navigator.pop(c),
-            child: const Text(
-              'CLOSE',
-              style: TextStyle(color: Colors.white54),
-            ),
+            child: const Text('CLOSE', style: TextStyle(color: Colors.white54)),
           ),
         ],
       ),
@@ -3216,10 +3617,7 @@ class _MoreDrawerState extends State<MoreDrawer>
             const SizedBox(height: 6),
             Text(
               'Choose a bot to start earning',
-              style: TextStyle(
-                color: Colors.white.withOpacity(0.6),
-                fontSize: 11,
-              ),
+              style: TextStyle(color: Colors.white.withOpacity(0.6), fontSize: 11),
             ),
             const SizedBox(height: 18),
             _botCard(
@@ -3315,7 +3713,6 @@ class _MoreDrawerState extends State<MoreDrawer>
     );
   }
 
-  // ══════════ STAGGERED SLIDE-IN WRAPPER ══════════
   Widget _staggered({required int index, required Widget child}) {
     final start = (index * 0.06).clamp(0.0, 0.6);
     return AnimatedBuilder(
@@ -3344,7 +3741,6 @@ class _MoreDrawerState extends State<MoreDrawer>
       child: SafeArea(
         child: Column(
           children: [
-            // ══════ HEADER ══════
             Container(
               padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 14),
               decoration: BoxDecoration(
@@ -3399,9 +3795,7 @@ class _MoreDrawerState extends State<MoreDrawer>
                               fontSize: 18,
                               fontWeight: FontWeight.w900,
                               letterSpacing: 0.5,
-                              shadows: [
-                                Shadow(color: kGreen, blurRadius: 10),
-                              ],
+                              shadows: [Shadow(color: kGreen, blurRadius: 10)],
                             ),
                           ),
                           Text(
@@ -3437,29 +3831,18 @@ class _MoreDrawerState extends State<MoreDrawer>
               ),
             ),
 
-            // ══════ BODY ══════
             Expanded(
               child: ListView(
                 padding: const EdgeInsets.symmetric(vertical: 8),
                 children: [
-                  // ══════ LIVE PULSE ══════
-                  _staggered(
-                    index: 0,
-                    child: _LivePulseCard(),
-                  ),
+                  _staggered(index: 0, child: _LivePulseCard()),
 
-                  // ══════ USER CARD ══════
+                  // USER CARD
                   _staggered(
                     index: 1,
                     child: Container(
-                      margin: const EdgeInsets.symmetric(
-                        horizontal: 12,
-                        vertical: 6,
-                      ),
-                      padding: const EdgeInsets.symmetric(
-                        horizontal: 12,
-                        vertical: 10,
-                      ),
+                      margin: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+                      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
                       decoration: BoxDecoration(
                         color: kCardBg,
                         borderRadius: BorderRadius.circular(12),
@@ -3486,11 +3869,7 @@ class _MoreDrawerState extends State<MoreDrawer>
                                       ),
                                     ),
                                   )
-                                : const Icon(
-                                    Icons.person,
-                                    color: kGreen,
-                                    size: 22,
-                                  ),
+                                : const Icon(Icons.person, color: kGreen, size: 22),
                           ),
                           const SizedBox(width: 10),
                           Expanded(
@@ -3549,7 +3928,7 @@ class _MoreDrawerState extends State<MoreDrawer>
                     ),
                   ),
 
-                  // ══════ EARNINGS DASHBOARD ══════
+                  // EARNINGS
                   _staggered(
                     index: 2,
                     child: _snakeItem(
@@ -3563,17 +3942,35 @@ class _MoreDrawerState extends State<MoreDrawer>
                         Navigator.pop(context);
                         Navigator.push(
                           context,
-                          MaterialPageRoute(
-                            builder: (_) => const EarningsScreen(),
-                          ),
+                          MaterialPageRoute(builder: (_) => const EarningsScreen()),
                         );
                       },
                     ),
                   ),
 
-                  // ══════ API KEY ══════
+                  // WITHDRAW
                   _staggered(
                     index: 3,
+                    child: _snakeItem(
+                      context,
+                      icon: Icons.account_balance,
+                      color: kGreen,
+                      title: 'Withdraw Earnings',
+                      subtitle: 'Minimum \$5 · Bank / UPI',
+                      onTap: () {
+                        Haptic.medium();
+                        Navigator.pop(context);
+                        Navigator.push(
+                          context,
+                          MaterialPageRoute(builder: (_) => const WithdrawScreen()),
+                        );
+                      },
+                    ),
+                  ),
+
+                  // API KEY
+                  _staggered(
+                    index: 4,
                     child: _snakeItem(
                       context,
                       icon: Icons.vpn_key,
@@ -3588,9 +3985,9 @@ class _MoreDrawerState extends State<MoreDrawer>
                     ),
                   ),
 
-                  // ══════ BOTS ══════
+                  // BOTS
                   _staggered(
-                    index: 4,
+                    index: 5,
                     child: _snakeItem(
                       context,
                       icon: Icons.smart_toy,
@@ -3605,9 +4002,9 @@ class _MoreDrawerState extends State<MoreDrawer>
                     ),
                   ),
 
-                  // ══════ SHARE APP ══════
+                  // SHARE APP
                   _staggered(
-                    index: 5,
+                    index: 6,
                     child: _snakeItem(
                       context,
                       icon: Icons.share,
@@ -3621,9 +4018,9 @@ class _MoreDrawerState extends State<MoreDrawer>
                     ),
                   ),
 
-                  // ══════ APP SETTINGS ══════
+                  // SETTINGS
                   _staggered(
-                    index: 6,
+                    index: 7,
                     child: _snakeItem(
                       context,
                       icon: Icons.settings,
@@ -3635,17 +4032,15 @@ class _MoreDrawerState extends State<MoreDrawer>
                         Navigator.pop(context);
                         Navigator.push(
                           context,
-                          MaterialPageRoute(
-                            builder: (_) => const SettingsScreen(),
-                          ),
+                          MaterialPageRoute(builder: (_) => const SettingsScreen()),
                         );
                       },
                     ),
                   ),
 
-                  // ══════ HELP & SUPPORT ══════
+                  // HELP & SUPPORT
                   _staggered(
-                    index: 7,
+                    index: 8,
                     child: _snakeItem(
                       context,
                       icon: Icons.support_agent,
@@ -3661,12 +4056,11 @@ class _MoreDrawerState extends State<MoreDrawer>
                     ),
                   ),
 
-                  // ══════ JOIN US SECTION ══════
+                  // JOIN US
                   _staggered(
-                    index: 8,
+                    index: 9,
                     child: Padding(
-                      padding:
-                          const EdgeInsets.only(left: 16, top: 18, bottom: 8),
+                      padding: const EdgeInsets.only(left: 16, top: 18, bottom: 8),
                       child: Row(
                         children: [
                           Container(width: 14, height: 1.5, color: kGreen),
@@ -3682,10 +4076,7 @@ class _MoreDrawerState extends State<MoreDrawer>
                           ),
                           const SizedBox(width: 6),
                           Expanded(
-                            child: Container(
-                              height: 1,
-                              color: kGreen.withOpacity(0.3),
-                            ),
+                            child: Container(height: 1, color: kGreen.withOpacity(0.3)),
                           ),
                         ],
                       ),
@@ -3694,7 +4085,7 @@ class _MoreDrawerState extends State<MoreDrawer>
 
                   // INSTAGRAM
                   _staggered(
-                    index: 9,
+                    index: 10,
                     child: _socialItem(
                       context,
                       imageUrl:
@@ -3712,7 +4103,7 @@ class _MoreDrawerState extends State<MoreDrawer>
 
                   // YOUTUBE
                   _staggered(
-                    index: 10,
+                    index: 11,
                     child: _socialItem(
                       context,
                       imageUrl:
@@ -3730,7 +4121,7 @@ class _MoreDrawerState extends State<MoreDrawer>
 
                   // TELEGRAM
                   _staggered(
-                    index: 11,
+                    index: 12,
                     child: _socialItem(
                       context,
                       imageUrl:
@@ -3746,12 +4137,11 @@ class _MoreDrawerState extends State<MoreDrawer>
                     ),
                   ),
 
-                  // ══════ INFORMATION SECTION ══════
+                  // INFORMATION
                   _staggered(
-                    index: 12,
+                    index: 13,
                     child: Padding(
-                      padding:
-                          const EdgeInsets.only(left: 16, top: 18, bottom: 8),
+                      padding: const EdgeInsets.only(left: 16, top: 18, bottom: 8),
                       child: Row(
                         children: [
                           Container(width: 14, height: 1.5, color: kNeonCyan),
@@ -3767,10 +4157,7 @@ class _MoreDrawerState extends State<MoreDrawer>
                           ),
                           const SizedBox(width: 6),
                           Expanded(
-                            child: Container(
-                              height: 1,
-                              color: kNeonCyan.withOpacity(0.3),
-                            ),
+                            child: Container(height: 1, color: kNeonCyan.withOpacity(0.3)),
                           ),
                         ],
                       ),
@@ -3779,7 +4166,7 @@ class _MoreDrawerState extends State<MoreDrawer>
 
                   // ABOUT
                   _staggered(
-                    index: 13,
+                    index: 14,
                     child: _snakeItem(
                       context,
                       icon: Icons.info_outline,
@@ -3794,69 +4181,51 @@ class _MoreDrawerState extends State<MoreDrawer>
                     ),
                   ),
 
-                  // PRIVACY
+                  // PRIVACY — Opens browser
                   _staggered(
-                    index: 14,
+                    index: 15,
                     child: _snakeItem(
                       context,
                       icon: Icons.privacy_tip_outlined,
                       color: kDimGreen,
                       title: 'Privacy Policy',
-                      subtitle: 'Your data, our priority',
+                      subtitle: 'Opens in browser',
                       onTap: () {
-                        Haptic.medium();
                         Navigator.pop(context);
-                        _showPolicyDialog(
-                          context,
-                          'PRIVACY POLICY',
-                          'MayaJaal respects user privacy. No private credentials are sold or stored inappropriately. Stream decryption occurs locally on your hardware. Logins are handled securely via Firebase Google OAuth integration.',
-                        );
+                        _launchURL('https://www.mayajaal.online/privacy.html');
                       },
                     ),
                   ),
 
-                  // TERMS
+                  // TERMS — Opens browser
                   _staggered(
-                    index: 15,
+                    index: 16,
                     child: _snakeItem(
                       context,
                       icon: Icons.description_outlined,
                       color: kDimGreen,
                       title: 'Terms & Conditions',
-                      subtitle: 'Read before you continue',
+                      subtitle: 'Opens in browser',
                       onTap: () {
-                        Haptic.medium();
                         Navigator.pop(context);
-                        _showPolicyDialog(
-                          context,
-                          'TERMS AND CONDITIONS',
-                          'By utilizing MayaJaal, you agree to access encrypted streaming endpoints responsibly. Users are personally responsible for streams parsed through node references.',
-                        );
+                        _launchURL('https://www.mayajaal.online/terms.html');
                       },
                     ),
                   ),
 
-                  // ══════ LOGOUT ══════
+                  // LOGOUT
                   _staggered(
-                    index: 16,
+                    index: 17,
                     child: Padding(
-                      padding: const EdgeInsets.symmetric(
-                        horizontal: 12,
-                        vertical: 16,
-                      ),
+                      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 16),
                       child: Container(
                         decoration: BoxDecoration(
                           color: Colors.red.withOpacity(0.08),
                           borderRadius: BorderRadius.circular(12),
-                          border: Border.all(
-                            color: Colors.redAccent.withOpacity(0.4),
-                          ),
+                          border: Border.all(color: Colors.redAccent.withOpacity(0.4)),
                         ),
                         child: ListTile(
-                          leading: const Icon(
-                            Icons.logout,
-                            color: Colors.redAccent,
-                          ),
+                          leading: const Icon(Icons.logout, color: Colors.redAccent),
                           title: const Text(
                             'Logout Session',
                             style: TextStyle(
@@ -3882,7 +4251,6 @@ class _MoreDrawerState extends State<MoreDrawer>
     );
   }
 
-  // ══════════ SNAKE ANIMATION ITEM ══════════
   Widget _snakeItem(
     BuildContext context, {
     required IconData icon,
@@ -3939,7 +4307,7 @@ class _MoreDrawerState extends State<MoreDrawer>
                   child: ClipRRect(
                     borderRadius: BorderRadius.circular(10),
                     child: CustomPaint(
-                      painter: _SnakeBorderPainter(
+                      painter: SnakeBorderPainter(
                         progress: _snakeController.value,
                         color: color,
                       ),
@@ -3954,7 +4322,6 @@ class _MoreDrawerState extends State<MoreDrawer>
     );
   }
 
-  // ══════════ SOCIAL MEDIA ITEM ══════════
   Widget _socialItem(
     BuildContext context, {
     required String imageUrl,
@@ -3980,8 +4347,7 @@ class _MoreDrawerState extends State<MoreDrawer>
           child: Image.network(
             imageUrl,
             fit: BoxFit.contain,
-            errorBuilder: (c, e, s) =>
-                Icon(fallbackIcon, color: color, size: 22),
+            errorBuilder: (c, e, s) => Icon(fallbackIcon, color: color, size: 22),
           ),
         ),
         title: Text(
@@ -4058,18 +4424,13 @@ class _LivePulseCardState extends State<_LivePulseCard>
           padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
           decoration: BoxDecoration(
             gradient: LinearGradient(
-              colors: [
-                kGreen.withOpacity(0.12),
-                Colors.black,
-              ],
+              colors: [kGreen.withOpacity(0.12), Colors.black],
               begin: Alignment.topLeft,
               end: Alignment.bottomRight,
             ),
             borderRadius: BorderRadius.circular(12),
             border: Border.all(color: kGreen.withOpacity(0.5), width: 1.2),
-            boxShadow: [
-              BoxShadow(color: kGreen.withOpacity(0.15), blurRadius: 12),
-            ],
+            boxShadow: [BoxShadow(color: kGreen.withOpacity(0.15), blurRadius: 12)],
           ),
           child: Row(
             children: [
@@ -4107,14 +4468,12 @@ class _LivePulseCardState extends State<_LivePulseCard>
                     ),
                     const SizedBox(height: 2),
                     Text(
-                      _hasData
-                          ? '\$${_currentEarning.toStringAsFixed(2)}'
-                          : '—',
-                      style: TextStyle(
+                      _hasData ? '\$${_currentEarning.toStringAsFixed(2)}' : '—',
+                      style: const TextStyle(
                         color: kGreen,
                         fontSize: 18,
                         fontWeight: FontWeight.w900,
-                        shadows: const [Shadow(color: kGreen, blurRadius: 10)],
+                        shadows: [Shadow(color: kGreen, blurRadius: 10)],
                       ),
                     ),
                   ],
@@ -4135,13 +4494,13 @@ class _LivePulseCardState extends State<_LivePulseCard>
 }
 
 // ═══════════════════════════════════════════════════════
-// SNAKE BORDER PAINTER (Moving Light Effect)
+// SNAKE BORDER PAINTER
 // ═══════════════════════════════════════════════════════
-class _SnakeBorderPainter extends CustomPainter {
+class SnakeBorderPainter extends CustomPainter {
   final double progress;
   final Color color;
 
-  _SnakeBorderPainter({required this.progress, required this.color});
+  SnakeBorderPainter({required this.progress, required this.color});
 
   @override
   void paint(Canvas canvas, Size size) {
@@ -4192,12 +4551,10 @@ class _SnakeBorderPainter extends CustomPainter {
   }
 
   @override
-  bool shouldRepaint(covariant _SnakeBorderPainter oldDelegate) {
+  bool shouldRepaint(covariant SnakeBorderPainter oldDelegate) {
     return oldDelegate.progress != progress || oldDelegate.color != color;
   }
 }
-
-// ============ PART 2 END ============
 
 // ═══════════════════════════════════════════════════════
 // CHANNEL SCREEN
@@ -4258,7 +4615,479 @@ class ChannelScreen extends StatelessWidget {
               ),
             ),
           ),
+          const SizedBox(height: 14),
+          Container(
+            padding: const EdgeInsets.all(16),
+            decoration: BoxDecoration(
+              color: kCardBg,
+              borderRadius: BorderRadius.circular(12),
+              border: Border.all(color: kNeonPurple.withOpacity(0.4)),
+            ),
+            child: const ListTile(
+              leading: Icon(Icons.security, color: kNeonPurple, size: 32),
+              title: Text(
+                'Encrypted Pipeline',
+                style: TextStyle(
+                  color: Colors.white,
+                  fontWeight: FontWeight.bold,
+                ),
+              ),
+              subtitle: Text(
+                'AES-256 quantum cipher: ACTIVE',
+                style: TextStyle(color: kNeonPurple, fontSize: 12),
+              ),
+            ),
+          ),
         ],
+      ),
+    );
+  }
+}
+
+// ═══════════════════════════════════════════════════════
+// GALLERY SCREEN — Professional media gallery
+// ═══════════════════════════════════════════════════════
+class GalleryScreen extends StatefulWidget {
+  const GalleryScreen({super.key});
+  @override
+  State<GalleryScreen> createState() => _GalleryScreenState();
+}
+
+class _GalleryScreenState extends State<GalleryScreen> {
+  List<AssetEntity> _allAssets = [];
+  List<AssetEntity> _videos = [];
+  List<AssetEntity> _images = [];
+  bool _loading = true;
+  bool _permissionDenied = false;
+  String _selectedTab = 'all'; // 'all', 'videos', 'images'
+
+  @override
+  void initState() {
+    super.initState();
+    _loadGallery();
+  }
+
+  Future<void> _loadGallery() async {
+    try {
+      final permission = await PhotoManager.requestPermissionExtend();
+      if (!permission.isAuth && !permission.hasAccess) {
+        setState(() {
+          _loading = false;
+          _permissionDenied = true;
+        });
+        return;
+      }
+
+      final albums = await PhotoManager.getAssetPathList(
+        type: RequestType.common,
+        onlyAll: true,
+      );
+
+      if (albums.isEmpty) {
+        setState(() => _loading = false);
+        return;
+      }
+
+      final recent = albums.first;
+      final assets = await recent.getAssetListPaged(page: 0, size: 200);
+
+      final videos = <AssetEntity>[];
+      final images = <AssetEntity>[];
+
+      for (final a in assets) {
+        if (a.type == AssetType.video) {
+          videos.add(a);
+        } else if (a.type == AssetType.image) {
+          images.add(a);
+        }
+      }
+
+      if (mounted) {
+        setState(() {
+          _allAssets = assets;
+          _videos = videos;
+          _images = images;
+          _loading = false;
+        });
+      }
+    } catch (e) {
+      debugPrint('Gallery error: $e');
+      if (mounted) {
+        setState(() {
+          _loading = false;
+          _permissionDenied = true;
+        });
+      }
+    }
+  }
+
+  List<AssetEntity> get _currentAssets {
+    switch (_selectedTab) {
+      case 'videos':
+        return _videos;
+      case 'images':
+        return _images;
+      default:
+        return _allAssets;
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Scaffold(
+      backgroundColor: Colors.black,
+      appBar: AppBar(
+        title: const Text('GALLERY'),
+        actions: [
+          IconButton(
+            icon: const Icon(Icons.refresh, color: kGreen),
+            onPressed: () {
+              Haptic.light();
+              setState(() => _loading = true);
+              _loadGallery();
+            },
+          ),
+        ],
+      ),
+      body: _loading
+          ? const Center(child: CircularProgressIndicator(color: kGreen))
+          : _permissionDenied
+              ? _buildPermissionDenied()
+              : Column(
+                  children: [
+                    _buildTabs(),
+                    const SizedBox(height: 4),
+                    Expanded(
+                      child: _currentAssets.isEmpty
+                          ? _buildEmpty()
+                          : _buildGrid(),
+                    ),
+                  ],
+                ),
+    );
+  }
+
+  Widget _buildPermissionDenied() {
+    return Center(
+      child: Padding(
+        padding: const EdgeInsets.all(24),
+        child: Column(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            const Icon(Icons.photo_library_outlined, color: kGreen, size: 80),
+            const SizedBox(height: 16),
+            const Text(
+              'GALLERY PERMISSION NEEDED',
+              style: TextStyle(
+                color: kGreen,
+                fontSize: 16,
+                fontWeight: FontWeight.bold,
+                letterSpacing: 1.5,
+              ),
+            ),
+            const SizedBox(height: 12),
+            const Text(
+              'Please allow gallery access to view your photos and videos.',
+              textAlign: TextAlign.center,
+              style: TextStyle(color: Colors.white70, fontSize: 13, height: 1.5),
+            ),
+            const SizedBox(height: 20),
+            ElevatedButton(
+              onPressed: () => PhotoManager.openSetting(),
+              style: ElevatedButton.styleFrom(
+                backgroundColor: kGreen,
+                foregroundColor: Colors.black,
+                padding: const EdgeInsets.symmetric(horizontal: 30, vertical: 14),
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(12),
+                ),
+              ),
+              child: const Text(
+                'OPEN SETTINGS',
+                style: TextStyle(fontWeight: FontWeight.bold, letterSpacing: 1.5),
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildEmpty() {
+    return Center(
+      child: Column(
+        mainAxisAlignment: MainAxisAlignment.center,
+        children: [
+          Icon(
+            Icons.photo_library_outlined,
+            color: kGreen.withOpacity(0.4),
+            size: 80,
+          ),
+          const SizedBox(height: 12),
+          Text(
+            'Koi ${_selectedTab == 'videos' ? 'video' : _selectedTab == 'images' ? 'photo' : 'media'} nahi mila',
+            style: TextStyle(color: kGreen.withOpacity(0.6), fontSize: 14),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildTabs() {
+    return Container(
+      margin: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+      padding: const EdgeInsets.all(4),
+      decoration: BoxDecoration(
+        color: const Color(0xFF011206),
+        borderRadius: BorderRadius.circular(14),
+        border: Border.all(color: kGreen.withOpacity(0.4)),
+      ),
+      child: Row(
+        children: [
+          _tabButton('all', 'ALL', Icons.apps),
+          _tabButton('videos', 'VIDEOS', Icons.videocam),
+          _tabButton('images', 'PHOTOS', Icons.image),
+        ],
+      ),
+    );
+  }
+
+  Widget _tabButton(String key, String label, IconData icon) {
+    final active = _selectedTab == key;
+    return Expanded(
+      child: GestureDetector(
+        onTap: () {
+          Haptic.selection();
+          setState(() => _selectedTab = key);
+        },
+        child: Container(
+          padding: const EdgeInsets.symmetric(vertical: 10),
+          decoration: BoxDecoration(
+            color: active ? const Color(0xFF01240B) : Colors.transparent,
+            borderRadius: BorderRadius.circular(10),
+            border: active ? Border.all(color: kGreen, width: 1.2) : null,
+          ),
+          child: Row(
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [
+              Icon(icon, color: active ? kGreen : Colors.white54, size: 14),
+              const SizedBox(width: 5),
+              Text(
+                label,
+                style: TextStyle(
+                  color: active ? kGreen : Colors.white54,
+                  fontSize: 10.5,
+                  fontWeight: FontWeight.bold,
+                  letterSpacing: 1.2,
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _buildGrid() {
+    return GridView.builder(
+      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+      gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
+        crossAxisCount: 3,
+        crossAxisSpacing: 6,
+        mainAxisSpacing: 6,
+        childAspectRatio: 1,
+      ),
+      itemCount: _currentAssets.length,
+      itemBuilder: (context, index) {
+        final asset = _currentAssets[index];
+        return _buildTile(asset);
+      },
+    );
+  }
+
+  Widget _buildTile(AssetEntity asset) {
+    final isVideo = asset.type == AssetType.video;
+    return GestureDetector(
+      onTap: () {
+        Haptic.light();
+        _openPreview(asset);
+      },
+      child: Stack(
+        fit: StackFit.expand,
+        children: [
+          ClipRRect(
+            borderRadius: BorderRadius.circular(8),
+            child: AssetEntityImage(
+              asset,
+              isOriginal: false,
+              thumbnailSize: const ThumbnailSize.square(300),
+              fit: BoxFit.cover,
+              errorBuilder: (c, e, s) => Container(
+                color: kCardBg,
+                child: const Icon(Icons.broken_image, color: kGreen),
+              ),
+            ),
+          ),
+          // Border overlay
+          Positioned.fill(
+            child: Container(
+              decoration: BoxDecoration(
+                borderRadius: BorderRadius.circular(8),
+                border: Border.all(color: kGreen.withOpacity(0.3), width: 1),
+              ),
+            ),
+          ),
+          // Video indicator
+          if (isVideo)
+            Positioned(
+              left: 4,
+              bottom: 4,
+              child: Container(
+                padding: const EdgeInsets.symmetric(horizontal: 5, vertical: 2),
+                decoration: BoxDecoration(
+                  color: Colors.black.withOpacity(0.75),
+                  borderRadius: BorderRadius.circular(4),
+                  border: Border.all(color: kGreen.withOpacity(0.5)),
+                ),
+                child: Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    const Icon(Icons.play_arrow, color: kGreen, size: 10),
+                    const SizedBox(width: 2),
+                    Text(
+                      _formatDuration(asset.duration),
+                      style: const TextStyle(
+                        color: Colors.white,
+                        fontSize: 9,
+                        fontWeight: FontWeight.bold,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ),
+          // Video top icon
+          if (isVideo)
+            Positioned(
+              right: 4,
+              top: 4,
+              child: Container(
+                padding: const EdgeInsets.all(4),
+                decoration: BoxDecoration(
+                  color: kGreen.withOpacity(0.9),
+                  shape: BoxShape.circle,
+                ),
+                child: const Icon(
+                  Icons.videocam,
+                  color: Colors.black,
+                  size: 10,
+                ),
+              ),
+            ),
+        ],
+      ),
+    );
+  }
+
+  String _formatDuration(int seconds) {
+    final m = (seconds ~/ 60).toString().padLeft(2, '0');
+    final s = (seconds % 60).toString().padLeft(2, '0');
+    return '$m:$s';
+  }
+
+  void _openPreview(AssetEntity asset) {
+    showDialog(
+      context: context,
+      barrierColor: Colors.black.withOpacity(0.95),
+      builder: (c) => Dialog(
+        backgroundColor: Colors.transparent,
+        insetPadding: EdgeInsets.zero,
+        child: Stack(
+          children: [
+            Center(
+              child: InteractiveViewer(
+                maxScale: 5,
+                child: AssetEntityImage(
+                  asset,
+                  isOriginal: true,
+                  fit: BoxFit.contain,
+                  errorBuilder: (c, e, s) => const Icon(
+                    Icons.broken_image,
+                    color: kGreen,
+                    size: 60,
+                  ),
+                ),
+              ),
+            ),
+            // Close button
+            Positioned(
+              top: 40,
+              right: 20,
+              child: GestureDetector(
+                onTap: () {
+                  Haptic.light();
+                  Navigator.pop(c);
+                },
+                child: Container(
+                  padding: const EdgeInsets.all(10),
+                  decoration: BoxDecoration(
+                    color: Colors.black.withOpacity(0.7),
+                    shape: BoxShape.circle,
+                    border: Border.all(color: kGreen, width: 1.5),
+                  ),
+                  child: const Icon(Icons.close, color: kGreen, size: 22),
+                ),
+              ),
+            ),
+            // Info bottom
+            Positioned(
+              bottom: 40,
+              left: 20,
+              right: 20,
+              child: Container(
+                padding: const EdgeInsets.all(14),
+                decoration: BoxDecoration(
+                  color: Colors.black.withOpacity(0.8),
+                  borderRadius: BorderRadius.circular(12),
+                  border: Border.all(color: kGreen.withOpacity(0.5)),
+                ),
+                child: Row(
+                  children: [
+                    Icon(
+                      asset.type == AssetType.video
+                          ? Icons.videocam
+                          : Icons.image,
+                      color: kGreen,
+                      size: 20,
+                    ),
+                    const SizedBox(width: 10),
+                    Expanded(
+                      child: Text(
+                        asset.title ?? 'Media',
+                        style: const TextStyle(
+                          color: Colors.white,
+                          fontSize: 12,
+                          fontWeight: FontWeight.bold,
+                        ),
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                      ),
+                    ),
+                    if (asset.type == AssetType.video)
+                      Text(
+                        _formatDuration(asset.duration),
+                        style: const TextStyle(
+                          color: kGreen,
+                          fontSize: 12,
+                          fontWeight: FontWeight.bold,
+                        ),
+                      ),
+                  ],
+                ),
+              ),
+            ),
+          ],
+        ),
       ),
     );
   }
@@ -4602,7 +5431,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
 }
 
 // ═══════════════════════════════════════════════════════
-// STREAM PREVIEW SCREEN — Professional Loading + 10s countdown
+// STREAM PREVIEW SCREEN — Thumbnail preview + Red snake play
 // ═══════════════════════════════════════════════════════
 class StreamPreviewScreen extends StatefulWidget {
   final String targetUrl;
@@ -4612,7 +5441,7 @@ class StreamPreviewScreen extends StatefulWidget {
 }
 
 class _StreamPreviewScreenState extends State<StreamPreviewScreen>
-    with SingleTickerProviderStateMixin {
+    with TickerProviderStateMixin {
   bool _loading = true;
   String _streamUrl = '';
   String _videoTitle = 'MayaJaal Video';
@@ -4624,17 +5453,22 @@ class _StreamPreviewScreenState extends State<StreamPreviewScreen>
   Timer? _countdownTimer;
   bool get _canProceed => _countdown <= 0;
 
+  late AnimationController _snakeCtrl;
   late AnimationController _pulseController;
   late Animation<double> _pulseAnimation;
 
   @override
   void initState() {
     super.initState();
+    _snakeCtrl = AnimationController(
+      vsync: this,
+      duration: const Duration(seconds: 2),
+    )..repeat();
     _pulseController = AnimationController(
       vsync: this,
       duration: const Duration(milliseconds: 1400),
     )..repeat(reverse: true);
-    _pulseAnimation = Tween<double>(begin: 0.95, end: 1.05)
+    _pulseAnimation = Tween<double>(begin: 0.96, end: 1.04)
         .animate(CurvedAnimation(parent: _pulseController, curve: Curves.easeInOut));
     _fetchStreamMetadata();
   }
@@ -4649,7 +5483,7 @@ class _StreamPreviewScreenState extends State<StreamPreviewScreen>
           _countdown--;
           if (_countdown <= 3 && _countdown > 0) Haptic.light();
         } else {
-          Haptic.medium();
+          Haptic.heavy();
           _countdownTimer?.cancel();
         }
       });
@@ -4659,6 +5493,7 @@ class _StreamPreviewScreenState extends State<StreamPreviewScreen>
   @override
   void dispose() {
     _countdownTimer?.cancel();
+    _snakeCtrl.dispose();
     _pulseController.dispose();
     super.dispose();
   }
@@ -4765,6 +5600,7 @@ class _StreamPreviewScreenState extends State<StreamPreviewScreen>
     if (!_canProceed) return;
     Haptic.heavy();
     _saveWatchRecord();
+    // pushReplacement ensures single back tap returns to source screen
     Navigator.pushReplacement(
       context,
       MaterialPageRoute(
@@ -4782,14 +5618,14 @@ class _StreamPreviewScreenState extends State<StreamPreviewScreen>
   Widget _buildCountdownCircle() {
     final progress = 1.0 - (_countdown / 10.0);
     return SizedBox(
-      width: 140,
-      height: 140,
+      width: 130,
+      height: 130,
       child: Stack(
         alignment: Alignment.center,
         children: [
           SizedBox(
-            width: 140,
-            height: 140,
+            width: 130,
+            height: 130,
             child: CircularProgressIndicator(
               value: progress,
               strokeWidth: 7,
@@ -4803,16 +5639,16 @@ class _StreamPreviewScreenState extends State<StreamPreviewScreen>
             mainAxisAlignment: MainAxisAlignment.center,
             children: [
               Icon(
-                _canProceed ? Icons.play_arrow_rounded : Icons.timer,
+                _canProceed ? Icons.check_circle_outline : Icons.timer,
                 color: _canProceed ? kGreen : Colors.orangeAccent,
-                size: 44,
+                size: 40,
               ),
               const SizedBox(height: 4),
               Text(
                 _canProceed ? 'READY' : '$_countdown',
                 style: TextStyle(
                   color: _canProceed ? kGreen : Colors.orangeAccent,
-                  fontSize: _canProceed ? 20 : 38,
+                  fontSize: _canProceed ? 18 : 36,
                   fontWeight: FontWeight.w900,
                   letterSpacing: 2,
                   shadows: [
@@ -4829,7 +5665,7 @@ class _StreamPreviewScreenState extends State<StreamPreviewScreen>
                   'SEC',
                   style: TextStyle(
                     color: Colors.orangeAccent.withOpacity(0.8),
-                    fontSize: 11,
+                    fontSize: 10,
                     letterSpacing: 3,
                     fontWeight: FontWeight.bold,
                   ),
@@ -4837,6 +5673,68 @@ class _StreamPreviewScreenState extends State<StreamPreviewScreen>
             ],
           ),
         ],
+      ),
+    );
+  }
+
+  // Red Snake Play Button
+  Widget _buildRedSnakePlayButton() {
+    return AnimatedBuilder(
+      animation: Listenable.merge([_snakeCtrl, _pulseAnimation]),
+      builder: (c, _) => Transform.scale(
+        scale: _pulseAnimation.value,
+        child: GestureDetector(
+          onTap: _launchNativePlayer,
+          child: Container(
+            width: double.infinity,
+            height: 64,
+            decoration: BoxDecoration(
+              color: Colors.black,
+              borderRadius: BorderRadius.circular(32),
+              boxShadow: [
+                BoxShadow(
+                  color: kRed.withOpacity(0.5),
+                  blurRadius: 22,
+                  spreadRadius: 1,
+                ),
+              ],
+            ),
+            child: Stack(
+              alignment: Alignment.center,
+              children: [
+                Positioned.fill(
+                  child: CustomPaint(
+                    painter: SnakeBorderPainter(
+                      progress: _snakeCtrl.value,
+                      color: kRed,
+                    ),
+                  ),
+                ),
+                Row(
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  children: const [
+                    Icon(
+                      Icons.play_arrow_rounded,
+                      color: kRed,
+                      size: 32,
+                    ),
+                    SizedBox(width: 8),
+                    Text(
+                      'PLAY NOW',
+                      style: TextStyle(
+                        color: kRed,
+                        fontSize: 15,
+                        fontWeight: FontWeight.w900,
+                        letterSpacing: 2.5,
+                        shadows: [Shadow(color: kRed, blurRadius: 14)],
+                      ),
+                    ),
+                  ],
+                ),
+              ],
+            ),
+          ),
+        ),
       ),
     );
   }
@@ -4857,6 +5755,7 @@ class _StreamPreviewScreenState extends State<StreamPreviewScreen>
               padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
               child: Column(
                 children: [
+                  // TOP BAR
                   Row(
                     children: [
                       IconButton(
@@ -4881,9 +5780,7 @@ class _StreamPreviewScreenState extends State<StreamPreviewScreen>
                                 fontSize: 19,
                                 fontWeight: FontWeight.w900,
                                 letterSpacing: 2,
-                                shadows: [
-                                  Shadow(color: kGreen, blurRadius: 12),
-                                ],
+                                shadows: [Shadow(color: kGreen, blurRadius: 12)],
                               ),
                             ),
                             Text(
@@ -4912,13 +5809,18 @@ class _StreamPreviewScreenState extends State<StreamPreviewScreen>
                       ),
                     ],
                   ),
-                  const SizedBox(height: 15),
+                  const SizedBox(height: 12),
+
+                  // AD SLOT 1 (TOP)
+                  AdBanner(slot: 'preview-top'),
+                  const SizedBox(height: 14),
+
+                  // VIDEO PREVIEW BOX with thumbnail
                   Container(
-                    padding:
-                        const EdgeInsets.symmetric(vertical: 26, horizontal: 16),
+                    padding: const EdgeInsets.all(4),
                     decoration: BoxDecoration(
                       color: const Color(0xFF011206),
-                      borderRadius: BorderRadius.circular(24),
+                      borderRadius: BorderRadius.circular(20),
                       border: Border.all(
                         color: _canProceed
                             ? kGreen
@@ -4933,49 +5835,76 @@ class _StreamPreviewScreenState extends State<StreamPreviewScreen>
                         ),
                       ],
                     ),
-                    child: Column(
-                      children: [
-                        _buildCountdownCircle(),
-                        const SizedBox(height: 20),
-                        Text(
-                          _canProceed
-                              ? '🚀 VIDEO READY TO PLAY'
-                              : '⏱ PLEASE WAIT',
-                          style: TextStyle(
-                            color: _canProceed ? kGreen : Colors.orangeAccent,
-                            fontSize: 16,
-                            fontWeight: FontWeight.w900,
-                            letterSpacing: 2,
-                          ),
-                        ),
-                        const SizedBox(height: 8),
-                        Text(
-                          _canProceed
-                              ? 'Tap the button below to start streaming'
-                              : 'Video unlocks in $_countdown seconds',
-                          textAlign: TextAlign.center,
-                          style: TextStyle(
-                            color: Colors.white.withOpacity(0.75),
-                            fontSize: 13,
-                            height: 1.5,
-                          ),
-                        ),
-                        const SizedBox(height: 16),
-                        ClipRRect(
-                          borderRadius: BorderRadius.circular(99),
-                          child: LinearProgressIndicator(
-                            value: 1.0 - (_countdown / 10.0),
-                            minHeight: 8,
-                            backgroundColor: Colors.white12,
-                            valueColor: AlwaysStoppedAnimation<Color>(
-                              _canProceed ? kGreen : Colors.orangeAccent,
+                    child: ClipRRect(
+                      borderRadius: BorderRadius.circular(16),
+                      child: AspectRatio(
+                        aspectRatio: 16 / 9,
+                        child: Stack(
+                          alignment: Alignment.center,
+                          children: [
+                            // Thumbnail placeholder (gradient + logo)
+                            Container(
+                              decoration: BoxDecoration(
+                                gradient: LinearGradient(
+                                  colors: [
+                                    kGreen.withOpacity(0.18),
+                                    kNeonCyan.withOpacity(0.10),
+                                    Colors.black,
+                                  ],
+                                  begin: Alignment.topLeft,
+                                  end: Alignment.bottomRight,
+                                ),
+                              ),
+                              child: Center(
+                                child: Image.asset(
+                                  'assets/icon/logo.png',
+                                  width: 75,
+                                  height: 75,
+                                  fit: BoxFit.cover,
+                                  errorBuilder: (c, e, s) => const Icon(
+                                    Icons.movie_filter,
+                                    color: kGreen,
+                                    size: 55,
+                                  ),
+                                ),
+                              ),
                             ),
-                          ),
+                            // Dark overlay
+                            Container(color: Colors.black.withOpacity(0.35)),
+                            // Countdown circle
+                            _buildCountdownCircle(),
+                            // HD badge
+                            Positioned(
+                              top: 8,
+                              left: 8,
+                              child: Container(
+                                padding: const EdgeInsets.symmetric(
+                                  horizontal: 6,
+                                  vertical: 3,
+                                ),
+                                decoration: BoxDecoration(
+                                  color: Colors.black.withOpacity(0.7),
+                                  borderRadius: BorderRadius.circular(5),
+                                  border: Border.all(color: kGreen, width: 1),
+                                ),
+                                child: const Text(
+                                  'HD',
+                                  style: TextStyle(
+                                    color: kGreen,
+                                    fontSize: 9.5,
+                                    fontWeight: FontWeight.bold,
+                                  ),
+                                ),
+                              ),
+                            ),
+                          ],
                         ),
-                      ],
+                      ),
                     ),
                   ),
                   const SizedBox(height: 16),
+
+                  // VIDEO INFO
                   Container(
                     padding: const EdgeInsets.all(14),
                     decoration: BoxDecoration(
@@ -5083,55 +6012,33 @@ class _StreamPreviewScreenState extends State<StreamPreviewScreen>
                     ),
                   ),
                   const SizedBox(height: 16),
-                  AnimatedBuilder(
-                    animation: _pulseAnimation,
-                    builder: (context, child) => Transform.scale(
-                      scale: _canProceed ? _pulseAnimation.value : 1.0,
-                      child: SizedBox(
-                        width: double.infinity,
-                        height: 60,
-                        child: ElevatedButton(
-                          onPressed: _canProceed ? _launchNativePlayer : null,
-                          style: ElevatedButton.styleFrom(
-                            backgroundColor:
-                                _canProceed ? kGreen : Colors.grey[850],
-                            foregroundColor: Colors.black,
-                            shape: RoundedRectangleBorder(
-                              borderRadius: BorderRadius.circular(14),
-                            ),
-                            elevation: _canProceed ? 15 : 0,
-                          ),
-                          child: Row(
-                            mainAxisAlignment: MainAxisAlignment.center,
-                            children: [
-                              Icon(
-                                Icons.play_arrow_rounded,
-                                color: _canProceed
-                                    ? Colors.black
-                                    : Colors.white38,
-                                size: 28,
-                              ),
-                              const SizedBox(width: 8),
-                              Text(
-                                _canProceed
-                                    ? 'OPEN PLAYER NOW'
-                                    : 'PLEASE WAIT...',
-                                style: TextStyle(
-                                  color: _canProceed
-                                      ? Colors.black
-                                      : Colors.white38,
-                                  fontSize: 14,
-                                  fontWeight: FontWeight.w900,
-                                  letterSpacing: 1.5,
-                                ),
-                              ),
-                            ],
+
+                  // RED SNAKE PLAY BUTTON (only after countdown)
+                  if (_canProceed)
+                    _buildRedSnakePlayButton()
+                  else
+                    Container(
+                      width: double.infinity,
+                      height: 64,
+                      decoration: BoxDecoration(
+                        color: Colors.grey[850],
+                        borderRadius: BorderRadius.circular(32),
+                      ),
+                      child: Center(
+                        child: Text(
+                          'UNLOCK IN $_countdown SEC',
+                          style: const TextStyle(
+                            color: Colors.white54,
+                            fontSize: 14,
+                            fontWeight: FontWeight.w900,
+                            letterSpacing: 2,
                           ),
                         ),
                       ),
                     ),
-                  ),
                   const SizedBox(height: 14),
+
+                  // SHARE BUTTON
                   SizedBox(
                     width: double.infinity,
                     height: 52,
@@ -5162,6 +6069,7 @@ class _StreamPreviewScreenState extends State<StreamPreviewScreen>
                     ),
                   ),
                   const SizedBox(height: 14),
+
                   Row(
                     mainAxisAlignment: MainAxisAlignment.center,
                     children: [
@@ -5178,64 +6086,14 @@ class _StreamPreviewScreenState extends State<StreamPreviewScreen>
                     ],
                   ),
                   const SizedBox(height: 14),
-                  Container(
-                    padding: const EdgeInsets.all(12),
-                    decoration: BoxDecoration(
-                      color: const Color(0xFF031408),
-                      borderRadius: BorderRadius.circular(16),
-                      border: Border.all(color: kGreen.withOpacity(0.4)),
-                    ),
-                    child: Row(
-                      children: [
-                        Container(
-                          padding: const EdgeInsets.symmetric(
-                            horizontal: 5,
-                            vertical: 2,
-                          ),
-                          decoration: BoxDecoration(
-                            color: kGreen,
-                            borderRadius: BorderRadius.circular(3),
-                          ),
-                          child: const Text(
-                            'AD',
-                            style: TextStyle(
-                              color: Colors.black,
-                              fontSize: 9,
-                              fontWeight: FontWeight.bold,
-                            ),
-                          ),
-                        ),
-                        const SizedBox(width: 10),
-                        Expanded(
-                          child: Column(
-                            crossAxisAlignment: CrossAxisAlignment.start,
-                            children: [
-                              const Text(
-                                'YOUR AD HERE',
-                                style: TextStyle(
-                                  color: Colors.white,
-                                  fontSize: 13,
-                                  fontWeight: FontWeight.bold,
-                                ),
-                              ),
-                              Text(
-                                'Grow Your Brand with Us',
-                                style: TextStyle(
-                                  color: Colors.white.withOpacity(0.6),
-                                  fontSize: 10,
-                                ),
-                              ),
-                            ],
-                          ),
-                        ),
-                        const Icon(
-                          Icons.campaign_outlined,
-                          color: kGreen,
-                          size: 28,
-                        ),
-                      ],
-                    ),
-                  ),
+
+                  // AD SLOT 2 (MIDDLE)
+                  AdBanner(slot: 'preview-middle'),
+                  const SizedBox(height: 14),
+
+                  // AD SLOT 3 (BOTTOM)
+                  AdBanner(slot: 'preview-bottom'),
+                  const SizedBox(height: 20),
                 ],
               ),
             ),
@@ -5247,8 +6105,7 @@ class _StreamPreviewScreenState extends State<StreamPreviewScreen>
 }
 
 // ═══════════════════════════════════════════════════════
-// NATIVE VIDEO PLAYER — Full Upgrade
-// No external packages — Manual implementation
+// NATIVE VIDEO PLAYER
 // ═══════════════════════════════════════════════════════
 class NativeVideoPlayerScreen extends StatefulWidget {
   final String videoUrl;
@@ -5300,16 +6157,14 @@ class _NativeVideoPlayerScreenState extends State<NativeVideoPlayerScreen> {
   bool _isDownloading = false;
   double _downloadProgress = 0.0;
 
-  // Volume & Brightness (Manual — no external packages)
   double _volume = 1.0;
-  double _brightness = 1.0; // 0.1 to 1.0 overlay dimming
+  double _brightness = 1.0;
   double _brightnessStart = 1.0;
   double _volumeStart = 1.0;
   double _dragStartY = 0;
   bool _isAdjustingVolume = false;
   bool _isAdjustingBrightness = false;
 
-  // Real-time Stats
   Map<String, int> _stats = {'views': 0, 'likes': 0, 'unlikes': 0, 'shares': 0};
   bool _isLiked = false;
   bool _isUnliked = false;
@@ -5324,7 +6179,6 @@ class _NativeVideoPlayerScreenState extends State<NativeVideoPlayerScreen> {
   Timer? _watchTimer;
   int _watchedSeconds = 0;
 
-  // Related videos
   List<Map<String, dynamic>> _relatedVideos = [];
   bool _relatedLoading = true;
 
@@ -5337,7 +6191,6 @@ class _NativeVideoPlayerScreenState extends State<NativeVideoPlayerScreen> {
     _fetchOwner().then((_) => _loadRelatedVideos());
   }
 
-  // ═══════════ VIEW REPORT (only after 10s actual playback) ═══════════
   Future<void> _reportViewToBackend() async {
     if (_viewReported) return;
     _viewReported = true;
@@ -5351,7 +6204,7 @@ class _NativeVideoPlayerScreenState extends State<NativeVideoPlayerScreen> {
           ? '$kBackendBaseUrl/api/view/${widget.videoId}?t=$token'
           : '$kBackendBaseUrl/api/view/${widget.videoId}';
 
-      final res = await http
+      await http
           .post(
             Uri.parse(url),
             headers: {'Content-Type': 'application/json'},
@@ -5362,8 +6215,6 @@ class _NativeVideoPlayerScreenState extends State<NativeVideoPlayerScreen> {
             }),
           )
           .timeout(const Duration(seconds: 10));
-
-      debugPrint('View report: ${res.statusCode} ${res.body}');
     } catch (e) {
       debugPrint('View report error: $e');
     }
@@ -5494,6 +6345,7 @@ class _NativeVideoPlayerScreenState extends State<NativeVideoPlayerScreen> {
   }
 
   void _onScreenTapped() {
+    Haptic.light();
     setState(() => _showControls = !_showControls);
     if (_showControls) _resetControlTimer();
   }
@@ -5506,7 +6358,6 @@ class _NativeVideoPlayerScreenState extends State<NativeVideoPlayerScreen> {
     });
   }
 
-  // ═══════════ LONG PRESS 2X BOOST ═══════════
   void _onLongPressStart() {
     Haptic.light();
     setState(() {
@@ -5524,7 +6375,6 @@ class _NativeVideoPlayerScreenState extends State<NativeVideoPlayerScreen> {
     }
   }
 
-  // ═══════════ DOUBLE TAP SEEK ═══════════
   void _onDoubleTap(TapDownDetails details, double width) {
     final dx = details.localPosition.dx;
     if (dx < width * 0.35) {
@@ -5590,12 +6440,7 @@ class _NativeVideoPlayerScreenState extends State<NativeVideoPlayerScreen> {
     Haptic.medium();
     final uid = MayaJaalAccount.cachedUid;
     if (uid == null) return;
-    await FirebaseService.toggleLike(
-      widget.videoId,
-      uid,
-      _ownerUid,
-      widget.title,
-    );
+    await FirebaseService.toggleLike(widget.videoId, uid, _ownerUid, widget.title);
   }
 
   Future<void> _handleDislike() async {
@@ -5605,7 +6450,6 @@ class _NativeVideoPlayerScreenState extends State<NativeVideoPlayerScreen> {
     await FirebaseService.toggleDislike(widget.videoId, uid);
   }
 
-  // ═══════════ PROFESSIONAL SHARE SHEET ═══════════
   Future<void> _shareVideoLink() async {
     Haptic.light();
     await FirebaseService.recordShare(widget.videoId);
@@ -5931,7 +6775,6 @@ class _NativeVideoPlayerScreenState extends State<NativeVideoPlayerScreen> {
     );
   }
 
-  // ═══════════ VERTICAL DRAG (Volume / Brightness) ═══════════
   void _onVerticalDragStart(DragStartDetails details, double width) {
     _dragStartY = details.localPosition.dy;
     final dx = details.localPosition.dx;
@@ -5967,765 +6810,620 @@ class _NativeVideoPlayerScreenState extends State<NativeVideoPlayerScreen> {
     _resetControlTimer();
   }
 
-  @override
-  Widget build(BuildContext context) {
-    return Scaffold(
-      backgroundColor: Colors.black,
-      body: SafeArea(
-        child: Column(
+  // Water-fill download button
+  Widget _buildWaterFillDownloadButton() {
+    return GestureDetector(
+      onTap: _isDownloading ? null : _startInAppDownload,
+      child: Container(
+        width: 108,
+        height: 42,
+        decoration: BoxDecoration(
+          color: Colors.black,
+          borderRadius: BorderRadius.circular(10),
+          border: Border.all(color: kGreen, width: 1.2),
+        ),
+        child: Stack(
           children: [
-            if (!_isFullscreen)
-              Padding(
-                padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-                child: Row(
-                  children: [
-                    IconButton(
-                      icon: const Icon(
-                        Icons.arrow_back_ios_new,
-                        color: kGreen,
-                        size: 22,
-                      ),
-                      onPressed: () {
-                        Haptic.light();
-                        Navigator.pop(context);
-                      },
-                    ),
-                    Expanded(
-                      child: Column(
-                        mainAxisSize: MainAxisSize.min,
-                        children: [
-                          Row(
-                            mainAxisAlignment: MainAxisAlignment.center,
-                            children: [
-                              Container(
-                                width: 22,
-                                height: 22,
-                                decoration: BoxDecoration(
-                                  shape: BoxShape.circle,
-                                  border: Border.all(color: kGreen, width: 1.5),
-                                ),
-                                child: const Center(
-                                  child: Icon(
-                                    Icons.change_history,
-                                    color: kGreen,
-                                    size: 14,
-                                  ),
-                                ),
-                              ),
-                              const SizedBox(width: 8),
-                              const Text(
-                                'MAYA JAAL',
-                                style: TextStyle(
-                                  color: kGreen,
-                                  fontSize: 19,
-                                  fontWeight: FontWeight.w900,
-                                  letterSpacing: 2,
-                                  shadows: [
-                                    Shadow(color: kGreen, blurRadius: 10),
-                                  ],
-                                ),
-                              ),
-                            ],
-                          ),
-                          Text(
-                            '— STREAM BEYOND LIMITS —',
-                            style: TextStyle(
-                              color: kGreen.withOpacity(0.8),
-                              fontSize: 8.5,
-                              letterSpacing: 2,
-                              fontWeight: FontWeight.bold,
-                            ),
-                          ),
-                        ],
-                      ),
-                    ),
-                    IconButton(
-                      icon: const Icon(Icons.share, color: kGreen, size: 22),
-                      onPressed: _shareVideoLink,
-                    ),
-                  ],
-                ),
-              ),
-            Expanded(
-              flex: _isFullscreen ? 1 : 0,
-              child: Padding(
-                padding: EdgeInsets.symmetric(
-                  horizontal: _isFullscreen ? 0 : 12,
-                  vertical: 4,
-                ),
-                child: Container(
-                  width: double.infinity,
-                  height: _isFullscreen ? double.infinity : 225,
+            // Water fill
+            if (_isDownloading)
+              Positioned(
+                bottom: 0,
+                left: 0,
+                right: 0,
+                child: AnimatedContainer(
+                  duration: const Duration(milliseconds: 300),
+                  height: 42 * _downloadProgress,
                   decoration: BoxDecoration(
-                    color: Colors.black,
-                    borderRadius: BorderRadius.circular(_isFullscreen ? 0 : 16),
-                    border: Border.all(
-                      color: kGreen.withOpacity(0.55),
-                      width: 1.5,
+                    color: kGreen.withOpacity(0.35),
+                    borderRadius: const BorderRadius.vertical(
+                      bottom: Radius.circular(9),
                     ),
                   ),
-                  child: ClipRRect(
-                    borderRadius: BorderRadius.circular(_isFullscreen ? 0 : 15),
-                    child: _hasError
-                        ? Center(
-                            child: Column(
+                ),
+              ),
+            // Content
+            Center(
+              child: Row(
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: [
+                  Icon(
+                    _isDownloading
+                        ? Icons.downloading
+                        : Icons.download_rounded,
+                    color: kGreen,
+                    size: 16,
+                  ),
+                  const SizedBox(width: 4),
+                  Text(
+                    _isDownloading
+                        ? '${(_downloadProgress * 100).toInt()}%'
+                        : 'Download',
+                    style: const TextStyle(
+                      color: kGreen,
+                      fontSize: 10.5,
+                      fontWeight: FontWeight.bold,
+                      letterSpacing: 0.5,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return WillPopScope(
+      onWillPop: () async {
+        // Single back press goes back to source screen (StreamPreview was replaced)
+        Navigator.of(context).pop();
+        return false;
+      },
+      child: Scaffold(
+        backgroundColor: Colors.black,
+        body: SafeArea(
+          child: Column(
+            children: [
+              if (!_isFullscreen)
+                Padding(
+                  padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+                  child: Row(
+                    children: [
+                      IconButton(
+                        icon: const Icon(
+                          Icons.arrow_back_ios_new,
+                          color: kGreen,
+                          size: 22,
+                        ),
+                        onPressed: () {
+                          Haptic.light();
+                          Navigator.pop(context);
+                        },
+                      ),
+                      Expanded(
+                        child: Column(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            Row(
                               mainAxisAlignment: MainAxisAlignment.center,
                               children: [
-                                const Icon(
-                                  Icons.error_outline,
-                                  color: Colors.redAccent,
-                                  size: 45,
+                                Container(
+                                  width: 22,
+                                  height: 22,
+                                  decoration: BoxDecoration(
+                                    shape: BoxShape.circle,
+                                    border: Border.all(color: kGreen, width: 1.5),
+                                  ),
+                                  child: const Center(
+                                    child: Icon(
+                                      Icons.change_history,
+                                      color: kGreen,
+                                      size: 14,
+                                    ),
+                                  ),
                                 ),
-                                const SizedBox(height: 10),
+                                const SizedBox(width: 8),
                                 const Text(
-                                  'Stream Connection Error',
-                                  style: TextStyle(color: Colors.redAccent),
-                                ),
-                                TextButton(
-                                  onPressed: _initVideo,
-                                  child: const Text(
-                                    'RETRY',
-                                    style: TextStyle(color: kGreen),
+                                  'MAYA JAAL',
+                                  style: TextStyle(
+                                    color: kGreen,
+                                    fontSize: 19,
+                                    fontWeight: FontWeight.w900,
+                                    letterSpacing: 2,
+                                    shadows: [
+                                      Shadow(color: kGreen, blurRadius: 10),
+                                    ],
                                   ),
                                 ),
                               ],
                             ),
-                          )
-                        : !_isInitialized
-                            ? const ProfessionalLoader(
-                                message: 'LOADING PLAYER...',
-                              )
-                            : LayoutBuilder(
-                                builder: (context, constraints) {
-                                  final w = constraints.maxWidth;
-                                  final h = constraints.maxHeight;
-                                  return GestureDetector(
-                                    onTap: _onScreenTapped,
-                                    onDoubleTapDown: (d) => _onDoubleTap(d, w),
-                                    onDoubleTap: () {},
-                                    onLongPressStart: (_) =>
-                                        _onLongPressStart(),
-                                    onLongPressEnd: (_) => _onLongPressEnd(),
-                                    onVerticalDragStart: (d) =>
-                                        _onVerticalDragStart(d, w),
-                                    onVerticalDragUpdate: (d) =>
-                                        _onVerticalDragUpdate(d, h),
-                                    onVerticalDragEnd: _onVerticalDragEnd,
-                                    behavior: HitTestBehavior.opaque,
-                                    child: Stack(
-                                      alignment: Alignment.center,
-                                      children: [
-                                        _buildScaledVideo(),
-                                        // ⭐ Brightness Dimming Overlay
-                                        if (_brightness < 1.0)
-                                          Positioned.fill(
-                                            child: IgnorePointer(
+                            Text(
+                              '— STREAM BEYOND LIMITS —',
+                              style: TextStyle(
+                                color: kGreen.withOpacity(0.8),
+                                fontSize: 8.5,
+                                letterSpacing: 2,
+                                fontWeight: FontWeight.bold,
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                      IconButton(
+                        icon: const Icon(Icons.share, color: kGreen, size: 22),
+                        onPressed: _shareVideoLink,
+                      ),
+                    ],
+                  ),
+                ),
+              Expanded(
+                flex: _isFullscreen ? 1 : 0,
+                child: Padding(
+                  padding: EdgeInsets.symmetric(
+                    horizontal: _isFullscreen ? 0 : 12,
+                    vertical: 4,
+                  ),
+                  child: Container(
+                    width: double.infinity,
+                    height: _isFullscreen ? double.infinity : 230,
+                    decoration: BoxDecoration(
+                      color: Colors.black,
+                      borderRadius: BorderRadius.circular(_isFullscreen ? 0 : 16),
+                      border: Border.all(
+                        color: kGreen.withOpacity(0.55),
+                        width: 1.5,
+                      ),
+                    ),
+                    child: ClipRRect(
+                      borderRadius:
+                          BorderRadius.circular(_isFullscreen ? 0 : 15),
+                      child: _hasError
+                          ? Center(
+                              child: Column(
+                                mainAxisAlignment: MainAxisAlignment.center,
+                                children: [
+                                  const Icon(
+                                    Icons.error_outline,
+                                    color: Colors.redAccent,
+                                    size: 45,
+                                  ),
+                                  const SizedBox(height: 10),
+                                  const Text(
+                                    'Stream Connection Error',
+                                    style: TextStyle(color: Colors.redAccent),
+                                  ),
+                                  TextButton(
+                                    onPressed: _initVideo,
+                                    child: const Text(
+                                      'RETRY',
+                                      style: TextStyle(color: kGreen),
+                                    ),
+                                  ),
+                                ],
+                              ),
+                            )
+                          : !_isInitialized
+                              ? const ProfessionalLoader(
+                                  message: 'LOADING PLAYER...',
+                                )
+                              : LayoutBuilder(
+                                  builder: (context, constraints) {
+                                    final w = constraints.maxWidth;
+                                    final h = constraints.maxHeight;
+                                    return GestureDetector(
+                                      onTap: _onScreenTapped,
+                                      onDoubleTapDown: (d) =>
+                                          _onDoubleTap(d, w),
+                                      onDoubleTap: () {},
+                                      onLongPressStart: (_) =>
+                                          _onLongPressStart(),
+                                      onLongPressEnd: (_) => _onLongPressEnd(),
+                                      onVerticalDragStart: (d) =>
+                                          _onVerticalDragStart(d, w),
+                                      onVerticalDragUpdate: (d) =>
+                                          _onVerticalDragUpdate(d, h),
+                                      onVerticalDragEnd: _onVerticalDragEnd,
+                                      behavior: HitTestBehavior.opaque,
+                                      child: Stack(
+                                        alignment: Alignment.center,
+                                        children: [
+                                          _buildScaledVideo(),
+                                          // Brightness overlay
+                                          if (_brightness < 1.0)
+                                            Positioned.fill(
+                                              child: IgnorePointer(
+                                                child: Container(
+                                                  color: Colors.black.withOpacity(
+                                                    1.0 - _brightness,
+                                                  ),
+                                                ),
+                                              ),
+                                            ),
+                                          // Quality Badge
+                                          Positioned(
+                                            top: 10,
+                                            left: 10,
+                                            child: GestureDetector(
+                                              onTap: _showQualityDialog,
                                               child: Container(
-                                                color: Colors.black
-                                                    .withOpacity(1.0 - _brightness),
+                                                padding:
+                                                    const EdgeInsets.symmetric(
+                                                  horizontal: 7,
+                                                  vertical: 3,
+                                                ),
+                                                decoration: BoxDecoration(
+                                                  color: Colors.black
+                                                      .withOpacity(0.7),
+                                                  borderRadius:
+                                                      BorderRadius.circular(6),
+                                                  border: Border.all(
+                                                    color: kGreen,
+                                                    width: 1,
+                                                  ),
+                                                ),
+                                                child: const Column(
+                                                  mainAxisSize: MainAxisSize.min,
+                                                  children: [
+                                                    Text(
+                                                      'HD',
+                                                      style: TextStyle(
+                                                        color: kGreen,
+                                                        fontSize: 10,
+                                                        fontWeight:
+                                                            FontWeight.bold,
+                                                      ),
+                                                    ),
+                                                    Text(
+                                                      '1080p',
+                                                      style: TextStyle(
+                                                        color: kGreen,
+                                                        fontSize: 7,
+                                                        fontWeight:
+                                                            FontWeight.bold,
+                                                      ),
+                                                    ),
+                                                  ],
+                                                ),
                                               ),
                                             ),
                                           ),
-                                        // Quality Badge
-                                        Positioned(
-                                          top: 10,
-                                          left: 10,
-                                          child: GestureDetector(
-                                            onTap: _showQualityDialog,
-                                            child: Container(
-                                              padding:
-                                                  const EdgeInsets.symmetric(
-                                                horizontal: 7,
-                                                vertical: 3,
-                                              ),
-                                              decoration: BoxDecoration(
-                                                color: Colors.black
-                                                    .withOpacity(0.7),
-                                                borderRadius:
-                                                    BorderRadius.circular(6),
-                                                border: Border.all(
-                                                  color: kGreen,
-                                                  width: 1,
+                                          // Speed Badge
+                                          Positioned(
+                                            top: 10,
+                                            right: 10,
+                                            child: GestureDetector(
+                                              onTap: _showSpeedDialog,
+                                              child: Container(
+                                                padding:
+                                                    const EdgeInsets.symmetric(
+                                                  horizontal: 7,
+                                                  vertical: 4,
+                                                ),
+                                                decoration: BoxDecoration(
+                                                  color: Colors.black
+                                                      .withOpacity(0.7),
+                                                  borderRadius:
+                                                      BorderRadius.circular(6),
+                                                  border: Border.all(
+                                                    color: kNeonCyan,
+                                                    width: 1,
+                                                  ),
+                                                ),
+                                                child: Text(
+                                                  '${_playbackSpeed}x',
+                                                  style: const TextStyle(
+                                                    color: kNeonCyan,
+                                                    fontSize: 10,
+                                                    fontWeight: FontWeight.bold,
+                                                  ),
                                                 ),
                                               ),
-                                              child: const Column(
-                                                mainAxisSize: MainAxisSize.min,
-                                                children: [
-                                                  Text(
-                                                    'HD',
-                                                    style: TextStyle(
-                                                      color: kGreen,
-                                                      fontSize: 10,
-                                                      fontWeight:
-                                                          FontWeight.bold,
+                                            ),
+                                          ),
+                                          // CENTER CONTROLS (only on tap)
+                                          if (_showControls && !_isLongPressBoost)
+                                            Row(
+                                              mainAxisAlignment:
+                                                  MainAxisAlignment.center,
+                                              children: [
+                                                // Back 10s
+                                                GestureDetector(
+                                                  onTap: () =>
+                                                      _seekRelative(-10),
+                                                  child: Container(
+                                                    padding:
+                                                        const EdgeInsets.all(8),
+                                                    decoration: BoxDecoration(
+                                                      color: Colors.black
+                                                          .withOpacity(0.5),
+                                                      shape: BoxShape.circle,
+                                                    ),
+                                                    child: const Icon(
+                                                      Icons.replay_10,
+                                                      color: Colors.white,
+                                                      size: 26,
                                                     ),
                                                   ),
+                                                ),
+                                                const SizedBox(width: 20),
+                                                // Play/Pause
+                                                GestureDetector(
+                                                  onTap: () {
+                                                    Haptic.light();
+                                                    setState(() {
+                                                      _controller
+                                                              .value.isPlaying
+                                                          ? _controller.pause()
+                                                          : _controller.play();
+                                                    });
+                                                    _resetControlTimer();
+                                                  },
+                                                  child: Container(
+                                                    width: 62,
+                                                    height: 62,
+                                                    decoration: BoxDecoration(
+                                                      color: Colors.black
+                                                          .withOpacity(0.6),
+                                                      shape: BoxShape.circle,
+                                                      border: Border.all(
+                                                        color: Colors.white,
+                                                        width: 2,
+                                                      ),
+                                                    ),
+                                                    child: Icon(
+                                                      _controller
+                                                              .value.isPlaying
+                                                          ? Icons.pause
+                                                          : Icons.play_arrow,
+                                                      color: Colors.white,
+                                                      size: 36,
+                                                    ),
+                                                  ),
+                                                ),
+                                                const SizedBox(width: 20),
+                                                // Forward 10s
+                                                GestureDetector(
+                                                  onTap: () =>
+                                                      _seekRelative(10),
+                                                  child: Container(
+                                                    padding:
+                                                        const EdgeInsets.all(8),
+                                                    decoration: BoxDecoration(
+                                                      color: Colors.black
+                                                          .withOpacity(0.5),
+                                                      shape: BoxShape.circle,
+                                                    ),
+                                                    child: const Icon(
+                                                      Icons.forward_10,
+                                                      color: Colors.white,
+                                                      size: 26,
+                                                    ),
+                                                  ),
+                                                ),
+                                              ],
+                                            ),
+                                          // Feedback
+                                          if (_flashFeedback.isNotEmpty)
+                                            Center(
+                                              child: Container(
+                                                padding:
+                                                    const EdgeInsets.symmetric(
+                                                  horizontal: 16,
+                                                  vertical: 10,
+                                                ),
+                                                decoration: BoxDecoration(
+                                                  color: Colors.black
+                                                      .withOpacity(0.8),
+                                                  borderRadius:
+                                                      BorderRadius.circular(10),
+                                                  border: Border.all(
+                                                    color: kGreen,
+                                                    width: 1,
+                                                  ),
+                                                ),
+                                                child: Text(
+                                                  _flashFeedback,
+                                                  style: const TextStyle(
+                                                    color: kGreen,
+                                                    fontWeight: FontWeight.bold,
+                                                    fontSize: 18,
+                                                  ),
+                                                ),
+                                              ),
+                                            ),
+                                          // BOTTOM PROGRESS (only on tap)
+                                          if (_showControls)
+                                            Positioned(
+                                              bottom: 6,
+                                              left: 10,
+                                              right: 10,
+                                              child: Row(
+                                                children: [
                                                   Text(
-                                                    '1080p',
-                                                    style: TextStyle(
-                                                      color: kGreen,
-                                                      fontSize: 7,
-                                                      fontWeight:
-                                                          FontWeight.bold,
+                                                    _formatDuration(_controller
+                                                        .value.position),
+                                                    style: const TextStyle(
+                                                      color: Colors.white,
+                                                      fontSize: 10,
+                                                      fontFamily: 'monospace',
+                                                    ),
+                                                  ),
+                                                  const SizedBox(width: 6),
+                                                  Expanded(
+                                                    child: SliderTheme(
+                                                      data: SliderTheme.of(
+                                                              context)
+                                                          .copyWith(
+                                                        trackHeight: 2.5,
+                                                        activeTrackColor: kGreen,
+                                                        inactiveTrackColor:
+                                                            Colors.white30,
+                                                        thumbColor: kGreen,
+                                                        thumbShape:
+                                                            const RoundSliderThumbShape(
+                                                          enabledThumbRadius: 4,
+                                                        ),
+                                                      ),
+                                                      child: Slider(
+                                                        value: _controller
+                                                            .value.position
+                                                            .inSeconds
+                                                            .toDouble()
+                                                            .clamp(
+                                                          0.0,
+                                                          _controller
+                                                                      .value
+                                                                      .duration
+                                                                      .inSeconds
+                                                                      .toDouble() <=
+                                                                  0
+                                                              ? 1.0
+                                                              : _controller
+                                                                  .value
+                                                                  .duration
+                                                                  .inSeconds
+                                                                  .toDouble(),
+                                                        ),
+                                                        min: 0.0,
+                                                        max: _controller
+                                                                    .value
+                                                                    .duration
+                                                                    .inSeconds
+                                                                    .toDouble() >
+                                                                0
+                                                            ? _controller
+                                                                .value.duration
+                                                                .inSeconds
+                                                                .toDouble()
+                                                            : 1.0,
+                                                        onChanged: (val) {
+                                                          _controller.seekTo(
+                                                            Duration(
+                                                              seconds:
+                                                                  val.toInt(),
+                                                            ),
+                                                          );
+                                                        },
+                                                      ),
+                                                    ),
+                                                  ),
+                                                  const SizedBox(width: 6),
+                                                  Text(
+                                                    _formatDuration(
+                                                      _controller
+                                                          .value.duration,
+                                                    ),
+                                                    style: const TextStyle(
+                                                      color: Colors.white,
+                                                      fontSize: 10,
+                                                      fontFamily: 'monospace',
+                                                    ),
+                                                  ),
+                                                  const SizedBox(width: 8),
+                                                  GestureDetector(
+                                                    onTap:
+                                                        _toggleSmartFullscreen,
+                                                    child: Icon(
+                                                      _isFullscreen
+                                                          ? Icons.fullscreen_exit
+                                                          : Icons.fullscreen,
+                                                      color: Colors.white,
+                                                      size: 20,
                                                     ),
                                                   ),
                                                 ],
                                               ),
                                             ),
-                                          ),
-                                        ),
-                                        // Speed Badge
-                                        Positioned(
-                                          top: 10,
-                                          right: 10,
-                                          child: GestureDetector(
-                                            onTap: _showSpeedDialog,
-                                            child: Container(
-                                              padding:
-                                                  const EdgeInsets.symmetric(
-                                                horizontal: 7,
-                                                vertical: 4,
-                                              ),
-                                              decoration: BoxDecoration(
-                                                color: Colors.black
-                                                    .withOpacity(0.7),
-                                                borderRadius:
-                                                    BorderRadius.circular(6),
-                                                border: Border.all(
-                                                  color: kNeonCyan,
-                                                  width: 1,
-                                                ),
-                                              ),
-                                              child: Text(
-                                                '${_playbackSpeed}x',
-                                                style: const TextStyle(
-                                                  color: kNeonCyan,
-                                                  fontSize: 10,
-                                                  fontWeight: FontWeight.bold,
-                                                ),
-                                              ),
-                                            ),
-                                          ),
-                                        ),
-                                        // Center Play/Pause
-                                        if (_showControls && !_isLongPressBoost)
-                                          GestureDetector(
-                                            onTap: () {
-                                              Haptic.light();
-                                              setState(() {
-                                                _controller.value.isPlaying
-                                                    ? _controller.pause()
-                                                    : _controller.play();
-                                              });
-                                              _resetControlTimer();
-                                            },
-                                            child: Container(
-                                              width: 58,
-                                              height: 58,
-                                              decoration: BoxDecoration(
-                                                color: Colors.black
-                                                    .withOpacity(0.55),
-                                                shape: BoxShape.circle,
-                                                border: Border.all(
-                                                  color: Colors.white,
-                                                  width: 2,
-                                                ),
-                                              ),
-                                              child: Icon(
-                                                _controller.value.isPlaying
-                                                    ? Icons.pause
-                                                    : Icons.play_arrow,
-                                                color: Colors.white,
-                                                size: 34,
-                                              ),
-                                            ),
-                                          ),
-                                        // Feedback Overlay
-                                        if (_flashFeedback.isNotEmpty)
-                                          Center(
-                                            child: Container(
-                                              padding:
-                                                  const EdgeInsets.symmetric(
-                                                horizontal: 16,
-                                                vertical: 10,
-                                              ),
-                                              decoration: BoxDecoration(
-                                                color: Colors.black
-                                                    .withOpacity(0.8),
-                                                borderRadius:
-                                                    BorderRadius.circular(10),
-                                                border: Border.all(
-                                                  color: kGreen,
-                                                  width: 1,
-                                                ),
-                                              ),
-                                              child: Text(
-                                                _flashFeedback,
-                                                style: const TextStyle(
-                                                  color: kGreen,
-                                                  fontWeight: FontWeight.bold,
-                                                  fontSize: 18,
-                                                ),
-                                              ),
-                                            ),
-                                          ),
-                                        // Progress Bar
-                                        Positioned(
-                                          bottom: 6,
-                                          left: 10,
-                                          right: 10,
-                                          child: Row(
-                                            children: [
-                                              Text(
-                                                _formatDuration(
-                                                    _controller.value.position),
-                                                style: const TextStyle(
-                                                  color: Colors.white,
-                                                  fontSize: 10,
-                                                  fontFamily: 'monospace',
-                                                ),
-                                              ),
-                                              const SizedBox(width: 6),
-                                              Expanded(
-                                                child: SliderTheme(
-                                                  data: SliderTheme.of(context)
-                                                      .copyWith(
-                                                    trackHeight: 2.5,
-                                                    activeTrackColor: kGreen,
-                                                    inactiveTrackColor:
-                                                        Colors.white30,
-                                                    thumbColor: kGreen,
-                                                    thumbShape:
-                                                        const RoundSliderThumbShape(
-                                                      enabledThumbRadius: 4,
-                                                    ),
-                                                  ),
-                                                  child: Slider(
-                                                    value: _controller
-                                                        .value.position.inSeconds
-                                                        .toDouble()
-                                                        .clamp(
-                                                      0.0,
-                                                      _controller.value.duration
-                                                                  .inSeconds
-                                                                  .toDouble() <=
-                                                              0
-                                                          ? 1.0
-                                                          : _controller
-                                                              .value.duration
-                                                              .inSeconds
-                                                              .toDouble(),
-                                                    ),
-                                                    min: 0.0,
-                                                    max: _controller.value
-                                                                .duration
-                                                                .inSeconds
-                                                                .toDouble() >
-                                                            0
-                                                        ? _controller
-                                                            .value.duration
-                                                            .inSeconds
-                                                            .toDouble()
-                                                        : 1.0,
-                                                    onChanged: (val) {
-                                                      _controller.seekTo(
-                                                        Duration(
-                                                            seconds:
-                                                                val.toInt()),
-                                                      );
-                                                    },
-                                                  ),
-                                                ),
-                                              ),
-                                              const SizedBox(width: 6),
-                                              Text(
-                                                _formatDuration(
-                                                    _controller.value.duration),
-                                                style: const TextStyle(
-                                                  color: Colors.white,
-                                                  fontSize: 10,
-                                                  fontFamily: 'monospace',
-                                                ),
-                                              ),
-                                              const SizedBox(width: 8),
-                                              GestureDetector(
-                                                onTap: _toggleSmartFullscreen,
-                                                child: Icon(
-                                                  _isFullscreen
-                                                      ? Icons.fullscreen_exit
-                                                      : Icons.fullscreen,
-                                                  color: Colors.white,
-                                                  size: 20,
-                                                ),
-                                              ),
-                                            ],
-                                          ),
-                                        ),
-                                      ],
-                                    ),
-                                  );
-                                },
-                              ),
+                                        ],
+                                      ),
+                                    );
+                                  },
+                                ),
+                    ),
                   ),
                 ),
               ),
-            ),
-            // 10 sec Forward/Back Buttons
-            if (!_isFullscreen && _isInitialized)
-              Padding(
-                padding: const EdgeInsets.symmetric(vertical: 8, horizontal: 12),
-                child: Row(
-                  mainAxisAlignment: MainAxisAlignment.center,
-                  children: [
-                    _seekButton(
-                      icon: Icons.replay_10,
-                      label: '10s',
-                      onTap: () => _seekRelative(-10),
-                    ),
-                    const SizedBox(width: 20),
-                    _seekButton(
-                      icon: _controller.value.isPlaying
-                          ? Icons.pause_circle_filled
-                          : Icons.play_circle_fill,
-                      label: _controller.value.isPlaying ? 'PAUSE' : 'PLAY',
-                      color: kGreen,
-                      size: 40,
-                      onTap: () {
-                        Haptic.medium();
-                        setState(() {
-                          _controller.value.isPlaying
-                              ? _controller.pause()
-                              : _controller.play();
-                        });
-                        _resetControlTimer();
-                      },
-                    ),
-                    const SizedBox(width: 20),
-                    _seekButton(
-                      icon: Icons.forward_10,
-                      label: '10s',
-                      onTap: () => _seekRelative(10),
-                    ),
-                  ],
-                ),
-              ),
-            if (!_isFullscreen)
-              Expanded(
-                child: SingleChildScrollView(
-                  padding:
-                      const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
-                  child: Column(
-                    children: [
-                      // Video Info Card
-                      Container(
-                        padding: const EdgeInsets.all(12),
-                        decoration: BoxDecoration(
-                          color: const Color(0xFF031408),
-                          borderRadius: BorderRadius.circular(16),
-                          border: Border.all(color: kGreen.withOpacity(0.55)),
-                        ),
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            Row(
-                              children: [
-                                const Icon(
-                                  Icons.play_circle_fill,
-                                  color: kGreen,
-                                  size: 26,
-                                ),
-                                const SizedBox(width: 8),
-                                Expanded(
-                                  child: Text(
-                                    widget.title,
-                                    style: const TextStyle(
-                                      color: Colors.white,
-                                      fontSize: 14,
-                                      fontWeight: FontWeight.bold,
-                                    ),
-                                    maxLines: 1,
-                                    overflow: TextOverflow.ellipsis,
-                                  ),
-                                ),
-                                Container(
-                                  padding: const EdgeInsets.symmetric(
-                                    horizontal: 7,
-                                    vertical: 3,
-                                  ),
-                                  decoration: BoxDecoration(
-                                    borderRadius: BorderRadius.circular(6),
-                                    border: Border.all(color: kGreen),
-                                  ),
-                                  child: const Text(
-                                    'HD',
-                                    style: TextStyle(
-                                      color: kGreen,
-                                      fontSize: 10,
-                                      fontWeight: FontWeight.bold,
-                                    ),
-                                  ),
-                                ),
-                              ],
-                            ),
-                            const SizedBox(height: 8),
-                            Row(
-                              children: [
-                                const Icon(
-                                  Icons.account_circle,
-                                  color: kGreen,
-                                  size: 14,
-                                ),
-                                const SizedBox(width: 4),
-                                Text(
-                                  'Uploaded by: ${widget.uploader}',
-                                  style: const TextStyle(
+              if (!_isFullscreen)
+                Expanded(
+                  child: SingleChildScrollView(
+                    padding:
+                        const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+                    child: Column(
+                      children: [
+                        // Video Info Card
+                        Container(
+                          padding: const EdgeInsets.all(12),
+                          decoration: BoxDecoration(
+                            color: const Color(0xFF031408),
+                            borderRadius: BorderRadius.circular(16),
+                            border:
+                                Border.all(color: kGreen.withOpacity(0.55)),
+                          ),
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Row(
+                                children: [
+                                  const Icon(
+                                    Icons.play_circle_fill,
                                     color: kGreen,
-                                    fontSize: 10,
+                                    size: 26,
                                   ),
-                                ),
-                                const SizedBox(width: 8),
-                                Text(
-                                  '|   👁 ${_stats['views']} views',
-                                  style: TextStyle(
-                                    color: Colors.white.withOpacity(0.6),
-                                    fontSize: 10,
-                                  ),
-                                ),
-                              ],
-                            ),
-                            const SizedBox(height: 12),
-                            Row(
-                              children: [
-                                Expanded(
-                                  child: InkWell(
-                                    onTap: _handleLike,
-                                    child: Container(
-                                      padding: const EdgeInsets.symmetric(
-                                        vertical: 8,
+                                  const SizedBox(width: 8),
+                                  Expanded(
+                                    child: Text(
+                                      widget.title,
+                                      style: const TextStyle(
+                                        color: Colors.white,
+                                        fontSize: 14,
+                                        fontWeight: FontWeight.bold,
                                       ),
-                                      decoration: BoxDecoration(
-                                        color: Colors.black,
-                                        borderRadius: BorderRadius.circular(8),
-                                        border: Border.all(
-                                          color: _isLiked
-                                              ? kGreen
-                                              : kGreen.withOpacity(0.4),
-                                        ),
-                                      ),
-                                      child: Column(
-                                        children: [
-                                          Row(
-                                            mainAxisAlignment:
-                                                MainAxisAlignment.center,
-                                            children: [
-                                              Icon(
-                                                _isLiked
-                                                    ? Icons.thumb_up
-                                                    : Icons
-                                                        .thumb_up_alt_outlined,
-                                                color: kGreen,
-                                                size: 14,
-                                              ),
-                                              const SizedBox(width: 4),
-                                              Text(
-                                                '${_stats['likes']}',
-                                                style: const TextStyle(
-                                                  color: Colors.white,
-                                                  fontSize: 11,
-                                                  fontWeight: FontWeight.bold,
-                                                ),
-                                              ),
-                                            ],
-                                          ),
-                                          const Text(
-                                            'Like',
-                                            style: TextStyle(
-                                              color: Colors.white54,
-                                              fontSize: 9,
-                                            ),
-                                          ),
-                                        ],
-                                      ),
+                                      maxLines: 1,
+                                      overflow: TextOverflow.ellipsis,
                                     ),
                                   ),
-                                ),
-                                const SizedBox(width: 6),
-                                Expanded(
-                                  child: InkWell(
-                                    onTap: _handleDislike,
-                                    child: Container(
-                                      padding: const EdgeInsets.symmetric(
-                                        vertical: 8,
-                                      ),
-                                      decoration: BoxDecoration(
-                                        color: Colors.black,
-                                        borderRadius: BorderRadius.circular(8),
-                                        border: Border.all(
-                                          color: _isUnliked
-                                              ? Colors.redAccent
-                                              : kGreen.withOpacity(0.4),
-                                        ),
-                                      ),
-                                      child: Column(
-                                        children: [
-                                          Row(
-                                            mainAxisAlignment:
-                                                MainAxisAlignment.center,
-                                            children: [
-                                              Icon(
-                                                _isUnliked
-                                                    ? Icons.thumb_down
-                                                    : Icons
-                                                        .thumb_down_alt_outlined,
-                                                color: Colors.redAccent,
-                                                size: 14,
-                                              ),
-                                              const SizedBox(width: 4),
-                                              Text(
-                                                '${_stats['unlikes']}',
-                                                style: const TextStyle(
-                                                  color: Colors.white,
-                                                  fontSize: 11,
-                                                  fontWeight: FontWeight.bold,
-                                                ),
-                                              ),
-                                            ],
-                                          ),
-                                          const Text(
-                                            'Dislike',
-                                            style: TextStyle(
-                                              color: Colors.white54,
-                                              fontSize: 9,
-                                            ),
-                                          ),
-                                        ],
-                                      ),
-                                    ),
-                                  ),
-                                ),
-                                const SizedBox(width: 6),
-                                Expanded(
-                                  child: InkWell(
-                                    onTap: _toggleSave,
-                                    child: Container(
-                                      padding: const EdgeInsets.symmetric(
-                                        vertical: 8,
-                                      ),
-                                      decoration: BoxDecoration(
-                                        color: Colors.black,
-                                        borderRadius: BorderRadius.circular(8),
-                                        border: Border.all(
-                                          color: _isSaved
-                                              ? kGreen
-                                              : kGreen.withOpacity(0.4),
-                                        ),
-                                      ),
-                                      child: Column(
-                                        children: [
-                                          Icon(
-                                            _isSaved
-                                                ? Icons.bookmark
-                                                : Icons.bookmark_border,
-                                            color: _isSaved
-                                                ? kGreen
-                                                : Colors.white,
-                                            size: 14,
-                                          ),
-                                          const Text(
-                                            'Save',
-                                            style: TextStyle(
-                                              color: Colors.white54,
-                                              fontSize: 9,
-                                            ),
-                                          ),
-                                        ],
-                                      ),
-                                    ),
-                                  ),
-                                ),
-                                const SizedBox(width: 8),
-                                InkWell(
-                                  onTap: _startInAppDownload,
-                                  child: Container(
+                                  Container(
                                     padding: const EdgeInsets.symmetric(
-                                      horizontal: 14,
-                                      vertical: 12,
+                                      horizontal: 7,
+                                      vertical: 3,
                                     ),
                                     decoration: BoxDecoration(
-                                      color: kGreen,
-                                      borderRadius: BorderRadius.circular(10),
+                                      borderRadius: BorderRadius.circular(6),
+                                      border: Border.all(color: kGreen),
                                     ),
-                                    child: Row(
-                                      children: [
-                                        const Icon(
-                                          Icons.download,
-                                          color: Colors.black,
-                                          size: 18,
-                                        ),
-                                        const SizedBox(width: 4),
-                                        Text(
-                                          _isDownloading
-                                              ? '${(_downloadProgress * 100).toInt()}%'
-                                              : 'Download',
-                                          style: const TextStyle(
-                                            color: Colors.black,
-                                            fontSize: 11,
-                                            fontWeight: FontWeight.bold,
-                                          ),
-                                        ),
-                                      ],
+                                    child: const Text(
+                                      'HD',
+                                      style: TextStyle(
+                                        color: kGreen,
+                                        fontSize: 10,
+                                        fontWeight: FontWeight.bold,
+                                      ),
                                     ),
                                   ),
-                                ),
-                              ],
-                            ),
-                          ],
-                        ),
-                      ),
-                      const SizedBox(height: 12),
-                      // AD Slot
-                      Container(
-                        padding: const EdgeInsets.all(12),
-                        decoration: BoxDecoration(
-                          color: const Color(0xFF031408),
-                          borderRadius: BorderRadius.circular(16),
-                          border: Border.all(color: kGreen.withOpacity(0.4)),
-                        ),
-                        child: Row(
-                          children: [
-                            Container(
-                              padding: const EdgeInsets.symmetric(
-                                horizontal: 5,
-                                vertical: 2,
+                                ],
                               ),
-                              decoration: BoxDecoration(
-                                color: kGreen,
-                                borderRadius: BorderRadius.circular(3),
-                              ),
-                              child: const Text(
-                                'AD',
-                                style: TextStyle(
-                                  color: Colors.black,
-                                  fontSize: 9,
-                                  fontWeight: FontWeight.bold,
-                                ),
-                              ),
-                            ),
-                            const SizedBox(width: 10),
-                            Expanded(
-                              child: Column(
-                                crossAxisAlignment: CrossAxisAlignment.start,
+                              const SizedBox(height: 8),
+                              Row(
                                 children: [
-                                  const Text(
-                                    'YOUR AD HERE',
-                                    style: TextStyle(
-                                      color: Colors.white,
-                                      fontSize: 13,
-                                      fontWeight: FontWeight.bold,
+                                  const Icon(
+                                    Icons.account_circle,
+                                    color: kGreen,
+                                    size: 14,
+                                  ),
+                                  const SizedBox(width: 4),
+                                  Text(
+                                    'Uploaded by: ${widget.uploader}',
+                                    style: const TextStyle(
+                                      color: kGreen,
+                                      fontSize: 10,
                                     ),
                                   ),
+                                  const SizedBox(width: 8),
                                   Text(
-                                    'Grow Your Brand with Us',
+                                    '|   👁 ${_stats['views']} views',
                                     style: TextStyle(
                                       color: Colors.white.withOpacity(0.6),
                                       fontSize: 10,
@@ -6733,106 +7431,241 @@ class _NativeVideoPlayerScreenState extends State<NativeVideoPlayerScreen> {
                                   ),
                                 ],
                               ),
-                            ),
-                            const Icon(
-                              Icons.campaign_outlined,
-                              color: kGreen,
-                              size: 28,
-                            ),
-                          ],
-                        ),
-                      ),
-                      const SizedBox(height: 14),
-                      // Related Videos
-                      Row(
-                        children: const [
-                          Icon(
-                            Icons.play_circle_outline,
-                            color: kGreen,
-                            size: 18,
-                          ),
-                          SizedBox(width: 6),
-                          Text(
-                            'Related Videos',
-                            style: TextStyle(
-                              color: Colors.white,
-                              fontSize: 13,
-                              fontWeight: FontWeight.bold,
-                            ),
-                          ),
-                        ],
-                      ),
-                      const SizedBox(height: 10),
-                      _relatedLoading
-                          ? const Center(
-                              child: Padding(
-                                padding: EdgeInsets.all(20),
-                                child: CircularProgressIndicator(
-                                  color: kGreen,
-                                  strokeWidth: 2,
-                                ),
-                              ),
-                            )
-                          : _relatedVideos.isEmpty
-                              ? Container(
-                                  padding: const EdgeInsets.all(20),
-                                  decoration: BoxDecoration(
-                                    color: const Color(0xFF031408),
-                                    borderRadius: BorderRadius.circular(12),
-                                    border: Border.all(
-                                      color: kGreen.withOpacity(0.3),
-                                    ),
-                                  ),
-                                  child: const Center(
-                                    child: Text(
-                                      'No related videos yet',
-                                      style: TextStyle(
-                                        color: Colors.white54,
-                                        fontSize: 12,
+                              const SizedBox(height: 12),
+                              Row(
+                                children: [
+                                  Expanded(
+                                    child: InkWell(
+                                      onTap: _handleLike,
+                                      child: Container(
+                                        padding: const EdgeInsets.symmetric(
+                                          vertical: 8,
+                                        ),
+                                        decoration: BoxDecoration(
+                                          color: Colors.black,
+                                          borderRadius:
+                                              BorderRadius.circular(8),
+                                          border: Border.all(
+                                            color: _isLiked
+                                                ? kGreen
+                                                : kGreen.withOpacity(0.4),
+                                          ),
+                                        ),
+                                        child: Column(
+                                          children: [
+                                            Row(
+                                              mainAxisAlignment:
+                                                  MainAxisAlignment.center,
+                                              children: [
+                                                Icon(
+                                                  _isLiked
+                                                      ? Icons.thumb_up
+                                                      : Icons
+                                                          .thumb_up_alt_outlined,
+                                                  color: kGreen,
+                                                  size: 14,
+                                                ),
+                                                const SizedBox(width: 4),
+                                                Text(
+                                                  '${_stats['likes']}',
+                                                  style: const TextStyle(
+                                                    color: Colors.white,
+                                                    fontSize: 11,
+                                                    fontWeight: FontWeight.bold,
+                                                  ),
+                                                ),
+                                              ],
+                                            ),
+                                            const Text(
+                                              'Like',
+                                              style: TextStyle(
+                                                color: Colors.white54,
+                                                fontSize: 9,
+                                              ),
+                                            ),
+                                          ],
+                                        ),
                                       ),
                                     ),
                                   ),
-                                )
-                              : SizedBox(
-                                  height: 155,
-                                  child: ListView.builder(
-                                    scrollDirection: Axis.horizontal,
-                                    itemCount: _relatedVideos.length,
-                                    itemBuilder: (context, i) {
-                                      final v = _relatedVideos[i];
-                                      return _buildRelatedCard(v);
-                                    },
+                                  const SizedBox(width: 6),
+                                  Expanded(
+                                    child: InkWell(
+                                      onTap: _handleDislike,
+                                      child: Container(
+                                        padding: const EdgeInsets.symmetric(
+                                          vertical: 8,
+                                        ),
+                                        decoration: BoxDecoration(
+                                          color: Colors.black,
+                                          borderRadius:
+                                              BorderRadius.circular(8),
+                                          border: Border.all(
+                                            color: _isUnliked
+                                                ? Colors.redAccent
+                                                : kGreen.withOpacity(0.4),
+                                          ),
+                                        ),
+                                        child: Column(
+                                          children: [
+                                            Row(
+                                              mainAxisAlignment:
+                                                  MainAxisAlignment.center,
+                                              children: [
+                                                Icon(
+                                                  _isUnliked
+                                                      ? Icons.thumb_down
+                                                      : Icons
+                                                          .thumb_down_alt_outlined,
+                                                  color: Colors.redAccent,
+                                                  size: 14,
+                                                ),
+                                                const SizedBox(width: 4),
+                                                Text(
+                                                  '${_stats['unlikes']}',
+                                                  style: const TextStyle(
+                                                    color: Colors.white,
+                                                    fontSize: 11,
+                                                    fontWeight: FontWeight.bold,
+                                                  ),
+                                                ),
+                                              ],
+                                            ),
+                                            const Text(
+                                              'Dislike',
+                                              style: TextStyle(
+                                                color: Colors.white54,
+                                                fontSize: 9,
+                                              ),
+                                            ),
+                                          ],
+                                        ),
+                                      ),
+                                    ),
+                                  ),
+                                  const SizedBox(width: 6),
+                                  Expanded(
+                                    child: InkWell(
+                                      onTap: _toggleSave,
+                                      child: Container(
+                                        padding: const EdgeInsets.symmetric(
+                                          vertical: 8,
+                                        ),
+                                        decoration: BoxDecoration(
+                                          color: Colors.black,
+                                          borderRadius:
+                                              BorderRadius.circular(8),
+                                          border: Border.all(
+                                            color: _isSaved
+                                                ? kGreen
+                                                : kGreen.withOpacity(0.4),
+                                          ),
+                                        ),
+                                        child: Column(
+                                          children: [
+                                            Icon(
+                                              _isSaved
+                                                  ? Icons.bookmark
+                                                  : Icons.bookmark_border,
+                                              color: _isSaved
+                                                  ? kGreen
+                                                  : Colors.white,
+                                              size: 14,
+                                            ),
+                                            const Text(
+                                              'Save',
+                                              style: TextStyle(
+                                                color: Colors.white54,
+                                                fontSize: 9,
+                                              ),
+                                            ),
+                                          ],
+                                        ),
+                                      ),
+                                    ),
+                                  ),
+                                  const SizedBox(width: 8),
+                                  _buildWaterFillDownloadButton(),
+                                ],
+                              ),
+                            ],
+                          ),
+                        ),
+                        const SizedBox(height: 12),
+                        // AD
+                        AdBanner(slot: 'player-mid'),
+                        const SizedBox(height: 12),
+                        // Related Videos
+                        Row(
+                          children: const [
+                            Icon(
+                              Icons.play_circle_outline,
+                              color: kGreen,
+                              size: 18,
+                            ),
+                            SizedBox(width: 6),
+                            Text(
+                              'Related Videos',
+                              style: TextStyle(
+                                color: Colors.white,
+                                fontSize: 13,
+                                fontWeight: FontWeight.bold,
+                              ),
+                            ),
+                          ],
+                        ),
+                        const SizedBox(height: 10),
+                        _relatedLoading
+                            ? const Center(
+                                child: Padding(
+                                  padding: EdgeInsets.all(20),
+                                  child: CircularProgressIndicator(
+                                    color: kGreen,
+                                    strokeWidth: 2,
                                   ),
                                 ),
-                      const SizedBox(height: 16),
-                    ],
+                              )
+                            : _relatedVideos.isEmpty
+                                ? Container(
+                                    padding: const EdgeInsets.all(20),
+                                    decoration: BoxDecoration(
+                                      color: const Color(0xFF031408),
+                                      borderRadius: BorderRadius.circular(12),
+                                      border: Border.all(
+                                        color: kGreen.withOpacity(0.3),
+                                      ),
+                                    ),
+                                    child: const Center(
+                                      child: Text(
+                                        'No related videos yet',
+                                        style: TextStyle(
+                                          color: Colors.white54,
+                                          fontSize: 12,
+                                        ),
+                                      ),
+                                    ),
+                                  )
+                                : SizedBox(
+                                    height: 155,
+                                    child: ListView.builder(
+                                      scrollDirection: Axis.horizontal,
+                                      itemCount: _relatedVideos.length,
+                                      itemBuilder: (context, i) {
+                                        final v = _relatedVideos[i];
+                                        return _buildRelatedCard(v);
+                                      },
+                                    ),
+                                  ),
+                        const SizedBox(height: 12),
+                        AdBanner(slot: 'player-bottom'),
+                        const SizedBox(height: 16),
+                      ],
+                    ),
                   ),
                 ),
-              ),
-          ],
-        ),
-      ),
-    );
-  }
-
-  Widget _seekButton({
-    required IconData icon,
-    required String label,
-    required VoidCallback onTap,
-    Color color = kGreen,
-    double size = 30,
-  }) {
-    return GestureDetector(
-      onTap: onTap,
-      child: Column(
-        children: [
-          Icon(icon, color: color, size: size),
-          const SizedBox(height: 2),
-          Text(
-            label,
-            style: TextStyle(color: color, fontSize: 9, letterSpacing: 1),
+            ],
           ),
-        ],
+        ),
       ),
     );
   }
@@ -6956,6 +7789,376 @@ class _NativeVideoPlayerScreenState extends State<NativeVideoPlayerScreen> {
 }
 
 // ═══════════════════════════════════════════════════════
+// WITHDRAW SCREEN (new) — min $5, disabled by default
+// ═══════════════════════════════════════════════════════
+class WithdrawScreen extends StatefulWidget {
+  const WithdrawScreen({super.key});
+  @override
+  State<WithdrawScreen> createState() => _WithdrawScreenState();
+}
+
+class _WithdrawScreenState extends State<WithdrawScreen> {
+  bool _loading = true;
+  double _balance = 0;
+  bool _enabled = false;
+
+  final _upiCtrl = TextEditingController();
+  final _bankCtrl = TextEditingController();
+  final _ifscCtrl = TextEditingController();
+  final _gmailCtrl = TextEditingController();
+
+  @override
+  void initState() {
+    super.initState();
+    _loadInfo();
+  }
+
+  @override
+  void dispose() {
+    _upiCtrl.dispose();
+    _bankCtrl.dispose();
+    _ifscCtrl.dispose();
+    _gmailCtrl.dispose();
+    super.dispose();
+  }
+
+  Future<void> _loadInfo() async {
+    try {
+      final dash = await MayaJaalAccount.getDashboard();
+      final views = (dash['totalViews'] ?? 0) as int;
+      final balance = MayaJaalAccount.calcEarnings(views);
+      final info = await MayaJaalAccount.getWithdrawalInfo();
+
+      if (mounted) {
+        setState(() {
+          _balance = balance;
+          _enabled = (info['enabled'] ?? false) == true;
+          _upiCtrl.text = info['upi']?.toString() ?? '';
+          _bankCtrl.text = info['bank_account']?.toString() ?? '';
+          _ifscCtrl.text = info['ifsc']?.toString() ?? '';
+          _gmailCtrl.text = info['gmail']?.toString() ?? '';
+          _loading = false;
+        });
+      }
+    } catch (_) {
+      if (mounted) setState(() => _loading = false);
+    }
+  }
+
+  Future<void> _saveInfo() async {
+    Haptic.medium();
+    await MayaJaalAccount.saveWithdrawalInfo({
+      'upi': _upiCtrl.text.trim(),
+      'bank_account': _bankCtrl.text.trim(),
+      'ifsc': _ifscCtrl.text.trim().toUpperCase(),
+      'gmail': _gmailCtrl.text.trim(),
+    });
+    if (!mounted) return;
+    ScaffoldMessenger.of(context).showSnackBar(
+      const SnackBar(
+        backgroundColor: kCardBg,
+        content: Text(
+          '✅ Withdrawal details saved',
+          style: TextStyle(color: kGreen),
+        ),
+      ),
+    );
+  }
+
+  Future<void> _requestWithdraw() async {
+    if (_balance < 5) {
+      Haptic.heavy();
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          backgroundColor: kCardBg,
+          content: Text(
+            '❌ Minimum \$5 balance required',
+            style: TextStyle(color: Colors.orangeAccent),
+          ),
+        ),
+      );
+      return;
+    }
+
+    if (!_enabled) {
+      Haptic.heavy();
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          backgroundColor: kCardBg,
+          content: Text(
+            '⚠️ Withdrawals coming soon — save your details first',
+            style: TextStyle(color: Colors.orangeAccent),
+          ),
+        ),
+      );
+      return;
+    }
+
+    Haptic.medium();
+    ScaffoldMessenger.of(context).showSnackBar(
+      const SnackBar(
+        backgroundColor: kCardBg,
+        content: Text(
+          '✅ Withdrawal request submitted',
+          style: TextStyle(color: kGreen),
+        ),
+      ),
+    );
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Scaffold(
+      backgroundColor: Colors.black,
+      appBar: AppBar(
+        title: const Text('WITHDRAW EARNINGS'),
+      ),
+      body: _loading
+          ? const Center(child: CircularProgressIndicator(color: kGreen))
+          : SingleChildScrollView(
+              padding: const EdgeInsets.all(16),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  // Balance card
+                  Container(
+                    width: double.infinity,
+                    padding: const EdgeInsets.all(22),
+                    decoration: BoxDecoration(
+                      color: const Color(0xFF031408),
+                      borderRadius: BorderRadius.circular(16),
+                      border: Border.all(color: kGreen, width: 1.5),
+                      boxShadow: [
+                        BoxShadow(
+                          color: kGreen.withOpacity(0.15),
+                          blurRadius: 20,
+                        ),
+                      ],
+                    ),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        const Text(
+                          'AVAILABLE BALANCE',
+                          style: TextStyle(
+                            color: Colors.white54,
+                            fontSize: 11,
+                            letterSpacing: 1.5,
+                          ),
+                        ),
+                        const SizedBox(height: 8),
+                        Text(
+                          '\$${_balance.toStringAsFixed(2)}',
+                          style: const TextStyle(
+                            color: kGreen,
+                            fontSize: 38,
+                            fontWeight: FontWeight.w900,
+                            shadows: [Shadow(color: kGreen, blurRadius: 20)],
+                          ),
+                        ),
+                        const SizedBox(height: 4),
+                        Text(
+                          '≈ ₹${(_balance * 80).toStringAsFixed(0)} INR',
+                          style: TextStyle(
+                            color: Colors.white.withOpacity(0.5),
+                            fontSize: 12,
+                          ),
+                        ),
+                        const SizedBox(height: 10),
+                        Container(
+                          padding: const EdgeInsets.symmetric(
+                            horizontal: 10,
+                            vertical: 5,
+                          ),
+                          decoration: BoxDecoration(
+                            color: _balance >= 5
+                                ? kGreen.withOpacity(0.15)
+                                : Colors.orange.withOpacity(0.15),
+                            borderRadius: BorderRadius.circular(6),
+                            border: Border.all(
+                              color: _balance >= 5 ? kGreen : Colors.orange,
+                              width: 1,
+                            ),
+                          ),
+                          child: Text(
+                            _balance >= 5
+                                ? '✅ Minimum reached — Ready to withdraw'
+                                : '⚠️ Minimum \$5 to withdraw',
+                            style: TextStyle(
+                              color: _balance >= 5 ? kGreen : Colors.orange,
+                              fontSize: 10.5,
+                              fontWeight: FontWeight.bold,
+                            ),
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                  const SizedBox(height: 20),
+
+                  const Text(
+                    'PAYMENT DETAILS',
+                    style: TextStyle(
+                      color: kGreen,
+                      fontSize: 13,
+                      fontWeight: FontWeight.bold,
+                      letterSpacing: 1.5,
+                    ),
+                  ),
+                  const SizedBox(height: 4),
+                  const Text(
+                    'Save your details for faster withdrawals',
+                    style: TextStyle(color: Colors.white54, fontSize: 11),
+                  ),
+                  const SizedBox(height: 12),
+
+                  _field('UPI ID', _upiCtrl, 'yourname@upi'),
+                  const SizedBox(height: 10),
+                  _field('Bank Account Number', _bankCtrl, '1234567890'),
+                  const SizedBox(height: 10),
+                  _field('IFSC Code', _ifscCtrl, 'HDFC0001234'),
+                  const SizedBox(height: 10),
+                  _field('Gmail', _gmailCtrl, 'yourname@gmail.com'),
+
+                  const SizedBox(height: 16),
+                  SizedBox(
+                    width: double.infinity,
+                    height: 48,
+                    child: OutlinedButton(
+                      onPressed: _saveInfo,
+                      style: OutlinedButton.styleFrom(
+                        side: const BorderSide(color: kGreen, width: 1.5),
+                        shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(12),
+                        ),
+                      ),
+                      child: const Text(
+                        '💾 SAVE DETAILS',
+                        style: TextStyle(
+                          color: kGreen,
+                          fontSize: 12,
+                          fontWeight: FontWeight.bold,
+                          letterSpacing: 1.5,
+                        ),
+                      ),
+                    ),
+                  ),
+                  const SizedBox(height: 12),
+                  SizedBox(
+                    width: double.infinity,
+                    height: 54,
+                    child: ElevatedButton(
+                      onPressed: _requestWithdraw,
+                      style: ElevatedButton.styleFrom(
+                        backgroundColor:
+                            _balance >= 5 ? kGreen : Colors.grey[850],
+                        foregroundColor: Colors.black,
+                        shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(12),
+                        ),
+                        elevation: _balance >= 5 ? 10 : 0,
+                      ),
+                      child: Text(
+                        _balance >= 5
+                            ? '💸 REQUEST WITHDRAWAL'
+                            : 'EARN \$5 TO WITHDRAW',
+                        style: TextStyle(
+                          color: _balance >= 5 ? Colors.black : Colors.white54,
+                          fontSize: 13,
+                          fontWeight: FontWeight.w900,
+                          letterSpacing: 1.5,
+                        ),
+                      ),
+                    ),
+                  ),
+
+                  const SizedBox(height: 20),
+                  Container(
+                    padding: const EdgeInsets.all(14),
+                    decoration: BoxDecoration(
+                      color: const Color(0xFF031408),
+                      borderRadius: BorderRadius.circular(12),
+                      border: Border.all(color: kGreen.withOpacity(0.3)),
+                    ),
+                    child: const Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Row(
+                          children: [
+                            Icon(Icons.info_outline, color: kGreen, size: 16),
+                            SizedBox(width: 6),
+                            Text(
+                              'INFO',
+                              style: TextStyle(
+                                color: kGreen,
+                                fontSize: 11,
+                                fontWeight: FontWeight.bold,
+                                letterSpacing: 1.2,
+                              ),
+                            ),
+                          ],
+                        ),
+                        SizedBox(height: 8),
+                        Text(
+                          '• Minimum withdrawal: \$5 (≈₹400)',
+                          style: TextStyle(color: Colors.white70, fontSize: 11.5),
+                        ),
+                        Text(
+                          '• Processing time: 24–48 hours',
+                          style: TextStyle(color: Colors.white70, fontSize: 11.5),
+                        ),
+                        Text(
+                          '• Methods: UPI · Bank Transfer',
+                          style: TextStyle(color: Colors.white70, fontSize: 11.5),
+                        ),
+                        Text(
+                          '• TDS @ 2% applies above ₹15,000/year',
+                          style: TextStyle(color: Colors.white70, fontSize: 11.5),
+                        ),
+                      ],
+                    ),
+                  ),
+                ],
+              ),
+            ),
+    );
+  }
+
+  Widget _field(String label, TextEditingController ctrl, String hint) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 4),
+      decoration: BoxDecoration(
+        color: const Color(0xFF031A0B),
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(color: kGreen.withOpacity(0.4)),
+      ),
+      child: TextField(
+        controller: ctrl,
+        style: const TextStyle(
+          color: Colors.white,
+          fontSize: 13,
+          fontFamily: 'monospace',
+        ),
+        decoration: InputDecoration(
+          labelText: label,
+          labelStyle: TextStyle(
+            color: kGreen.withOpacity(0.8),
+            fontSize: 11,
+            letterSpacing: 1,
+          ),
+          hintText: hint,
+          hintStyle: TextStyle(
+            color: Colors.white.withOpacity(0.3),
+            fontSize: 12,
+          ),
+          border: InputBorder.none,
+        ),
+      ),
+    );
+  }
+}
+
+// ═══════════════════════════════════════════════════════
 // USER SEARCH DELEGATE
 // ═══════════════════════════════════════════════════════
 class UserSearchDelegate extends SearchDelegate {
@@ -7019,9 +8222,7 @@ class UserSearchDelegate extends SearchDelegate {
         future: FirebaseService.searchUsers(query),
         builder: (context, snapshot) {
           if (snapshot.connectionState == ConnectionState.waiting) {
-            return const Center(
-              child: CircularProgressIndicator(color: kGreen),
-            );
+            return const Center(child: CircularProgressIndicator(color: kGreen));
           }
           final users = snapshot.data ?? [];
           if (users.isEmpty) {
@@ -7037,10 +8238,7 @@ class UserSearchDelegate extends SearchDelegate {
                   const SizedBox(height: 12),
                   Text(
                     'No user found for "$query"',
-                    style: const TextStyle(
-                      color: Colors.white54,
-                      fontSize: 14,
-                    ),
+                    style: const TextStyle(color: Colors.white54, fontSize: 14),
                   ),
                 ],
               ),
@@ -7129,8 +8327,7 @@ class _UserProfileScreenState extends State<UserProfileScreen> {
   bool _loading = true;
 
   String get _channelUid => widget.channelProfile['uid']?.toString() ?? '';
-  String get _channelName =>
-      widget.channelProfile['name']?.toString() ?? 'User';
+  String get _channelName => widget.channelProfile['name']?.toString() ?? 'User';
   String get _channelEmail => widget.channelProfile['email']?.toString() ?? '';
   String get _channelPhoto =>
       widget.channelProfile['photoURL']?.toString() ?? '';
@@ -7402,7 +8599,7 @@ class _UserProfileScreenState extends State<UserProfileScreen> {
 }
 
 // ═══════════════════════════════════════════════════════
-// EARNINGS SCREEN — With Rank Animation
+// EARNINGS SCREEN
 // ═══════════════════════════════════════════════════════
 class EarningsScreen extends StatefulWidget {
   const EarningsScreen({super.key});
@@ -7602,7 +8799,6 @@ class _EarningsScreenState extends State<EarningsScreen>
             ),
             const SizedBox(height: 16),
 
-            // ═══ RANK CARD with animation ═══
             AnimatedBuilder(
               animation: _rankScale,
               builder: (c, child) => Transform.scale(
@@ -7613,10 +8809,7 @@ class _EarningsScreenState extends State<EarningsScreen>
                 padding: const EdgeInsets.all(16),
                 decoration: BoxDecoration(
                   gradient: LinearGradient(
-                    colors: [
-                      rankColor.withOpacity(0.15),
-                      Colors.black,
-                    ],
+                    colors: [rankColor.withOpacity(0.15), Colors.black],
                     begin: Alignment.topLeft,
                     end: Alignment.bottomRight,
                   ),
@@ -7838,10 +9031,7 @@ class _EarningsScreenState extends State<EarningsScreen>
                       child: Text(
                         'No links yet. Bot me video upload karke start karein.',
                         textAlign: TextAlign.center,
-                        style: TextStyle(
-                          color: Colors.white54,
-                          fontSize: 12,
-                        ),
+                        style: TextStyle(color: Colors.white54, fontSize: 12),
                       ),
                     ),
                   )
@@ -7965,7 +9155,7 @@ class _EarningsScreenState extends State<EarningsScreen>
                   ),
                   SizedBox(height: 8),
                   Text(
-                    'Minimum: \$20 (≈₹1,600)',
+                    'Minimum: \$5 (≈₹400)',
                     style: TextStyle(color: Colors.white70, fontSize: 11.5),
                   ),
                   Text(
