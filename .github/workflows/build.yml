@@ -43,7 +43,7 @@ jobs:
             exit 1
           fi
 
-      # ⭐⭐⭐ NEW STEP: Inject required packages into pubspec.yaml ⭐⭐⭐
+      # ⭐⭐⭐ pubspec.yaml with correct packages ⭐⭐⭐
       - name: Overwrite pubspec.yaml with required packages
         run: |
           cat > pubspec.yaml << 'EOF'
@@ -78,8 +78,9 @@ jobs:
             device_info_plus: ^10.1.2
             path_provider: ^2.1.4
 
-            screen_brightness: ^1.0.1
-            floating: ^6.0.0
+            permission_handler: ^11.3.1
+            photo_manager: ^3.6.4
+            photo_manager_image_provider: ^2.1.1
 
           dev_dependencies:
             flutter_test:
@@ -151,7 +152,7 @@ jobs:
           </resources>
           EOF
 
-      # ⭐⭐⭐ AndroidManifest with PiP enabled ⭐⭐⭐
+      # ⭐⭐⭐ AndroidManifest with media permissions + PiP ⭐⭐⭐
       - name: Create AndroidManifest.xml
         run: |
           cat > android/app/src/main/AndroidManifest.xml << 'EOF'
@@ -164,6 +165,8 @@ jobs:
               <uses-permission android:name="android.permission.READ_MEDIA_VIDEO"/>
               <uses-permission android:name="android.permission.READ_MEDIA_AUDIO"/>
               <uses-permission android:name="android.permission.READ_MEDIA_IMAGES"/>
+              <uses-permission android:name="android.permission.READ_MEDIA_VISUAL_USER_SELECTED"/>
+              <uses-permission android:name="android.permission.ACCESS_MEDIA_LOCATION"/>
               <uses-permission android:name="android.permission.CAMERA"/>
               <uses-permission android:name="android.permission.POST_NOTIFICATIONS"/>
               <uses-permission android:name="android.permission.WAKE_LOCK"/>
@@ -173,6 +176,7 @@ jobs:
                   android:name="${applicationName}"
                   android:icon="@mipmap/ic_launcher"
                   android:hardwareAccelerated="true"
+                  android:requestLegacyExternalStorage="true"
                   android:usesCleartextTraffic="true">
                   <activity
                       android:name=".MainActivity"
@@ -181,7 +185,7 @@ jobs:
                       android:supportsPictureInPicture="true"
                       android:resizeableActivity="true"
                       android:theme="@style/LaunchTheme"
-                      android:configChanges="orientation|keyboardHidden|keyboard|screenSize|smallestScreenSize|locale|layoutDirection|fontScale|screenLayout|density|uiMode|screenLayout|smallestScreenSize|screenSize"
+                      android:configChanges="orientation|keyboardHidden|keyboard|screenSize|smallestScreenSize|locale|layoutDirection|fontScale|screenLayout|density|uiMode"
                       android:hardwareAccelerated="true"
                       android:windowSoftInputMode="adjustResize">
                       <meta-data
@@ -234,8 +238,8 @@ jobs:
           }
           def flutterRoot = localProperties.getProperty('flutter.sdk')
           if (flutterRoot == null) { throw new GradleException("Flutter SDK not found.") }
-          def flutterVersionCode = localProperties.getProperty('flutter.versionCode') ?: '2'
-          def flutterVersionName = localProperties.getProperty('flutter.versionName') ?: '1.1.0'
+          def flutterVersionCode = localProperties.getProperty('flutter.versionCode') ?: '3'
+          def flutterVersionName = localProperties.getProperty('flutter.versionName') ?: '1.1.1'
 
           apply plugin: 'com.android.application'
           apply plugin: 'kotlin-android'
@@ -301,9 +305,10 @@ jobs:
       - name: Create gradle.properties
         run: |
           cat > android/gradle.properties << 'EOF'
-          org.gradle.jvmargs=-Xmx1536M
+          org.gradle.jvmargs=-Xmx2048M
           android.useAndroidX=true
           android.enableJetifier=true
+          android.enableR8.fullMode=false
           EOF
 
       - name: Create settings.gradle
