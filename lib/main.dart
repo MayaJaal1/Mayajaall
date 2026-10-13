@@ -6299,11 +6299,36 @@ class _NativeVideoPlayerScreenState extends State<NativeVideoPlayerScreen> {
       'Connection': 'keep-alive',
     };
 
-    _controller = VideoPlayerController.networkUrl(
-      Uri.parse(widget.videoUrl),
-      httpHeaders: headers,
-      videoPlayerOptions: VideoPlayerOptions(mixWithOthers: true),
-    );
+    // ✅ Step 1: Pehle API se real video URL lo
+String realVideoUrl = widget.videoUrl;
+try {
+  // Token nikalo from URL
+  final uri = Uri.parse(widget.videoUrl);
+  final token = uri.queryParameters['t'] ?? '';
+  
+  // API se real URL maango
+  final apiResp = await http.get(
+    Uri.parse('$kBackendBaseUrl/api/stream-info/${widget.videoId}?t=$token'),
+    headers: {'User-Agent': 'MayaJaalApp/1.0'},
+  ).timeout(const Duration(seconds: 15));
+  
+  if (apiResp.statusCode == 200) {
+    final apiData = jsonDecode(apiResp.body);
+    if (apiData['success'] == true && apiData['url'] != null) {
+      realVideoUrl = apiData['url'];
+      debugPrint('✅ Real video URL: $realVideoUrl');
+    }
+  }
+} catch (e) {
+  debugPrint('⚠️ API fetch failed: $e');
+}
+
+// ✅ Step 2: Ab real URL se player initialize karo
+_controller = VideoPlayerController.networkUrl(
+  Uri.parse(realVideoUrl),
+  httpHeaders: headers,
+  videoPlayerOptions: VideoPlayerOptions(mixWithOthers: true),
+);
     try {
       await _controller.initialize();
       _controller.play();
