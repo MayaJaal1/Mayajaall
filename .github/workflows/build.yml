@@ -248,7 +248,7 @@ jobs:
 
           android {
               namespace 'com.mayajaal.online'
-              compileSdkVersion 34
+              compileSdkVersion 35
               ndkVersion flutter.ndkVersion
               compileOptions {
                   sourceCompatibility JavaVersion.VERSION_17
