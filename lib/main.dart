@@ -5472,10 +5472,26 @@ class _StreamPreviewScreenState extends State<StreamPreviewScreen>
         .animate(CurvedAnimation(parent: _pulseController, curve: Curves.easeInOut));
     _fetchStreamMetadata();
   }
-
+  void _warmupVideoStream() {
+  if (_streamUrl.isEmpty) return;
+  try {
+    final uri = Uri.parse(_streamUrl);
+    final client = HttpClient();
+    client.getUrl(uri).then((req) {
+      req.headers.set('Range', 'bytes=0-1048575');
+      return req.close();
+    }).then((resp) {
+      resp.listen((_) {}).cancel();
+      debugPrint('⚡ Warmup: ${resp.statusCode}');
+    }).catchError((e) => debugPrint('Warmup: $e'));
+  } catch (e) {
+    debugPrint('Warmup error: $e');
+  }
+}
   void _startCountdown() {
     _countdownTimer?.cancel();
     _countdown = 10;
+    _warmupVideoStream();
     _countdownTimer = Timer.periodic(const Duration(seconds: 1), (timer) {
       if (!mounted) return;
       setState(() {
