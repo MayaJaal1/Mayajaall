@@ -6289,16 +6289,6 @@ class _NativeVideoPlayerScreenState extends State<NativeVideoPlayerScreen> {
     } catch (_) {}
   }
 
-  Future<void> _initVideo() async {
-    final headers = {
-      'User-Agent':
-          'Mozilla/5.0 (Linux; Android 10) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Mobile Safari/537.36',
-      'Referer': 'https://www.mayajaal.online/',
-      'Accept': '*/*',
-      'Accept-Encoding': 'identity',
-      'Connection': 'keep-alive',
-    };
-
     Future<void> _initVideo() async {
   final headers = {
     'User-Agent':
