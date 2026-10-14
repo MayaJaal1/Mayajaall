@@ -6299,53 +6299,71 @@ class _NativeVideoPlayerScreenState extends State<NativeVideoPlayerScreen> {
       'Connection': 'keep-alive',
     };
 
-    // ✅ Step 1: Pehle API se real video URL lo
-String realVideoUrl = widget.videoUrl;
-try {
-  // Token nikalo from URL
-  final uri = Uri.parse(widget.videoUrl);
-  final token = uri.queryParameters['t'] ?? '';
-  
-  // API se real URL maango
-  final apiResp = await http.get(
-    Uri.parse('$kBackendBaseUrl/api/stream-info/${widget.videoId}?t=$token'),
-    headers: {'User-Agent': 'MayaJaalApp/1.0'},
-  ).timeout(const Duration(seconds: 15));
-  
-  if (apiResp.statusCode == 200) {
-    final apiData = jsonDecode(apiResp.body);
-    if (apiData['success'] == true && apiData['url'] != null) {
-      realVideoUrl = apiData['url'];
-      debugPrint('✅ Real video URL: $realVideoUrl');
+    Future<void> _initVideo() async {
+  final headers = {
+    'User-Agent':
+        'Mozilla/5.0 (Linux; Android 10) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Mobile Safari/537.36',
+    'Referer': 'https://www.mayajaal.online/',
+    'Accept': '*/*',
+    'Accept-Encoding': 'identity',
+    'Connection': 'keep-alive',
+  };
+
+  // ⚡ FAST LOAD: Agar already direct R2 URL hai to API call skip karo
+  String realVideoUrl = widget.videoUrl;
+  final isDirectUrl = widget.videoUrl.contains('.r2.dev') ||
+                       widget.videoUrl.contains('cloudflarestorage') ||
+                       widget.videoUrl.contains('.mp4');
+
+  if (!isDirectUrl) {
+    try {
+      final uri = Uri.parse(widget.sourcePageUrl);
+      final token = uri.queryParameters['t'] ?? uri.queryParameters['s'] ?? '';
+
+      final apiResp = await http.get(
+        Uri.parse('$kBackendBaseUrl/api/stream-info/${widget.videoId}?t=$token'),
+        headers: {'User-Agent': 'MayaJaalApp/1.0'},
+      ).timeout(const Duration(seconds: 8));
+
+      if (apiResp.statusCode == 200) {
+        final apiData = jsonDecode(apiResp.body);
+        if (apiData['success'] == true && apiData['url'] != null) {
+          realVideoUrl = apiData['url'];
+          debugPrint('✅ API R2 URL: $realVideoUrl');
+        }
+      }
+    } catch (e) {
+      debugPrint('⚠️ API fallback: $e');
     }
+  } else {
+    debugPrint('⚡ Direct R2 URL — skipping API call');
   }
-} catch (e) {
-  debugPrint('⚠️ API fetch failed: $e');
+
+  // ✅ Player initialize karo (turant)
+  _controller = VideoPlayerController.networkUrl(
+    Uri.parse(realVideoUrl),
+    httpHeaders: headers,
+    videoPlayerOptions: VideoPlayerOptions(mixWithOthers: true),
+  );
+
+  try {
+    await _controller.initialize();
+    _controller.play();
+    _controller.setPlaybackSpeed(_playbackSpeed);
+    _controller.setVolume(_volume);
+
+    _controller.addListener(() {
+      if (mounted) setState(() {});
+    });
+    setState(() => _isInitialized = true);
+    _resetControlTimer();
+    _startWatchTracking();
+  } catch (e) {
+    debugPrint("Player Init Error: $e");
+    setState(() => _hasError = true);
+  }
 }
 
-// ✅ Step 2: Ab real URL se player initialize karo
-_controller = VideoPlayerController.networkUrl(
-  Uri.parse(realVideoUrl),
-  httpHeaders: headers,
-  videoPlayerOptions: VideoPlayerOptions(mixWithOthers: true),
-);
-    try {
-      await _controller.initialize();
-      _controller.play();
-      _controller.setPlaybackSpeed(_playbackSpeed);
-      _controller.setVolume(_volume);
-
-      _controller.addListener(() {
-        if (mounted) setState(() {});
-      });
-      setState(() => _isInitialized = true);
-      _resetControlTimer();
-      _startWatchTracking();
-    } catch (e) {
-      debugPrint("Player Init Error: $e");
-      setState(() => _hasError = true);
-    }
-  }
 
   @override
   void dispose() {
