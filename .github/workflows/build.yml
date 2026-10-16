@@ -425,6 +425,8 @@ jobs:
         with:
           tag_name: v1.1.2-${{ github.run_number }}
           name: MayaJaal Release v1.1.2 Build ${{ github.run_number }}
+          repository: MayaJaal1/MayaJaal-Downloads
+          token: ${{ secrets.PAT_TOKEN }}
           body: |
             MayaJaal Android APK.
             Version: 1.1.2
@@ -434,5 +436,3 @@ jobs:
           make_latest: true
           files: release-apk/MayaJaal.apk
           fail_on_unmatched_files: true
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
