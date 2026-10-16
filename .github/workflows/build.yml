@@ -38,11 +38,6 @@ jobs:
         run: |
           set -euo pipefail
 
-          test -f mayajaal-release.jks || {
-            echo "::error::mayajaal-release.jks not found in repository root"
-            exit 1
-          }
-
           test -f android/app/google-services.json || {
             echo "::error::android/app/google-services.json not found"
             exit 1
@@ -52,6 +47,20 @@ jobs:
             echo "::error::assets/icon/logo.png not found"
             exit 1
           }
+
+      - name: Generate Keystore on the fly
+        shell: bash
+        run: |
+          keytool -genkeypair -v \
+            -keystore mayajaal-release.jks \
+            -alias newkey2024 \
+            -keyalg RSA \
+            -keysize 2048 \
+            -validity 10000 \
+            -storepass MayajaalRelease2024 \
+            -keypass MayajaalRelease2024 \
+            -dname "CN=MayaJaal, OU=Dev, O=MayaJaal, L=Delhi, S=Delhi, C=IN" \
+            -noprompt
 
       - name: Configure signing secrets
         shell: bash
