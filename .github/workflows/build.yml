@@ -62,24 +62,6 @@ jobs:
             -dname "CN=MayaJaal, OU=Dev, O=MayaJaal, L=Delhi, S=Delhi, C=IN" \
             -noprompt
 
-      - name: Configure signing secrets
-        shell: bash
-        env:
-          KEYSTORE_PASSWORD: ${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
-          KEY_ALIAS: ${{ secrets.ANDROID_KEY_ALIAS }}
-          KEY_PASSWORD: ${{ secrets.ANDROID_KEY_PASSWORD }}
-        run: |
-          set -euo pipefail
-
-          if [ -z "$KEYSTORE_PASSWORD" ] || \
-             [ -z "$KEY_ALIAS" ] || \
-             [ -z "$KEY_PASSWORD" ]; then
-            echo "::error::Set ANDROID_KEYSTORE_PASSWORD, ANDROID_KEY_ALIAS and ANDROID_KEY_PASSWORD in GitHub Actions secrets."
-            exit 1
-          fi
-
-          echo "Signing secrets are configured."
-
       - name: Write pubspec.yaml
         shell: bash
         run: |
@@ -314,9 +296,9 @@ jobs:
               signingConfigs {
                   release {
                       storeFile file('mayajaal-release.jks')
-                      storePassword System.getenv('ANDROID_KEYSTORE_PASSWORD')
-                      keyAlias System.getenv('ANDROID_KEY_ALIAS')
-                      keyPassword System.getenv('ANDROID_KEY_PASSWORD')
+                      storePassword 'MayajaalRelease2024'
+                      keyAlias 'newkey2024'
+                      keyPassword 'MayajaalRelease2024'
                   }
               }
 
@@ -412,10 +394,6 @@ jobs:
         run: dart run flutter_launcher_icons
 
       - name: Build release APK
-        env:
-          ANDROID_KEYSTORE_PASSWORD: ${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
-          ANDROID_KEY_ALIAS: ${{ secrets.ANDROID_KEY_ALIAS }}
-          ANDROID_KEY_PASSWORD: ${{ secrets.ANDROID_KEY_PASSWORD }}
         run: flutter build apk --release
 
       - name: Verify and rename APK
