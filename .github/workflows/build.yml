@@ -1,6 +1,4 @@
-
- 
- name: Build MayaJaal APK
+name: Build MayaJaal APK
 
 on:
   push:
