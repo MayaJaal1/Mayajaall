@@ -69,7 +69,7 @@ jobs:
           name: mayajaal
           description: Mayajaal App
           publish_to: 'none'
-          version: 1.1.2+4
+          version: 1.1.2+${{ github.run_number }}
 
           environment:
             sdk: '>=3.0.0 <4.0.0'
@@ -288,7 +288,7 @@ jobs:
                   applicationId "com.mayajaal.online"
                   minSdkVersion 23
                   targetSdkVersion 35
-                  versionCode 4
+                  versionCode ${{ github.run_number }}
                   versionName "1.1.2"
                   multiDexEnabled true
               }
@@ -415,7 +415,7 @@ jobs:
       - name: Upload APK artifact
         uses: actions/upload-artifact@v4
         with:
-          name: MayaJaal-APK-v1.1.2
+          name: MayaJaal-APK
           path: release-apk/MayaJaal.apk
           if-no-files-found: error
 
@@ -423,12 +423,12 @@ jobs:
         if: github.ref == 'refs/heads/main'
         uses: softprops/action-gh-release@v2
         with:
-          tag_name: latest
-          name: MayaJaal Latest Release
+          tag_name: v1.1.2-${{ github.run_number }}
+          name: MayaJaal Release v1.1.2 Build ${{ github.run_number }}
           body: |
             MayaJaal Android APK.
             Version: 1.1.2
-            Version Code: 4
+            Version Code: ${{ github.run_number }}
           draft: false
           prerelease: false
           make_latest: true
