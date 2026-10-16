@@ -1,12 +1,16 @@
-name: Build MaayaJaal APK
+name: Build MayaJaal APK
 
 on:
   push:
-    branches: [ main ]
+    branches: [main]
   workflow_dispatch:
 
 permissions:
   contents: write
+
+concurrency:
+  group: mayajaal-apk-build
+  cancel-in-progress: false
 
 jobs:
   build:
@@ -19,33 +23,58 @@ jobs:
       - name: Set up Java
         uses: actions/setup-java@v4
         with:
-          distribution: 'zulu'
-          java-version: '17'
+          distribution: zulu
+          java-version: "17"
 
       - name: Set up Flutter
         uses: subosito/flutter-action@v2
         with:
-          flutter-version: '3.19.6'
-          channel: 'stable'
+          flutter-version: "3.19.6"
+          channel: stable
+          cache: true
 
-      - name: Copy Keystore
+      - name: Verify required files
+        shell: bash
         run: |
-          mkdir -p android/app
-          cp mayajaal-release.jks android/app/mayajaal-release.jks
+          set -euo pipefail
 
-      - name: Verify google-services.json
+          test -f mayajaal-release.jks || {
+            echo "::error::mayajaal-release.jks not found in repository root"
+            exit 1
+          }
+
+          test -f android/app/google-services.json || {
+            echo "::error::android/app/google-services.json not found"
+            exit 1
+          }
+
+          test -f assets/icon/logo.png || {
+            echo "::error::assets/icon/logo.png not found"
+            exit 1
+          }
+
+      - name: Configure signing secrets
+        shell: bash
+        env:
+          KEYSTORE_PASSWORD: ${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
+          KEY_ALIAS: ${{ secrets.ANDROID_KEY_ALIAS }}
+          KEY_PASSWORD: ${{ secrets.ANDROID_KEY_PASSWORD }}
         run: |
-          echo "=== Checking google-services.json ==="
-          if [ -f android/app/google-services.json ]; then
-            echo "google-services.json found"
-          else
-            echo "ERROR: google-services.json NOT found"
+          set -euo pipefail
+
+          if [ -z "$KEYSTORE_PASSWORD" ] || \
+             [ -z "$KEY_ALIAS" ] || \
+             [ -z "$KEY_PASSWORD" ]; then
+            echo "::error::Set ANDROID_KEYSTORE_PASSWORD, ANDROID_KEY_ALIAS and ANDROID_KEY_PASSWORD in GitHub Actions secrets."
             exit 1
           fi
 
-      - name: Overwrite pubspec.yaml with required packages
+          echo "Signing secrets are configured."
+
+      - name: Write pubspec.yaml
+        shell: bash
         run: |
-          cat > pubspec.yaml << 'EOF'
+          cat > pubspec.yaml <<'EOF'
           name: mayajaal
           description: Mayajaal App
           publish_to: 'none'
@@ -96,33 +125,26 @@ jobs:
               - assets/icon/
           EOF
 
-      - name: Create Android Folder Structure
+      - name: Prepare Android project
+        shell: bash
         run: |
+          set -euo pipefail
+
           mkdir -p android/app/src/main/kotlin/com/mayajaal/online
-          mkdir -p android/app/src/main/res/drawable
-          mkdir -p android/app/src/main/res/drawable-v21
-          mkdir -p android/app/src/main/res/mipmap-hdpi
-          mkdir -p android/app/src/main/res/mipmap-mdpi
-          mkdir -p android/app/src/main/res/mipmap-xhdpi
-          mkdir -p android/app/src/main/res/mipmap-xxhdpi
-          mkdir -p android/app/src/main/res/mipmap-xxxhdpi
           mkdir -p android/app/src/main/res/values
           mkdir -p android/app/src/main/res/values-night
 
-      - name: Create MainActivity.kt
-        run: |
-          cat > android/app/src/main/kotlin/com/mayajaal/online/MainActivity.kt << 'EOF'
+          cp mayajaal-release.jks android/app/mayajaal-release.jks
+
+          cat > android/app/src/main/kotlin/com/mayajaal/online/MainActivity.kt <<'EOF'
           package com.mayajaal.online
 
           import io.flutter.embedding.android.FlutterActivity
 
-          class MainActivity: FlutterActivity() {
-          }
+          class MainActivity : FlutterActivity()
           EOF
 
-      - name: Create Theme Files
-        run: |
-          cat > android/app/src/main/res/values/styles.xml << 'EOF'
+          cat > android/app/src/main/res/values/styles.xml <<'EOF'
           <?xml version="1.0" encoding="utf-8"?>
           <resources>
               <style name="LaunchTheme" parent="@android:style/Theme.Light.NoTitleBar">
@@ -134,7 +156,7 @@ jobs:
           </resources>
           EOF
 
-          cat > android/app/src/main/res/values-night/styles.xml << 'EOF'
+          cat > android/app/src/main/res/values-night/styles.xml <<'EOF'
           <?xml version="1.0" encoding="utf-8"?>
           <resources>
               <style name="LaunchTheme" parent="@android:style/Theme.Black.NoTitleBar">
@@ -147,8 +169,9 @@ jobs:
           EOF
 
       - name: Create AndroidManifest.xml
+        shell: bash
         run: |
-          cat > android/app/src/main/AndroidManifest.xml << 'EOF'
+          cat > android/app/src/main/AndroidManifest.xml <<'EOF'
           <manifest xmlns:android="http://schemas.android.com/apk/res/android">
 
               <uses-permission android:name="android.permission.INTERNET"/>
@@ -229,11 +252,13 @@ jobs:
           </manifest>
           EOF
 
-      - name: Create build.gradle (app)
+      - name: Create app build.gradle
+        shell: bash
         run: |
-          cat > android/app/build.gradle << 'EOF'
+          cat > android/app/build.gradle <<'EOF'
           def localProperties = new Properties()
           def localPropertiesFile = rootProject.file('local.properties')
+
           if (localPropertiesFile.exists()) {
               localPropertiesFile.withReader('UTF-8') { reader ->
                   localProperties.load(reader)
@@ -244,9 +269,6 @@ jobs:
           if (flutterRoot == null) {
               throw new GradleException("Flutter SDK not found.")
           }
-
-          def flutterVersionCode = localProperties.getProperty('flutter.versionCode') ?: '4'
-          def flutterVersionName = localProperties.getProperty('flutter.versionName') ?: '1.1.2'
 
           apply plugin: 'com.android.application'
           apply plugin: 'kotlin-android'
@@ -275,17 +297,17 @@ jobs:
                   applicationId "com.mayajaal.online"
                   minSdkVersion 23
                   targetSdkVersion 35
-                  versionCode flutterVersionCode.toInteger()
-                  versionName flutterVersionName
+                  versionCode 4
+                  versionName "1.1.2"
                   multiDexEnabled true
               }
 
               signingConfigs {
                   release {
                       storeFile file('mayajaal-release.jks')
-                      storePassword System.getenv('ANDROID_KEYSTORE_PASSWORD') ?: 'MayajaalRelease2024'
-                      keyAlias System.getenv('ANDROID_KEY_ALIAS') ?: 'newkey2024'
-                      keyPassword System.getenv('ANDROID_KEY_PASSWORD') ?: 'MayajaalRelease2024'
+                      storePassword System.getenv('ANDROID_KEYSTORE_PASSWORD')
+                      keyAlias System.getenv('ANDROID_KEY_ALIAS')
+                      keyPassword System.getenv('ANDROID_KEY_PASSWORD')
                   }
               }
 
@@ -303,15 +325,18 @@ jobs:
           }
           EOF
 
-      - name: Create build.gradle (root)
+      - name: Create root build.gradle
+        shell: bash
         run: |
-          cat > android/build.gradle << 'EOF'
+          cat > android/build.gradle <<'EOF'
           buildscript {
               ext.kotlin_version = '1.9.24'
+
               repositories {
                   google()
                   mavenCentral()
               }
+
               dependencies {
                   classpath 'com.android.tools.build:gradle:8.1.4'
                   classpath "org.jetbrains.kotlin:kotlin-gradle-plugin:$kotlin_version"
@@ -327,20 +352,24 @@ jobs:
           }
 
           rootProject.buildDir = '../build'
+
           subprojects {
               project.buildDir = "${rootProject.buildDir}/${project.name}"
           }
+
           subprojects {
               project.evaluationDependsOn(':app')
           }
+
           tasks.register("clean", Delete) {
               delete rootProject.buildDir
           }
           EOF
 
       - name: Create gradle.properties
+        shell: bash
         run: |
-          cat > android/gradle.properties << 'EOF'
+          cat > android/gradle.properties <<'EOF'
           org.gradle.jvmargs=-Xmx2048M
           android.useAndroidX=true
           android.enableJetifier=true
@@ -348,12 +377,14 @@ jobs:
           EOF
 
       - name: Create settings.gradle
+        shell: bash
         run: |
-          cat > android/settings.gradle << 'EOF'
+          cat > android/settings.gradle <<'EOF'
           include ':app'
 
           def localPropertiesFile = new File(rootProject.projectDir, "local.properties")
           def properties = new Properties()
+
           assert localPropertiesFile.exists()
           localPropertiesFile.withReader("UTF-8") { reader ->
               properties.load(reader)
@@ -365,51 +396,56 @@ jobs:
           apply from: "$flutterSdkPath/packages/flutter_tools/gradle/app_plugin_loader.gradle"
           EOF
 
-      - name: Get SHA1 and SHA256 Fingerprints
-        run: |
-          keytool -list -v \
-            -keystore android/app/mayajaal-release.jks \
-            -alias newkey2024 \
-            -storepass "$ANDROID_KEYSTORE_PASSWORD" \
-            -keypass "$ANDROID_KEY_PASSWORD" | grep -iE "sha1|sha-1|sha256|sha-256"
-        env:
-          ANDROID_KEYSTORE_PASSWORD: ${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
-          ANDROID_KEY_PASSWORD: ${{ secrets.ANDROID_KEY_PASSWORD }}
-
-      - name: Get Dependencies
+      - name: Get Flutter dependencies
         run: flutter pub get
 
-      - name: Generate Launcher Icons
-        run: flutter pub run flutter_launcher_icons
+      - name: Generate launcher icons
+        run: dart run flutter_launcher_icons
 
-      - name: Build MaayaJaal Release APK
+      - name: Build release APK
+        env:
+          ANDROID_KEYSTORE_PASSWORD: ${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
+          ANDROID_KEY_ALIAS: ${{ secrets.ANDROID_KEY_ALIAS }}
+          ANDROID_KEY_PASSWORD: ${{ secrets.ANDROID_KEY_PASSWORD }}
         run: flutter build apk --release
 
-      - name: Verify APK Version
+      - name: Verify and rename APK
+        shell: bash
         run: |
-          echo "Building MayaJaal version 1.1.2 (versionCode 4)"
-          ls -lh build/app/outputs/flutter-apk/app-release.apk
+          set -euo pipefail
 
-      - name: Rename APK
-        run: |
-          mv build/app/outputs/flutter-apk/app-release.apk build/app/outputs/flutter-apk/MayaJaal.apk
+          APK="build/app/outputs/flutter-apk/app-release.apk"
 
-      - name: Upload APK Artifact
+          if [ ! -f "$APK" ]; then
+            echo "::error::APK build output was not found"
+            exit 1
+          fi
+
+          mkdir -p release-apk
+          cp "$APK" release-apk/MayaJaal.apk
+          ls -lh release-apk/MayaJaal.apk
+
+      - name: Upload APK artifact
         uses: actions/upload-artifact@v4
         with:
-          name: MayaJaal-APK
-          path: build/app/outputs/flutter-apk/MayaJaal.apk
+          name: MayaJaal-APK-v1.1.2
+          path: release-apk/MayaJaal.apk
+          if-no-files-found: error
 
-      - name: Release APK to GitHub Releases
-        uses: softprops/action-gh-release@v2
+      - name: Publish GitHub Release
         if: github.ref == 'refs/heads/main'
+        uses: softprops/action-gh-release@v2
         with:
           tag_name: latest
-          name: "MayaJaal Latest Release"
+          name: MayaJaal Latest Release
+          body: |
+            MayaJaal Android APK.
+            Version: 1.1.2
+            Version Code: 4
           draft: false
           prerelease: false
           make_latest: true
-          overwrite_files: true
-          files: build/app/outputs/flutter-apk/MayaJaal.apk
+          files: release-apk/MayaJaal.apk
+          fail_on_unmatched_files: true
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
