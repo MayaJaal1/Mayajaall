@@ -1363,7 +1363,7 @@ class AuthGate extends StatelessWidget {
 }
 
 // ═══════════════════════════════════════════════════════
-// LOGIN SCREEN (SAME TO SAME AS IMAGE)
+// LOGIN SCREEN (Same to Same as Image)
 // ═══════════════════════════════════════════════════════
 class LoginScreen extends StatefulWidget {
   final VoidCallback? onLoginSuccess;
@@ -1450,51 +1450,70 @@ class _LoginScreenState extends State<LoginScreen>
       body: Stack(
         children: [
           // 1. Matrix Background
-          const MatrixRain(opacity: 0.25),
+          const MatrixRain(opacity: 0.2),
           
-          // 2. Laptop Mockup/Background Effect (To match image)
+          // 2. Laptop Mockup Effect
           Positioned(
-            bottom: 50,
-            right: -30,
+            bottom: 80,
+            right: -40,
             child: Opacity(
-              opacity: 0.5,
-              child: Container(
-                width: 320,
-                height: 220,
-                decoration: BoxDecoration(
-                  gradient: LinearGradient(
-                    colors: [Colors.black, kGreen.withOpacity(0.2), Colors.black],
-                    begin: Alignment.topLeft,
-                    end: Alignment.bottomRight,
+              opacity: 0.6,
+              child: Transform.rotate(
+                angle: -0.05,
+                child: Container(
+                  width: 340,
+                  height: 220,
+                  decoration: BoxDecoration(
+                    color: const Color(0xFF021206),
+                    border: Border.all(color: kGreen.withOpacity(0.5), width: 2),
+                    borderRadius: BorderRadius.circular(10),
+                    boxShadow: [
+                      BoxShadow(color: kGreen.withOpacity(0.2), blurRadius: 40, spreadRadius: 10)
+                    ]
                   ),
-                  border: Border.all(color: kGreen.withOpacity(0.5), width: 2),
-                  borderRadius: BorderRadius.circular(12),
-                  boxShadow: [
-                    BoxShadow(color: kGreen.withOpacity(0.2), blurRadius: 30, spreadRadius: 10)
-                  ]
-                ),
-                child: Column(
-                  children: [
-                    Container(
-                      height: 24,
-                      color: Colors.black,
-                      padding: const EdgeInsets.symmetric(horizontal: 8),
-                      child: Row(
-                        children: [
-                          CircleAvatar(radius: 5, backgroundColor: Colors.redAccent.withOpacity(0.8)),
-                          const SizedBox(width: 6),
-                          CircleAvatar(radius: 5, backgroundColor: Colors.amber.withOpacity(0.8)),
-                          const SizedBox(width: 6),
-                          CircleAvatar(radius: 5, backgroundColor: kGreen.withOpacity(0.8)),
-                        ],
+                  child: Column(
+                    children: [
+                      Container(
+                        height: 22,
+                        color: Colors.black,
+                        padding: const EdgeInsets.symmetric(horizontal: 10),
+                        child: Row(
+                          children: [
+                            CircleAvatar(radius: 4, backgroundColor: Colors.redAccent.withOpacity(0.8)),
+                            const SizedBox(width: 6),
+                            CircleAvatar(radius: 4, backgroundColor: Colors.amber.withOpacity(0.8)),
+                            const SizedBox(width: 6),
+                            CircleAvatar(radius: 4, backgroundColor: kGreen.withOpacity(0.8)),
+                          ],
+                        ),
                       ),
-                    ),
-                    Expanded(
-                      child: Center(
-                        child: Icon(Icons.play_circle_outline, color: kGreen.withOpacity(0.3), size: 80),
+                      Expanded(
+                        child: Stack(
+                          children: [
+                            Center(
+                              child: Icon(Icons.play_circle_outline, color: kGreen.withOpacity(0.3), size: 80),
+                            ),
+                            Positioned(
+                              bottom: 10,
+                              left: 10,
+                              right: 10,
+                              child: Container(
+                                height: 4,
+                                decoration: BoxDecoration(color: kGreen.withOpacity(0.3), borderRadius: BorderRadius.circular(2)),
+                                child: FractionallySizedBox(
+                                  alignment: Alignment.centerLeft,
+                                  widthFactor: 0.6,
+                                  child: Container(
+                                    decoration: BoxDecoration(color: kGreen, borderRadius: BorderRadius.circular(2)),
+                                  ),
+                                ),
+                              ),
+                            ),
+                          ],
+                        ),
                       ),
-                    ),
-                  ],
+                    ],
+                  ),
                 ),
               ),
             ),
@@ -1503,7 +1522,7 @@ class _LoginScreenState extends State<LoginScreen>
           // 3. Main Content
           SafeArea(
             child: Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 20),
+              padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 30),
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
@@ -1600,7 +1619,7 @@ class _LoginScreenState extends State<LoginScreen>
                     ),
                   ),
 
-                  const SizedBox(height: 60),
+                  const Spacer(),
 
                   // White Google Button
                   SizedBox(
@@ -1671,7 +1690,7 @@ class _LoginScreenState extends State<LoginScreen>
                       ),
                     ),
                   ],
-                  const SizedBox(height: 20),
+                  const SizedBox(height: 10),
                 ],
               ),
             ),
@@ -3509,8 +3528,26 @@ class _MoreDrawerState extends State<MoreDrawer>
                     index: 4,
                     child: _snakeItem(
                       context,
-                      icon: Icons.vpn_key,
+                      icon: Icons.bookmark,
                       color: kNeonCyan,
+                      title: 'Saved Videos',
+                      subtitle: 'Your bookmarked videos',
+                      onTap: () {
+                        Haptic.medium();
+                        Navigator.pop(context);
+                        Navigator.push(
+                          context,
+                          MaterialPageRoute(builder: (_) => const SavedVideosScreen()),
+                        );
+                      },
+                    ),
+                  ),
+                  _staggered(
+                    index: 5,
+                    child: _snakeItem(
+                      context,
+                      icon: Icons.vpn_key,
+                      color: kNeonPurple,
                       title: 'My API Key',
                       subtitle: 'View & copy for bot',
                       onTap: () {
@@ -3521,11 +3558,11 @@ class _MoreDrawerState extends State<MoreDrawer>
                     ),
                   ),
                   _staggered(
-                    index: 5,
+                    index: 6,
                     child: _snakeItem(
                       context,
                       icon: Icons.smart_toy,
-                      color: kNeonPurple,
+                      color: Colors.amberAccent,
                       title: 'MayaJaal Bots',
                       subtitle: 'Upload & Converter bots',
                       onTap: () {
@@ -3536,7 +3573,7 @@ class _MoreDrawerState extends State<MoreDrawer>
                     ),
                   ),
                   _staggered(
-                    index: 6,
+                    index: 7,
                     child: _snakeItem(
                       context,
                       icon: Icons.share,
@@ -3550,7 +3587,7 @@ class _MoreDrawerState extends State<MoreDrawer>
                     ),
                   ),
                   _staggered(
-                    index: 7,
+                    index: 8,
                     child: _snakeItem(
                       context,
                       icon: Icons.settings,
@@ -3568,7 +3605,7 @@ class _MoreDrawerState extends State<MoreDrawer>
                     ),
                   ),
                   _staggered(
-                    index: 8,
+                    index: 9,
                     child: _snakeItem(
                       context,
                       icon: Icons.support_agent,
@@ -3584,7 +3621,7 @@ class _MoreDrawerState extends State<MoreDrawer>
                     ),
                   ),
                   _staggered(
-                    index: 9,
+                    index: 10,
                     child: Padding(
                       padding: const EdgeInsets.only(left: 16, top: 18, bottom: 8),
                       child: Row(
@@ -3609,7 +3646,7 @@ class _MoreDrawerState extends State<MoreDrawer>
                     ),
                   ),
                   _staggered(
-                    index: 10,
+                    index: 11,
                     child: _socialItem(
                       context,
                       imageUrl:
@@ -3625,7 +3662,7 @@ class _MoreDrawerState extends State<MoreDrawer>
                     ),
                   ),
                   _staggered(
-                    index: 11,
+                    index: 12,
                     child: _socialItem(
                       context,
                       imageUrl:
@@ -3641,7 +3678,7 @@ class _MoreDrawerState extends State<MoreDrawer>
                     ),
                   ),
                   _staggered(
-                    index: 12,
+                    index: 13,
                     child: _socialItem(
                       context,
                       imageUrl:
@@ -3657,7 +3694,7 @@ class _MoreDrawerState extends State<MoreDrawer>
                     ),
                   ),
                   _staggered(
-                    index: 13,
+                    index: 14,
                     child: Padding(
                       padding: const EdgeInsets.only(left: 16, top: 18, bottom: 8),
                       child: Row(
@@ -3682,7 +3719,7 @@ class _MoreDrawerState extends State<MoreDrawer>
                     ),
                   ),
                   _staggered(
-                    index: 14,
+                    index: 15,
                     child: _snakeItem(
                       context,
                       icon: Icons.info_outline,
@@ -3697,7 +3734,7 @@ class _MoreDrawerState extends State<MoreDrawer>
                     ),
                   ),
                   _staggered(
-                    index: 15,
+                    index: 16,
                     child: _snakeItem(
                       context,
                       icon: Icons.privacy_tip_outlined,
@@ -3711,7 +3748,7 @@ class _MoreDrawerState extends State<MoreDrawer>
                     ),
                   ),
                   _staggered(
-                    index: 16,
+                    index: 17,
                     child: _snakeItem(
                       context,
                       icon: Icons.description_outlined,
@@ -3725,7 +3762,7 @@ class _MoreDrawerState extends State<MoreDrawer>
                     ),
                   ),
                   _staggered(
-                    index: 17,
+                    index: 18,
                     child: Padding(
                       padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 16),
                       child: Container(
@@ -4090,10 +4127,7 @@ class ChannelScreen extends StatelessWidget {
               leading: Icon(Icons.bolt, color: kGreen, size: 32),
               title: Text(
                 'Quantum Streaming Node',
-                style: TextStyle(
-                  color: Colors.white,
-                  fontWeight: FontWeight.bold,
-                ),
+                style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold),
               ),
               subtitle: Text(
                 'Direct hardware pipeline active',
@@ -4113,10 +4147,7 @@ class ChannelScreen extends StatelessWidget {
               leading: Icon(Icons.cloud_done, color: kNeonCyan, size: 32),
               title: Text(
                 'High Speed CDN Node',
-                style: TextStyle(
-                  color: Colors.white,
-                  fontWeight: FontWeight.bold,
-                ),
+                style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold),
               ),
               subtitle: Text(
                 'Buffer acceleration: ENABLED',
@@ -4136,10 +4167,7 @@ class ChannelScreen extends StatelessWidget {
               leading: Icon(Icons.security, color: kNeonPurple, size: 32),
               title: Text(
                 'Encrypted Pipeline',
-                style: TextStyle(
-                  color: Colors.white,
-                  fontWeight: FontWeight.bold,
-                ),
+                style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold),
               ),
               subtitle: Text(
                 'AES-256 quantum cipher: ACTIVE',
@@ -4287,12 +4315,7 @@ class _GalleryScreenState extends State<GalleryScreen> {
             const SizedBox(height: 16),
             const Text(
               'GALLERY PERMISSION NEEDED',
-              style: TextStyle(
-                color: kGreen,
-                fontSize: 16,
-                fontWeight: FontWeight.bold,
-                letterSpacing: 1.5,
-              ),
+              style: TextStyle(color: kGreen, fontSize: 16, fontWeight: FontWeight.bold, letterSpacing: 1.5),
             ),
             const SizedBox(height: 12),
             const Text(
@@ -4307,14 +4330,9 @@ class _GalleryScreenState extends State<GalleryScreen> {
                 backgroundColor: kGreen,
                 foregroundColor: Colors.black,
                 padding: const EdgeInsets.symmetric(horizontal: 30, vertical: 14),
-                shape: RoundedRectangleBorder(
-                  borderRadius: BorderRadius.circular(12),
-                ),
+                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
               ),
-              child: const Text(
-                'OPEN SETTINGS',
-                style: TextStyle(fontWeight: FontWeight.bold, letterSpacing: 1.5),
-              ),
+              child: const Text('OPEN SETTINGS', style: TextStyle(fontWeight: FontWeight.bold, letterSpacing: 1.5)),
             ),
           ],
         ),
@@ -4327,11 +4345,7 @@ class _GalleryScreenState extends State<GalleryScreen> {
       child: Column(
         mainAxisAlignment: MainAxisAlignment.center,
         children: [
-          Icon(
-            Icons.photo_library_outlined,
-            color: kGreen.withOpacity(0.4),
-            size: 80,
-          ),
+          Icon(Icons.photo_library_outlined, color: kGreen.withOpacity(0.4), size: 80),
           const SizedBox(height: 12),
           Text(
             'Koi ${_selectedTab == 'videos' ? 'video' : _selectedTab == 'images' ? 'photo' : 'media'} nahi mila',
@@ -4407,10 +4421,7 @@ class _GalleryScreenState extends State<GalleryScreen> {
         childAspectRatio: 1,
       ),
       itemCount: _currentAssets.length,
-      itemBuilder: (context, index) {
-        final asset = _currentAssets[index];
-        return _buildTile(asset);
-      },
+      itemBuilder: (context, index) => _buildTile(_currentAssets[index]),
     );
   }
 
@@ -4463,11 +4474,7 @@ class _GalleryScreenState extends State<GalleryScreen> {
                     const SizedBox(width: 2),
                     Text(
                       _formatDuration(asset.duration),
-                      style: const TextStyle(
-                        color: Colors.white,
-                        fontSize: 9,
-                        fontWeight: FontWeight.bold,
-                      ),
+                      style: const TextStyle(color: Colors.white, fontSize: 9, fontWeight: FontWeight.bold),
                     ),
                   ],
                 ),
@@ -4479,15 +4486,8 @@ class _GalleryScreenState extends State<GalleryScreen> {
               top: 4,
               child: Container(
                 padding: const EdgeInsets.all(4),
-                decoration: BoxDecoration(
-                  color: kGreen.withOpacity(0.9),
-                  shape: BoxShape.circle,
-                ),
-                child: const Icon(
-                  Icons.videocam,
-                  color: Colors.black,
-                  size: 10,
-                ),
+                decoration: BoxDecoration(color: kGreen.withOpacity(0.9), shape: BoxShape.circle),
+                child: const Icon(Icons.videocam, color: Colors.black, size: 10),
               ),
             ),
         ],
@@ -4517,11 +4517,7 @@ class _GalleryScreenState extends State<GalleryScreen> {
                   asset,
                   isOriginal: true,
                   fit: BoxFit.contain,
-                  errorBuilder: (c, e, s) => const Icon(
-                    Icons.broken_image,
-                    color: kGreen,
-                    size: 60,
-                  ),
+                  errorBuilder: (c, e, s) => const Icon(Icons.broken_image, color: kGreen, size: 60),
                 ),
               ),
             ),
@@ -4544,52 +4540,6 @@ class _GalleryScreenState extends State<GalleryScreen> {
                 ),
               ),
             ),
-            Positioned(
-              bottom: 40,
-              left: 20,
-              right: 20,
-              child: Container(
-                padding: const EdgeInsets.all(14),
-                decoration: BoxDecoration(
-                  color: Colors.black.withOpacity(0.8),
-                  borderRadius: BorderRadius.circular(12),
-                  border: Border.all(color: kGreen.withOpacity(0.5)),
-                ),
-                child: Row(
-                  children: [
-                    Icon(
-                      asset.type == AssetType.video
-                          ? Icons.videocam
-                          : Icons.image,
-                      color: kGreen,
-                      size: 20,
-                    ),
-                    const SizedBox(width: 10),
-                    Expanded(
-                      child: Text(
-                        asset.title ?? 'Media',
-                        style: const TextStyle(
-                          color: Colors.white,
-                          fontSize: 12,
-                          fontWeight: FontWeight.bold,
-                        ),
-                        maxLines: 1,
-                        overflow: TextOverflow.ellipsis,
-                      ),
-                    ),
-                    if (asset.type == AssetType.video)
-                      Text(
-                        _formatDuration(asset.duration),
-                        style: const TextStyle(
-                          color: kGreen,
-                          fontSize: 12,
-                          fontWeight: FontWeight.bold,
-                        ),
-                      ),
-                  ],
-                ),
-              ),
-            ),
           ],
         ),
       ),
@@ -4598,7 +4548,7 @@ class _GalleryScreenState extends State<GalleryScreen> {
 }
 
 // ═══════════════════════════════════════════════════════
-// SAVED VIDEOS SCREEN
+// SAVED VIDEOS SCREEN (Naya Option)
 // ═══════════════════════════════════════════════════════
 class SavedVideosScreen extends StatefulWidget {
   const SavedVideosScreen({super.key});
@@ -4684,7 +4634,7 @@ class _SavedVideosScreenState extends State<SavedVideosScreen> {
                         MaterialPageRoute(
                           builder: (_) => StreamPreviewScreen(targetUrl: item['url']),
                         ),
-                      );
+                      ).then((_) => _loadSaved());
                     },
                   ),
                 );
@@ -4695,7 +4645,7 @@ class _SavedVideosScreenState extends State<SavedVideosScreen> {
 }
 
 // ═══════════════════════════════════════════════════════
-// HISTORY SCREEN (With Save Feature)
+// HISTORY SCREEN (With Thumbnail & Save Feature)
 // ═══════════════════════════════════════════════════════
 class HistoryScreen extends StatefulWidget {
   const HistoryScreen({super.key});
@@ -4806,14 +4756,14 @@ class _HistoryScreenState extends State<HistoryScreen> {
                   ),
                   child: ListTile(
                     leading: Container(
-                      width: 45,
-                      height: 45,
+                      width: 50,
+                      height: 50,
                       decoration: BoxDecoration(
                         color: Colors.black,
                         borderRadius: BorderRadius.circular(8),
                         border: Border.all(color: kGreen.withOpacity(0.5)),
                       ),
-                      child: const Icon(Icons.play_circle_outline, color: kGreen, size: 24),
+                      child: const Icon(Icons.play_circle_outline, color: kGreen, size: 28),
                     ),
                     title: Text(
                       item['title'] ?? 'Media Node',
@@ -5020,7 +4970,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
 }
 
 // ═══════════════════════════════════════════════════════
-// STREAM PREVIEW SCREEN (In-App Thumbnail Fix)
+// STREAM PREVIEW SCREEN (10-Sec Page)
 // ═══════════════════════════════════════════════════════
 class StreamPreviewScreen extends StatefulWidget {
   final String targetUrl;
@@ -5072,9 +5022,9 @@ class _StreamPreviewScreenState extends State<StreamPreviewScreen>
   void _initThumbnail(String url) {
     _previewController = VideoPlayerController.networkUrl(Uri.parse(url));
     _previewController!.initialize().then((_) {
-      _previewController!.seekTo(Duration.zero);
-      _previewController!.pause();
-      _previewController!.setVolume(0);
+      _previewController!.setLooping(true);
+      _previewController!.setVolume(0); // Mute the preview
+      _previewController!.play(); // Play in background as per user request
       if (mounted) setState(() => _previewReady = true);
     }).catchError((e) {
       debugPrint("Thumbnail init error: $e");
@@ -5211,7 +5161,7 @@ class _StreamPreviewScreenState extends State<StreamPreviewScreen>
     Haptic.heavy();
     _saveWatchRecord();
 
-    // ✅ Back Navigation Fix: Normal Push, so back returns here
+    // ✅ STRICT NAVIGATION FIX: Push and wait for return to restart countdown
     Navigator.of(context).push(
       MaterialPageRoute(
         builder: (_) => NativeVideoPlayerScreen(
@@ -5222,7 +5172,18 @@ class _StreamPreviewScreenState extends State<StreamPreviewScreen>
           videoId: _rawId,
         ),
       ),
-    );
+    ).then((_) {
+      // When user comes back from the player, restart the 10s countdown
+      if (mounted) {
+        _startCountdown();
+      }
+    });
+  }
+
+  void _goToHome() {
+    Haptic.heavy();
+    // Go back to the very first screen (MainNavigationHolder)
+    Navigator.of(context).popUntil((route) => route.isFirst);
   }
 
   Widget _buildCountdownCircle() {
@@ -5323,13 +5284,14 @@ class _StreamPreviewScreenState extends State<StreamPreviewScreen>
               padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
               child: Column(
                 children: [
+                  // Top Bar
                   Row(
                     children: [
                       IconButton(
                         icon: const Icon(Icons.arrow_back_ios_new, color: kGreen, size: 22),
                         onPressed: () {
                           Haptic.light();
-                          Navigator.pop(context); // ✅ Goes back to previous screen (History/Home)
+                          Navigator.pop(context); // ✅ Goes back to History/Home
                         },
                       ),
                       Expanded(
@@ -5356,7 +5318,7 @@ class _StreamPreviewScreenState extends State<StreamPreviewScreen>
                   ),
                   const SizedBox(height: 12),
                   
-                  // ✅ Video Preview Box (In-App Thumbnail)
+                  // ✅ Video Preview Box (Playing Live Video)
                   Container(
                     padding: const EdgeInsets.all(4),
                     decoration: BoxDecoration(
@@ -5373,7 +5335,7 @@ class _StreamPreviewScreenState extends State<StreamPreviewScreen>
                           fit: StackFit.expand,
                           alignment: Alignment.center,
                           children: [
-                            // Background (Video Frame)
+                            // Live Video Frame
                             if (_previewReady && _previewController != null)
                               FittedBox(
                                 fit: BoxFit.cover,
@@ -5397,7 +5359,7 @@ class _StreamPreviewScreenState extends State<StreamPreviewScreen>
                                 ),
                               ),
                               
-                            // Dark Overlay for Visibility
+                            // Dark Overlay
                             Container(color: Colors.black.withOpacity(0.4)),
                             
                             // Countdown
@@ -5420,6 +5382,7 @@ class _StreamPreviewScreenState extends State<StreamPreviewScreen>
                   ),
                   const SizedBox(height: 14),
                   
+                  // Play Button
                   if (_canProceed)
                     _buildRedSnakePlayButton()
                   else
@@ -5434,6 +5397,24 @@ class _StreamPreviewScreenState extends State<StreamPreviewScreen>
                         ),
                       ),
                     ),
+                  
+                  const SizedBox(height: 12),
+
+                  // ✅ Home Button (Below Play Button)
+                  SizedBox(
+                    width: double.infinity,
+                    height: 50,
+                    child: OutlinedButton.icon(
+                      onPressed: _goToHome,
+                      icon: const Icon(Icons.home, color: Colors.white54, size: 20),
+                      label: const Text('GO TO HOME PAGE', style: TextStyle(color: Colors.white54, fontSize: 12, fontWeight: FontWeight.bold, letterSpacing: 1.5)),
+                      style: OutlinedButton.styleFrom(
+                        side: BorderSide(color: Colors.white24, width: 1.5),
+                        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(25)),
+                      ),
+                    ),
+                  ),
+
                   const SizedBox(height: 16),
                   
                   // Info Box
@@ -5511,15 +5492,6 @@ class _StreamPreviewScreenState extends State<StreamPreviewScreen>
                         ],
                       ),
                     ),
-                  ),
-                  const SizedBox(height: 14),
-                  Row(
-                    mainAxisAlignment: MainAxisAlignment.center,
-                    children: [
-                      const Icon(Icons.lock_outline, color: kGreen, size: 14),
-                      const SizedBox(width: 6),
-                      Text('SECURE STREAM PIPELINE ACTIVE', style: TextStyle(color: kGreen.withOpacity(0.75), fontSize: 9.5, letterSpacing: 1.2)),
-                    ],
                   ),
                   const SizedBox(height: 20),
                 ],
@@ -6327,7 +6299,7 @@ class _NativeVideoPlayerScreenState extends State<NativeVideoPlayerScreen> {
                       icon: const Icon(Icons.arrow_back_ios_new, color: kGreen, size: 22),
                       onPressed: () {
                         Haptic.light();
-                        Navigator.pop(context); // ✅ Goes back to preview
+                        Navigator.pop(context); // ✅ Goes back to preview (10s page)
                       },
                     ),
                     Expanded(
@@ -6677,7 +6649,7 @@ class _NativeVideoPlayerScreenState extends State<NativeVideoPlayerScreen> {
         onTap: () {
           Haptic.medium();
           final url = '$kBackendBaseUrl/v/$id';
-          // ✅ Related Video Navigation Fix (PushReplacement keeps history intact)
+          // ✅ PushReplacement so the back button goes to the original preview screen
           Navigator.pushReplacement(
             context,
             MaterialPageRoute(
