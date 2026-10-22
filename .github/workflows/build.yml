@@ -48,19 +48,35 @@ jobs:
             exit 1
           }
 
-      - name: Generate Keystore on the fly
+      - name: Verify existing keystore
         shell: bash
         run: |
-          keytool -genkeypair -v \
-            -keystore mayajaal-release.jks \
+          set -euo pipefail
+
+          if [ ! -f "mayajaal-release.jks" ]; then
+            echo "::error::mayajaal-release.jks repo mein nahi mila."
+            echo "::error::Pehle 'Setup Keystore (One Time)' workflow chalao aur usse commit hone do."
+            exit 1
+          fi
+
+          echo "✅ Existing keystore mil gaya - isse hi sign hoga"
+
+      - name: Print SHA1 and SHA256 (YEH COPY KARO)
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          echo "=========================================================="
+          echo "        SHA1 + SHA256  →  YAHAN SE COPY KARO"
+          echo "=========================================================="
+          keytool -list -v -keystore mayajaal-release.jks \
             -alias newkey2024 \
-            -keyalg RSA \
-            -keysize 2048 \
-            -validity 10000 \
             -storepass MayajaalRelease2024 \
-            -keypass MayajaalRelease2024 \
-            -dname "CN=MayaJaal, OU=Dev, O=MayaJaal, L=Delhi, S=Delhi, C=IN" \
-            -noprompt
+            -keypass MayajaalRelease2024 | grep -iE "SHA1:|SHA256:"
+          echo "=========================================================="
+          echo "NOTE: Ye SHA assetlinks.json ke sha256_cert_fingerprints"
+          echo "      se match karni chahiye (colon ke saath, uppercase)."
+          echo "=========================================================="
 
       - name: Write pubspec.yaml
         shell: bash
@@ -411,6 +427,18 @@ jobs:
           mkdir -p release-apk
           cp "$APK" release-apk/MayaJaal.apk
           ls -lh release-apk/MayaJaal.apk
+
+      - name: Print final APK SHA256 (sanity check)
+        shell: bash
+        run: |
+          echo "=========================================================="
+          echo "  Actual built APK ka signing SHA256 (verify karo):"
+          echo "=========================================================="
+          keytool -printcert -jarfile release-apk/MayaJaal.apk \
+            | grep -iE "SHA1:|SHA256:"
+          echo "=========================================================="
+          echo "  Ye SHA256 assetlinks.json se match honi chahiye."
+          echo "=========================================================="
 
       - name: Upload APK artifact
         uses: actions/upload-artifact@v4
