@@ -851,7 +851,7 @@ Future<void> main() async {
         projectId: "mayajaal-app",
         storageBucket: "mayajaal-app.firebasestorage.app",
         messagingSenderId: "96139047750",
-        appId: "1:96139047750:android:b2bfa8b843d71a32012b47",
+        appId: "1:96139047750:android:7dbfb9487d023c20012b47",
       ),
     );
     debugPrint("✅ Firebase Initialized");
