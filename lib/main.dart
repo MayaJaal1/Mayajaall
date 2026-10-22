@@ -369,7 +369,7 @@ class MayaJaalAccount {
     }
   }
 
-  // ✅ UPDATED EARNING RATES AS REQUESTED
+  // ✅ UPDATED EARNING RATES
   static double calcEarnings(int views) {
     views = math.max(0, views);
     if (views <= 0) return 0;
@@ -388,7 +388,6 @@ class MayaJaalAccount {
     if (views < 2000) {
       return {'tier': 2, 'rate': 2.50, 'next': 2000 - views};
     }
-    // After 2000, the rate is constant $2.00 per 1k, next milestone is every 2000 views
     return {
       'tier': 3 + (views ~/ 2000),
       'rate': 2.00,
@@ -1364,7 +1363,7 @@ class AuthGate extends StatelessWidget {
 }
 
 // ═══════════════════════════════════════════════════════
-// LOGIN SCREEN (Image ke jaisa updated)
+// LOGIN SCREEN (SAME TO SAME AS IMAGE)
 // ═══════════════════════════════════════════════════════
 class LoginScreen extends StatefulWidget {
   final VoidCallback? onLoginSuccess;
@@ -1380,7 +1379,6 @@ class _LoginScreenState extends State<LoginScreen>
 
   late AnimationController _magicController;
   late Animation<double> _glowAnimation;
-  late Animation<double> _scaleAnimation;
 
   @override
   void initState() {
@@ -1390,9 +1388,6 @@ class _LoginScreenState extends State<LoginScreen>
       duration: const Duration(milliseconds: 1200),
     );
     _glowAnimation = Tween<double>(begin: 0.0, end: 40.0).animate(
-      CurvedAnimation(parent: _magicController, curve: Curves.easeInOut),
-    );
-    _scaleAnimation = Tween<double>(begin: 1.0, end: 1.04).animate(
       CurvedAnimation(parent: _magicController, curve: Curves.easeInOut),
     );
   }
@@ -1454,46 +1449,49 @@ class _LoginScreenState extends State<LoginScreen>
       backgroundColor: Colors.black,
       body: Stack(
         children: [
-          // Matrix Rain Background
-          const MatrixRain(opacity: 0.3),
+          // 1. Matrix Background
+          const MatrixRain(opacity: 0.25),
           
-          // Laptop/Streaming Image Overlay (Custom Gradient & Icons to match image)
+          // 2. Laptop Mockup/Background Effect (To match image)
           Positioned(
-            bottom: 0,
-            right: -50,
+            bottom: 50,
+            right: -30,
             child: Opacity(
-              opacity: 0.4,
+              opacity: 0.5,
               child: Container(
-                width: 300,
-                height: 200,
+                width: 320,
+                height: 220,
                 decoration: BoxDecoration(
                   gradient: LinearGradient(
                     colors: [Colors.black, kGreen.withOpacity(0.2), Colors.black],
                     begin: Alignment.topLeft,
                     end: Alignment.bottomRight,
                   ),
-                  border: Border.all(color: kGreen.withOpacity(0.3), width: 2),
+                  border: Border.all(color: kGreen.withOpacity(0.5), width: 2),
                   borderRadius: BorderRadius.circular(12),
+                  boxShadow: [
+                    BoxShadow(color: kGreen.withOpacity(0.2), blurRadius: 30, spreadRadius: 10)
+                  ]
                 ),
                 child: Column(
                   children: [
                     Container(
-                      height: 20,
+                      height: 24,
                       color: Colors.black,
+                      padding: const EdgeInsets.symmetric(horizontal: 8),
                       child: Row(
                         children: [
-                          const SizedBox(width: 8),
-                          CircleAvatar(radius: 4, backgroundColor: Colors.redAccent),
-                          const SizedBox(width: 4),
-                          CircleAvatar(radius: 4, backgroundColor: Colors.amber),
-                          const SizedBox(width: 4),
-                          CircleAvatar(radius: 4, backgroundColor: kGreen),
+                          CircleAvatar(radius: 5, backgroundColor: Colors.redAccent.withOpacity(0.8)),
+                          const SizedBox(width: 6),
+                          CircleAvatar(radius: 5, backgroundColor: Colors.amber.withOpacity(0.8)),
+                          const SizedBox(width: 6),
+                          CircleAvatar(radius: 5, backgroundColor: kGreen.withOpacity(0.8)),
                         ],
                       ),
                     ),
                     Expanded(
                       child: Center(
-                        child: Icon(Icons.play_circle_outline, color: kGreen.withOpacity(0.5), size: 80),
+                        child: Icon(Icons.play_circle_outline, color: kGreen.withOpacity(0.3), size: 80),
                       ),
                     ),
                   ],
@@ -1502,59 +1500,60 @@ class _LoginScreenState extends State<LoginScreen>
             ),
           ),
 
+          // 3. Main Content
           SafeArea(
             child: Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 40),
+              padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 20),
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  // Logo & Brand Name
+                  // Logo & Brand
                   Row(
                     children: [
                       Container(
-                        width: 50,
-                        height: 50,
+                        width: 60,
+                        height: 60,
                         decoration: BoxDecoration(
                           color: Colors.black,
-                          borderRadius: BorderRadius.circular(12),
-                          border: Border.all(color: kGreen, width: 2),
+                          borderRadius: BorderRadius.circular(16),
+                          border: Border.all(color: kGreen, width: 2.5),
                           boxShadow: [
-                            BoxShadow(color: kGreen.withOpacity(0.5), blurRadius: 15),
+                            BoxShadow(color: kGreen.withOpacity(0.6), blurRadius: 20, spreadRadius: 2),
                           ],
                         ),
                         child: ClipRRect(
-                          borderRadius: BorderRadius.circular(10),
+                          borderRadius: BorderRadius.circular(13),
                           child: Image.asset(
                             'assets/icon/logo.png',
                             fit: BoxFit.cover,
                             errorBuilder: (c, e, s) => const Icon(
                               Icons.change_history,
                               color: kGreen,
-                              size: 30,
+                              size: 32,
                             ),
                           ),
                         ),
                       ),
-                      const SizedBox(width: 12),
+                      const SizedBox(width: 14),
                       const Text(
                         'Maya',
                         style: TextStyle(
-                          fontSize: 34,
+                          fontSize: 36,
                           fontWeight: FontWeight.w900,
                           color: Colors.white,
                           fontFamily: 'sans-serif',
-                          letterSpacing: 1,
+                          letterSpacing: 0.5,
                         ),
                       ),
                       const Text(
                         'Jaal',
                         style: TextStyle(
-                          fontSize: 34,
+                          fontSize: 36,
                           fontWeight: FontWeight.w900,
                           color: kGreen,
                           fontFamily: 'sans-serif',
-                          letterSpacing: 1,
-                          shadows: [Shadow(color: kGreen, blurRadius: 10)],
+                          letterSpacing: 0.5,
+                          shadows: [Shadow(color: kGreen, blurRadius: 15)],
                         ),
                       ),
                     ],
@@ -1562,53 +1561,69 @@ class _LoginScreenState extends State<LoginScreen>
 
                   const Spacer(),
 
-                  // Tagline
+                  // Headline Text
                   const Text(
-                    'Your Videos.\nYour Links.\nYour Earnings.',
+                    'Your Videos.\nYour Links.',
                     style: TextStyle(
-                      fontSize: 38,
+                      fontSize: 42,
                       fontWeight: FontWeight.w900,
                       color: Colors.white,
                       height: 1.1,
-                      letterSpacing: -1,
+                      fontFamily: 'sans-serif',
+                      letterSpacing: -0.5,
                     ),
                   ),
+                  const Text(
+                    'Your Earnings.',
+                    style: TextStyle(
+                      fontSize: 42,
+                      fontWeight: FontWeight.w900,
+                      color: kGreen,
+                      height: 1.1,
+                      fontFamily: 'sans-serif',
+                      letterSpacing: -0.5,
+                      shadows: [Shadow(color: kGreen, blurRadius: 10)],
+                    ),
+                  ),
+                  
                   const SizedBox(height: 16),
+                  
+                  // Tagline
                   Text(
                     "World's Smartest Video Sharing\nPlatform",
                     style: TextStyle(
-                      fontSize: 14,
+                      fontSize: 15,
                       color: Colors.white.withOpacity(0.8),
                       fontFamily: 'monospace',
-                      letterSpacing: 1.5,
+                      letterSpacing: 1.2,
                       height: 1.4,
                     ),
                   ),
 
-                  const SizedBox(height: 50),
+                  const SizedBox(height: 60),
 
-                  // Google Login Button
+                  // White Google Button
                   SizedBox(
                     width: double.infinity,
-                    height: 60,
+                    height: 62,
                     child: ElevatedButton(
                       onPressed: _loading ? null : _handleGoogle,
                       style: ElevatedButton.styleFrom(
                         backgroundColor: Colors.white,
-                        foregroundColor: Colors.black87,
+                        foregroundColor: Colors.black,
+                        elevation: 10,
+                        shadowColor: kGreen.withOpacity(0.3),
                         shape: RoundedRectangleBorder(
-                          borderRadius: BorderRadius.circular(30),
+                          borderRadius: BorderRadius.circular(31),
                         ),
-                        elevation: 8,
-                        shadowColor: kGreen.withOpacity(0.5),
                       ),
                       child: _loading
                           ? const SizedBox(
-                              width: 24,
-                              height: 24,
+                              width: 26,
+                              height: 26,
                               child: CircularProgressIndicator(
                                 color: Colors.black,
-                                strokeWidth: 2.5,
+                                strokeWidth: 3,
                               ),
                             )
                           : Row(
@@ -1616,11 +1631,11 @@ class _LoginScreenState extends State<LoginScreen>
                               children: [
                                 Image.network(
                                   'https://developers.google.com/identity/images/g-logo.png',
-                                  height: 26,
+                                  height: 28,
                                   errorBuilder: (c, e, s) => const Icon(
                                     Icons.g_mobiledata,
                                     color: Colors.red,
-                                    size: 32,
+                                    size: 34,
                                   ),
                                 ),
                                 const SizedBox(width: 12),
@@ -1628,13 +1643,13 @@ class _LoginScreenState extends State<LoginScreen>
                                   'Sign in with Google',
                                   style: TextStyle(
                                     fontSize: 18,
-                                    fontWeight: FontWeight.w700,
+                                    fontWeight: FontWeight.w800,
                                     fontFamily: 'sans-serif',
                                   ),
                                 ),
                                 const Spacer(),
-                                const Icon(Icons.arrow_forward, color: Colors.black87),
-                                const SizedBox(width: 12),
+                                const Icon(Icons.arrow_forward, color: Colors.black, size: 24),
+                                const SizedBox(width: 16),
                               ],
                             ),
                     ),
@@ -1651,10 +1666,7 @@ class _LoginScreenState extends State<LoginScreen>
                       ),
                       child: Text(
                         _error,
-                        style: const TextStyle(
-                          color: Colors.redAccent,
-                          fontSize: 12,
-                        ),
+                        style: const TextStyle(color: Colors.redAccent, fontSize: 12),
                         textAlign: TextAlign.center,
                       ),
                     ),
@@ -1671,7 +1683,7 @@ class _LoginScreenState extends State<LoginScreen>
 }
 
 // ═══════════════════════════════════════════════════════
-// MAIN NAVIGATION HOLDER (Ads Popup Removed)
+// MAIN NAVIGATION HOLDER
 // ═══════════════════════════════════════════════════════
 class MainNavigationHolder extends StatefulWidget {
   const MainNavigationHolder({super.key});
@@ -4586,7 +4598,104 @@ class _GalleryScreenState extends State<GalleryScreen> {
 }
 
 // ═══════════════════════════════════════════════════════
-// HISTORY SCREEN (Recent Videos Fix)
+// SAVED VIDEOS SCREEN
+// ═══════════════════════════════════════════════════════
+class SavedVideosScreen extends StatefulWidget {
+  const SavedVideosScreen({super.key});
+  @override
+  State<SavedVideosScreen> createState() => _SavedVideosScreenState();
+}
+
+class _SavedVideosScreenState extends State<SavedVideosScreen> {
+  List<Map<String, dynamic>> _saved = [];
+
+  @override
+  void initState() {
+    super.initState();
+    _loadSaved();
+  }
+
+  Future<void> _loadSaved() async {
+    final prefs = await SharedPreferences.getInstance();
+    final jsonStr = prefs.getString('saved_videos_v1');
+    if (jsonStr != null) {
+      try {
+        final List decoded = jsonDecode(jsonStr);
+        if (mounted) setState(() => _saved = decoded.cast<Map<String, dynamic>>());
+      } catch (_) {}
+    }
+  }
+
+  Future<void> _removeSaved(int index) async {
+    Haptic.light();
+    final prefs = await SharedPreferences.getInstance();
+    setState(() => _saved.removeAt(index));
+    await prefs.setString('saved_videos_v1', jsonEncode(_saved));
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Scaffold(
+      backgroundColor: Colors.black,
+      appBar: AppBar(title: const Text('SAVED VIDEOS')),
+      body: _saved.isEmpty
+          ? Center(
+              child: Column(
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: [
+                  Icon(Icons.bookmark_border, size: 60, color: kGreen.withOpacity(0.4)),
+                  const SizedBox(height: 12),
+                  Text('No saved videos yet', style: TextStyle(color: kGreen.withOpacity(0.6))),
+                ],
+              ),
+            )
+          : ListView.builder(
+              padding: const EdgeInsets.all(16),
+              itemCount: _saved.length,
+              itemBuilder: (c, i) {
+                final item = _saved[i];
+                return Container(
+                  margin: const EdgeInsets.only(bottom: 12),
+                  decoration: BoxDecoration(
+                    color: kCardBg,
+                    borderRadius: BorderRadius.circular(10),
+                    border: Border.all(color: kGreen.withOpacity(0.3)),
+                  ),
+                  child: ListTile(
+                    leading: const Icon(Icons.play_circle_fill, color: kGreen, size: 30),
+                    title: Text(
+                      item['title'] ?? 'Video',
+                      style: const TextStyle(fontSize: 13, color: kGreen, fontWeight: FontWeight.bold),
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                    ),
+                    subtitle: Text(
+                      'By: ${item['uploader'] ?? 'Node'}',
+                      style: TextStyle(fontSize: 11, color: kDimGreen.withOpacity(0.8)),
+                    ),
+                    trailing: IconButton(
+                      icon: const Icon(Icons.delete, size: 18, color: Colors.redAccent),
+                      onPressed: () => _removeSaved(i),
+                    ),
+                    onTap: () {
+                      Haptic.light();
+                      Navigator.push(
+                        context,
+                        MaterialPageRoute(
+                          builder: (_) => StreamPreviewScreen(targetUrl: item['url']),
+                        ),
+                      );
+                    },
+                  ),
+                );
+              },
+            ),
+    );
+  }
+}
+
+// ═══════════════════════════════════════════════════════
+// HISTORY SCREEN (With Save Feature)
 // ═══════════════════════════════════════════════════════
 class HistoryScreen extends StatefulWidget {
   const HistoryScreen({super.key});
@@ -4609,9 +4718,7 @@ class _HistoryScreenState extends State<HistoryScreen> {
     if (localJson != null) {
       try {
         final List decoded = jsonDecode(localJson);
-        if (mounted) {
-          setState(() => _history = decoded.cast<Map<String, dynamic>>());
-        }
+        if (mounted) setState(() => _history = decoded.cast<Map<String, dynamic>>());
       } catch (_) {}
     }
   }
@@ -4628,6 +4735,36 @@ class _HistoryScreenState extends State<HistoryScreen> {
     final prefs = await SharedPreferences.getInstance();
     await prefs.remove('watch_history_v2');
     setState(() => _history = []);
+  }
+
+  Future<void> _saveItem(Map<String, dynamic> item) async {
+    Haptic.medium();
+    final prefs = await SharedPreferences.getInstance();
+    final savedStr = prefs.getString('saved_videos_v1');
+    List<Map<String, dynamic>> savedList = [];
+    if (savedStr != null) {
+      try {
+        savedList = (jsonDecode(savedStr) as List).cast<Map<String, dynamic>>();
+      } catch (_) {}
+    }
+
+    if (savedList.any((s) => s['url'] == item['url'])) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(backgroundColor: kCardBg, content: Text('Already saved!', style: TextStyle(color: kGreen))),
+        );
+      }
+      return;
+    }
+
+    savedList.insert(0, item);
+    await prefs.setString('saved_videos_v1', jsonEncode(savedList));
+    
+    if (mounted) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(backgroundColor: kCardBg, content: Text('✅ Video Saved!', style: TextStyle(color: kGreen))),
+      );
+    }
   }
 
   @override
@@ -4649,16 +4786,9 @@ class _HistoryScreenState extends State<HistoryScreen> {
               child: Column(
                 mainAxisAlignment: MainAxisAlignment.center,
                 children: [
-                  Icon(
-                    Icons.history,
-                    size: 60,
-                    color: kGreen.withOpacity(0.4),
-                  ),
+                  Icon(Icons.history, size: 60, color: kGreen.withOpacity(0.4)),
                   const SizedBox(height: 12),
-                  Text(
-                    tr('no_history'),
-                    style: TextStyle(color: kGreen.withOpacity(0.6)),
-                  ),
+                  Text(tr('no_history'), style: TextStyle(color: kGreen.withOpacity(0.6))),
                 ],
               ),
             )
@@ -4667,8 +4797,6 @@ class _HistoryScreenState extends State<HistoryScreen> {
               itemCount: _history.length,
               itemBuilder: (c, i) {
                 final item = _history[i];
-                final thumbnail = item['thumbnail']?.toString() ?? '';
-                
                 return Container(
                   margin: const EdgeInsets.only(bottom: 12),
                   decoration: BoxDecoration(
@@ -4678,61 +4806,44 @@ class _HistoryScreenState extends State<HistoryScreen> {
                   ),
                   child: ListTile(
                     leading: Container(
-                      width: 60,
+                      width: 45,
                       height: 45,
                       decoration: BoxDecoration(
                         color: Colors.black,
-                        borderRadius: BorderRadius.circular(6),
+                        borderRadius: BorderRadius.circular(8),
                         border: Border.all(color: kGreen.withOpacity(0.5)),
                       ),
-                      child: thumbnail.isNotEmpty
-                          ? ClipRRect(
-                              borderRadius: BorderRadius.circular(5),
-                              child: Image.network(
-                                thumbnail,
-                                fit: BoxFit.cover,
-                                errorBuilder: (c, e, s) => const Icon(
-                                  Icons.play_circle_outline,
-                                  color: kGreen,
-                                  size: 24,
-                                ),
-                              ),
-                            )
-                          : const Icon(Icons.play_circle_outline, color: kGreen, size: 24),
+                      child: const Icon(Icons.play_circle_outline, color: kGreen, size: 24),
                     ),
                     title: Text(
                       item['title'] ?? 'Media Node',
-                      style: const TextStyle(
-                        fontSize: 13,
-                        color: kGreen,
-                        fontWeight: FontWeight.bold,
-                      ),
+                      style: const TextStyle(fontSize: 13, color: kGreen, fontWeight: FontWeight.bold),
                       maxLines: 1,
                       overflow: TextOverflow.ellipsis,
                     ),
                     subtitle: Text(
                       'By: ${item['uploader'] ?? 'Node'}',
-                      style: TextStyle(
-                        fontSize: 11,
-                        color: kDimGreen.withOpacity(0.8),
-                      ),
+                      style: TextStyle(fontSize: 11, color: kDimGreen.withOpacity(0.8)),
                     ),
-                    trailing: IconButton(
-                      icon: const Icon(
-                        Icons.close,
-                        size: 16,
-                        color: Colors.redAccent,
-                      ),
-                      onPressed: () => _deleteItem(i),
+                    trailing: Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        IconButton(
+                          icon: const Icon(Icons.bookmark_add_outlined, size: 20, color: kNeonCyan),
+                          onPressed: () => _saveItem(item),
+                        ),
+                        IconButton(
+                          icon: const Icon(Icons.close, size: 18, color: Colors.redAccent),
+                          onPressed: () => _deleteItem(i),
+                        ),
+                      ],
                     ),
                     onTap: () {
                       Haptic.light();
                       Navigator.push(
                         context,
                         MaterialPageRoute(
-                          builder: (_) => StreamPreviewScreen(
-                            targetUrl: item['url'],
-                          ),
+                          builder: (_) => StreamPreviewScreen(targetUrl: item['url']),
                         ),
                       ).then((_) => _loadHistory());
                     },
@@ -4776,8 +4887,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
     setState(() {
       _darkTheme = prefs.getBool('dark_theme') ?? true;
       _language = prefs.getString('language') ?? 'English';
-      _downloadLocation =
-          prefs.getString('download_location') ?? 'Internal Storage / Mayajaall';
+      _downloadLocation = prefs.getString('download_location') ?? 'Internal Storage / Mayajaall';
     });
   }
 
@@ -4813,10 +4923,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
         children: [
           ListTile(
             leading: const Icon(Icons.palette_outlined, color: kGreen),
-            title: Text(
-              tr('dark_theme'),
-              style: const TextStyle(color: kGreen),
-            ),
+            title: Text(tr('dark_theme'), style: const TextStyle(color: kGreen)),
             subtitle: Text(
               _darkTheme ? 'Matrix Cyber Neon' : 'Standard Light',
               style: TextStyle(color: kGreen.withOpacity(0.6), fontSize: 12),
@@ -4830,44 +4937,23 @@ class _SettingsScreenState extends State<SettingsScreen> {
           Divider(color: kGreen.withOpacity(0.2)),
           ListTile(
             leading: const Icon(Icons.language, color: kGreen),
-            title: Text(
-              tr('language'),
-              style: const TextStyle(color: kGreen),
-            ),
-            subtitle: Text(
-              _language,
-              style: TextStyle(color: kGreen.withOpacity(0.6), fontSize: 12),
-            ),
-            trailing: const Icon(
-              Icons.arrow_forward_ios,
-              size: 14,
-              color: kGreen,
-            ),
+            title: Text(tr('language'), style: const TextStyle(color: kGreen)),
+            subtitle: Text(_language, style: TextStyle(color: kGreen.withOpacity(0.6), fontSize: 12)),
+            trailing: const Icon(Icons.arrow_forward_ios, size: 14, color: kGreen),
             onTap: _showLanguageDialog,
           ),
           Divider(color: kGreen.withOpacity(0.2)),
           ListTile(
             leading: const Icon(Icons.download, color: kGreen),
-            title: Text(
-              tr('download_location'),
-              style: const TextStyle(color: kGreen),
-            ),
-            subtitle: Text(
-              _downloadLocation,
-              style: TextStyle(color: kGreen.withOpacity(0.6), fontSize: 12),
-            ),
-            trailing: const Icon(
-              Icons.arrow_forward_ios,
-              size: 14,
-              color: kGreen,
-            ),
+            title: Text(tr('download_location'), style: const TextStyle(color: kGreen)),
+            subtitle: Text(_downloadLocation, style: TextStyle(color: kGreen.withOpacity(0.6), fontSize: 12)),
+            trailing: const Icon(Icons.arrow_forward_ios, size: 14, color: kGreen),
             onTap: _showDownloadLocationDialog,
           ),
           Divider(color: kGreen.withOpacity(0.2)),
           const SizedBox(height: 30),
           Center(
-            child: Text(
-              '> MayaJaal v1.2.0 // Quantum Core',
+            child: Text('> MayaJaal v1.2.0 // Quantum Core',
               style: TextStyle(color: kGreen.withOpacity(0.5), fontSize: 12),
             ),
           ),
@@ -4881,10 +4967,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
       context: context,
       builder: (c) => AlertDialog(
         backgroundColor: kCardBg,
-        shape: RoundedRectangleBorder(
-          borderRadius: BorderRadius.circular(12),
-          side: BorderSide(color: kGreen.withOpacity(0.5)),
-        ),
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12), side: BorderSide(color: kGreen.withOpacity(0.5))),
         title: Text(tr('language'), style: const TextStyle(color: kGreen)),
         content: Column(
           mainAxisSize: MainAxisSize.min,
@@ -4912,22 +4995,13 @@ class _SettingsScreenState extends State<SettingsScreen> {
       context: context,
       builder: (c) => AlertDialog(
         backgroundColor: kCardBg,
-        shape: RoundedRectangleBorder(
-          borderRadius: BorderRadius.circular(12),
-          side: BorderSide(color: kGreen.withOpacity(0.5)),
-        ),
-        title: Text(
-          tr('download_location'),
-          style: const TextStyle(color: kGreen),
-        ),
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12), side: BorderSide(color: kGreen.withOpacity(0.5))),
+        title: Text(tr('download_location'), style: const TextStyle(color: kGreen)),
         content: Column(
           mainAxisSize: MainAxisSize.min,
           children: _downloadLocations.map((loc) {
             return RadioListTile<String>(
-              title: Text(
-                loc,
-                style: const TextStyle(color: kGreen, fontSize: 12),
-              ),
+              title: Text(loc, style: const TextStyle(color: kGreen, fontSize: 12)),
               value: loc,
               groupValue: _downloadLocation,
               activeColor: kGreen,
@@ -4946,7 +5020,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
 }
 
 // ═══════════════════════════════════════════════════════
-// STREAM PREVIEW SCREEN (With Video Thumbnail)
+// STREAM PREVIEW SCREEN (In-App Thumbnail Fix)
 // ═══════════════════════════════════════════════════════
 class StreamPreviewScreen extends StatefulWidget {
   final String targetUrl;
@@ -4963,7 +5037,9 @@ class _StreamPreviewScreenState extends State<StreamPreviewScreen>
   String _uploaderName = '@mayajaal';
   String _rawId = '';
   String _token = '';
-  String _thumbnailUrl = ''; // ✅ Added for Video Thumbnail
+
+  VideoPlayerController? _previewController; // ✅ In-App Thumbnail Controller
+  bool _previewReady = false;
 
   int _countdown = 10;
   Timer? _countdownTimer;
@@ -4976,37 +5052,33 @@ class _StreamPreviewScreenState extends State<StreamPreviewScreen>
   @override
   void initState() {
     super.initState();
-    _snakeCtrl = AnimationController(
-      vsync: this,
-      duration: const Duration(seconds: 2),
-    )..repeat();
-    _pulseController = AnimationController(
-      vsync: this,
-      duration: const Duration(milliseconds: 1400),
-    )..repeat(reverse: true);
-    _pulseAnimation = Tween<double>(begin: 0.96, end: 1.04)
-        .animate(CurvedAnimation(parent: _pulseController, curve: Curves.easeInOut));
+    _snakeCtrl = AnimationController(vsync: this, duration: const Duration(seconds: 2))..repeat();
+    _pulseController = AnimationController(vsync: this, duration: const Duration(milliseconds: 1400))..repeat(reverse: true);
+    _pulseAnimation = Tween<double>(begin: 0.96, end: 1.04).animate(CurvedAnimation(parent: _pulseController, curve: Curves.easeInOut));
 
     if (!MayaJaalAccount.isLoggedIn) {
       WidgetsBinding.instance.addPostFrameCallback((_) {
         ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
-            backgroundColor: kCardBg,
-            content: Text(
-              'Please login to watch videos',
-              style: TextStyle(color: kGreen),
-            ),
-          ),
+          const SnackBar(backgroundColor: kCardBg, content: Text('Please login to watch videos', style: TextStyle(color: kGreen))),
         );
-        Navigator.pushReplacement(
-          context,
-          MaterialPageRoute(builder: (_) => const LoginScreen()),
-        );
+        Navigator.pushReplacement(context, MaterialPageRoute(builder: (_) => const LoginScreen()));
       });
       return;
     }
 
     _fetchStreamMetadata();
+  }
+
+  void _initThumbnail(String url) {
+    _previewController = VideoPlayerController.networkUrl(Uri.parse(url));
+    _previewController!.initialize().then((_) {
+      _previewController!.seekTo(Duration.zero);
+      _previewController!.pause();
+      _previewController!.setVolume(0);
+      if (mounted) setState(() => _previewReady = true);
+    }).catchError((e) {
+      debugPrint("Thumbnail init error: $e");
+    });
   }
 
   void _warmupVideoStream() {
@@ -5019,11 +5091,8 @@ class _StreamPreviewScreenState extends State<StreamPreviewScreen>
         return req.close();
       }).then((resp) {
         resp.listen((_) {}).cancel();
-        debugPrint('⚡ Warmup: ${resp.statusCode}');
       }).catchError((e) => debugPrint('Warmup: $e'));
-    } catch (e) {
-      debugPrint('Warmup error: $e');
-    }
+    } catch (e) {}
   }
 
   void _startCountdown() {
@@ -5049,6 +5118,7 @@ class _StreamPreviewScreenState extends State<StreamPreviewScreen>
     _countdownTimer?.cancel();
     _snakeCtrl.dispose();
     _pulseController.dispose();
+    _previewController?.dispose(); // Cleanup thumbnail controller
     super.dispose();
   }
 
@@ -5058,13 +5128,13 @@ class _StreamPreviewScreenState extends State<StreamPreviewScreen>
       _rawId = uri.pathSegments.isNotEmpty ? uri.pathSegments.last : 'stream';
       _token = uri.queryParameters['t'] ?? uri.queryParameters['s'] ?? '';
 
-      if (widget.targetUrl.endsWith('.mp4') ||
-          widget.targetUrl.endsWith('.m3u8')) {
+      if (widget.targetUrl.endsWith('.mp4') || widget.targetUrl.endsWith('.m3u8')) {
         setState(() {
           _streamUrl = widget.targetUrl;
           _videoTitle = _rawId;
           _loading = false;
         });
+        _initThumbnail(_streamUrl);
         _startCountdown();
         return;
       }
@@ -5073,51 +5143,34 @@ class _StreamPreviewScreenState extends State<StreamPreviewScreen>
           ? '$kBackendBaseUrl/api/stream-info/$_rawId?t=$_token'
           : '$kBackendBaseUrl/api/stream-info/$_rawId';
 
-      final res = await http
-          .get(Uri.parse(apiUrl))
-          .timeout(const Duration(seconds: 8));
+      final res = await http.get(Uri.parse(apiUrl)).timeout(const Duration(seconds: 8));
       if (res.statusCode == 200) {
         final data = jsonDecode(res.body);
-        if (data['success'] == true &&
-            (data['url'] != null || data['video_url'] != null)) {
+        if (data['success'] == true && (data['url'] != null || data['video_url'] != null)) {
           setState(() {
             _streamUrl = data['url'] ?? data['video_url'];
             _videoTitle = data['title'] ?? data['file_name'] ?? _rawId;
             _uploaderName = data['uploader'] ?? '@mayajaal';
-            // ✅ Fetch Thumbnail if available
-            _thumbnailUrl = data['thumbnail'] ?? data['poster'] ?? ''; 
             _loading = false;
           });
+          _initThumbnail(_streamUrl);
           _startCountdown();
           return;
         }
-      }
-
-      final res2 = await http
-          .get(Uri.parse('$kBackendBaseUrl/api/v/$_rawId?t=$_token'))
-          .timeout(const Duration(seconds: 8));
-      if (res2.statusCode == 200) {
-        final data = jsonDecode(res2.body);
-        setState(() {
-          _streamUrl = widget.targetUrl;
-          _videoTitle = data['name'] ?? _rawId;
-          _thumbnailUrl = data['thumbnail'] ?? '';
-          _loading = false;
-        });
-        _startCountdown();
-        return;
       }
 
       setState(() {
         _streamUrl = widget.targetUrl;
         _loading = false;
       });
+      _initThumbnail(_streamUrl);
       _startCountdown();
     } catch (e) {
       setState(() {
         _streamUrl = widget.targetUrl;
         _loading = false;
       });
+      _initThumbnail(_streamUrl);
       _startCountdown();
     }
   }
@@ -5143,7 +5196,6 @@ class _StreamPreviewScreenState extends State<StreamPreviewScreen>
       'title': _videoTitle,
       'uploader': _uploaderName,
       'id': _rawId,
-      'thumbnail': _thumbnailUrl, // ✅ Save thumbnail for history
       'time': DateTime.now().toIso8601String(),
     };
 
@@ -5159,6 +5211,7 @@ class _StreamPreviewScreenState extends State<StreamPreviewScreen>
     Haptic.heavy();
     _saveWatchRecord();
 
+    // ✅ Back Navigation Fix: Normal Push, so back returns here
     Navigator.of(context).push(
       MaterialPageRoute(
         builder: (_) => NativeVideoPlayerScreen(
@@ -5187,9 +5240,7 @@ class _StreamPreviewScreenState extends State<StreamPreviewScreen>
               value: progress,
               strokeWidth: 7,
               backgroundColor: Colors.white12,
-              valueColor: AlwaysStoppedAnimation<Color>(
-                _canProceed ? kGreen : Colors.orangeAccent,
-              ),
+              valueColor: AlwaysStoppedAnimation<Color>(_canProceed ? kGreen : Colors.orangeAccent),
             ),
           ),
           Column(
@@ -5208,25 +5259,9 @@ class _StreamPreviewScreenState extends State<StreamPreviewScreen>
                   fontSize: _canProceed ? 18 : 36,
                   fontWeight: FontWeight.w900,
                   letterSpacing: 2,
-                  shadows: [
-                    Shadow(
-                      color: (_canProceed ? kGreen : Colors.orangeAccent)
-                          .withOpacity(0.7),
-                      blurRadius: 15,
-                    ),
-                  ],
+                  shadows: [Shadow(color: (_canProceed ? kGreen : Colors.orangeAccent).withOpacity(0.7), blurRadius: 15)],
                 ),
               ),
-              if (!_canProceed)
-                Text(
-                  'SEC',
-                  style: TextStyle(
-                    color: Colors.orangeAccent.withOpacity(0.8),
-                    fontSize: 10,
-                    letterSpacing: 3,
-                    fontWeight: FontWeight.bold,
-                  ),
-                ),
             ],
           ),
         ],
@@ -5247,43 +5282,22 @@ class _StreamPreviewScreenState extends State<StreamPreviewScreen>
             decoration: BoxDecoration(
               color: Colors.black,
               borderRadius: BorderRadius.circular(32),
-              boxShadow: [
-                BoxShadow(
-                  color: kRed.withOpacity(0.5),
-                  blurRadius: 22,
-                  spreadRadius: 1,
-                ),
-              ],
+              boxShadow: [BoxShadow(color: kRed.withOpacity(0.5), blurRadius: 22, spreadRadius: 1)],
             ),
             child: Stack(
               alignment: Alignment.center,
               children: [
                 Positioned.fill(
-                  child: CustomPaint(
-                    painter: SnakeBorderPainter(
-                      progress: _snakeCtrl.value,
-                      color: kRed,
-                    ),
-                  ),
+                  child: CustomPaint(painter: SnakeBorderPainter(progress: _snakeCtrl.value, color: kRed)),
                 ),
                 Row(
                   mainAxisAlignment: MainAxisAlignment.center,
                   children: const [
-                    Icon(
-                      Icons.play_arrow_rounded,
-                      color: kRed,
-                      size: 32,
-                    ),
+                    Icon(Icons.play_arrow_rounded, color: kRed, size: 32),
                     SizedBox(width: 8),
                     Text(
                       'PLAY NOW',
-                      style: TextStyle(
-                        color: kRed,
-                        fontSize: 15,
-                        fontWeight: FontWeight.w900,
-                        letterSpacing: 2.5,
-                        shadows: [Shadow(color: kRed, blurRadius: 14)],
-                      ),
+                      style: TextStyle(color: kRed, fontSize: 15, fontWeight: FontWeight.w900, letterSpacing: 2.5, shadows: [Shadow(color: kRed, blurRadius: 14)]),
                     ),
                   ],
                 ),
@@ -5297,9 +5311,7 @@ class _StreamPreviewScreenState extends State<StreamPreviewScreen>
 
   @override
   Widget build(BuildContext context) {
-    if (_loading) {
-      return const ProfessionalLoader(message: 'DECRYPTING STREAM...');
-    }
+    if (_loading) return const ProfessionalLoader(message: 'DECRYPTING STREAM...');
 
     return Scaffold(
       backgroundColor: Colors.black,
@@ -5314,14 +5326,10 @@ class _StreamPreviewScreenState extends State<StreamPreviewScreen>
                   Row(
                     children: [
                       IconButton(
-                        icon: const Icon(
-                          Icons.arrow_back_ios_new,
-                          color: kGreen,
-                          size: 22,
-                        ),
+                        icon: const Icon(Icons.arrow_back_ios_new, color: kGreen, size: 22),
                         onPressed: () {
                           Haptic.light();
-                          Navigator.pop(context);
+                          Navigator.pop(context); // ✅ Goes back to previous screen (History/Home)
                         },
                       ),
                       Expanded(
@@ -5330,119 +5338,79 @@ class _StreamPreviewScreenState extends State<StreamPreviewScreen>
                           children: [
                             const Text(
                               'STREAM READY',
-                              style: TextStyle(
-                                color: kGreen,
-                                fontSize: 19,
-                                fontWeight: FontWeight.w900,
-                                letterSpacing: 2,
-                                shadows: [Shadow(color: kGreen, blurRadius: 12)],
-                              ),
+                              style: TextStyle(color: kGreen, fontSize: 19, fontWeight: FontWeight.w900, letterSpacing: 2, shadows: [Shadow(color: kGreen, blurRadius: 12)]),
                             ),
                             Text(
                               'MATRIX NEURAL STREAM',
-                              style: TextStyle(
-                                color: kGreen.withOpacity(0.7),
-                                fontSize: 9,
-                                letterSpacing: 2.5,
-                                fontWeight: FontWeight.w600,
-                              ),
+                              style: TextStyle(color: kGreen.withOpacity(0.7), fontSize: 9, letterSpacing: 2.5, fontWeight: FontWeight.w600),
                             ),
                           ],
                         ),
                       ),
                       Container(
                         padding: const EdgeInsets.all(7),
-                        decoration: BoxDecoration(
-                          shape: BoxShape.circle,
-                          border: Border.all(color: kGreen.withOpacity(0.6)),
-                        ),
-                        child: const Icon(
-                          Icons.verified_user_rounded,
-                          color: kGreen,
-                          size: 18,
-                        ),
+                        decoration: BoxDecoration(shape: BoxShape.circle, border: Border.all(color: kGreen.withOpacity(0.6))),
+                        child: const Icon(Icons.verified_user_rounded, color: kGreen, size: 18),
                       ),
                     ],
                   ),
                   const SizedBox(height: 12),
                   
-                  // ✅ VIDEO PREVIEW BOX (Showing Thumbnail instead of Logo)
+                  // ✅ Video Preview Box (In-App Thumbnail)
                   Container(
                     padding: const EdgeInsets.all(4),
                     decoration: BoxDecoration(
                       color: const Color(0xFF011206),
                       borderRadius: BorderRadius.circular(20),
-                      border: Border.all(
-                        color: _canProceed
-                            ? kGreen
-                            : Colors.orangeAccent.withOpacity(0.6),
-                        width: 1.8,
-                      ),
-                      boxShadow: [
-                        BoxShadow(
-                          color: (_canProceed ? kGreen : Colors.orangeAccent)
-                              .withOpacity(0.25),
-                          blurRadius: 30,
-                        ),
-                      ],
+                      border: Border.all(color: _canProceed ? kGreen : Colors.orangeAccent.withOpacity(0.6), width: 1.8),
+                      boxShadow: [BoxShadow(color: (_canProceed ? kGreen : Colors.orangeAccent).withOpacity(0.25), blurRadius: 30)],
                     ),
                     child: ClipRRect(
                       borderRadius: BorderRadius.circular(16),
                       child: AspectRatio(
                         aspectRatio: 16 / 9,
                         child: Stack(
+                          fit: StackFit.expand,
                           alignment: Alignment.center,
                           children: [
-                            // Background Image (Thumbnail)
-                            Container(
-                              decoration: BoxDecoration(
+                            // Background (Video Frame)
+                            if (_previewReady && _previewController != null)
+                              FittedBox(
+                                fit: BoxFit.cover,
+                                child: SizedBox(
+                                  width: _previewController!.value.size.width,
+                                  height: _previewController!.value.size.height,
+                                  child: VideoPlayer(_previewController!),
+                                ),
+                              )
+                            else
+                              Container(
                                 color: Colors.black,
-                                image: _thumbnailUrl.isNotEmpty 
-                                  ? DecorationImage(
-                                      image: NetworkImage(_thumbnailUrl),
-                                      fit: BoxFit.cover,
-                                    )
-                                  : null,
+                                child: Center(
+                                  child: Image.asset(
+                                    'assets/icon/logo.png',
+                                    width: 75,
+                                    height: 75,
+                                    fit: BoxFit.cover,
+                                    errorBuilder: (c, e, s) => const Icon(Icons.movie_filter, color: kGreen, size: 55),
+                                  ),
+                                ),
                               ),
-                              child: _thumbnailUrl.isEmpty 
-                                ? Center(
-                                    child: Image.asset(
-                                      'assets/icon/logo.png',
-                                      width: 75,
-                                      height: 75,
-                                      fit: BoxFit.cover,
-                                      errorBuilder: (c, e, s) => const Icon(
-                                        Icons.movie_filter,
-                                        color: kGreen,
-                                        size: 55,
-                                      ),
-                                    ),
-                                  )
-                                : null,
-                            ),
-                            Container(color: Colors.black.withOpacity(0.4)), // Darken image for visibility
+                              
+                            // Dark Overlay for Visibility
+                            Container(color: Colors.black.withOpacity(0.4)),
+                            
+                            // Countdown
                             _buildCountdownCircle(),
+                            
+                            // HD Badge
                             Positioned(
                               top: 8,
                               left: 8,
                               child: Container(
-                                padding: const EdgeInsets.symmetric(
-                                  horizontal: 6,
-                                  vertical: 3,
-                                ),
-                                decoration: BoxDecoration(
-                                  color: Colors.black.withOpacity(0.7),
-                                  borderRadius: BorderRadius.circular(5),
-                                  border: Border.all(color: kGreen, width: 1),
-                                ),
-                                child: const Text(
-                                  'HD',
-                                  style: TextStyle(
-                                    color: kGreen,
-                                    fontSize: 9.5,
-                                    fontWeight: FontWeight.bold,
-                                  ),
-                                ),
+                                padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 3),
+                                decoration: BoxDecoration(color: Colors.black.withOpacity(0.7), borderRadius: BorderRadius.circular(5), border: Border.all(color: kGreen, width: 1)),
+                                child: const Text('HD', style: TextStyle(color: kGreen, fontSize: 9.5, fontWeight: FontWeight.bold)),
                               ),
                             ),
                           ],
@@ -5458,19 +5426,11 @@ class _StreamPreviewScreenState extends State<StreamPreviewScreen>
                     Container(
                       width: double.infinity,
                       height: 64,
-                      decoration: BoxDecoration(
-                        color: Colors.grey[850],
-                        borderRadius: BorderRadius.circular(32),
-                      ),
+                      decoration: BoxDecoration(color: Colors.grey[850], borderRadius: BorderRadius.circular(32)),
                       child: Center(
                         child: Text(
                           'UNLOCK IN $_countdown SEC',
-                          style: const TextStyle(
-                            color: Colors.white54,
-                            fontSize: 14,
-                            fontWeight: FontWeight.w900,
-                            letterSpacing: 2,
-                          ),
+                          style: const TextStyle(color: Colors.white54, fontSize: 14, fontWeight: FontWeight.w900, letterSpacing: 2),
                         ),
                       ),
                     ),
@@ -5490,43 +5450,17 @@ class _StreamPreviewScreenState extends State<StreamPreviewScreen>
                           children: [
                             Container(
                               padding: const EdgeInsets.all(10),
-                              decoration: BoxDecoration(
-                                shape: BoxShape.circle,
-                                color: Colors.black,
-                                border: Border.all(
-                                  color: kGreen.withOpacity(0.5),
-                                ),
-                              ),
-                              child: const Icon(
-                                Icons.video_collection_outlined,
-                                color: kGreen,
-                                size: 20,
-                              ),
+                              decoration: BoxDecoration(shape: BoxShape.circle, color: Colors.black, border: Border.all(color: kGreen.withOpacity(0.5))),
+                              child: const Icon(Icons.video_collection_outlined, color: kGreen, size: 20),
                             ),
                             const SizedBox(width: 14),
                             Expanded(
                               child: Column(
                                 crossAxisAlignment: CrossAxisAlignment.start,
                                 children: [
-                                  Text(
-                                    'FILE NAME',
-                                    style: TextStyle(
-                                      color: Colors.white.withOpacity(0.5),
-                                      fontSize: 9.5,
-                                      letterSpacing: 1,
-                                    ),
-                                  ),
+                                  Text('FILE NAME', style: TextStyle(color: Colors.white.withOpacity(0.5), fontSize: 9.5, letterSpacing: 1)),
                                   const SizedBox(height: 2),
-                                  Text(
-                                    _videoTitle,
-                                    style: const TextStyle(
-                                      color: Colors.white,
-                                      fontSize: 13.5,
-                                      fontWeight: FontWeight.bold,
-                                    ),
-                                    maxLines: 1,
-                                    overflow: TextOverflow.ellipsis,
-                                  ),
+                                  Text(_videoTitle, style: const TextStyle(color: Colors.white, fontSize: 13.5, fontWeight: FontWeight.bold), maxLines: 1, overflow: TextOverflow.ellipsis),
                                 ],
                               ),
                             ),
@@ -5540,41 +5474,17 @@ class _StreamPreviewScreenState extends State<StreamPreviewScreen>
                           children: [
                             Container(
                               padding: const EdgeInsets.all(10),
-                              decoration: BoxDecoration(
-                                shape: BoxShape.circle,
-                                color: Colors.black,
-                                border: Border.all(
-                                  color: kGreen.withOpacity(0.5),
-                                ),
-                              ),
-                              child: const Icon(
-                                Icons.person_outline,
-                                color: kGreen,
-                                size: 20,
-                              ),
+                              decoration: BoxDecoration(shape: BoxShape.circle, color: Colors.black, border: Border.all(color: kGreen.withOpacity(0.5))),
+                              child: const Icon(Icons.person_outline, color: kGreen, size: 20),
                             ),
                             const SizedBox(width: 14),
                             Expanded(
                               child: Column(
                                 crossAxisAlignment: CrossAxisAlignment.start,
                                 children: [
-                                  Text(
-                                    'UPLOADER',
-                                    style: TextStyle(
-                                      color: Colors.white.withOpacity(0.5),
-                                      fontSize: 9.5,
-                                      letterSpacing: 1,
-                                    ),
-                                  ),
+                                  Text('UPLOADER', style: TextStyle(color: Colors.white.withOpacity(0.5), fontSize: 9.5, letterSpacing: 1)),
                                   const SizedBox(height: 2),
-                                  Text(
-                                    _uploaderName,
-                                    style: const TextStyle(
-                                      color: kGreen,
-                                      fontSize: 13.5,
-                                      fontWeight: FontWeight.bold,
-                                    ),
-                                  ),
+                                  Text(_uploaderName, style: const TextStyle(color: kGreen, fontSize: 13.5, fontWeight: FontWeight.bold)),
                                 ],
                               ),
                             ),
@@ -5591,26 +5501,13 @@ class _StreamPreviewScreenState extends State<StreamPreviewScreen>
                     height: 52,
                     child: OutlinedButton(
                       onPressed: _shareStreamDirect,
-                      style: OutlinedButton.styleFrom(
-                        side: const BorderSide(color: kGreen, width: 1.5),
-                        shape: RoundedRectangleBorder(
-                          borderRadius: BorderRadius.circular(26),
-                        ),
-                      ),
+                      style: OutlinedButton.styleFrom(side: const BorderSide(color: kGreen, width: 1.5), shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(26))),
                       child: Row(
                         mainAxisAlignment: MainAxisAlignment.center,
                         children: const [
                           Icon(Icons.share, color: kGreen, size: 20),
                           SizedBox(width: 10),
-                          Text(
-                            'SHARE VIDEO',
-                            style: TextStyle(
-                              color: kGreen,
-                              fontSize: 12,
-                              fontWeight: FontWeight.bold,
-                              letterSpacing: 1.5,
-                            ),
-                          ),
+                          Text('SHARE VIDEO', style: TextStyle(color: kGreen, fontSize: 12, fontWeight: FontWeight.bold, letterSpacing: 1.5)),
                         ],
                       ),
                     ),
@@ -5621,14 +5518,7 @@ class _StreamPreviewScreenState extends State<StreamPreviewScreen>
                     children: [
                       const Icon(Icons.lock_outline, color: kGreen, size: 14),
                       const SizedBox(width: 6),
-                      Text(
-                        'SECURE STREAM PIPELINE ACTIVE',
-                        style: TextStyle(
-                          color: kGreen.withOpacity(0.75),
-                          fontSize: 9.5,
-                          letterSpacing: 1.2,
-                        ),
-                      ),
+                      Text('SECURE STREAM PIPELINE ACTIVE', style: TextStyle(color: kGreen.withOpacity(0.75), fontSize: 9.5, letterSpacing: 1.2)),
                     ],
                   ),
                   const SizedBox(height: 20),
@@ -5662,8 +5552,7 @@ class NativeVideoPlayerScreen extends StatefulWidget {
   });
 
   @override
-  State<NativeVideoPlayerScreen> createState() =>
-      _NativeVideoPlayerScreenState();
+  State<NativeVideoPlayerScreen> createState() => _NativeVideoPlayerScreenState();
 }
 
 class _NativeVideoPlayerScreenState extends State<NativeVideoPlayerScreen> {
@@ -5684,13 +5573,7 @@ class _NativeVideoPlayerScreenState extends State<NativeVideoPlayerScreen> {
   bool _isLongPressBoost = false;
 
   String _selectedQuality = 'Auto (1080p)';
-  final List<String> _qualities = [
-    'Auto (1080p)',
-    '1080p FHD',
-    '720p HD',
-    '480p SD',
-    '360p Low',
-  ];
+  final List<String> _qualities = ['Auto (1080p)', '1080p FHD', '720p HD', '480p SD', '360p Low'];
 
   bool _isDownloading = false;
   double _downloadProgress = 0.0;
@@ -5742,17 +5625,11 @@ class _NativeVideoPlayerScreenState extends State<NativeVideoPlayerScreen> {
           ? '$kBackendBaseUrl/api/view/${widget.videoId}?t=$token'
           : '$kBackendBaseUrl/api/view/${widget.videoId}';
 
-      await http
-          .post(
-            Uri.parse(url),
-            headers: {'Content-Type': 'application/json'},
-            body: jsonEncode({
-              'playedSeconds': _watchedSeconds,
-              'deviceId': deviceId,
-              'token': token,
-            }),
-          )
-          .timeout(const Duration(seconds: 10));
+      await http.post(
+        Uri.parse(url),
+        headers: {'Content-Type': 'application/json'},
+        body: jsonEncode({'playedSeconds': _watchedSeconds, 'deviceId': deviceId, 'token': token}),
+      ).timeout(const Duration(seconds: 10));
     } catch (e) {
       debugPrint('View report error: $e');
     }
@@ -5783,17 +5660,14 @@ class _NativeVideoPlayerScreenState extends State<NativeVideoPlayerScreen> {
       if (mounted) setState(() => _isLiked = liked);
     });
 
-    _unlikeSub =
-        FirebaseService.isUnlikedStream(widget.videoId, uid).listen((unliked) {
+    _unlikeSub = FirebaseService.isUnlikedStream(widget.videoId, uid).listen((unliked) {
       if (mounted) setState(() => _isUnliked = unliked);
     });
   }
 
   Future<void> _fetchOwner() async {
     try {
-      final snap = await FirebaseDatabase.instance
-          .ref('links/${widget.videoId}/ownerUid')
-          .once();
+      final snap = await FirebaseDatabase.instance.ref('links/${widget.videoId}/ownerUid').once();
       _ownerUid = snap.snapshot.value?.toString() ?? '';
     } catch (_) {}
   }
@@ -5829,8 +5703,7 @@ class _NativeVideoPlayerScreenState extends State<NativeVideoPlayerScreen> {
 
   Future<void> _initVideo() async {
     final headers = {
-      'User-Agent':
-          'Mozilla/5.0 (Linux; Android 10) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Mobile Safari/537.36',
+      'User-Agent': 'Mozilla/5.0 (Linux; Android 10) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Mobile Safari/537.36',
       'Referer': 'https://www.mayajaal.online/',
       'Accept': '*/*',
       'Accept-Encoding': 'identity',
@@ -5838,9 +5711,7 @@ class _NativeVideoPlayerScreenState extends State<NativeVideoPlayerScreen> {
     };
 
     String realVideoUrl = widget.videoUrl;
-    final isDirectUrl = widget.videoUrl.contains('.r2.dev') ||
-                         widget.videoUrl.contains('cloudflarestorage') ||
-                         widget.videoUrl.contains('.mp4');
+    final isDirectUrl = widget.videoUrl.contains('.r2.dev') || widget.videoUrl.contains('cloudflarestorage') || widget.videoUrl.contains('.mp4');
 
     if (!isDirectUrl) {
       try {
@@ -5856,14 +5727,11 @@ class _NativeVideoPlayerScreenState extends State<NativeVideoPlayerScreen> {
           final apiData = jsonDecode(apiResp.body);
           if (apiData['success'] == true && apiData['url'] != null) {
             realVideoUrl = apiData['url'];
-            debugPrint('✅ API R2 URL: $realVideoUrl');
           }
         }
       } catch (e) {
         debugPrint('⚠️ API fallback: $e');
       }
-    } else {
-      debugPrint('⚡ Direct R2 URL — skipping API call');
     }
 
     _controller = VideoPlayerController.networkUrl(
@@ -5885,7 +5753,6 @@ class _NativeVideoPlayerScreenState extends State<NativeVideoPlayerScreen> {
       _resetControlTimer();
       _startWatchTracking();
     } catch (e) {
-      debugPrint("Player Init Error: $e");
       setState(() => _hasError = true);
     }
   }
@@ -5971,9 +5838,7 @@ class _NativeVideoPlayerScreenState extends State<NativeVideoPlayerScreen> {
     final newPos = _controller.value.position + Duration(seconds: seconds);
     final clamped = newPos < Duration.zero
         ? Duration.zero
-        : (newPos > _controller.value.duration
-            ? _controller.value.duration
-            : newPos);
+        : (newPos > _controller.value.duration ? _controller.value.duration : newPos);
     _controller.seekTo(clamped);
     _showFeedback(seconds > 0 ? '+${seconds}s' : '${seconds}s');
     _resetControlTimer();
@@ -5987,10 +5852,7 @@ class _NativeVideoPlayerScreenState extends State<NativeVideoPlayerScreen> {
       SystemChrome.setEnabledSystemUIMode(SystemUiMode.immersiveSticky);
       final isWide = _controller.value.aspectRatio >= 1.2;
       if (isWide) {
-        SystemChrome.setPreferredOrientations([
-          DeviceOrientation.landscapeLeft,
-          DeviceOrientation.landscapeRight,
-        ]);
+        SystemChrome.setPreferredOrientations([DeviceOrientation.landscapeLeft, DeviceOrientation.landscapeRight]);
       } else {
         SystemChrome.setPreferredOrientations([DeviceOrientation.portraitUp]);
       }
@@ -6029,80 +5891,37 @@ class _NativeVideoPlayerScreenState extends State<NativeVideoPlayerScreen> {
     showModalBottomSheet(
       context: context,
       backgroundColor: const Color(0xFF021206),
-      shape: const RoundedRectangleBorder(
-        borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
-      ),
+      shape: const RoundedRectangleBorder(borderRadius: BorderRadius.vertical(top: Radius.circular(20))),
       builder: (c) => Padding(
         padding: const EdgeInsets.all(20),
         child: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
-            Container(
-              width: 40,
-              height: 4,
-              decoration: BoxDecoration(
-                color: kGreen.withOpacity(0.4),
-                borderRadius: BorderRadius.circular(2),
-              ),
-            ),
+            Container(width: 40, height: 4, decoration: BoxDecoration(color: kGreen.withOpacity(0.4), borderRadius: BorderRadius.circular(2))),
             const SizedBox(height: 16),
-            const Text(
-              'SHARE VIDEO',
-              style: TextStyle(
-                color: kGreen,
-                fontSize: 16,
-                fontWeight: FontWeight.bold,
-                letterSpacing: 2,
-              ),
-            ),
+            const Text('SHARE VIDEO', style: TextStyle(color: kGreen, fontSize: 16, fontWeight: FontWeight.bold, letterSpacing: 2)),
             const SizedBox(height: 6),
-            Text(
-              widget.title,
-              style: const TextStyle(color: Colors.white70, fontSize: 12),
-              maxLines: 1,
-              overflow: TextOverflow.ellipsis,
-            ),
+            Text(widget.title, style: const TextStyle(color: Colors.white70, fontSize: 12), maxLines: 1, overflow: TextOverflow.ellipsis),
             const SizedBox(height: 20),
             Row(
               mainAxisAlignment: MainAxisAlignment.spaceEvenly,
               children: [
-                _shareOption(
-                  Icons.link,
-                  'Copy Link',
-                  kNeonCyan,
-                  () async {
-                    Haptic.medium();
-                    await Clipboard.setData(
-                      ClipboardData(text: widget.sourcePageUrl),
-                    );
-                    if (c.mounted) Navigator.pop(c);
-                    _showFeedback('🔗 Link Copied!');
-                  },
-                ),
-                _shareOption(
-                  Icons.share,
-                  'Share Now',
-                  kGreen,
-                  () {
-                    Haptic.medium();
-                    Navigator.pop(c);
-                    Share.share(
-                      '🎬 Watch "${widget.title}" on MayaJaal:\n${widget.sourcePageUrl}',
-                    );
-                  },
-                ),
-                _shareOption(
-                  Icons.send_rounded,
-                  'Telegram',
-                  const Color(0xFF229ED9),
-                  () {
-                    Haptic.medium();
-                    Navigator.pop(c);
-                    Share.share(
-                      '🎬 Watch "${widget.title}" on MayaJaal:\n${widget.sourcePageUrl}',
-                    );
-                  },
-                ),
+                _shareOption(Icons.link, 'Copy Link', kNeonCyan, () async {
+                  Haptic.medium();
+                  await Clipboard.setData(ClipboardData(text: widget.sourcePageUrl));
+                  if (c.mounted) Navigator.pop(c);
+                  _showFeedback('🔗 Link Copied!');
+                }),
+                _shareOption(Icons.share, 'Share Now', kGreen, () {
+                  Haptic.medium();
+                  Navigator.pop(c);
+                  Share.share('🎬 Watch "${widget.title}" on MayaJaal:\n${widget.sourcePageUrl}');
+                }),
+                _shareOption(Icons.send_rounded, 'Telegram', const Color(0xFF229ED9), () {
+                  Haptic.medium();
+                  Navigator.pop(c);
+                  Share.share('🎬 Watch "${widget.title}" on MayaJaal:\n${widget.sourcePageUrl}');
+                }),
               ],
             ),
             const SizedBox(height: 20),
@@ -6112,12 +5931,7 @@ class _NativeVideoPlayerScreenState extends State<NativeVideoPlayerScreen> {
     );
   }
 
-  Widget _shareOption(
-    IconData icon,
-    String label,
-    Color color,
-    VoidCallback onTap,
-  ) {
+  Widget _shareOption(IconData icon, String label, Color color, VoidCallback onTap) {
     return InkWell(
       onTap: onTap,
       borderRadius: BorderRadius.circular(12),
@@ -6126,21 +5940,11 @@ class _NativeVideoPlayerScreenState extends State<NativeVideoPlayerScreen> {
           Container(
             width: 56,
             height: 56,
-            decoration: BoxDecoration(
-              color: Colors.black,
-              shape: BoxShape.circle,
-              border: Border.all(color: color, width: 1.5),
-              boxShadow: [
-                BoxShadow(color: color.withOpacity(0.4), blurRadius: 12),
-              ],
-            ),
+            decoration: BoxDecoration(color: Colors.black, shape: BoxShape.circle, border: Border.all(color: color, width: 1.5), boxShadow: [BoxShadow(color: color.withOpacity(0.4), blurRadius: 12)]),
             child: Icon(icon, color: color, size: 26),
           ),
           const SizedBox(height: 8),
-          Text(
-            label,
-            style: const TextStyle(color: Colors.white, fontSize: 11),
-          ),
+          Text(label, style: const TextStyle(color: Colors.white, fontSize: 11)),
         ],
       ),
     );
@@ -6165,17 +5969,11 @@ class _NativeVideoPlayerScreenState extends State<NativeVideoPlayerScreen> {
       int receivedBytes = 0;
 
       Directory baseDir = Directory('/storage/emulated/0/Download');
-      if (!baseDir.existsSync()) {
-        baseDir = Directory('/storage/emulated/0/Movies');
-      }
-      if (!baseDir.existsSync()) {
-        baseDir = Directory.systemTemp;
-      }
+      if (!baseDir.existsSync()) baseDir = Directory('/storage/emulated/0/Movies');
+      if (!baseDir.existsSync()) baseDir = Directory.systemTemp;
 
-      final safeName =
-          widget.title.replaceAll(RegExp(r'[^a-zA-Z0-9._-]'), '_');
-      final savePath =
-          '${baseDir.path}/${safeName}_${DateTime.now().millisecondsSinceEpoch}.mp4';
+      final safeName = widget.title.replaceAll(RegExp(r'[^a-zA-Z0-9._-]'), '_');
+      final savePath = '${baseDir.path}/${safeName}_${DateTime.now().millisecondsSinceEpoch}.mp4';
       final file = File(savePath);
       final sink = file.openWrite();
 
@@ -6183,9 +5981,7 @@ class _NativeVideoPlayerScreenState extends State<NativeVideoPlayerScreen> {
         sink.add(chunk);
         receivedBytes += chunk.length;
         if (totalBytes > 0 && mounted) {
-          setState(() {
-            _downloadProgress = receivedBytes / totalBytes;
-          });
+          setState(() => _downloadProgress = receivedBytes / totalBytes);
         }
       }).asFuture();
 
@@ -6195,21 +5991,13 @@ class _NativeVideoPlayerScreenState extends State<NativeVideoPlayerScreen> {
       if (mounted) {
         setState(() => _isDownloading = false);
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            backgroundColor: kCardBg,
-            content: Text(
-              '✅ Video saved to:\n$savePath',
-              style: const TextStyle(color: kGreen, fontSize: 11),
-            ),
-          ),
+          SnackBar(backgroundColor: kCardBg, content: Text('✅ Video saved to:\n$savePath', style: const TextStyle(color: kGreen, fontSize: 11))),
         );
       }
     } catch (e) {
       if (mounted) {
         setState(() => _isDownloading = false);
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Download status: $e')),
-        );
+        ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Download status: $e')));
       }
     }
   }
@@ -6217,17 +6005,31 @@ class _NativeVideoPlayerScreenState extends State<NativeVideoPlayerScreen> {
   Future<void> _toggleSave() async {
     Haptic.medium();
     final prefs = await SharedPreferences.getInstance();
-    setState(() {
-      _isSaved = !_isSaved;
-      prefs.setBool('saved_${widget.videoId}', _isSaved);
-    });
+    final savedStr = prefs.getString('saved_videos_v1');
+    List<Map<String, dynamic>> savedList = [];
+    if (savedStr != null) {
+      try { savedList = (jsonDecode(savedStr) as List).cast<Map<String, dynamic>>(); } catch (_) {}
+    }
+
+    setState(() => _isSaved = !_isSaved);
+
+    if (_isSaved) {
+      savedList.add({
+        'url': widget.sourcePageUrl,
+        'title': widget.title,
+        'uploader': widget.uploader,
+        'id': widget.videoId,
+      });
+      await prefs.setString('saved_videos_v1', jsonEncode(savedList));
+      prefs.setBool('saved_${widget.videoId}', true);
+    } else {
+      savedList.removeWhere((s) => s['url'] == widget.sourcePageUrl);
+      await prefs.setString('saved_videos_v1', jsonEncode(savedList));
+      prefs.setBool('saved_${widget.videoId}', false);
+    }
+
     ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(
-        content: Text(
-          _isSaved ? 'Video Saved to Favorites' : 'Removed from Favorites',
-        ),
-        duration: const Duration(seconds: 1),
-      ),
+      SnackBar(content: Text(_isSaved ? 'Video Saved to Favorites' : 'Removed from Favorites'), duration: const Duration(seconds: 1)),
     );
   }
 
@@ -6237,23 +6039,9 @@ class _NativeVideoPlayerScreenState extends State<NativeVideoPlayerScreen> {
       context: context,
       builder: (c) => AlertDialog(
         backgroundColor: const Color(0xFF031408),
-        shape: RoundedRectangleBorder(
-          borderRadius: BorderRadius.circular(16),
-          side: const BorderSide(color: kGreen, width: 1.5),
-        ),
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16), side: const BorderSide(color: kGreen, width: 1.5)),
         title: Row(
-          children: const [
-            Icon(Icons.hd, color: kGreen, size: 24),
-            SizedBox(width: 8),
-            Text(
-              'SELECT QUALITY',
-              style: TextStyle(
-                color: kGreen,
-                fontSize: 15,
-                fontWeight: FontWeight.bold,
-              ),
-            ),
-          ],
+          children: const [Icon(Icons.hd, color: kGreen, size: 24), SizedBox(width: 8), Text('SELECT QUALITY', style: TextStyle(color: kGreen, fontSize: 15, fontWeight: FontWeight.bold))],
         ),
         content: Column(
           mainAxisSize: MainAxisSize.min,
@@ -6262,14 +6050,7 @@ class _NativeVideoPlayerScreenState extends State<NativeVideoPlayerScreen> {
               value: q,
               groupValue: _selectedQuality,
               activeColor: kGreen,
-              title: Text(
-                q,
-                style: const TextStyle(
-                  color: Colors.white,
-                  fontSize: 13,
-                  fontWeight: FontWeight.w600,
-                ),
-              ),
+              title: Text(q, style: const TextStyle(color: Colors.white, fontSize: 13, fontWeight: FontWeight.w600)),
               onChanged: (val) {
                 if (val != null) {
                   Haptic.selection();
@@ -6291,14 +6072,8 @@ class _NativeVideoPlayerScreenState extends State<NativeVideoPlayerScreen> {
       context: context,
       builder: (c) => AlertDialog(
         backgroundColor: const Color(0xFF031408),
-        shape: RoundedRectangleBorder(
-          borderRadius: BorderRadius.circular(16),
-          side: const BorderSide(color: kGreen, width: 1.5),
-        ),
-        title: const Text(
-          'PLAYBACK SPEED',
-          style: TextStyle(color: kGreen, fontSize: 14),
-        ),
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16), side: const BorderSide(color: kGreen, width: 1.5)),
+        title: const Text('PLAYBACK SPEED', style: TextStyle(color: kGreen, fontSize: 14)),
         content: Column(
           mainAxisSize: MainAxisSize.min,
           children: _speeds.map((s) {
@@ -6306,10 +6081,7 @@ class _NativeVideoPlayerScreenState extends State<NativeVideoPlayerScreen> {
               value: s,
               groupValue: _playbackSpeed,
               activeColor: kGreen,
-              title: Text(
-                '${s}x',
-                style: const TextStyle(color: Colors.white, fontSize: 13),
-              ),
+              title: Text('${s}x', style: const TextStyle(color: Colors.white, fontSize: 13)),
               onChanged: (val) {
                 if (val != null) {
                   Haptic.selection();
@@ -6387,11 +6159,7 @@ class _NativeVideoPlayerScreenState extends State<NativeVideoPlayerScreen> {
       child: Container(
         width: 108,
         height: 42,
-        decoration: BoxDecoration(
-          color: Colors.black,
-          borderRadius: BorderRadius.circular(10),
-          border: Border.all(color: kGreen, width: 1.2),
-        ),
+        decoration: BoxDecoration(color: Colors.black, borderRadius: BorderRadius.circular(10), border: Border.all(color: kGreen, width: 1.2)),
         child: Stack(
           children: [
             if (_isDownloading)
@@ -6402,36 +6170,18 @@ class _NativeVideoPlayerScreenState extends State<NativeVideoPlayerScreen> {
                 child: AnimatedContainer(
                   duration: const Duration(milliseconds: 300),
                   height: 42 * _downloadProgress,
-                  decoration: BoxDecoration(
-                    color: kGreen.withOpacity(0.35),
-                    borderRadius: const BorderRadius.vertical(
-                      bottom: Radius.circular(9),
-                    ),
-                  ),
+                  decoration: BoxDecoration(color: kGreen.withOpacity(0.35), borderRadius: const BorderRadius.vertical(bottom: Radius.circular(9))),
                 ),
               ),
             Center(
               child: Row(
                 mainAxisAlignment: MainAxisAlignment.center,
                 children: [
-                  Icon(
-                    _isDownloading
-                        ? Icons.downloading
-                        : Icons.download_rounded,
-                    color: kGreen,
-                    size: 16,
-                  ),
+                  Icon(_isDownloading ? Icons.downloading : Icons.download_rounded, color: kGreen, size: 16),
                   const SizedBox(width: 4),
                   Text(
-                    _isDownloading
-                        ? '${(_downloadProgress * 100).toInt()}%'
-                        : 'Download',
-                    style: const TextStyle(
-                      color: kGreen,
-                      fontSize: 10.5,
-                      fontWeight: FontWeight.bold,
-                      letterSpacing: 0.5,
-                    ),
+                    _isDownloading ? '${(_downloadProgress * 100).toInt()}%' : 'Download',
+                    style: const TextStyle(color: kGreen, fontSize: 10.5, fontWeight: FontWeight.bold, letterSpacing: 0.5),
                   ),
                 ],
               ),
@@ -6466,13 +6216,7 @@ class _NativeVideoPlayerScreenState extends State<NativeVideoPlayerScreen> {
                 children: [
                   _buildScaledVideo(),
                   if (_brightness < 1.0)
-                    Positioned.fill(
-                      child: IgnorePointer(
-                        child: Container(
-                          color: Colors.black.withOpacity(1.0 - _brightness),
-                        ),
-                      ),
-                    ),
+                    Positioned.fill(child: IgnorePointer(child: Container(color: Colors.black.withOpacity(1.0 - _brightness)))),
                   if (_showControls) ...[
                     Positioned(
                       top: 20,
@@ -6481,15 +6225,8 @@ class _NativeVideoPlayerScreenState extends State<NativeVideoPlayerScreen> {
                         onTap: _toggleSmartFullscreen,
                         child: Container(
                           padding: const EdgeInsets.all(8),
-                          decoration: BoxDecoration(
-                            color: Colors.black.withOpacity(0.6),
-                            shape: BoxShape.circle,
-                          ),
-                          child: const Icon(
-                            Icons.fullscreen_exit,
-                            color: Colors.white,
-                            size: 28,
-                          ),
+                          decoration: BoxDecoration(color: Colors.black.withOpacity(0.6), shape: BoxShape.circle),
+                          child: const Icon(Icons.fullscreen_exit, color: Colors.white, size: 28),
                         ),
                       ),
                     ),
@@ -6500,15 +6237,8 @@ class _NativeVideoPlayerScreenState extends State<NativeVideoPlayerScreen> {
                           onTap: () => _seekRelative(-10),
                           child: Container(
                             padding: const EdgeInsets.all(8),
-                            decoration: BoxDecoration(
-                              color: Colors.black.withOpacity(0.5),
-                              shape: BoxShape.circle,
-                            ),
-                            child: const Icon(
-                              Icons.replay_10,
-                              color: Colors.white,
-                              size: 30,
-                            ),
+                            decoration: BoxDecoration(color: Colors.black.withOpacity(0.5), shape: BoxShape.circle),
+                            child: const Icon(Icons.replay_10, color: Colors.white, size: 30),
                           ),
                         ),
                         const SizedBox(width: 30),
@@ -6516,27 +6246,15 @@ class _NativeVideoPlayerScreenState extends State<NativeVideoPlayerScreen> {
                           onTap: () {
                             Haptic.light();
                             setState(() {
-                              _controller.value.isPlaying
-                                  ? _controller.pause()
-                                  : _controller.play();
+                              _controller.value.isPlaying ? _controller.pause() : _controller.play();
                             });
                             _resetControlTimer();
                           },
                           child: Container(
                             width: 70,
                             height: 70,
-                            decoration: BoxDecoration(
-                              color: Colors.black.withOpacity(0.6),
-                              shape: BoxShape.circle,
-                              border: Border.all(color: Colors.white, width: 2),
-                            ),
-                            child: Icon(
-                              _controller.value.isPlaying
-                                  ? Icons.pause
-                                  : Icons.play_arrow,
-                              color: Colors.white,
-                              size: 40,
-                            ),
+                            decoration: BoxDecoration(color: Colors.black.withOpacity(0.6), shape: BoxShape.circle, border: Border.all(color: Colors.white, width: 2)),
+                            child: Icon(_controller.value.isPlaying ? Icons.pause : Icons.play_arrow, color: Colors.white, size: 40),
                           ),
                         ),
                         const SizedBox(width: 30),
@@ -6544,15 +6262,8 @@ class _NativeVideoPlayerScreenState extends State<NativeVideoPlayerScreen> {
                           onTap: () => _seekRelative(10),
                           child: Container(
                             padding: const EdgeInsets.all(8),
-                            decoration: BoxDecoration(
-                              color: Colors.black.withOpacity(0.5),
-                              shape: BoxShape.circle,
-                            ),
-                            child: const Icon(
-                              Icons.forward_10,
-                              color: Colors.white,
-                              size: 30,
-                            ),
+                            decoration: BoxDecoration(color: Colors.black.withOpacity(0.5), shape: BoxShape.circle),
+                            child: const Icon(Icons.forward_10, color: Colors.white, size: 30),
                           ),
                         ),
                       ],
@@ -6563,62 +6274,21 @@ class _NativeVideoPlayerScreenState extends State<NativeVideoPlayerScreen> {
                       right: 20,
                       child: Row(
                         children: [
-                          Text(
-                            _formatDuration(_controller.value.position),
-                            style: const TextStyle(
-                              color: Colors.white,
-                              fontSize: 12,
-                              fontFamily: 'monospace',
-                            ),
-                          ),
+                          Text(_formatDuration(_controller.value.position), style: const TextStyle(color: Colors.white, fontSize: 12, fontFamily: 'monospace')),
                           const SizedBox(width: 8),
                           Expanded(
                             child: SliderTheme(
-                              data: SliderTheme.of(context).copyWith(
-                                trackHeight: 3,
-                                activeTrackColor: kGreen,
-                                inactiveTrackColor: Colors.white30,
-                                thumbColor: kGreen,
-                                thumbShape: const RoundSliderThumbShape(
-                                  enabledThumbRadius: 6,
-                                ),
-                              ),
+                              data: SliderTheme.of(context).copyWith(trackHeight: 3, activeTrackColor: kGreen, inactiveTrackColor: Colors.white30, thumbColor: kGreen, thumbShape: const RoundSliderThumbShape(enabledThumbRadius: 6)),
                               child: Slider(
-                                value: _controller.value.position.inSeconds
-                                    .toDouble()
-                                    .clamp(
-                                  0.0,
-                                  _controller.value.duration.inSeconds
-                                              .toDouble() <=
-                                          0
-                                      ? 1.0
-                                      : _controller.value.duration.inSeconds
-                                          .toDouble(),
-                                ),
+                                value: _controller.value.position.inSeconds.toDouble().clamp(0.0, _controller.value.duration.inSeconds.toDouble() <= 0 ? 1.0 : _controller.value.duration.inSeconds.toDouble()),
                                 min: 0.0,
-                                max: _controller.value.duration.inSeconds
-                                            .toDouble() >
-                                        0
-                                    ? _controller.value.duration.inSeconds
-                                        .toDouble()
-                                    : 1.0,
-                                onChanged: (val) {
-                                  _controller.seekTo(
-                                    Duration(seconds: val.toInt()),
-                                  );
-                                },
+                                max: _controller.value.duration.inSeconds.toDouble() > 0 ? _controller.value.duration.inSeconds.toDouble() : 1.0,
+                                onChanged: (val) => _controller.seekTo(Duration(seconds: val.toInt())),
                               ),
                             ),
                           ),
                           const SizedBox(width: 8),
-                          Text(
-                            _formatDuration(_controller.value.duration),
-                            style: const TextStyle(
-                              color: Colors.white,
-                              fontSize: 12,
-                              fontFamily: 'monospace',
-                            ),
-                          ),
+                          Text(_formatDuration(_controller.value.duration), style: const TextStyle(color: Colors.white, fontSize: 12, fontFamily: 'monospace')),
                         ],
                       ),
                     ),
@@ -6626,23 +6296,9 @@ class _NativeVideoPlayerScreenState extends State<NativeVideoPlayerScreen> {
                   if (_flashFeedback.isNotEmpty)
                     Center(
                       child: Container(
-                        padding: const EdgeInsets.symmetric(
-                          horizontal: 16,
-                          vertical: 10,
-                        ),
-                        decoration: BoxDecoration(
-                          color: Colors.black.withOpacity(0.8),
-                          borderRadius: BorderRadius.circular(10),
-                          border: Border.all(color: kGreen, width: 1),
-                        ),
-                        child: Text(
-                          _flashFeedback,
-                          style: const TextStyle(
-                            color: kGreen,
-                            fontWeight: FontWeight.bold,
-                            fontSize: 18,
-                          ),
-                        ),
+                        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
+                        decoration: BoxDecoration(color: Colors.black.withOpacity(0.8), borderRadius: BorderRadius.circular(10), border: Border.all(color: kGreen, width: 1)),
+                        child: Text(_flashFeedback, style: const TextStyle(color: kGreen, fontWeight: FontWeight.bold, fontSize: 18)),
                       ),
                     ),
                 ],
@@ -6655,7 +6311,7 @@ class _NativeVideoPlayerScreenState extends State<NativeVideoPlayerScreen> {
 
     return WillPopScope(
       onWillPop: () async {
-        Navigator.of(context).pop();
+        Navigator.pop(context);
         return false;
       },
       child: Scaffold(
@@ -6668,14 +6324,10 @@ class _NativeVideoPlayerScreenState extends State<NativeVideoPlayerScreen> {
                 child: Row(
                   children: [
                     IconButton(
-                      icon: const Icon(
-                        Icons.arrow_back_ios_new,
-                        color: kGreen,
-                        size: 22,
-                      ),
+                      icon: const Icon(Icons.arrow_back_ios_new, color: kGreen, size: 22),
                       onPressed: () {
                         Haptic.light();
-                        Navigator.pop(context);
+                        Navigator.pop(context); // ✅ Goes back to preview
                       },
                     ),
                     Expanded(
@@ -6688,49 +6340,18 @@ class _NativeVideoPlayerScreenState extends State<NativeVideoPlayerScreen> {
                               Container(
                                 width: 22,
                                 height: 22,
-                                decoration: BoxDecoration(
-                                  shape: BoxShape.circle,
-                                  border: Border.all(color: kGreen, width: 1.5),
-                                ),
-                                child: const Center(
-                                  child: Icon(
-                                    Icons.change_history,
-                                    color: kGreen,
-                                    size: 14,
-                                  ),
-                                ),
+                                decoration: BoxDecoration(shape: BoxShape.circle, border: Border.all(color: kGreen, width: 1.5)),
+                                child: const Center(child: Icon(Icons.change_history, color: kGreen, size: 14)),
                               ),
                               const SizedBox(width: 8),
-                              const Text(
-                                'MayaJaal',
-                                style: TextStyle(
-                                  color: kGreen,
-                                  fontSize: 19,
-                                  fontWeight: FontWeight.w900,
-                                  letterSpacing: 1,
-                                  shadows: [
-                                    Shadow(color: kGreen, blurRadius: 10),
-                                  ],
-                                ),
-                              ),
+                              const Text('MayaJaal', style: TextStyle(color: kGreen, fontSize: 19, fontWeight: FontWeight.w900, letterSpacing: 1, shadows: [Shadow(color: kGreen, blurRadius: 10)])),
                             ],
                           ),
-                          Text(
-                            '— STREAM BEYOND LIMITS —',
-                            style: TextStyle(
-                              color: kGreen.withOpacity(0.8),
-                              fontSize: 8.5,
-                              letterSpacing: 2,
-                              fontWeight: FontWeight.bold,
-                            ),
-                          ),
+                          Text('— STREAM BEYOND LIMITS —', style: TextStyle(color: kGreen.withOpacity(0.8), fontSize: 8.5, letterSpacing: 2, fontWeight: FontWeight.bold)),
                         ],
                       ),
                     ),
-                    IconButton(
-                      icon: const Icon(Icons.share, color: kGreen, size: 22),
-                      onPressed: _shareVideoLink,
-                    ),
+                    IconButton(icon: const Icon(Icons.share, color: kGreen, size: 22), onPressed: _shareVideoLink),
                   ],
                 ),
               ),
@@ -6741,14 +6362,7 @@ class _NativeVideoPlayerScreenState extends State<NativeVideoPlayerScreen> {
                   child: Container(
                     width: double.infinity,
                     height: 230,
-                    decoration: BoxDecoration(
-                      color: Colors.black,
-                      borderRadius: BorderRadius.circular(16),
-                      border: Border.all(
-                        color: kGreen.withOpacity(0.55),
-                        width: 1.5,
-                      ),
-                    ),
+                    decoration: BoxDecoration(color: Colors.black, borderRadius: BorderRadius.circular(16), border: Border.all(color: kGreen.withOpacity(0.55), width: 1.5)),
                     child: ClipRRect(
                       borderRadius: BorderRadius.circular(15),
                       child: _hasError
@@ -6756,46 +6370,27 @@ class _NativeVideoPlayerScreenState extends State<NativeVideoPlayerScreen> {
                               child: Column(
                                 mainAxisAlignment: MainAxisAlignment.center,
                                 children: [
-                                  const Icon(
-                                    Icons.error_outline,
-                                    color: Colors.redAccent,
-                                    size: 45,
-                                  ),
+                                  const Icon(Icons.error_outline, color: Colors.redAccent, size: 45),
                                   const SizedBox(height: 10),
-                                  const Text(
-                                    'Stream Connection Error',
-                                    style: TextStyle(color: Colors.redAccent),
-                                  ),
-                                  TextButton(
-                                    onPressed: _initVideo,
-                                    child: const Text(
-                                      'RETRY',
-                                      style: TextStyle(color: kGreen),
-                                    ),
-                                  ),
+                                  const Text('Stream Connection Error', style: TextStyle(color: Colors.redAccent)),
+                                  TextButton(onPressed: _initVideo, child: const Text('RETRY', style: TextStyle(color: kGreen))),
                                 ],
                               ),
                             )
                           : !_isInitialized
-                              ? const ProfessionalLoader(
-                                  message: 'LOADING PLAYER...',
-                                )
+                              ? const ProfessionalLoader(message: 'LOADING PLAYER...')
                               : LayoutBuilder(
                                   builder: (context, constraints) {
                                     final w = constraints.maxWidth;
                                     final h = constraints.maxHeight;
                                     return GestureDetector(
                                       onTap: _onScreenTapped,
-                                      onDoubleTapDown: (d) =>
-                                          _onDoubleTap(d, w),
+                                      onDoubleTapDown: (d) => _onDoubleTap(d, w),
                                       onDoubleTap: () {},
-                                      onLongPressStart: (_) =>
-                                          _onLongPressStart(),
+                                      onLongPressStart: (_) => _onLongPressStart(),
                                       onLongPressEnd: (_) => _onLongPressEnd(),
-                                      onVerticalDragStart: (d) =>
-                                          _onVerticalDragStart(d, w),
-                                      onVerticalDragUpdate: (d) =>
-                                          _onVerticalDragUpdate(d, h),
+                                      onVerticalDragStart: (d) => _onVerticalDragStart(d, w),
+                                      onVerticalDragUpdate: (d) => _onVerticalDragUpdate(d, h),
                                       onVerticalDragEnd: _onVerticalDragEnd,
                                       behavior: HitTestBehavior.opaque,
                                       child: Stack(
@@ -6803,57 +6398,20 @@ class _NativeVideoPlayerScreenState extends State<NativeVideoPlayerScreen> {
                                         children: [
                                           _buildScaledVideo(),
                                           if (_brightness < 1.0)
-                                            Positioned.fill(
-                                              child: IgnorePointer(
-                                                child: Container(
-                                                  color: Colors.black.withOpacity(
-                                                    1.0 - _brightness,
-                                                  ),
-                                                ),
-                                              ),
-                                            ),
+                                            Positioned.fill(child: IgnorePointer(child: Container(color: Colors.black.withOpacity(1.0 - _brightness)))),
                                           Positioned(
                                             top: 10,
                                             left: 10,
                                             child: GestureDetector(
                                               onTap: _showQualityDialog,
                                               child: Container(
-                                                padding:
-                                                    const EdgeInsets.symmetric(
-                                                  horizontal: 7,
-                                                  vertical: 3,
-                                                ),
-                                                decoration: BoxDecoration(
-                                                  color: Colors.black
-                                                      .withOpacity(0.7),
-                                                  borderRadius:
-                                                      BorderRadius.circular(6),
-                                                  border: Border.all(
-                                                    color: kGreen,
-                                                    width: 1,
-                                                  ),
-                                                ),
+                                                padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 3),
+                                                decoration: BoxDecoration(color: Colors.black.withOpacity(0.7), borderRadius: BorderRadius.circular(6), border: Border.all(color: kGreen, width: 1)),
                                                 child: const Column(
                                                   mainAxisSize: MainAxisSize.min,
                                                   children: [
-                                                    Text(
-                                                      'HD',
-                                                      style: TextStyle(
-                                                        color: kGreen,
-                                                        fontSize: 10,
-                                                        fontWeight:
-                                                            FontWeight.bold,
-                                                      ),
-                                                    ),
-                                                    Text(
-                                                      '1080p',
-                                                      style: TextStyle(
-                                                        color: kGreen,
-                                                        fontSize: 7,
-                                                        fontWeight:
-                                                            FontWeight.bold,
-                                                      ),
-                                                    ),
+                                                    Text('HD', style: TextStyle(color: kGreen, fontSize: 10, fontWeight: FontWeight.bold)),
+                                                    Text('1080p', style: TextStyle(color: kGreen, fontSize: 7, fontWeight: FontWeight.bold)),
                                                   ],
                                                 ),
                                               ),
@@ -6865,53 +6423,22 @@ class _NativeVideoPlayerScreenState extends State<NativeVideoPlayerScreen> {
                                             child: GestureDetector(
                                               onTap: _showSpeedDialog,
                                               child: Container(
-                                                padding:
-                                                    const EdgeInsets.symmetric(
-                                                  horizontal: 7,
-                                                  vertical: 4,
-                                                ),
-                                                decoration: BoxDecoration(
-                                                  color: Colors.black
-                                                      .withOpacity(0.7),
-                                                  borderRadius:
-                                                      BorderRadius.circular(6),
-                                                  border: Border.all(
-                                                    color: kNeonCyan,
-                                                    width: 1,
-                                                  ),
-                                                ),
-                                                child: Text(
-                                                  '${_playbackSpeed}x',
-                                                  style: const TextStyle(
-                                                    color: kNeonCyan,
-                                                    fontSize: 10,
-                                                    fontWeight: FontWeight.bold,
-                                                  ),
-                                                ),
+                                                padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 4),
+                                                decoration: BoxDecoration(color: Colors.black.withOpacity(0.7), borderRadius: BorderRadius.circular(6), border: Border.all(color: kNeonCyan, width: 1)),
+                                                child: Text('${_playbackSpeed}x', style: const TextStyle(color: kNeonCyan, fontSize: 10, fontWeight: FontWeight.bold)),
                                               ),
                                             ),
                                           ),
                                           if (_showControls && !_isLongPressBoost)
                                             Row(
-                                              mainAxisAlignment:
-                                                  MainAxisAlignment.center,
+                                              mainAxisAlignment: MainAxisAlignment.center,
                                               children: [
                                                 GestureDetector(
-                                                  onTap: () =>
-                                                      _seekRelative(-10),
+                                                  onTap: () => _seekRelative(-10),
                                                   child: Container(
-                                                    padding:
-                                                        const EdgeInsets.all(8),
-                                                    decoration: BoxDecoration(
-                                                      color: Colors.black
-                                                          .withOpacity(0.5),
-                                                      shape: BoxShape.circle,
-                                                    ),
-                                                    child: const Icon(
-                                                      Icons.replay_10,
-                                                      color: Colors.white,
-                                                      size: 26,
-                                                    ),
+                                                    padding: const EdgeInsets.all(8),
+                                                    decoration: BoxDecoration(color: Colors.black.withOpacity(0.5), shape: BoxShape.circle),
+                                                    child: const Icon(Icons.replay_10, color: Colors.white, size: 26),
                                                   ),
                                                 ),
                                                 const SizedBox(width: 20),
@@ -6919,52 +6446,24 @@ class _NativeVideoPlayerScreenState extends State<NativeVideoPlayerScreen> {
                                                   onTap: () {
                                                     Haptic.light();
                                                     setState(() {
-                                                      _controller
-                                                              .value.isPlaying
-                                                          ? _controller.pause()
-                                                          : _controller.play();
+                                                      _controller.value.isPlaying ? _controller.pause() : _controller.play();
                                                     });
                                                     _resetControlTimer();
                                                   },
                                                   child: Container(
                                                     width: 62,
                                                     height: 62,
-                                                    decoration: BoxDecoration(
-                                                      color: Colors.black
-                                                          .withOpacity(0.6),
-                                                      shape: BoxShape.circle,
-                                                      border: Border.all(
-                                                        color: Colors.white,
-                                                        width: 2,
-                                                      ),
-                                                    ),
-                                                    child: Icon(
-                                                      _controller
-                                                              .value.isPlaying
-                                                          ? Icons.pause
-                                                          : Icons.play_arrow,
-                                                      color: Colors.white,
-                                                      size: 36,
-                                                    ),
+                                                    decoration: BoxDecoration(color: Colors.black.withOpacity(0.6), shape: BoxShape.circle, border: Border.all(color: Colors.white, width: 2)),
+                                                    child: Icon(_controller.value.isPlaying ? Icons.pause : Icons.play_arrow, color: Colors.white, size: 36),
                                                   ),
                                                 ),
                                                 const SizedBox(width: 20),
                                                 GestureDetector(
-                                                  onTap: () =>
-                                                      _seekRelative(10),
+                                                  onTap: () => _seekRelative(10),
                                                   child: Container(
-                                                    padding:
-                                                        const EdgeInsets.all(8),
-                                                    decoration: BoxDecoration(
-                                                      color: Colors.black
-                                                          .withOpacity(0.5),
-                                                      shape: BoxShape.circle,
-                                                    ),
-                                                    child: const Icon(
-                                                      Icons.forward_10,
-                                                      color: Colors.white,
-                                                      size: 26,
-                                                    ),
+                                                    padding: const EdgeInsets.all(8),
+                                                    decoration: BoxDecoration(color: Colors.black.withOpacity(0.5), shape: BoxShape.circle),
+                                                    child: const Icon(Icons.forward_10, color: Colors.white, size: 26),
                                                   ),
                                                 ),
                                               ],
@@ -6972,29 +6471,9 @@ class _NativeVideoPlayerScreenState extends State<NativeVideoPlayerScreen> {
                                           if (_flashFeedback.isNotEmpty)
                                             Center(
                                               child: Container(
-                                                padding:
-                                                    const EdgeInsets.symmetric(
-                                                  horizontal: 16,
-                                                  vertical: 10,
-                                                ),
-                                                decoration: BoxDecoration(
-                                                  color: Colors.black
-                                                      .withOpacity(0.8),
-                                                  borderRadius:
-                                                      BorderRadius.circular(10),
-                                                  border: Border.all(
-                                                    color: kGreen,
-                                                    width: 1,
-                                                  ),
-                                                ),
-                                                child: Text(
-                                                  _flashFeedback,
-                                                  style: const TextStyle(
-                                                    color: kGreen,
-                                                    fontWeight: FontWeight.bold,
-                                                    fontSize: 18,
-                                                  ),
-                                                ),
+                                                padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
+                                                decoration: BoxDecoration(color: Colors.black.withOpacity(0.8), borderRadius: BorderRadius.circular(10), border: Border.all(color: kGreen, width: 1)),
+                                                child: Text(_flashFeedback, style: const TextStyle(color: kGreen, fontWeight: FontWeight.bold, fontSize: 18)),
                                               ),
                                             ),
                                           if (_showControls)
@@ -7004,97 +6483,25 @@ class _NativeVideoPlayerScreenState extends State<NativeVideoPlayerScreen> {
                                               right: 10,
                                               child: Row(
                                                 children: [
-                                                  Text(
-                                                    _formatDuration(_controller
-                                                        .value.position),
-                                                    style: const TextStyle(
-                                                      color: Colors.white,
-                                                      fontSize: 10,
-                                                      fontFamily: 'monospace',
-                                                    ),
-                                                  ),
+                                                  Text(_formatDuration(_controller.value.position), style: const TextStyle(color: Colors.white, fontSize: 10, fontFamily: 'monospace')),
                                                   const SizedBox(width: 6),
                                                   Expanded(
                                                     child: SliderTheme(
-                                                      data: SliderTheme.of(
-                                                              context)
-                                                          .copyWith(
-                                                        trackHeight: 2.5,
-                                                        activeTrackColor: kGreen,
-                                                        inactiveTrackColor:
-                                                            Colors.white30,
-                                                        thumbColor: kGreen,
-                                                        thumbShape:
-                                                            const RoundSliderThumbShape(
-                                                          enabledThumbRadius: 4,
-                                                        ),
-                                                      ),
+                                                      data: SliderTheme.of(context).copyWith(trackHeight: 2.5, activeTrackColor: kGreen, inactiveTrackColor: Colors.white30, thumbColor: kGreen, thumbShape: const RoundSliderThumbShape(enabledThumbRadius: 4)),
                                                       child: Slider(
-                                                        value: _controller
-                                                            .value.position
-                                                            .inSeconds
-                                                            .toDouble()
-                                                            .clamp(
-                                                          0.0,
-                                                          _controller
-                                                                      .value
-                                                                      .duration
-                                                                      .inSeconds
-                                                                      .toDouble() <=
-                                                                  0
-                                                              ? 1.0
-                                                              : _controller
-                                                                  .value
-                                                                  .duration
-                                                                  .inSeconds
-                                                                  .toDouble(),
-                                                        ),
+                                                        value: _controller.value.position.inSeconds.toDouble().clamp(0.0, _controller.value.duration.inSeconds.toDouble() <= 0 ? 1.0 : _controller.value.duration.inSeconds.toDouble()),
                                                         min: 0.0,
-                                                        max: _controller
-                                                                    .value
-                                                                    .duration
-                                                                    .inSeconds
-                                                                    .toDouble() >
-                                                                0
-                                                            ? _controller
-                                                                .value.duration
-                                                                .inSeconds
-                                                                .toDouble()
-                                                            : 1.0,
-                                                        onChanged: (val) {
-                                                          _controller.seekTo(
-                                                            Duration(
-                                                              seconds:
-                                                                  val.toInt(),
-                                                            ),
-                                                          );
-                                                        },
+                                                        max: _controller.value.duration.inSeconds.toDouble() > 0 ? _controller.value.duration.inSeconds.toDouble() : 1.0,
+                                                        onChanged: (val) => _controller.seekTo(Duration(seconds: val.toInt())),
                                                       ),
                                                     ),
                                                   ),
                                                   const SizedBox(width: 6),
-                                                  Text(
-                                                    _formatDuration(
-                                                      _controller
-                                                          .value.duration,
-                                                    ),
-                                                    style: const TextStyle(
-                                                      color: Colors.white,
-                                                      fontSize: 10,
-                                                      fontFamily: 'monospace',
-                                                    ),
-                                                  ),
+                                                  Text(_formatDuration(_controller.value.duration), style: const TextStyle(color: Colors.white, fontSize: 10, fontFamily: 'monospace')),
                                                   const SizedBox(width: 8),
                                                   GestureDetector(
-                                                    onTap:
-                                                        _toggleSmartFullscreen,
-                                                    child: Icon(
-                                                      _isFullscreen
-                                                          ? Icons.fullscreen_exit
-                                                          : Icons.fullscreen,
-                                                      color: Colors.white,
-                                                      size: 20,
-                                                    ),
+                                                    onTap: _toggleSmartFullscreen,
+                                                    child: Icon(_isFullscreen ? Icons.fullscreen_exit : Icons.fullscreen, color: Colors.white, size: 20),
                                                   ),
                                                 ],
                                               ),
@@ -7110,85 +6517,37 @@ class _NativeVideoPlayerScreenState extends State<NativeVideoPlayerScreen> {
               ),
               Expanded(
                 child: SingleChildScrollView(
-                  padding:
-                      const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+                  padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
                   child: Column(
                     children: [
                       Container(
                         padding: const EdgeInsets.all(12),
-                        decoration: BoxDecoration(
-                          color: const Color(0xFF031408),
-                          borderRadius: BorderRadius.circular(16),
-                          border:
-                              Border.all(color: kGreen.withOpacity(0.55)),
-                        ),
+                        decoration: BoxDecoration(color: const Color(0xFF031408), borderRadius: BorderRadius.circular(16), border: Border.all(color: kGreen.withOpacity(0.55))),
                         child: Column(
                           crossAxisAlignment: CrossAxisAlignment.start,
                           children: [
                             Row(
                               children: [
-                                const Icon(
-                                  Icons.play_circle_fill,
-                                  color: kGreen,
-                                  size: 26,
-                                ),
+                                const Icon(Icons.play_circle_fill, color: kGreen, size: 26),
                                 const SizedBox(width: 8),
                                 Expanded(
-                                  child: Text(
-                                    widget.title,
-                                    style: const TextStyle(
-                                      color: Colors.white,
-                                      fontSize: 14,
-                                      fontWeight: FontWeight.bold,
-                                    ),
-                                    maxLines: 1,
-                                    overflow: TextOverflow.ellipsis,
-                                  ),
+                                  child: Text(widget.title, style: const TextStyle(color: Colors.white, fontSize: 14, fontWeight: FontWeight.bold), maxLines: 1, overflow: TextOverflow.ellipsis),
                                 ),
                                 Container(
-                                  padding: const EdgeInsets.symmetric(
-                                    horizontal: 7,
-                                    vertical: 3,
-                                  ),
-                                  decoration: BoxDecoration(
-                                    borderRadius: BorderRadius.circular(6),
-                                    border: Border.all(color: kGreen),
-                                  ),
-                                  child: const Text(
-                                    'HD',
-                                    style: TextStyle(
-                                      color: kGreen,
-                                      fontSize: 10,
-                                      fontWeight: FontWeight.bold,
-                                    ),
-                                  ),
+                                  padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 3),
+                                  decoration: BoxDecoration(borderRadius: BorderRadius.circular(6), border: Border.all(color: kGreen)),
+                                  child: const Text('HD', style: TextStyle(color: kGreen, fontSize: 10, fontWeight: FontWeight.bold)),
                                 ),
                               ],
                             ),
                             const SizedBox(height: 8),
                             Row(
                               children: [
-                                const Icon(
-                                  Icons.account_circle,
-                                  color: kGreen,
-                                  size: 14,
-                                ),
+                                const Icon(Icons.account_circle, color: kGreen, size: 14),
                                 const SizedBox(width: 4),
-                                Text(
-                                  'Uploaded by: ${widget.uploader}',
-                                  style: const TextStyle(
-                                    color: kGreen,
-                                    fontSize: 10,
-                                  ),
-                                ),
+                                Text('Uploaded by: ${widget.uploader}', style: const TextStyle(color: kGreen, fontSize: 10)),
                                 const SizedBox(width: 8),
-                                Text(
-                                  '|   👁 ${_stats['views']} views',
-                                  style: TextStyle(
-                                    color: Colors.white.withOpacity(0.6),
-                                    fontSize: 10,
-                                  ),
-                                ),
+                                Text('|   👁 ${_stats['views']} views', style: TextStyle(color: Colors.white.withOpacity(0.6), fontSize: 10)),
                               ],
                             ),
                             const SizedBox(height: 12),
@@ -7198,51 +6557,19 @@ class _NativeVideoPlayerScreenState extends State<NativeVideoPlayerScreen> {
                                   child: InkWell(
                                     onTap: _handleLike,
                                     child: Container(
-                                      padding: const EdgeInsets.symmetric(
-                                        vertical: 8,
-                                      ),
-                                      decoration: BoxDecoration(
-                                        color: Colors.black,
-                                        borderRadius:
-                                            BorderRadius.circular(8),
-                                        border: Border.all(
-                                          color: _isLiked
-                                              ? kGreen
-                                              : kGreen.withOpacity(0.4),
-                                        ),
-                                      ),
+                                      padding: const EdgeInsets.symmetric(vertical: 8),
+                                      decoration: BoxDecoration(color: Colors.black, borderRadius: BorderRadius.circular(8), border: Border.all(color: _isLiked ? kGreen : kGreen.withOpacity(0.4))),
                                       child: Column(
                                         children: [
                                           Row(
-                                            mainAxisAlignment:
-                                                MainAxisAlignment.center,
+                                            mainAxisAlignment: MainAxisAlignment.center,
                                             children: [
-                                              Icon(
-                                                _isLiked
-                                                    ? Icons.thumb_up
-                                                    : Icons
-                                                        .thumb_up_alt_outlined,
-                                                color: kGreen,
-                                                size: 14,
-                                              ),
+                                              Icon(_isLiked ? Icons.thumb_up : Icons.thumb_up_alt_outlined, color: kGreen, size: 14),
                                               const SizedBox(width: 4),
-                                              Text(
-                                                '${_stats['likes']}',
-                                                style: const TextStyle(
-                                                  color: Colors.white,
-                                                  fontSize: 11,
-                                                  fontWeight: FontWeight.bold,
-                                                ),
-                                              ),
+                                              Text('${_stats['likes']}', style: const TextStyle(color: Colors.white, fontSize: 11, fontWeight: FontWeight.bold)),
                                             ],
                                           ),
-                                          const Text(
-                                            'Like',
-                                            style: TextStyle(
-                                              color: Colors.white54,
-                                              fontSize: 9,
-                                            ),
-                                          ),
+                                          const Text('Like', style: TextStyle(color: Colors.white54, fontSize: 9)),
                                         ],
                                       ),
                                     ),
@@ -7253,51 +6580,19 @@ class _NativeVideoPlayerScreenState extends State<NativeVideoPlayerScreen> {
                                   child: InkWell(
                                     onTap: _handleDislike,
                                     child: Container(
-                                      padding: const EdgeInsets.symmetric(
-                                        vertical: 8,
-                                      ),
-                                      decoration: BoxDecoration(
-                                        color: Colors.black,
-                                        borderRadius:
-                                            BorderRadius.circular(8),
-                                        border: Border.all(
-                                          color: _isUnliked
-                                              ? Colors.redAccent
-                                              : kGreen.withOpacity(0.4),
-                                        ),
-                                      ),
+                                      padding: const EdgeInsets.symmetric(vertical: 8),
+                                      decoration: BoxDecoration(color: Colors.black, borderRadius: BorderRadius.circular(8), border: Border.all(color: _isUnliked ? Colors.redAccent : kGreen.withOpacity(0.4))),
                                       child: Column(
                                         children: [
                                           Row(
-                                            mainAxisAlignment:
-                                                MainAxisAlignment.center,
+                                            mainAxisAlignment: MainAxisAlignment.center,
                                             children: [
-                                              Icon(
-                                                _isUnliked
-                                                    ? Icons.thumb_down
-                                                    : Icons
-                                                        .thumb_down_alt_outlined,
-                                                color: Colors.redAccent,
-                                                size: 14,
-                                              ),
+                                              Icon(_isUnliked ? Icons.thumb_down : Icons.thumb_down_alt_outlined, color: Colors.redAccent, size: 14),
                                               const SizedBox(width: 4),
-                                              Text(
-                                                '${_stats['unlikes']}',
-                                                style: const TextStyle(
-                                                  color: Colors.white,
-                                                  fontSize: 11,
-                                                  fontWeight: FontWeight.bold,
-                                                ),
-                                              ),
+                                              Text('${_stats['unlikes']}', style: const TextStyle(color: Colors.white, fontSize: 11, fontWeight: FontWeight.bold)),
                                             ],
                                           ),
-                                          const Text(
-                                            'Dislike',
-                                            style: TextStyle(
-                                              color: Colors.white54,
-                                              fontSize: 9,
-                                            ),
-                                          ),
+                                          const Text('Dislike', style: TextStyle(color: Colors.white54, fontSize: 9)),
                                         ],
                                       ),
                                     ),
@@ -7308,37 +6603,12 @@ class _NativeVideoPlayerScreenState extends State<NativeVideoPlayerScreen> {
                                   child: InkWell(
                                     onTap: _toggleSave,
                                     child: Container(
-                                      padding: const EdgeInsets.symmetric(
-                                        vertical: 8,
-                                      ),
-                                      decoration: BoxDecoration(
-                                        color: Colors.black,
-                                        borderRadius:
-                                            BorderRadius.circular(8),
-                                        border: Border.all(
-                                          color: _isSaved
-                                              ? kGreen
-                                              : kGreen.withOpacity(0.4),
-                                        ),
-                                      ),
+                                      padding: const EdgeInsets.symmetric(vertical: 8),
+                                      decoration: BoxDecoration(color: Colors.black, borderRadius: BorderRadius.circular(8), border: Border.all(color: _isSaved ? kGreen : kGreen.withOpacity(0.4))),
                                       child: Column(
                                         children: [
-                                          Icon(
-                                            _isSaved
-                                                ? Icons.bookmark
-                                                : Icons.bookmark_border,
-                                            color: _isSaved
-                                                ? kGreen
-                                                : Colors.white,
-                                            size: 14,
-                                          ),
-                                          const Text(
-                                            'Save',
-                                            style: TextStyle(
-                                              color: Colors.white54,
-                                              fontSize: 9,
-                                            ),
-                                          ),
+                                          Icon(_isSaved ? Icons.bookmark : Icons.bookmark_border, color: _isSaved ? kGreen : Colors.white, size: 14),
+                                          const Text('Save', style: TextStyle(color: Colors.white54, fontSize: 9)),
                                         ],
                                       ),
                                     ),
@@ -7356,52 +6626,19 @@ class _NativeVideoPlayerScreenState extends State<NativeVideoPlayerScreen> {
                       const SizedBox(height: 12),
                       Row(
                         children: const [
-                          Icon(
-                            Icons.play_circle_outline,
-                            color: kGreen,
-                            size: 18,
-                          ),
+                          Icon(Icons.play_circle_outline, color: kGreen, size: 18),
                           SizedBox(width: 6),
-                          Text(
-                            'Related Videos',
-                            style: TextStyle(
-                              color: Colors.white,
-                              fontSize: 13,
-                              fontWeight: FontWeight.bold,
-                            ),
-                          ),
+                          Text('Related Videos', style: TextStyle(color: Colors.white, fontSize: 13, fontWeight: FontWeight.bold)),
                         ],
                       ),
                       const SizedBox(height: 10),
                       _relatedLoading
-                          ? const Center(
-                              child: Padding(
-                                padding: EdgeInsets.all(20),
-                                child: CircularProgressIndicator(
-                                  color: kGreen,
-                                  strokeWidth: 2,
-                                ),
-                              ),
-                            )
+                          ? const Center(child: Padding(padding: EdgeInsets.all(20), child: CircularProgressIndicator(color: kGreen, strokeWidth: 2)))
                           : _relatedVideos.isEmpty
                               ? Container(
                                   padding: const EdgeInsets.all(20),
-                                  decoration: BoxDecoration(
-                                    color: const Color(0xFF031408),
-                                    borderRadius: BorderRadius.circular(12),
-                                    border: Border.all(
-                                      color: kGreen.withOpacity(0.3),
-                                    ),
-                                  ),
-                                  child: const Center(
-                                    child: Text(
-                                      'No related videos yet',
-                                      style: TextStyle(
-                                        color: Colors.white54,
-                                        fontSize: 12,
-                                      ),
-                                    ),
-                                  ),
+                                  decoration: BoxDecoration(color: const Color(0xFF031408), borderRadius: BorderRadius.circular(12), border: Border.all(color: kGreen.withOpacity(0.3))),
+                                  child: const Center(child: Text('No related videos yet', style: TextStyle(color: Colors.white54, fontSize: 12))),
                                 )
                               : SizedBox(
                                   height: 155,
@@ -7433,7 +6670,6 @@ class _NativeVideoPlayerScreenState extends State<NativeVideoPlayerScreen> {
     final title = (v['filename'] ?? v['originalUrl'] ?? 'Video').toString();
     final uploader = (v['uploader'] ?? '@mayajaal').toString();
     final views = (v['views'] ?? 0) as int;
-    final thumbnail = v['thumbnail']?.toString() ?? '';
 
     return Padding(
       padding: const EdgeInsets.only(right: 10),
@@ -7441,100 +6677,53 @@ class _NativeVideoPlayerScreenState extends State<NativeVideoPlayerScreen> {
         onTap: () {
           Haptic.medium();
           final url = '$kBackendBaseUrl/v/$id';
-          Navigator.pushAndRemoveUntil(
+          // ✅ Related Video Navigation Fix (PushReplacement keeps history intact)
+          Navigator.pushReplacement(
             context,
             MaterialPageRoute(
               builder: (_) => StreamPreviewScreen(targetUrl: url),
             ),
-            (route) => route.isFirst,
           );
         },
         borderRadius: BorderRadius.circular(12),
         child: Container(
           width: 175,
-          decoration: BoxDecoration(
-            color: const Color(0xFF031408),
-            borderRadius: BorderRadius.circular(12),
-            border: Border.all(color: kGreen.withOpacity(0.35)),
-          ),
+          decoration: BoxDecoration(color: const Color(0xFF031408), borderRadius: BorderRadius.circular(12), border: Border.all(color: kGreen.withOpacity(0.35))),
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
               Container(
                 height: 90,
                 decoration: BoxDecoration(
-                  borderRadius: const BorderRadius.vertical(
-                    top: Radius.circular(11),
+                  borderRadius: const BorderRadius.vertical(top: Radius.circular(11)),
+                  gradient: LinearGradient(
+                    colors: [kGreen.withOpacity(0.15), kNeonCyan.withOpacity(0.1), Colors.black],
+                    begin: Alignment.topLeft,
+                    end: Alignment.bottomRight,
                   ),
-                  color: Colors.black,
-                  image: thumbnail.isNotEmpty
-                      ? DecorationImage(
-                          image: NetworkImage(thumbnail),
-                          fit: BoxFit.cover,
-                        )
-                      : null,
                 ),
-                child: thumbnail.isEmpty 
-                  ? Center(
-                      child: Container(
-                        width: 40,
-                        height: 40,
-                        decoration: BoxDecoration(
-                          shape: BoxShape.circle,
-                          color: Colors.black.withOpacity(0.6),
-                          border: Border.all(color: kGreen, width: 1.5),
-                        ),
-                        child: const Icon(
-                          Icons.play_arrow,
-                          color: kGreen,
-                          size: 22,
-                        ),
-                      ),
-                    )
-                  : null,
+                child: Center(
+                  child: Container(
+                    width: 40,
+                    height: 40,
+                    decoration: BoxDecoration(shape: BoxShape.circle, color: Colors.black.withOpacity(0.6), border: Border.all(color: kGreen, width: 1.5)),
+                    child: const Icon(Icons.play_arrow, color: kGreen, size: 22),
+                  ),
+                ),
               ),
               Padding(
                 padding: const EdgeInsets.all(8),
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    Text(
-                      title,
-                      style: const TextStyle(
-                        color: Colors.white,
-                        fontSize: 11,
-                        fontWeight: FontWeight.bold,
-                      ),
-                      maxLines: 2,
-                      overflow: TextOverflow.ellipsis,
-                    ),
+                    Text(title, style: const TextStyle(color: Colors.white, fontSize: 11, fontWeight: FontWeight.bold), maxLines: 2, overflow: TextOverflow.ellipsis),
                     const SizedBox(height: 4),
                     Row(
                       children: [
-                        Expanded(
-                          child: Text(
-                            uploader,
-                            style: TextStyle(
-                              color: kGreen.withOpacity(0.8),
-                              fontSize: 9.5,
-                            ),
-                            maxLines: 1,
-                            overflow: TextOverflow.ellipsis,
-                          ),
-                        ),
-                        const Icon(
-                          Icons.visibility,
-                          color: Colors.white54,
-                          size: 10,
-                        ),
+                        Expanded(child: Text(uploader, style: TextStyle(color: kGreen.withOpacity(0.8), fontSize: 9.5), maxLines: 1, overflow: TextOverflow.ellipsis)),
+                        const Icon(Icons.visibility, color: Colors.white54, size: 10),
                         const SizedBox(width: 2),
-                        Text(
-                          '$views',
-                          style: const TextStyle(
-                            color: Colors.white54,
-                            fontSize: 9,
-                          ),
-                        ),
+                        Text('$views', style: const TextStyle(color: Colors.white54, fontSize: 9)),
                       ],
                     ),
                   ],
@@ -7615,13 +6804,7 @@ class _WithdrawScreenState extends State<WithdrawScreen> {
     });
     if (!mounted) return;
     ScaffoldMessenger.of(context).showSnackBar(
-      const SnackBar(
-        backgroundColor: kCardBg,
-        content: Text(
-          '✅ Withdrawal details saved',
-          style: TextStyle(color: kGreen),
-        ),
-      ),
+      const SnackBar(backgroundColor: kCardBg, content: Text('✅ Withdrawal details saved', style: TextStyle(color: kGreen))),
     );
   }
 
@@ -7629,13 +6812,7 @@ class _WithdrawScreenState extends State<WithdrawScreen> {
     if (_balance < 5) {
       Haptic.heavy();
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          backgroundColor: kCardBg,
-          content: Text(
-            '❌ Minimum \$5 balance required',
-            style: TextStyle(color: Colors.orangeAccent),
-          ),
-        ),
+        const SnackBar(backgroundColor: kCardBg, content: Text('❌ Minimum \$5 balance required', style: TextStyle(color: Colors.orangeAccent))),
       );
       return;
     }
@@ -7643,26 +6820,14 @@ class _WithdrawScreenState extends State<WithdrawScreen> {
     if (!_enabled) {
       Haptic.heavy();
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          backgroundColor: kCardBg,
-          content: Text(
-            '⚠️ Withdrawals coming soon — save your details first',
-            style: TextStyle(color: Colors.orangeAccent),
-          ),
-        ),
+        const SnackBar(backgroundColor: kCardBg, content: Text('⚠️ Withdrawals coming soon — save your details first', style: TextStyle(color: Colors.orangeAccent))),
       );
       return;
     }
 
     Haptic.medium();
     ScaffoldMessenger.of(context).showSnackBar(
-      const SnackBar(
-        backgroundColor: kCardBg,
-        content: Text(
-          '✅ Withdrawal request submitted',
-          style: TextStyle(color: kGreen),
-        ),
-      ),
+      const SnackBar(backgroundColor: kCardBg, content: Text('✅ Withdrawal request submitted', style: TextStyle(color: kGreen))),
     );
   }
 
@@ -7670,9 +6835,7 @@ class _WithdrawScreenState extends State<WithdrawScreen> {
   Widget build(BuildContext context) {
     return Scaffold(
       backgroundColor: Colors.black,
-      appBar: AppBar(
-        title: const Text('WITHDRAW EARNINGS'),
-      ),
+      appBar: AppBar(title: const Text('WITHDRAW EARNINGS')),
       body: _loading
           ? const Center(child: CircularProgressIndicator(color: kGreen))
           : SingleChildScrollView(
@@ -7683,94 +6846,32 @@ class _WithdrawScreenState extends State<WithdrawScreen> {
                   Container(
                     width: double.infinity,
                     padding: const EdgeInsets.all(22),
-                    decoration: BoxDecoration(
-                      color: const Color(0xFF031408),
-                      borderRadius: BorderRadius.circular(16),
-                      border: Border.all(color: kGreen, width: 1.5),
-                      boxShadow: [
-                        BoxShadow(
-                          color: kGreen.withOpacity(0.15),
-                          blurRadius: 20,
-                        ),
-                      ],
-                    ),
+                    decoration: BoxDecoration(color: const Color(0xFF031408), borderRadius: BorderRadius.circular(16), border: Border.all(color: kGreen, width: 1.5), boxShadow: [BoxShadow(color: kGreen.withOpacity(0.15), blurRadius: 20)]),
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
-                        const Text(
-                          'AVAILABLE BALANCE',
-                          style: TextStyle(
-                            color: Colors.white54,
-                            fontSize: 11,
-                            letterSpacing: 1.5,
-                          ),
-                        ),
+                        const Text('AVAILABLE BALANCE', style: TextStyle(color: Colors.white54, fontSize: 11, letterSpacing: 1.5)),
                         const SizedBox(height: 8),
-                        Text(
-                          '\$${_balance.toStringAsFixed(2)}',
-                          style: const TextStyle(
-                            color: kGreen,
-                            fontSize: 38,
-                            fontWeight: FontWeight.w900,
-                            shadows: [Shadow(color: kGreen, blurRadius: 20)],
-                          ),
-                        ),
+                        Text('\$${_balance.toStringAsFixed(2)}', style: const TextStyle(color: kGreen, fontSize: 38, fontWeight: FontWeight.w900, shadows: [Shadow(color: kGreen, blurRadius: 20)])),
                         const SizedBox(height: 4),
-                        Text(
-                          '≈ ₹${(_balance * 80).toStringAsFixed(0)} INR',
-                          style: TextStyle(
-                            color: Colors.white.withOpacity(0.5),
-                            fontSize: 12,
-                          ),
-                        ),
+                        Text('≈ ₹${(_balance * 80).toStringAsFixed(0)} INR', style: TextStyle(color: Colors.white.withOpacity(0.5), fontSize: 12)),
                         const SizedBox(height: 10),
                         Container(
-                          padding: const EdgeInsets.symmetric(
-                            horizontal: 10,
-                            vertical: 5,
-                          ),
-                          decoration: BoxDecoration(
-                            color: _balance >= 5
-                                ? kGreen.withOpacity(0.15)
-                                : Colors.orange.withOpacity(0.15),
-                            borderRadius: BorderRadius.circular(6),
-                            border: Border.all(
-                              color: _balance >= 5 ? kGreen : Colors.orange,
-                              width: 1,
-                            ),
-                          ),
+                          padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
+                          decoration: BoxDecoration(color: _balance >= 5 ? kGreen.withOpacity(0.15) : Colors.orange.withOpacity(0.15), borderRadius: BorderRadius.circular(6), border: Border.all(color: _balance >= 5 ? kGreen : Colors.orange, width: 1)),
                           child: Text(
-                            _balance >= 5
-                                ? '✅ Minimum reached — Ready to withdraw'
-                                : '⚠️ Minimum \$5 to withdraw',
-                            style: TextStyle(
-                              color: _balance >= 5 ? kGreen : Colors.orange,
-                              fontSize: 10.5,
-                              fontWeight: FontWeight.bold,
-                            ),
+                            _balance >= 5 ? '✅ Minimum reached — Ready to withdraw' : '⚠️ Minimum \$5 to withdraw',
+                            style: TextStyle(color: _balance >= 5 ? kGreen : Colors.orange, fontSize: 10.5, fontWeight: FontWeight.bold),
                           ),
                         ),
                       ],
                     ),
                   ),
                   const SizedBox(height: 20),
-
-                  const Text(
-                    'PAYMENT DETAILS',
-                    style: TextStyle(
-                      color: kGreen,
-                      fontSize: 13,
-                      fontWeight: FontWeight.bold,
-                      letterSpacing: 1.5,
-                    ),
-                  ),
+                  const Text('PAYMENT DETAILS', style: TextStyle(color: kGreen, fontSize: 13, fontWeight: FontWeight.bold, letterSpacing: 1.5)),
                   const SizedBox(height: 4),
-                  const Text(
-                    'Save your details for faster withdrawals',
-                    style: TextStyle(color: Colors.white54, fontSize: 11),
-                  ),
+                  const Text('Save your details for faster withdrawals', style: TextStyle(color: Colors.white54, fontSize: 11)),
                   const SizedBox(height: 12),
-
                   _field('UPI ID', _upiCtrl, 'yourname@upi'),
                   const SizedBox(height: 10),
                   _field('Bank Account Number', _bankCtrl, '1234567890'),
@@ -7778,28 +6879,14 @@ class _WithdrawScreenState extends State<WithdrawScreen> {
                   _field('IFSC Code', _ifscCtrl, 'HDFC0001234'),
                   const SizedBox(height: 10),
                   _field('Gmail', _gmailCtrl, 'yourname@gmail.com'),
-
                   const SizedBox(height: 16),
                   SizedBox(
                     width: double.infinity,
                     height: 48,
                     child: OutlinedButton(
                       onPressed: _saveInfo,
-                      style: OutlinedButton.styleFrom(
-                        side: const BorderSide(color: kGreen, width: 1.5),
-                        shape: RoundedRectangleBorder(
-                          borderRadius: BorderRadius.circular(12),
-                        ),
-                      ),
-                      child: const Text(
-                        '💾 SAVE DETAILS',
-                        style: TextStyle(
-                          color: kGreen,
-                          fontSize: 12,
-                          fontWeight: FontWeight.bold,
-                          letterSpacing: 1.5,
-                        ),
-                      ),
+                      style: OutlinedButton.styleFrom(side: const BorderSide(color: kGreen, width: 1.5), shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12))),
+                      child: const Text('💾 SAVE DETAILS', style: TextStyle(color: kGreen, fontSize: 12, fontWeight: FontWeight.bold, letterSpacing: 1.5)),
                     ),
                   ),
                   const SizedBox(height: 12),
@@ -7808,72 +6895,26 @@ class _WithdrawScreenState extends State<WithdrawScreen> {
                     height: 54,
                     child: ElevatedButton(
                       onPressed: _requestWithdraw,
-                      style: ElevatedButton.styleFrom(
-                        backgroundColor:
-                            _balance >= 5 ? kGreen : Colors.grey[850],
-                        foregroundColor: Colors.black,
-                        shape: RoundedRectangleBorder(
-                          borderRadius: BorderRadius.circular(12),
-                        ),
-                        elevation: _balance >= 5 ? 10 : 0,
-                      ),
+                      style: ElevatedButton.styleFrom(backgroundColor: _balance >= 5 ? kGreen : Colors.grey[850], foregroundColor: Colors.black, shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)), elevation: _balance >= 5 ? 10 : 0),
                       child: Text(
-                        _balance >= 5
-                            ? '💸 REQUEST WITHDRAWAL'
-                            : 'EARN \$5 TO WITHDRAW',
-                        style: TextStyle(
-                          color: _balance >= 5 ? Colors.black : Colors.white54,
-                          fontSize: 13,
-                          fontWeight: FontWeight.w900,
-                          letterSpacing: 1.5,
-                        ),
+                        _balance >= 5 ? '💸 REQUEST WITHDRAWAL' : 'EARN \$5 TO WITHDRAW',
+                        style: TextStyle(color: _balance >= 5 ? Colors.black : Colors.white54, fontSize: 13, fontWeight: FontWeight.w900, letterSpacing: 1.5),
                       ),
                     ),
                   ),
-
                   const SizedBox(height: 20),
                   Container(
                     padding: const EdgeInsets.all(14),
-                    decoration: BoxDecoration(
-                      color: const Color(0xFF031408),
-                      borderRadius: BorderRadius.circular(12),
-                      border: Border.all(color: kGreen.withOpacity(0.3)),
-                    ),
+                    decoration: BoxDecoration(color: const Color(0xFF031408), borderRadius: BorderRadius.circular(12), border: Border.all(color: kGreen.withOpacity(0.3))),
                     child: const Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
-                        Row(
-                          children: [
-                            Icon(Icons.info_outline, color: kGreen, size: 16),
-                            SizedBox(width: 6),
-                            Text(
-                              'INFO',
-                              style: TextStyle(
-                                color: kGreen,
-                                fontSize: 11,
-                                fontWeight: FontWeight.bold,
-                                letterSpacing: 1.2,
-                              ),
-                            ),
-                          ],
-                        ),
+                        Row(children: [Icon(Icons.info_outline, color: kGreen, size: 16), SizedBox(width: 6), Text('INFO', style: TextStyle(color: kGreen, fontSize: 11, fontWeight: FontWeight.bold, letterSpacing: 1.2))]),
                         SizedBox(height: 8),
-                        Text(
-                          '• Minimum withdrawal: \$5 (≈₹400)',
-                          style: TextStyle(color: Colors.white70, fontSize: 11.5),
-                        ),
-                        Text(
-                          '• Processing time: 24–48 hours',
-                          style: TextStyle(color: Colors.white70, fontSize: 11.5),
-                        ),
-                        Text(
-                          '• Methods: UPI · Bank Transfer',
-                          style: TextStyle(color: Colors.white70, fontSize: 11.5),
-                        ),
-                        Text(
-                          '• TDS @ 2% applies above ₹15,000/year',
-                          style: TextStyle(color: Colors.white70, fontSize: 11.5),
-                        ),
+                        Text('• Minimum withdrawal: \$5 (≈₹400)', style: TextStyle(color: Colors.white70, fontSize: 11.5)),
+                        Text('• Processing time: 24–48 hours', style: TextStyle(color: Colors.white70, fontSize: 11.5)),
+                        Text('• Methods: UPI · Bank Transfer', style: TextStyle(color: Colors.white70, fontSize: 11.5)),
+                        Text('• TDS @ 2% applies above ₹15,000/year', style: TextStyle(color: Colors.white70, fontSize: 11.5)),
                       ],
                     ),
                   ),
@@ -7886,30 +6927,15 @@ class _WithdrawScreenState extends State<WithdrawScreen> {
   Widget _field(String label, TextEditingController ctrl, String hint) {
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 4),
-      decoration: BoxDecoration(
-        color: const Color(0xFF031A0B),
-        borderRadius: BorderRadius.circular(12),
-        border: Border.all(color: kGreen.withOpacity(0.4)),
-      ),
+      decoration: BoxDecoration(color: const Color(0xFF031A0B), borderRadius: BorderRadius.circular(12), border: Border.all(color: kGreen.withOpacity(0.4))),
       child: TextField(
         controller: ctrl,
-        style: const TextStyle(
-          color: Colors.white,
-          fontSize: 13,
-          fontFamily: 'monospace',
-        ),
+        style: const TextStyle(color: Colors.white, fontSize: 13, fontFamily: 'monospace'),
         decoration: InputDecoration(
           labelText: label,
-          labelStyle: TextStyle(
-            color: kGreen.withOpacity(0.8),
-            fontSize: 11,
-            letterSpacing: 1,
-          ),
+          labelStyle: TextStyle(color: kGreen.withOpacity(0.8), fontSize: 11, letterSpacing: 1),
           hintText: hint,
-          hintStyle: TextStyle(
-            color: Colors.white.withOpacity(0.3),
-            fontSize: 12,
-          ),
+          hintStyle: TextStyle(color: Colors.white.withOpacity(0.3), fontSize: 12),
           border: InputBorder.none,
         ),
       ),
@@ -7925,22 +6951,14 @@ class UserSearchDelegate extends SearchDelegate {
   ThemeData appBarTheme(BuildContext context) {
     return ThemeData(
       appBarTheme: const AppBarTheme(backgroundColor: Colors.black),
-      inputDecorationTheme: const InputDecorationTheme(
-        hintStyle: TextStyle(color: Colors.white54),
-        border: InputBorder.none,
-      ),
-      textTheme: const TextTheme(
-        titleLarge: TextStyle(color: Colors.white, fontSize: 16),
-      ),
+      inputDecorationTheme: const InputDecorationTheme(hintStyle: TextStyle(color: Colors.white54), border: InputBorder.none),
+      textTheme: const TextTheme(titleLarge: TextStyle(color: Colors.white, fontSize: 16)),
     );
   }
 
   @override
   List<Widget>? buildActions(BuildContext context) => [
-        IconButton(
-          icon: const Icon(Icons.clear, color: kGreen),
-          onPressed: () => query = '',
-        ),
+        IconButton(icon: const Icon(Icons.clear, color: kGreen), onPressed: () => query = ''),
       ];
 
   @override
@@ -7965,10 +6983,7 @@ class UserSearchDelegate extends SearchDelegate {
             children: [
               Icon(Icons.search, color: kGreen.withOpacity(0.4), size: 60),
               const SizedBox(height: 12),
-              const Text(
-                'Search users by name or email',
-                style: TextStyle(color: Colors.white54, fontSize: 14),
-              ),
+              const Text('Search users by name or email', style: TextStyle(color: Colors.white54, fontSize: 14)),
             ],
           ),
         ),
@@ -7989,16 +7004,9 @@ class UserSearchDelegate extends SearchDelegate {
               child: Column(
                 mainAxisAlignment: MainAxisAlignment.center,
                 children: [
-                  Icon(
-                    Icons.person_off_outlined,
-                    color: kGreen.withOpacity(0.4),
-                    size: 60,
-                  ),
+                  Icon(Icons.person_off_outlined, color: kGreen.withOpacity(0.4), size: 60),
                   const SizedBox(height: 12),
-                  Text(
-                    'No user found for "$query"',
-                    style: const TextStyle(color: Colors.white54, fontSize: 14),
-                  ),
+                  Text('No user found for "$query"', style: const TextStyle(color: Colors.white54, fontSize: 14)),
                 ],
               ),
             );
@@ -8015,50 +7023,18 @@ class UserSearchDelegate extends SearchDelegate {
                 leading: Container(
                   width: 42,
                   height: 42,
-                  decoration: BoxDecoration(
-                    shape: BoxShape.circle,
-                    border: Border.all(color: kGreen, width: 1.5),
-                  ),
+                  decoration: BoxDecoration(shape: BoxShape.circle, border: Border.all(color: kGreen, width: 1.5)),
                   child: photo.isNotEmpty
-                      ? ClipOval(
-                          child: Image.network(
-                            photo,
-                            fit: BoxFit.cover,
-                            errorBuilder: (c, e, s) =>
-                                const Icon(Icons.person, color: kGreen),
-                          ),
-                        )
+                      ? ClipOval(child: Image.network(photo, fit: BoxFit.cover, errorBuilder: (c, e, s) => const Icon(Icons.person, color: kGreen)))
                       : const Icon(Icons.person, color: kGreen),
                 ),
-                title: Text(
-                  name,
-                  style: const TextStyle(
-                    color: Colors.white,
-                    fontSize: 14,
-                    fontWeight: FontWeight.bold,
-                  ),
-                ),
-                subtitle: Text(
-                  email,
-                  style: TextStyle(
-                    color: kGreen.withOpacity(0.7),
-                    fontSize: 11.5,
-                  ),
-                ),
-                trailing: const Icon(
-                  Icons.arrow_forward_ios,
-                  color: kGreen,
-                  size: 14,
-                ),
+                title: Text(name, style: const TextStyle(color: Colors.white, fontSize: 14, fontWeight: FontWeight.bold)),
+                subtitle: Text(email, style: TextStyle(color: kGreen.withOpacity(0.7), fontSize: 11.5)),
+                trailing: const Icon(Icons.arrow_forward_ios, color: kGreen, size: 14),
                 onTap: () {
                   Haptic.light();
                   close(context, null);
-                  Navigator.push(
-                    context,
-                    MaterialPageRoute(
-                      builder: (_) => UserProfileScreen(channelProfile: u),
-                    ),
-                  );
+                  Navigator.push(context, MaterialPageRoute(builder: (_) => UserProfileScreen(channelProfile: u)));
                 },
               );
             },
@@ -8088,8 +7064,7 @@ class _UserProfileScreenState extends State<UserProfileScreen> {
   String get _channelUid => widget.channelProfile['uid']?.toString() ?? '';
   String get _channelName => widget.channelProfile['name']?.toString() ?? 'User';
   String get _channelEmail => widget.channelProfile['email']?.toString() ?? '';
-  String get _channelPhoto =>
-      widget.channelProfile['photoURL']?.toString() ?? '';
+  String get _channelPhoto => widget.channelProfile['photoURL']?.toString() ?? '';
 
   @override
   void initState() {
@@ -8115,19 +7090,11 @@ class _UserProfileScreenState extends State<UserProfileScreen> {
     Haptic.medium();
     final myUid = MayaJaalAccount.cachedUid;
     if (myUid == null) return;
-    final newState =
-        await FirebaseService.toggleSubscription(myUid, _channelUid);
+    final newState = await FirebaseService.toggleSubscription(myUid, _channelUid);
     if (mounted) {
       setState(() => _isSubscribed = newState);
       ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          backgroundColor: kCardBg,
-          content: Text(
-            newState ? '✅ Subscribed!' : 'Unsubscribed',
-            style: const TextStyle(color: kGreen),
-          ),
-          duration: const Duration(seconds: 1),
-        ),
+        SnackBar(backgroundColor: kCardBg, content: Text(newState ? '✅ Subscribed!' : 'Unsubscribed', style: const TextStyle(color: kGreen)), duration: const Duration(seconds: 1)),
       );
     }
   }
@@ -8147,59 +7114,21 @@ class _UserProfileScreenState extends State<UserProfileScreen> {
                 Container(
                   width: 82,
                   height: 82,
-                  decoration: BoxDecoration(
-                    shape: BoxShape.circle,
-                    border: Border.all(color: kGreen, width: 2),
-                    boxShadow: [
-                      BoxShadow(
-                        color: kGreen.withOpacity(0.4),
-                        blurRadius: 20,
-                      ),
-                    ],
-                  ),
+                  decoration: BoxDecoration(shape: BoxShape.circle, border: Border.all(color: kGreen, width: 2), boxShadow: [BoxShadow(color: kGreen.withOpacity(0.4), blurRadius: 20)]),
                   child: _channelPhoto.isNotEmpty
-                      ? ClipOval(
-                          child: Image.network(
-                            _channelPhoto,
-                            fit: BoxFit.cover,
-                            errorBuilder: (c, e, s) => const Icon(
-                              Icons.person,
-                              size: 45,
-                              color: kGreen,
-                            ),
-                          ),
-                        )
+                      ? ClipOval(child: Image.network(_channelPhoto, fit: BoxFit.cover, errorBuilder: (c, e, s) => const Icon(Icons.person, size: 45, color: kGreen)))
                       : const Icon(Icons.person, size: 45, color: kGreen),
                 ),
                 const SizedBox(height: 12),
-                Text(
-                  _channelName,
-                  style: const TextStyle(
-                    color: Colors.white,
-                    fontSize: 20,
-                    fontWeight: FontWeight.bold,
-                  ),
-                ),
+                Text(_channelName, style: const TextStyle(color: Colors.white, fontSize: 20, fontWeight: FontWeight.bold)),
                 const SizedBox(height: 3),
-                Text(
-                  _channelEmail,
-                  style: TextStyle(
-                    color: kGreen.withOpacity(0.7),
-                    fontSize: 12,
-                  ),
-                ),
+                Text(_channelEmail, style: TextStyle(color: kGreen.withOpacity(0.7), fontSize: 12)),
                 const SizedBox(height: 6),
                 StreamBuilder<int>(
                   stream: FirebaseService.getSubscriberCount(_channelUid),
                   builder: (c, s) {
                     final count = s.data ?? 0;
-                    return Text(
-                      '$count subscribers',
-                      style: TextStyle(
-                        color: Colors.white.withOpacity(0.5),
-                        fontSize: 11,
-                      ),
-                    );
+                    return Text('$count subscribers', style: TextStyle(color: Colors.white.withOpacity(0.5), fontSize: 11));
                   },
                 ),
                 const SizedBox(height: 16),
@@ -8208,23 +7137,8 @@ class _UserProfileScreenState extends State<UserProfileScreen> {
                     width: 200,
                     child: ElevatedButton(
                       onPressed: _toggleSub,
-                      style: ElevatedButton.styleFrom(
-                        backgroundColor:
-                            _isSubscribed ? Colors.grey[850] : kGreen,
-                        foregroundColor:
-                            _isSubscribed ? Colors.white : Colors.black,
-                        shape: RoundedRectangleBorder(
-                          borderRadius: BorderRadius.circular(20),
-                        ),
-                        padding: const EdgeInsets.symmetric(vertical: 12),
-                      ),
-                      child: Text(
-                        _isSubscribed ? '✓ SUBSCRIBED' : '+ SUBSCRIBE',
-                        style: const TextStyle(
-                          fontWeight: FontWeight.bold,
-                          letterSpacing: 1.2,
-                        ),
-                      ),
+                      style: ElevatedButton.styleFrom(backgroundColor: _isSubscribed ? Colors.grey[850] : kGreen, foregroundColor: _isSubscribed ? Colors.white : Colors.black, shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)), padding: const EdgeInsets.symmetric(vertical: 12)),
+                      child: Text(_isSubscribed ? '✓ SUBSCRIBED' : '+ SUBSCRIBE', style: const TextStyle(fontWeight: FontWeight.bold, letterSpacing: 1.2)),
                     ),
                   ),
                 const Divider(color: Colors.white24, height: 30),
@@ -8232,21 +7146,9 @@ class _UserProfileScreenState extends State<UserProfileScreen> {
                   padding: const EdgeInsets.symmetric(horizontal: 16),
                   child: Row(
                     children: [
-                      const Icon(
-                        Icons.video_library,
-                        color: kGreen,
-                        size: 18,
-                      ),
+                      const Icon(Icons.video_library, color: kGreen, size: 18),
                       const SizedBox(width: 6),
-                      Text(
-                        'VIDEOS (${_videos.length})',
-                        style: const TextStyle(
-                          color: kGreen,
-                          fontSize: 12,
-                          fontWeight: FontWeight.bold,
-                          letterSpacing: 1.2,
-                        ),
-                      ),
+                      Text('VIDEOS (${_videos.length})', style: const TextStyle(color: kGreen, fontSize: 12, fontWeight: FontWeight.bold, letterSpacing: 1.2)),
                     ],
                   ),
                 ),
@@ -8257,19 +7159,9 @@ class _UserProfileScreenState extends State<UserProfileScreen> {
                           child: Column(
                             mainAxisAlignment: MainAxisAlignment.center,
                             children: [
-                              Icon(
-                                Icons.video_library_outlined,
-                                color: kGreen.withOpacity(0.4),
-                                size: 60,
-                              ),
+                              Icon(Icons.video_library_outlined, color: kGreen.withOpacity(0.4), size: 60),
                               const SizedBox(height: 12),
-                              const Text(
-                                'No uploads yet',
-                                style: TextStyle(
-                                  color: Colors.white54,
-                                  fontSize: 14,
-                                ),
-                              ),
+                              const Text('No uploads yet', style: TextStyle(color: Colors.white54, fontSize: 14)),
                             ],
                           ),
                         )
@@ -8284,67 +7176,25 @@ class _UserProfileScreenState extends State<UserProfileScreen> {
 
                             return Container(
                               margin: const EdgeInsets.only(bottom: 8),
-                              decoration: BoxDecoration(
-                                color: kCardBg,
-                                borderRadius: BorderRadius.circular(12),
-                                border: Border.all(
-                                  color: kGreen.withOpacity(0.3),
-                                ),
-                              ),
+                              decoration: BoxDecoration(color: kCardBg, borderRadius: BorderRadius.circular(12), border: Border.all(color: kGreen.withOpacity(0.3))),
                               child: ListTile(
                                 leading: Container(
                                   width: 40,
                                   height: 40,
-                                  decoration: BoxDecoration(
-                                    color: Colors.black,
-                                    borderRadius: BorderRadius.circular(8),
-                                    border: Border.all(
-                                      color: kGreen.withOpacity(0.5),
-                                    ),
-                                  ),
-                                  child: const Icon(
-                                    Icons.play_circle_fill,
-                                    color: kGreen,
-                                    size: 22,
-                                  ),
+                                  decoration: BoxDecoration(color: Colors.black, borderRadius: BorderRadius.circular(8), border: Border.all(color: kGreen.withOpacity(0.5))),
+                                  child: const Icon(Icons.play_circle_fill, color: kGreen, size: 22),
                                 ),
-                                title: Text(
-                                  name,
-                                  style: const TextStyle(
-                                    color: Colors.white,
-                                    fontSize: 12.5,
-                                    fontWeight: FontWeight.bold,
-                                  ),
-                                  maxLines: 1,
-                                  overflow: TextOverflow.ellipsis,
-                                ),
+                                title: Text(name, style: const TextStyle(color: Colors.white, fontSize: 12.5, fontWeight: FontWeight.bold), maxLines: 1, overflow: TextOverflow.ellipsis),
                                 subtitle: Row(
                                   children: [
-                                    const Icon(
-                                      Icons.visibility,
-                                      color: kGreen,
-                                      size: 11,
-                                    ),
+                                    const Icon(Icons.visibility, color: kGreen, size: 11),
                                     const SizedBox(width: 3),
-                                    Text(
-                                      '$views views',
-                                      style: TextStyle(
-                                        color: kGreen.withOpacity(0.8),
-                                        fontSize: 10.5,
-                                      ),
-                                    ),
+                                    Text('$views views', style: TextStyle(color: kGreen.withOpacity(0.8), fontSize: 10.5)),
                                   ],
                                 ),
                                 onTap: () {
                                   Haptic.light();
-                                  Navigator.push(
-                                    context,
-                                    MaterialPageRoute(
-                                      builder: (_) => StreamPreviewScreen(
-                                        targetUrl: '$kBackendBaseUrl/v/$id',
-                                      ),
-                                    ),
-                                  );
+                                  Navigator.push(context, MaterialPageRoute(builder: (_) => StreamPreviewScreen(targetUrl: '$kBackendBaseUrl/v/$id')));
                                 },
                               ),
                             );
@@ -8383,10 +7233,7 @@ class _EarningsScreenState extends State<EarningsScreen>
   @override
   void initState() {
     super.initState();
-    _rankAnimCtrl = AnimationController(
-      vsync: this,
-      duration: const Duration(milliseconds: 1200),
-    );
+    _rankAnimCtrl = AnimationController(vsync: this, duration: const Duration(milliseconds: 1200));
     _rankScale = TweenSequence<double>([
       TweenSequenceItem(tween: Tween(begin: 1.0, end: 1.15), weight: 40),
       TweenSequenceItem(tween: Tween(begin: 1.15, end: 1.0), weight: 60),
@@ -8442,10 +7289,7 @@ class _EarningsScreenState extends State<EarningsScreen>
     return Scaffold(
       backgroundColor: Colors.black,
       appBar: AppBar(
-        title: const Text(
-          'EARNINGS DASHBOARD',
-          style: TextStyle(letterSpacing: 1.5),
-        ),
+        title: const Text('EARNINGS DASHBOARD', style: TextStyle(letterSpacing: 1.5)),
         actions: [
           IconButton(
             icon: const Icon(Icons.refresh, color: kGreen),
@@ -8474,25 +7318,9 @@ class _EarningsScreenState extends State<EarningsScreen>
           children: [
             const Icon(Icons.link_off, color: Colors.orangeAccent, size: 60),
             const SizedBox(height: 16),
-            const Text(
-              'NOT LOGGED IN',
-              style: TextStyle(
-                color: Colors.white,
-                fontSize: 18,
-                fontWeight: FontWeight.bold,
-                letterSpacing: 1.5,
-              ),
-            ),
+            const Text('NOT LOGGED IN', style: TextStyle(color: Colors.white, fontSize: 18, fontWeight: FontWeight.bold, letterSpacing: 1.5)),
             const SizedBox(height: 12),
-            const Text(
-              'Login karke earnings dekh sakte hain.',
-              textAlign: TextAlign.center,
-              style: TextStyle(
-                color: Colors.white70,
-                fontSize: 13,
-                height: 1.5,
-              ),
-            ),
+            const Text('Login karke earnings dekh sakte hain.', textAlign: TextAlign.center, style: TextStyle(color: Colors.white70, fontSize: 13, height: 1.5)),
           ],
         ),
       ),
@@ -8519,11 +7347,7 @@ class _EarningsScreenState extends State<EarningsScreen>
           children: [
             Container(
               padding: const EdgeInsets.all(14),
-              decoration: BoxDecoration(
-                color: kCardBg,
-                borderRadius: BorderRadius.circular(12),
-                border: Border.all(color: kGreen.withOpacity(0.5)),
-              ),
+              decoration: BoxDecoration(color: kCardBg, borderRadius: BorderRadius.circular(12), border: Border.all(color: kGreen.withOpacity(0.5))),
               child: Row(
                 children: [
                   const Icon(Icons.verified, color: kGreen, size: 20),
@@ -8532,24 +7356,9 @@ class _EarningsScreenState extends State<EarningsScreen>
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
-                        const Text(
-                          'LOGGED IN AS',
-                          style: TextStyle(
-                            color: Colors.white54,
-                            fontSize: 9,
-                            letterSpacing: 1.5,
-                          ),
-                        ),
+                        const Text('LOGGED IN AS', style: TextStyle(color: Colors.white54, fontSize: 9, letterSpacing: 1.5)),
                         const SizedBox(height: 2),
-                        Text(
-                          MayaJaalAccount.cachedEmail ?? 'N/A',
-                          style: const TextStyle(
-                            color: kGreen,
-                            fontSize: 13,
-                            fontWeight: FontWeight.bold,
-                          ),
-                          overflow: TextOverflow.ellipsis,
-                        ),
+                        Text(MayaJaalAccount.cachedEmail ?? 'N/A', style: const TextStyle(color: kGreen, fontSize: 13, fontWeight: FontWeight.bold), overflow: TextOverflow.ellipsis),
                       ],
                     ),
                   ),
@@ -8557,92 +7366,35 @@ class _EarningsScreenState extends State<EarningsScreen>
               ),
             ),
             const SizedBox(height: 16),
-
             AnimatedBuilder(
               animation: _rankScale,
-              builder: (c, child) => Transform.scale(
-                scale: _rankScale.value,
-                child: child,
-              ),
+              builder: (c, child) => Transform.scale(scale: _rankScale.value, child: child),
               child: Container(
                 padding: const EdgeInsets.all(16),
                 decoration: BoxDecoration(
-                  gradient: LinearGradient(
-                    colors: [rankColor.withOpacity(0.15), Colors.black],
-                    begin: Alignment.topLeft,
-                    end: Alignment.bottomRight,
-                  ),
+                  gradient: LinearGradient(colors: [rankColor.withOpacity(0.15), Colors.black], begin: Alignment.topLeft, end: Alignment.bottomRight),
                   borderRadius: BorderRadius.circular(14),
-                  border: Border.all(
-                    color: rankColor.withOpacity(0.5),
-                    width: 1.5,
-                  ),
-                  boxShadow: [
-                    BoxShadow(
-                      color: rankColor.withOpacity(0.25),
-                      blurRadius: 18,
-                    ),
-                  ],
+                  border: Border.all(color: rankColor.withOpacity(0.5), width: 1.5),
+                  boxShadow: [BoxShadow(color: rankColor.withOpacity(0.25), blurRadius: 18)],
                 ),
                 child: Row(
                   children: [
                     Container(
                       width: 54,
                       height: 54,
-                      decoration: BoxDecoration(
-                        shape: BoxShape.circle,
-                        border: Border.all(color: rankColor, width: 2),
-                        boxShadow: [
-                          BoxShadow(
-                            color: rankColor.withOpacity(0.5),
-                            blurRadius: 15,
-                          ),
-                        ],
-                      ),
-                      child: Center(
-                        child: Text(
-                          rank['emoji'] as String,
-                          style: const TextStyle(fontSize: 26),
-                        ),
-                      ),
+                      decoration: BoxDecoration(shape: BoxShape.circle, border: Border.all(color: rankColor, width: 2), boxShadow: [BoxShadow(color: rankColor.withOpacity(0.5), blurRadius: 15)]),
+                      child: Center(child: Text(rank['emoji'] as String, style: const TextStyle(fontSize: 26))),
                     ),
                     const SizedBox(width: 14),
                     Expanded(
                       child: Column(
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
-                          Text(
-                            'CYBER RANK',
-                            style: TextStyle(
-                              color: rankColor,
-                              fontSize: 9,
-                              letterSpacing: 2,
-                              fontWeight: FontWeight.bold,
-                            ),
-                          ),
+                          Text('CYBER RANK', style: TextStyle(color: rankColor, fontSize: 9, letterSpacing: 2, fontWeight: FontWeight.bold)),
                           const SizedBox(height: 3),
-                          Text(
-                            rank['name'] as String,
-                            style: TextStyle(
-                              color: rankColor,
-                              fontSize: 18,
-                              fontWeight: FontWeight.w900,
-                              shadows: [
-                                Shadow(
-                                  color: rankColor.withOpacity(0.6),
-                                  blurRadius: 12,
-                                ),
-                              ],
-                            ),
-                          ),
+                          Text(rank['name'] as String, style: TextStyle(color: rankColor, fontSize: 18, fontWeight: FontWeight.w900, shadows: [Shadow(color: rankColor.withOpacity(0.6), blurRadius: 12)])),
                           if (nextRank != null)
-                            Text(
-                              '${(nextRank['min'] as int) - totalViews} views to ${nextRank['name']}',
-                              style: const TextStyle(
-                                color: Colors.white54,
-                                fontSize: 10,
-                              ),
-                            ),
+                            Text('${(nextRank['min'] as int) - totalViews} views to ${nextRank['name']}', style: const TextStyle(color: Colors.white54, fontSize: 10)),
                         ],
                       ),
                     ),
@@ -8651,56 +7403,22 @@ class _EarningsScreenState extends State<EarningsScreen>
               ),
             ),
             const SizedBox(height: 16),
-
             Container(
               width: double.infinity,
               padding: const EdgeInsets.all(22),
-              decoration: BoxDecoration(
-                color: const Color(0xFF031408),
-                borderRadius: BorderRadius.circular(16),
-                border: Border.all(color: kGreen, width: 1.5),
-                boxShadow: [
-                  BoxShadow(
-                    color: kGreen.withOpacity(0.15),
-                    blurRadius: 20,
-                  ),
-                ],
-              ),
+              decoration: BoxDecoration(color: const Color(0xFF031408), borderRadius: BorderRadius.circular(16), border: Border.all(color: kGreen, width: 1.5), boxShadow: [BoxShadow(color: kGreen.withOpacity(0.15), blurRadius: 20)]),
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  const Text(
-                    'TOTAL BALANCE',
-                    style: TextStyle(
-                      color: Colors.white54,
-                      fontSize: 11,
-                      letterSpacing: 1.5,
-                    ),
-                  ),
+                  const Text('TOTAL BALANCE', style: TextStyle(color: Colors.white54, fontSize: 11, letterSpacing: 1.5)),
                   const SizedBox(height: 8),
-                  Text(
-                    '\$${_totalIncome.toStringAsFixed(2)}',
-                    style: const TextStyle(
-                      color: kGreen,
-                      fontSize: 40,
-                      fontWeight: FontWeight.w900,
-                      shadows: [Shadow(color: kGreen, blurRadius: 20)],
-                    ),
-                  ),
+                  Text('\$${_totalIncome.toStringAsFixed(2)}', style: const TextStyle(color: kGreen, fontSize: 40, fontWeight: FontWeight.w900, shadows: [Shadow(color: kGreen, blurRadius: 20)])),
                   const SizedBox(height: 4),
-                  Text(
-                    '≈ ₹${(_totalIncome * 80).toStringAsFixed(0)} INR',
-                    style: TextStyle(
-                      color: Colors.white.withOpacity(0.5),
-                      fontSize: 12,
-                    ),
-                  ),
+                  Text('≈ ₹${(_totalIncome * 80).toStringAsFixed(0)} INR', style: TextStyle(color: Colors.white.withOpacity(0.5), fontSize: 12)),
                   const Divider(color: Colors.white24, height: 28),
                   Row(
                     children: [
-                      Expanded(
-                        child: _statChip('👁 Total Views', '$totalViews'),
-                      ),
+                      Expanded(child: _statChip('👁 Total Views', '$totalViews')),
                       const SizedBox(width: 8),
                       Expanded(child: _statChip('📅 Today', '$todayViews')),
                       const SizedBox(width: 8),
@@ -8711,171 +7429,75 @@ class _EarningsScreenState extends State<EarningsScreen>
               ),
             ),
             const SizedBox(height: 16),
-
             Container(
               padding: const EdgeInsets.all(16),
-              decoration: BoxDecoration(
-                color: const Color(0xFF031408),
-                borderRadius: BorderRadius.circular(14),
-                border: Border.all(
-                  color: Colors.orangeAccent.withOpacity(0.5),
-                ),
-              ),
+              decoration: BoxDecoration(color: const Color(0xFF031408), borderRadius: BorderRadius.circular(14), border: Border.all(color: Colors.orangeAccent.withOpacity(0.5))),
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
                   Row(
                     children: [
-                      const Icon(
-                        Icons.local_fire_department,
-                        color: Colors.orangeAccent,
-                        size: 20,
-                      ),
+                      const Icon(Icons.local_fire_department, color: Colors.orangeAccent, size: 20),
                       const SizedBox(width: 8),
-                      Text(
-                        'TIER $_currentTier',
-                        style: const TextStyle(
-                          color: Colors.orangeAccent,
-                          fontSize: 14,
-                          fontWeight: FontWeight.bold,
-                          letterSpacing: 1.5,
-                        ),
-                      ),
+                      Text('TIER $_currentTier', style: const TextStyle(color: Colors.orangeAccent, fontSize: 14, fontWeight: FontWeight.bold, letterSpacing: 1.5)),
                     ],
                   ),
                   const SizedBox(height: 12),
                   Row(
                     children: [
-                      Expanded(
-                        child: _tierStat(
-                          'Current Rate',
-                          '\$${_currentRate.toStringAsFixed(2)}/1K',
-                        ),
-                      ),
+                      Expanded(child: _tierStat('Current Rate', '\$${_currentRate.toStringAsFixed(2)}/1K')),
                       const SizedBox(width: 8),
-                      Expanded(
-                        child: _tierStat('Next Boost', '$_nextBoost views'),
-                      ),
+                      Expanded(child: _tierStat('Next Boost', '$_nextBoost views')),
                     ],
                   ),
                   const SizedBox(height: 12),
-                  // ✅ UPDATED EARNING RATE TEXT
-                  const Text(
-                    'Rates: 1K = \$1.50 · 2K = \$4.00 · 4K = \$8.00 · 6K = \$12.00 · 8K = \$16.00 · 10K = \$20.00\nAfter 10K: \$2.00 per 1K views',
-                    style: TextStyle(color: Colors.white54, fontSize: 10.5),
-                  ),
+                  const Text('Rates: 1K = \$1.50 · 2K = \$4.00 · 4K = \$8.00 · 6K = \$12.00 · 8K = \$16.00 · 10K = \$20.00\nAfter 10K: \$2.00 per 1K views', style: TextStyle(color: Colors.white54, fontSize: 10.5)),
                 ],
               ),
             ),
             const SizedBox(height: 20),
-
-            const Text(
-              'YOUR LINKS',
-              style: TextStyle(
-                color: kGreen,
-                fontSize: 13,
-                fontWeight: FontWeight.bold,
-                letterSpacing: 1.5,
-              ),
-            ),
+            const Text('YOUR LINKS', style: TextStyle(color: kGreen, fontSize: 13, fontWeight: FontWeight.bold, letterSpacing: 1.5)),
             const SizedBox(height: 10),
             _links.isEmpty
                 ? Container(
                     padding: const EdgeInsets.all(20),
-                    decoration: BoxDecoration(
-                      color: kCardBg,
-                      borderRadius: BorderRadius.circular(12),
-                      border: Border.all(color: kGreen.withOpacity(0.3)),
-                    ),
-                    child: const Center(
-                      child: Text(
-                        'No links yet. Bot me video upload karke start karein.',
-                        textAlign: TextAlign.center,
-                        style: TextStyle(color: Colors.white54, fontSize: 12),
-                      ),
-                    ),
+                    decoration: BoxDecoration(color: kCardBg, borderRadius: BorderRadius.circular(12), border: Border.all(color: kGreen.withOpacity(0.3))),
+                    child: const Center(child: Text('No links yet. Bot me video upload karke start karein.', textAlign: TextAlign.center, style: TextStyle(color: Colors.white54, fontSize: 12))),
                   )
                 : Column(
                     children: _links.map((link) {
                       final views = (link['views'] ?? 0) as int;
                       final earnings = MayaJaalAccount.calcEarnings(views);
-                      final name =
-                          (link['filename'] ?? link['originalUrl'] ?? 'link')
-                              .toString();
+                      final name = (link['filename'] ?? link['originalUrl'] ?? 'link').toString();
 
                       return Container(
                         margin: const EdgeInsets.only(bottom: 10),
                         padding: const EdgeInsets.all(12),
-                        decoration: BoxDecoration(
-                          color: kCardBg,
-                          borderRadius: BorderRadius.circular(12),
-                          border: Border.all(color: kGreen.withOpacity(0.3)),
-                        ),
+                        decoration: BoxDecoration(color: kCardBg, borderRadius: BorderRadius.circular(12), border: Border.all(color: kGreen.withOpacity(0.3))),
                         child: Row(
                           children: [
                             Container(
                               width: 38,
                               height: 38,
-                              decoration: BoxDecoration(
-                                color: Colors.black,
-                                borderRadius: BorderRadius.circular(10),
-                                border: Border.all(
-                                  color: kGreen.withOpacity(0.5),
-                                ),
-                              ),
-                              child: const Icon(
-                                Icons.play_circle_outline,
-                                color: kGreen,
-                                size: 20,
-                              ),
+                              decoration: BoxDecoration(color: Colors.black, borderRadius: BorderRadius.circular(10), border: Border.all(color: kGreen.withOpacity(0.5))),
+                              child: const Icon(Icons.play_circle_outline, color: kGreen, size: 20),
                             ),
                             const SizedBox(width: 10),
                             Expanded(
                               child: Column(
                                 crossAxisAlignment: CrossAxisAlignment.start,
                                 children: [
-                                  Text(
-                                    name,
-                                    style: const TextStyle(
-                                      color: Colors.white,
-                                      fontSize: 12,
-                                      fontWeight: FontWeight.bold,
-                                    ),
-                                    maxLines: 1,
-                                    overflow: TextOverflow.ellipsis,
-                                  ),
+                                  Text(name, style: const TextStyle(color: Colors.white, fontSize: 12, fontWeight: FontWeight.bold), maxLines: 1, overflow: TextOverflow.ellipsis),
                                   const SizedBox(height: 3),
                                   Row(
                                     children: [
-                                      const Icon(
-                                        Icons.visibility,
-                                        color: kGreen,
-                                        size: 11,
-                                      ),
+                                      const Icon(Icons.visibility, color: kGreen, size: 11),
                                       const SizedBox(width: 3),
-                                      Text(
-                                        '$views',
-                                        style: TextStyle(
-                                          color: kGreen.withOpacity(0.9),
-                                          fontSize: 10.5,
-                                          fontWeight: FontWeight.bold,
-                                        ),
-                                      ),
+                                      Text('$views', style: TextStyle(color: kGreen.withOpacity(0.9), fontSize: 10.5, fontWeight: FontWeight.bold)),
                                       const SizedBox(width: 10),
-                                      const Icon(
-                                        Icons.attach_money,
-                                        color: Colors.amberAccent,
-                                        size: 11,
-                                      ),
+                                      const Icon(Icons.attach_money, color: Colors.amberAccent, size: 11),
                                       const SizedBox(width: 2),
-                                      Text(
-                                        '\$${earnings.toStringAsFixed(2)}',
-                                        style: const TextStyle(
-                                          color: Colors.amberAccent,
-                                          fontSize: 10.5,
-                                          fontWeight: FontWeight.bold,
-                                        ),
-                                      ),
+                                      Text('\$${earnings.toStringAsFixed(2)}', style: const TextStyle(color: Colors.amberAccent, fontSize: 10.5, fontWeight: FontWeight.bold)),
                                     ],
                                   ),
                                 ],
@@ -8887,45 +7509,17 @@ class _EarningsScreenState extends State<EarningsScreen>
                     }).toList(),
                   ),
             const SizedBox(height: 20),
-
             Container(
               padding: const EdgeInsets.all(14),
-              decoration: BoxDecoration(
-                color: const Color(0xFF031408),
-                borderRadius: BorderRadius.circular(12),
-                border: Border.all(color: kGreen.withOpacity(0.3)),
-              ),
+              decoration: BoxDecoration(color: const Color(0xFF031408), borderRadius: BorderRadius.circular(12), border: Border.all(color: kGreen.withOpacity(0.3))),
               child: const Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  Row(
-                    children: [
-                      Icon(Icons.info_outline, color: kGreen, size: 16),
-                      SizedBox(width: 6),
-                      Text(
-                        'WITHDRAWAL INFO',
-                        style: TextStyle(
-                          color: kGreen,
-                          fontSize: 11,
-                          fontWeight: FontWeight.bold,
-                          letterSpacing: 1.2,
-                        ),
-                      ),
-                    ],
-                  ),
+                  Row(children: [Icon(Icons.info_outline, color: kGreen, size: 16), SizedBox(width: 6), Text('WITHDRAWAL INFO', style: TextStyle(color: kGreen, fontSize: 11, fontWeight: FontWeight.bold, letterSpacing: 1.2))]),
                   SizedBox(height: 8),
-                  Text(
-                    'Minimum: \$5 (≈₹400)',
-                    style: TextStyle(color: Colors.white70, fontSize: 11.5),
-                  ),
-                  Text(
-                    'Methods: Bank Transfer · UPI · Any Bank',
-                    style: TextStyle(color: Colors.white70, fontSize: 11.5),
-                  ),
-                  Text(
-                    'Processing: 24–48 hours',
-                    style: TextStyle(color: Colors.white70, fontSize: 11.5),
-                  ),
+                  Text('Minimum: \$5 (≈₹400)', style: TextStyle(color: Colors.white70, fontSize: 11.5)),
+                  Text('Methods: Bank Transfer · UPI · Any Bank', style: TextStyle(color: Colors.white70, fontSize: 11.5)),
+                  Text('Processing: 24–48 hours', style: TextStyle(color: Colors.white70, fontSize: 11.5)),
                 ],
               ),
             ),
@@ -8939,27 +7533,12 @@ class _EarningsScreenState extends State<EarningsScreen>
   Widget _statChip(String label, String value) {
     return Container(
       padding: const EdgeInsets.symmetric(vertical: 10, horizontal: 8),
-      decoration: BoxDecoration(
-        color: Colors.black.withOpacity(0.5),
-        borderRadius: BorderRadius.circular(8),
-        border: Border.all(color: kGreen.withOpacity(0.2)),
-      ),
+      decoration: BoxDecoration(color: Colors.black.withOpacity(0.5), borderRadius: BorderRadius.circular(8), border: Border.all(color: kGreen.withOpacity(0.2))),
       child: Column(
         children: [
-          Text(
-            label,
-            style: const TextStyle(color: Colors.white54, fontSize: 9.5),
-            textAlign: TextAlign.center,
-          ),
+          Text(label, style: const TextStyle(color: Colors.white54, fontSize: 9.5), textAlign: TextAlign.center),
           const SizedBox(height: 4),
-          Text(
-            value,
-            style: const TextStyle(
-              color: Colors.white,
-              fontSize: 15,
-              fontWeight: FontWeight.bold,
-            ),
-          ),
+          Text(value, style: const TextStyle(color: Colors.white, fontSize: 15, fontWeight: FontWeight.bold)),
         ],
       ),
     );
@@ -8968,26 +7547,12 @@ class _EarningsScreenState extends State<EarningsScreen>
   Widget _tierStat(String label, String value) {
     return Container(
       padding: const EdgeInsets.symmetric(vertical: 10, horizontal: 8),
-      decoration: BoxDecoration(
-        color: Colors.black.withOpacity(0.5),
-        borderRadius: BorderRadius.circular(8),
-        border: Border.all(color: Colors.orangeAccent.withOpacity(0.3)),
-      ),
+      decoration: BoxDecoration(color: Colors.black.withOpacity(0.5), borderRadius: BorderRadius.circular(8), border: Border.all(color: Colors.orangeAccent.withOpacity(0.3))),
       child: Column(
         children: [
-          Text(
-            label,
-            style: const TextStyle(color: Colors.white54, fontSize: 9.5),
-          ),
+          Text(label, style: const TextStyle(color: Colors.white54, fontSize: 9.5)),
           const SizedBox(height: 4),
-          Text(
-            value,
-            style: const TextStyle(
-              color: Colors.orangeAccent,
-              fontSize: 13,
-              fontWeight: FontWeight.bold,
-            ),
-          ),
+          Text(value, style: const TextStyle(color: Colors.orangeAccent, fontSize: 13, fontWeight: FontWeight.bold)),
         ],
       ),
     );
