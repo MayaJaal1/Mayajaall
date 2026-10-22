@@ -369,14 +369,12 @@ class MayaJaalAccount {
     }
   }
 
-  // ✅ UPDATED EARNING RATES
   static double calcEarnings(int views) {
     views = math.max(0, views);
     if (views <= 0) return 0;
     if (views <= 1000) return _r2(views * 0.0015);
     if (views <= 2000) return _r2(1.50 + (views - 1000) * 0.0025);
     
-    // 2000 se upar $2.00 per 1k views (i.e., 0.002 per view)
     return _r2(4.00 + (views - 2000) * 0.002);
   }
 
@@ -1184,7 +1182,7 @@ class _SplashScreenState extends State<SplashScreen>
 }
 
 // ═══════════════════════════════════════════════════════
-// MY APP
+// MY APP (FIXED - Initial deep link handled properly)
 // ═══════════════════════════════════════════════════════
 class MyApp extends StatefulWidget {
   const MyApp({super.key});
@@ -1193,15 +1191,21 @@ class MyApp extends StatefulWidget {
 }
 
 class _MyAppState extends State<MyApp> {
+  static _MyAppState? instance;
+  
   late AppLinks _appLinks;
   StreamSubscription<Uri>? _linkSub;
   Uri? _initialLink;
   bool _linkReady = false;
   String? _pendingVideoTargetUrl;
 
+  String? get pendingUrl => _pendingVideoTargetUrl;
+  void clearPending() => _pendingVideoTargetUrl = null;
+
   @override
   void initState() {
     super.initState();
+    instance = this;
     _initDeepLinks();
   }
 
@@ -1211,7 +1215,11 @@ class _MyAppState extends State<MyApp> {
       final initial = await _appLinks.getInitialLink();
       if (initial != null) {
         _initialLink = initial;
-        debugPrint('Initial deep link: $initial');
+        final url = _buildUrlFromLink(initial);
+        if (url.isNotEmpty) {
+          _pendingVideoTargetUrl = url;
+          debugPrint('📌 Initial deep link pending: $url');
+        }
       }
     } catch (e) {
       debugPrint('Initial link error: $e');
@@ -1225,55 +1233,56 @@ class _MyAppState extends State<MyApp> {
     }, onError: (e) => debugPrint('Link stream error: $e'));
   }
 
-  void _handleDeepLink(Uri uri) {
-    final navigator = navigatorKey.currentState;
-    if (navigator == null) return;
+  String _buildUrlFromLink(Uri uri) {
+    String videoId = '';
+    final token = uri.queryParameters['t'] ?? uri.queryParameters['s'] ?? '';
 
-    if (uri.path.startsWith('/v/') ||
-        uri.path.startsWith('/s/') ||
-        uri.host == 'watch' ||
-        uri.scheme == 'mayajaall') {
-      String videoId = '';
-      final token = uri.queryParameters['t'] ?? uri.queryParameters['s'] ?? '';
-
-      if (uri.path.startsWith('/v/') || uri.path.startsWith('/s/')) {
-        videoId = uri.pathSegments.isNotEmpty ? uri.pathSegments.last : '';
-      } else if (uri.queryParameters['v'] != null) {
-        videoId = uri.queryParameters['v']!;
-      }
-      if (videoId.isEmpty) return;
-
-      final targetUrl = token.isNotEmpty
-          ? 'https://www.mayajaal.online/v/$videoId?t=$token'
-          : 'https://www.mayajaal.online/v/$videoId';
-
-      if (!MayaJaalAccount.isLoggedIn) {
-        _pendingVideoTargetUrl = targetUrl;
-        navigator.push(MaterialPageRoute(
-          builder: (_) => LoginScreen(
-            onLoginSuccess: () {
-              final target = _pendingVideoTargetUrl;
-              _pendingVideoTargetUrl = null;
-              if (target == null) return;
-              navigatorKey.currentState?.push(MaterialPageRoute(
-                builder: (_) => StreamPreviewScreen(targetUrl: target),
-              ));
-            },
-          ),
-        ));
-        return;
-      }
-
-      // ✅ ALWAYS push to 10-second preview page. NEVER HOME.
-      navigator.push(MaterialPageRoute(
-        builder: (_) => StreamPreviewScreen(targetUrl: targetUrl),
-      ));
+    if (uri.path.startsWith('/v/') || uri.path.startsWith('/s/')) {
+      videoId = uri.pathSegments.isNotEmpty ? uri.pathSegments.last : '';
+    } else if (uri.queryParameters['v'] != null) {
+      videoId = uri.queryParameters['v']!;
     }
+
+    if (videoId.isEmpty) return '';
+
+    return token.isNotEmpty
+        ? 'https://www.mayajaal.online/v/$videoId?t=$token'
+        : 'https://www.mayajaal.online/v/$videoId';
+  }
+
+  void _handleDeepLink(Uri uri) {
+    final target = _buildUrlFromLink(uri);
+    if (target.isEmpty) return;
+
+    final user = FirebaseAuth.instance.currentUser;
+    if (user == null) {
+      _pendingVideoTargetUrl = target;
+      navigatorKey.currentState?.push(MaterialPageRoute(
+        builder: (_) => LoginScreen(
+          onLoginSuccess: () {
+            final pending = _pendingVideoTargetUrl;
+            _pendingVideoTargetUrl = null;
+            if (pending != null && pending.isNotEmpty) {
+              navigatorKey.currentState?.pushReplacement(
+                MaterialPageRoute(builder: (_) => StreamPreviewScreen(targetUrl: pending)),
+              );
+            }
+          },
+        ),
+      ));
+      return;
+    }
+
+    // ✅ Logged in → ALWAYS 10sec page
+    navigatorKey.currentState?.push(MaterialPageRoute(
+      builder: (_) => StreamPreviewScreen(targetUrl: target),
+    ));
   }
 
   @override
   void dispose() {
     _linkSub?.cancel();
+    if (instance == this) instance = null;
     super.dispose();
   }
 
@@ -1330,21 +1339,50 @@ class _MyAppState extends State<MyApp> {
 }
 
 // ═══════════════════════════════════════════════════════
-// AUTH GATE
+// AUTH GATE (FIXED - Checks pending link BEFORE Home)
 // ═══════════════════════════════════════════════════════
-class AuthGate extends StatelessWidget {
+class AuthGate extends StatefulWidget {
   const AuthGate({super.key});
+  @override
+  State<AuthGate> createState() => _AuthGateState();
+}
+
+class _AuthGateState extends State<AuthGate> {
+  bool _initialCheckDone = false;
+  String? _initialPendingUrl;
+  bool _initialHandled = false;
+
+  @override
+  void initState() {
+    super.initState();
+    _initialize();
+  }
+
+  Future<void> _initialize() async {
+    await Future.delayed(const Duration(milliseconds: 500));
+
+    _initialPendingUrl = _MyAppState.instance?.pendingUrl;
+    debugPrint('🔍 AuthGate initial pending URL: $_initialPendingUrl');
+
+    if (mounted) setState(() => _initialCheckDone = true);
+  }
 
   @override
   Widget build(BuildContext context) {
+    if (!_initialCheckDone) {
+      return const SplashScreen();
+    }
+
     return StreamBuilder<User?>(
       stream: FirebaseAuth.instance.authStateChanges(),
       builder: (context, snapshot) {
         if (snapshot.connectionState == ConnectionState.waiting) {
           return const SplashScreen();
         }
+
         if (snapshot.hasData && snapshot.data != null) {
           final user = snapshot.data!;
+
           WidgetsBinding.instance.addPostFrameCallback((_) async {
             MayaJaalAccount.cachedUid = user.uid;
             MayaJaalAccount.cachedEmail = user.email;
@@ -1353,8 +1391,24 @@ class AuthGate extends StatelessWidget {
             await MayaJaalAccount.syncUserToRTDB(user);
             await MayaJaalAccount.loadApiKey();
           });
+
+          // ✅ Pending URL exists → 10sec page (Home kabhi nahi!)
+          if (!_initialHandled &&
+              _initialPendingUrl != null &&
+              _initialPendingUrl!.isNotEmpty) {
+            _initialHandled = true;
+            final url = _initialPendingUrl!;
+            _initialPendingUrl = null;
+            _MyAppState.instance?.clearPending();
+            debugPrint('✅ AuthGate routing to 10sec page: $url');
+            return StreamPreviewScreen(targetUrl: url);
+          }
+
+          // ✅ No pending URL → Home page
           return const MainNavigationHolder();
         }
+
+        // Not logged in → Login screen
         return const LoginScreen();
       },
     );
