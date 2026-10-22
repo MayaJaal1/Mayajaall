@@ -2490,6 +2490,7 @@ class _HomeScreenState extends State<HomeScreen>
         child: SingleChildScrollView(
           child: Column(
             children: [
+              // Header (Updated to match login page MayaJaal branding)
               Padding(
                 padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
                 child: Row(
@@ -2501,43 +2502,53 @@ class _HomeScreenState extends State<HomeScreen>
                         widget.onMenuTap?.call();
                       },
                     ),
-                    Expanded(
-                      child: Row(
-                        children: [
-                          Container(
-                            width: 32,
-                            height: 32,
-                            decoration: BoxDecoration(
-                              borderRadius: BorderRadius.circular(8),
-                              border: Border.all(color: kGreen, width: 1.5),
-                            ),
-                            child: ClipRRect(
-                              borderRadius: BorderRadius.circular(6),
-                              child: Image.asset(
-                                'assets/icon/logo.png',
-                                fit: BoxFit.cover,
-                                errorBuilder: (c, e, s) => const Icon(
-                                  Icons.change_history,
-                                  color: kGreen,
-                                  size: 18,
-                                ),
-                              ),
-                            ),
-                          ),
-                          const SizedBox(width: 8),
-                          const Text(
-                            'MayaJaal',
-                            style: TextStyle(
-                              color: kGreen,
-                              fontSize: 22,
-                              fontWeight: FontWeight.w900,
-                              letterSpacing: 1,
-                              shadows: [Shadow(color: kGreen, blurRadius: 12)],
-                            ),
-                          ),
+                    Container(
+                      width: 40,
+                      height: 40,
+                      decoration: BoxDecoration(
+                        color: Colors.black,
+                        borderRadius: BorderRadius.circular(10),
+                        border: Border.all(color: kGreen, width: 2),
+                        boxShadow: [
+                          BoxShadow(color: kGreen.withOpacity(0.5), blurRadius: 15),
                         ],
                       ),
+                      child: ClipRRect(
+                        borderRadius: BorderRadius.circular(8),
+                        child: Image.asset(
+                          'assets/icon/logo.png',
+                          fit: BoxFit.cover,
+                          errorBuilder: (c, e, s) => const Icon(
+                            Icons.change_history,
+                            color: kGreen,
+                            size: 22,
+                          ),
+                        ),
+                      ),
                     ),
+                    const SizedBox(width: 10),
+                    const Text(
+                      'Maya',
+                      style: TextStyle(
+                        fontSize: 26,
+                        fontWeight: FontWeight.w900,
+                        color: Colors.white,
+                        fontFamily: 'sans-serif',
+                        letterSpacing: 0.5,
+                      ),
+                    ),
+                    const Text(
+                      'Jaal',
+                      style: TextStyle(
+                        fontSize: 26,
+                        fontWeight: FontWeight.w900,
+                        color: kGreen,
+                        fontFamily: 'sans-serif',
+                        letterSpacing: 0.5,
+                        shadows: [Shadow(color: kGreen, blurRadius: 12)],
+                      ),
+                    ),
+                    const Spacer(),
                     IconButton(
                       icon: const Icon(Icons.search, color: kGreen, size: 24),
                       onPressed: () {
@@ -4548,7 +4559,7 @@ class _GalleryScreenState extends State<GalleryScreen> {
 }
 
 // ═══════════════════════════════════════════════════════
-// SAVED VIDEOS SCREEN (Naya Option)
+// SAVED VIDEOS SCREEN
 // ═══════════════════════════════════════════════════════
 class SavedVideosScreen extends StatefulWidget {
   const SavedVideosScreen({super.key});
@@ -4645,7 +4656,7 @@ class _SavedVideosScreenState extends State<SavedVideosScreen> {
 }
 
 // ═══════════════════════════════════════════════════════
-// HISTORY SCREEN (With Thumbnail & Save Feature)
+// HISTORY SCREEN (With Save Feature & Thumbnail)
 // ═══════════════════════════════════════════════════════
 class HistoryScreen extends StatefulWidget {
   const HistoryScreen({super.key});
@@ -4970,7 +4981,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
 }
 
 // ═══════════════════════════════════════════════════════
-// STREAM PREVIEW SCREEN (10-Sec Page)
+// STREAM PREVIEW SCREEN (10-Sec Page - Strict Rules)
 // ═══════════════════════════════════════════════════════
 class StreamPreviewScreen extends StatefulWidget {
   final String targetUrl;
@@ -4979,33 +4990,22 @@ class StreamPreviewScreen extends StatefulWidget {
   State<StreamPreviewScreen> createState() => _StreamPreviewScreenState();
 }
 
-class _StreamPreviewScreenState extends State<StreamPreviewScreen>
-    with TickerProviderStateMixin {
+class _StreamPreviewScreenState extends State<StreamPreviewScreen> {
   bool _loading = true;
   String _streamUrl = '';
   String _videoTitle = 'MayaJaal Video';
   String _uploaderName = '@mayajaal';
   String _rawId = '';
   String _token = '';
-
-  VideoPlayerController? _previewController; // ✅ In-App Thumbnail Controller
-  bool _previewReady = false;
+  String _thumbnailUrl = ''; // Backend se aayega
 
   int _countdown = 10;
   Timer? _countdownTimer;
-  bool get _canProceed => _countdown <= 0;
-
-  late AnimationController _snakeCtrl;
-  late AnimationController _pulseController;
-  late Animation<double> _pulseAnimation;
+  bool _isNavigatingToPlayer = false;
 
   @override
   void initState() {
     super.initState();
-    _snakeCtrl = AnimationController(vsync: this, duration: const Duration(seconds: 2))..repeat();
-    _pulseController = AnimationController(vsync: this, duration: const Duration(milliseconds: 1400))..repeat(reverse: true);
-    _pulseAnimation = Tween<double>(begin: 0.96, end: 1.04).animate(CurvedAnimation(parent: _pulseController, curve: Curves.easeInOut));
-
     if (!MayaJaalAccount.isLoggedIn) {
       WidgetsBinding.instance.addPostFrameCallback((_) {
         ScaffoldMessenger.of(context).showSnackBar(
@@ -5019,36 +5019,10 @@ class _StreamPreviewScreenState extends State<StreamPreviewScreen>
     _fetchStreamMetadata();
   }
 
-  void _initThumbnail(String url) {
-    _previewController = VideoPlayerController.networkUrl(Uri.parse(url));
-    _previewController!.initialize().then((_) {
-      _previewController!.setLooping(true);
-      _previewController!.setVolume(0); // Mute the preview
-      _previewController!.play(); // Play in background as per user request
-      if (mounted) setState(() => _previewReady = true);
-    }).catchError((e) {
-      debugPrint("Thumbnail init error: $e");
-    });
-  }
-
-  void _warmupVideoStream() {
-    if (_streamUrl.isEmpty) return;
-    try {
-      final uri = Uri.parse(_streamUrl);
-      final client = HttpClient();
-      client.getUrl(uri).then((req) {
-        req.headers.set('Range', 'bytes=0-1048575');
-        return req.close();
-      }).then((resp) {
-        resp.listen((_) {}).cancel();
-      }).catchError((e) => debugPrint('Warmup: $e'));
-    } catch (e) {}
-  }
-
   void _startCountdown() {
     _countdownTimer?.cancel();
-    _countdown = 10;
-    _warmupVideoStream();
+    setState(() => _countdown = 10);
+    
     _countdownTimer = Timer.periodic(const Duration(seconds: 1), (timer) {
       if (!mounted) return;
       setState(() {
@@ -5056,8 +5030,9 @@ class _StreamPreviewScreenState extends State<StreamPreviewScreen>
           _countdown--;
           if (_countdown <= 3 && _countdown > 0) Haptic.light();
         } else {
-          Haptic.heavy();
           _countdownTimer?.cancel();
+          Haptic.heavy();
+          _launchNativePlayer(); // ✅ Auto play after 10 sec
         }
       });
     });
@@ -5066,9 +5041,6 @@ class _StreamPreviewScreenState extends State<StreamPreviewScreen>
   @override
   void dispose() {
     _countdownTimer?.cancel();
-    _snakeCtrl.dispose();
-    _pulseController.dispose();
-    _previewController?.dispose(); // Cleanup thumbnail controller
     super.dispose();
   }
 
@@ -5084,7 +5056,6 @@ class _StreamPreviewScreenState extends State<StreamPreviewScreen>
           _videoTitle = _rawId;
           _loading = false;
         });
-        _initThumbnail(_streamUrl);
         _startCountdown();
         return;
       }
@@ -5101,9 +5072,9 @@ class _StreamPreviewScreenState extends State<StreamPreviewScreen>
             _streamUrl = data['url'] ?? data['video_url'];
             _videoTitle = data['title'] ?? data['file_name'] ?? _rawId;
             _uploaderName = data['uploader'] ?? '@mayajaal';
+            _thumbnailUrl = data['thumbnail'] ?? data['poster'] ?? ''; // Fetch thumbnail
             _loading = false;
           });
-          _initThumbnail(_streamUrl);
           _startCountdown();
           return;
         }
@@ -5113,14 +5084,12 @@ class _StreamPreviewScreenState extends State<StreamPreviewScreen>
         _streamUrl = widget.targetUrl;
         _loading = false;
       });
-      _initThumbnail(_streamUrl);
       _startCountdown();
     } catch (e) {
       setState(() {
         _streamUrl = widget.targetUrl;
         _loading = false;
       });
-      _initThumbnail(_streamUrl);
       _startCountdown();
     }
   }
@@ -5146,6 +5115,7 @@ class _StreamPreviewScreenState extends State<StreamPreviewScreen>
       'title': _videoTitle,
       'uploader': _uploaderName,
       'id': _rawId,
+      'thumbnail': _thumbnailUrl, // Save thumbnail for history
       'time': DateTime.now().toIso8601String(),
     };
 
@@ -5157,11 +5127,11 @@ class _StreamPreviewScreenState extends State<StreamPreviewScreen>
   }
 
   void _launchNativePlayer() {
-    if (!_canProceed) return;
-    Haptic.heavy();
+    if (_isNavigatingToPlayer) return;
+    _isNavigatingToPlayer = true;
     _saveWatchRecord();
 
-    // ✅ STRICT NAVIGATION FIX: Push and wait for return to restart countdown
+    // ✅ Strict Navigation: Push and wait for return to restart countdown
     Navigator.of(context).push(
       MaterialPageRoute(
         builder: (_) => NativeVideoPlayerScreen(
@@ -5173,99 +5143,54 @@ class _StreamPreviewScreenState extends State<StreamPreviewScreen>
         ),
       ),
     ).then((_) {
-      // When user comes back from the player, restart the 10s countdown
+      _isNavigatingToPlayer = false;
       if (mounted) {
-        _startCountdown();
+        _startCountdown(); // ✅ Restarts 10s timer when user comes back
       }
     });
   }
 
   void _goToHome() {
     Haptic.heavy();
-    // Go back to the very first screen (MainNavigationHolder)
     Navigator.of(context).popUntil((route) => route.isFirst);
   }
 
   Widget _buildCountdownCircle() {
     final progress = 1.0 - (_countdown / 10.0);
     return SizedBox(
-      width: 130,
-      height: 130,
+      width: 100,
+      height: 100,
       child: Stack(
         alignment: Alignment.center,
         children: [
           SizedBox(
-            width: 130,
-            height: 130,
+            width: 100,
+            height: 100,
             child: CircularProgressIndicator(
               value: progress,
-              strokeWidth: 7,
+              strokeWidth: 6,
               backgroundColor: Colors.white12,
-              valueColor: AlwaysStoppedAnimation<Color>(_canProceed ? kGreen : Colors.orangeAccent),
+              valueColor: const AlwaysStoppedAnimation<Color>(Colors.orangeAccent),
             ),
           ),
           Column(
             mainAxisAlignment: MainAxisAlignment.center,
             children: [
-              Icon(
-                _canProceed ? Icons.check_circle_outline : Icons.timer,
-                color: _canProceed ? kGreen : Colors.orangeAccent,
-                size: 40,
-              ),
-              const SizedBox(height: 4),
+              const Icon(Icons.timer, color: Colors.orangeAccent, size: 30),
+              const SizedBox(height: 2),
               Text(
-                _canProceed ? 'READY' : '$_countdown',
-                style: TextStyle(
-                  color: _canProceed ? kGreen : Colors.orangeAccent,
-                  fontSize: _canProceed ? 18 : 36,
+                '$_countdown',
+                style: const TextStyle(
+                  color: Colors.orangeAccent,
+                  fontSize: 28,
                   fontWeight: FontWeight.w900,
-                  letterSpacing: 2,
-                  shadows: [Shadow(color: (_canProceed ? kGreen : Colors.orangeAccent).withOpacity(0.7), blurRadius: 15)],
+                  letterSpacing: 1,
+                  shadows: [Shadow(color: Colors.orangeAccent, blurRadius: 10)],
                 ),
               ),
             ],
           ),
         ],
-      ),
-    );
-  }
-
-  Widget _buildRedSnakePlayButton() {
-    return AnimatedBuilder(
-      animation: Listenable.merge([_snakeCtrl, _pulseAnimation]),
-      builder: (c, _) => Transform.scale(
-        scale: _pulseAnimation.value,
-        child: GestureDetector(
-          onTap: _launchNativePlayer,
-          child: Container(
-            width: double.infinity,
-            height: 64,
-            decoration: BoxDecoration(
-              color: Colors.black,
-              borderRadius: BorderRadius.circular(32),
-              boxShadow: [BoxShadow(color: kRed.withOpacity(0.5), blurRadius: 22, spreadRadius: 1)],
-            ),
-            child: Stack(
-              alignment: Alignment.center,
-              children: [
-                Positioned.fill(
-                  child: CustomPaint(painter: SnakeBorderPainter(progress: _snakeCtrl.value, color: kRed)),
-                ),
-                Row(
-                  mainAxisAlignment: MainAxisAlignment.center,
-                  children: const [
-                    Icon(Icons.play_arrow_rounded, color: kRed, size: 32),
-                    SizedBox(width: 8),
-                    Text(
-                      'PLAY NOW',
-                      style: TextStyle(color: kRed, fontSize: 15, fontWeight: FontWeight.w900, letterSpacing: 2.5, shadows: [Shadow(color: kRed, blurRadius: 14)]),
-                    ),
-                  ],
-                ),
-              ],
-            ),
-          ),
-        ),
       ),
     );
   }
@@ -5291,7 +5216,7 @@ class _StreamPreviewScreenState extends State<StreamPreviewScreen>
                         icon: const Icon(Icons.arrow_back_ios_new, color: kGreen, size: 22),
                         onPressed: () {
                           Haptic.light();
-                          Navigator.pop(context); // ✅ Goes back to History/Home
+                          Navigator.pop(context); // Goes back to History/Home
                         },
                       ),
                       Expanded(
@@ -5318,49 +5243,38 @@ class _StreamPreviewScreenState extends State<StreamPreviewScreen>
                   ),
                   const SizedBox(height: 12),
                   
-                  // ✅ Video Preview Box (Playing Live Video)
+                  // ✅ Video Preview Box (Thumbnail Only, No Auto-Play)
                   Container(
-                    padding: const EdgeInsets.all(4),
+                    padding: const EdgeInsets.all(2),
                     decoration: BoxDecoration(
                       color: const Color(0xFF011206),
-                      borderRadius: BorderRadius.circular(20),
-                      border: Border.all(color: _canProceed ? kGreen : Colors.orangeAccent.withOpacity(0.6), width: 1.8),
-                      boxShadow: [BoxShadow(color: (_canProceed ? kGreen : Colors.orangeAccent).withOpacity(0.25), blurRadius: 30)],
+                      borderRadius: BorderRadius.circular(16),
+                      border: Border.all(color: Colors.orangeAccent.withOpacity(0.6), width: 1.8),
+                      boxShadow: [BoxShadow(color: Colors.orangeAccent.withOpacity(0.2), blurRadius: 20)],
                     ),
                     child: ClipRRect(
-                      borderRadius: BorderRadius.circular(16),
+                      borderRadius: BorderRadius.circular(14),
                       child: AspectRatio(
                         aspectRatio: 16 / 9,
                         child: Stack(
                           fit: StackFit.expand,
                           alignment: Alignment.center,
                           children: [
-                            // Live Video Frame
-                            if (_previewReady && _previewController != null)
-                              FittedBox(
-                                fit: BoxFit.cover,
-                                child: SizedBox(
-                                  width: _previewController!.value.size.width,
-                                  height: _previewController!.value.size.height,
-                                  child: VideoPlayer(_previewController!),
+                            // ✅ Thumbnail / Placeholder (Full Image - No Zoom)
+                            if (_thumbnailUrl.isNotEmpty)
+                              Container(
+                                color: Colors.black,
+                                child: Image.network(
+                                  _thumbnailUrl,
+                                  fit: BoxFit.contain, // ✅ Full video dikhegi, zoom nahi hogi
+                                  errorBuilder: (c, e, s) => _buildPlaceholder(),
                                 ),
                               )
                             else
-                              Container(
-                                color: Colors.black,
-                                child: Center(
-                                  child: Image.asset(
-                                    'assets/icon/logo.png',
-                                    width: 75,
-                                    height: 75,
-                                    fit: BoxFit.cover,
-                                    errorBuilder: (c, e, s) => const Icon(Icons.movie_filter, color: kGreen, size: 55),
-                                  ),
-                                ),
-                              ),
+                              _buildPlaceholder(),
                               
-                            // Dark Overlay
-                            Container(color: Colors.black.withOpacity(0.4)),
+                            // Dark Overlay for Visibility
+                            Container(color: Colors.black.withOpacity(0.5)),
                             
                             // Countdown
                             _buildCountdownCircle(),
@@ -5380,44 +5294,9 @@ class _StreamPreviewScreenState extends State<StreamPreviewScreen>
                       ),
                     ),
                   ),
-                  const SizedBox(height: 14),
-                  
-                  // Play Button
-                  if (_canProceed)
-                    _buildRedSnakePlayButton()
-                  else
-                    Container(
-                      width: double.infinity,
-                      height: 64,
-                      decoration: BoxDecoration(color: Colors.grey[850], borderRadius: BorderRadius.circular(32)),
-                      child: Center(
-                        child: Text(
-                          'UNLOCK IN $_countdown SEC',
-                          style: const TextStyle(color: Colors.white54, fontSize: 14, fontWeight: FontWeight.w900, letterSpacing: 2),
-                        ),
-                      ),
-                    ),
-                  
-                  const SizedBox(height: 12),
-
-                  // ✅ Home Button (Below Play Button)
-                  SizedBox(
-                    width: double.infinity,
-                    height: 50,
-                    child: OutlinedButton.icon(
-                      onPressed: _goToHome,
-                      icon: const Icon(Icons.home, color: Colors.white54, size: 20),
-                      label: const Text('GO TO HOME PAGE', style: TextStyle(color: Colors.white54, fontSize: 12, fontWeight: FontWeight.bold, letterSpacing: 1.5)),
-                      style: OutlinedButton.styleFrom(
-                        side: BorderSide(color: Colors.white24, width: 1.5),
-                        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(25)),
-                      ),
-                    ),
-                  ),
-
                   const SizedBox(height: 16),
-                  
-                  // Info Box
+
+                  // ✅ Info Box
                   Container(
                     padding: const EdgeInsets.all(14),
                     decoration: BoxDecoration(
@@ -5475,8 +5354,8 @@ class _StreamPreviewScreenState extends State<StreamPreviewScreen>
                     ),
                   ),
                   const SizedBox(height: 16),
-                  
-                  // Share Button
+
+                  // ✅ Share Button
                   SizedBox(
                     width: double.infinity,
                     height: 52,
@@ -5493,12 +5372,44 @@ class _StreamPreviewScreenState extends State<StreamPreviewScreen>
                       ),
                     ),
                   ),
+                  
+                  const SizedBox(height: 16),
+
+                  // ✅ Home Button (If user wants to skip)
+                  SizedBox(
+                    width: double.infinity,
+                    height: 45,
+                    child: TextButton.icon(
+                      onPressed: _goToHome,
+                      icon: const Icon(Icons.home, color: Colors.white54, size: 18),
+                      label: const Text('GO TO HOME PAGE', style: TextStyle(color: Colors.white54, fontSize: 12, fontWeight: FontWeight.bold, letterSpacing: 1.5)),
+                      style: TextButton.styleFrom(
+                        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(25)),
+                      ),
+                    ),
+                  ),
+
                   const SizedBox(height: 20),
                 ],
               ),
             ),
           ),
         ],
+      ),
+    );
+  }
+
+  Widget _buildPlaceholder() {
+    return Container(
+      color: Colors.black,
+      child: Center(
+        child: Image.asset(
+          'assets/icon/logo.png',
+          width: 75,
+          height: 75,
+          fit: BoxFit.contain,
+          errorBuilder: (c, e, s) => const Icon(Icons.movie_filter, color: kGreen, size: 55),
+        ),
       ),
     );
   }
@@ -6283,7 +6194,7 @@ class _NativeVideoPlayerScreenState extends State<NativeVideoPlayerScreen> {
 
     return WillPopScope(
       onWillPop: () async {
-        Navigator.pop(context);
+        Navigator.pop(context); // ✅ Goes back to preview screen
         return false;
       },
       child: Scaffold(
@@ -6299,7 +6210,7 @@ class _NativeVideoPlayerScreenState extends State<NativeVideoPlayerScreen> {
                       icon: const Icon(Icons.arrow_back_ios_new, color: kGreen, size: 22),
                       onPressed: () {
                         Haptic.light();
-                        Navigator.pop(context); // ✅ Goes back to preview (10s page)
+                        Navigator.pop(context); // ✅ Goes back to preview screen
                       },
                     ),
                     Expanded(
@@ -6649,7 +6560,7 @@ class _NativeVideoPlayerScreenState extends State<NativeVideoPlayerScreen> {
         onTap: () {
           Haptic.medium();
           final url = '$kBackendBaseUrl/v/$id';
-          // ✅ PushReplacement so the back button goes to the original preview screen
+          // ✅ PushReplacement keeps the 10s page in the history stack
           Navigator.pushReplacement(
             context,
             MaterialPageRoute(
