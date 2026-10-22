@@ -137,7 +137,7 @@ class CyberRank {
 }
 
 // ═══════════════════════════════════════════════════════
-// AD TRACKER — 7 ads watched = 24h no ads
+// AD TRACKER
 // ═══════════════════════════════════════════════════════
 class AdTracker {
   static const String _kCountKey = 'ads_watched_count';
@@ -172,7 +172,7 @@ class AdTracker {
       final lastTime = prefs.getInt(_kLastTimeKey) ?? 0;
       if (lastTime == 0) return false;
       final diff = DateTime.now().millisecondsSinceEpoch - lastTime;
-      return diff < 24 * 60 * 60 * 1000; // 24 hours
+      return diff < 24 * 60 * 60 * 1000;
     } catch (_) {
       return false;
     }
@@ -296,28 +296,6 @@ class MayaJaalAccount {
       accessToken: googleAuth.accessToken,
     );
     return await FirebaseAuth.instance.signInWithCredential(credential);
-  }
-
-  static Future<UserCredential> signInWithEmail(String email, String password) async {
-    return await FirebaseAuth.instance.signInWithEmailAndPassword(
-      email: email.toLowerCase().trim(),
-      password: password.trim(),
-    );
-  }
-
-  static Future<UserCredential> signUpWithEmail(String email, String password, String name) async {
-    final cred = await FirebaseAuth.instance.createUserWithEmailAndPassword(
-      email: email.toLowerCase().trim(),
-      password: password.trim(),
-    );
-    if (cred.user != null && name.isNotEmpty) {
-      await cred.user!.updateDisplayName(name);
-    }
-    return cred;
-  }
-
-  static Future<void> sendPasswordReset(String email) async {
-    await FirebaseAuth.instance.sendPasswordResetEmail(email: email.toLowerCase().trim());
   }
 
   static Future<void> signOut() async {
@@ -701,12 +679,6 @@ class FirebaseService {
       debugPrint('getRelatedVideos error: $e');
       return [];
     }
-  }
-
-  static Future<void> deleteVideo(String videoId) async {
-    try {
-      await _rtdb.child('links/$videoId').remove();
-    } catch (_) {}
   }
 
   static Stream<Map<String, int>> getVideoStatsStream(String videoId) {
@@ -1190,7 +1162,7 @@ class _SplashScreenState extends State<SplashScreen>
                 ),
                 const SizedBox(height: 28),
                 Text(
-                  'MAYA JAAL LOADING...',
+                  'MAYAJAAL LOADING...',
                   style: TextStyle(
                     fontSize: 21,
                     fontWeight: FontWeight.bold,
@@ -1285,6 +1257,16 @@ class _MyAppState extends State<MyApp> {
           ? 'https://www.mayajaal.online/v/$videoId?t=$token'
           : 'https://www.mayajaal.online/v/$videoId';
 
+      if (!MayaJaalAccount.isLoggedIn) {
+        ScaffoldMessenger.of(navigator.context).showSnackBar(
+          const SnackBar(
+            backgroundColor: kCardBg,
+            content: Text('Please login to watch videos', style: TextStyle(color: kGreen)),
+          ),
+        );
+        return;
+      }
+
       navigator.push(MaterialPageRoute(
         builder: (_) => StreamPreviewScreen(targetUrl: targetUrl),
       ));
@@ -1332,10 +1314,7 @@ class _MyAppState extends State<MyApp> {
               themeMode: ThemeMode.dark,
               theme: _buildPureDarkTheme(),
               darkTheme: _buildPureDarkTheme(),
-              home: _initialLink != null
-                  ? StreamPreviewScreen(
-                      targetUrl: _buildUrlFromLink(_initialLink!))
-                  : const AuthGate(),
+              home: const AuthGate(),
             );
           },
         );
@@ -1366,7 +1345,7 @@ class _MyAppState extends State<MyApp> {
 }
 
 // ═══════════════════════════════════════════════════════
-// AUTH GATE — Now shows PermissionsScreen after login
+// AUTH GATE
 // ═══════════════════════════════════════════════════════
 class AuthGate extends StatelessWidget {
   const AuthGate({super.key});
@@ -1398,7 +1377,7 @@ class AuthGate extends StatelessWidget {
 }
 
 // ═══════════════════════════════════════════════════════
-// PERMISSIONS SCREEN (new — shows after login)
+// PERMISSIONS SCREEN
 // ═══════════════════════════════════════════════════════
 class PermissionsScreen extends StatefulWidget {
   const PermissionsScreen({super.key});
@@ -1536,7 +1515,7 @@ class _PermissionItem extends StatelessWidget {
 }
 
 // ═══════════════════════════════════════════════════════
-// LOGIN SCREEN
+// LOGIN SCREEN — Only Google Login + Tagline
 // ═══════════════════════════════════════════════════════
 class LoginScreen extends StatefulWidget {
   const LoginScreen({super.key});
@@ -1546,15 +1525,8 @@ class LoginScreen extends StatefulWidget {
 
 class _LoginScreenState extends State<LoginScreen>
     with SingleTickerProviderStateMixin {
-  bool _isLoginTab = true;
   bool _loading = false;
-  bool _obscurePassword = true;
   String _error = '';
-  String _successMsg = '';
-
-  final _emailCtrl = TextEditingController();
-  final _passCtrl = TextEditingController();
-  final _nameCtrl = TextEditingController();
 
   late AnimationController _magicController;
   late Animation<double> _glowAnimation;
@@ -1577,9 +1549,6 @@ class _LoginScreenState extends State<LoginScreen>
 
   @override
   void dispose() {
-    _emailCtrl.dispose();
-    _passCtrl.dispose();
-    _nameCtrl.dispose();
     _magicController.dispose();
     super.dispose();
   }
@@ -1591,61 +1560,6 @@ class _LoginScreenState extends State<LoginScreen>
     } catch (_) {}
     await _magicController.forward();
     await Future.delayed(const Duration(milliseconds: 400));
-  }
-
-  Future<void> _handleLogin() async {
-    final email = _emailCtrl.text.trim();
-    final pass = _passCtrl.text.trim();
-
-    if (email.isEmpty || pass.isEmpty) {
-      setState(() => _error = 'Email aur Password dono daalein');
-      return;
-    }
-
-    setState(() {
-      _loading = true;
-      _error = '';
-      _successMsg = '';
-    });
-
-    try {
-      await MayaJaalAccount.signInWithEmail(email, pass);
-      await _triggerMagic();
-    } on FirebaseAuthException catch (e) {
-      setState(() => _error = '❌ ${_fbError(e.code)}');
-    } catch (e) {
-      setState(() => _error = '❌ Login failed: $e');
-    } finally {
-      if (mounted) setState(() => _loading = false);
-    }
-  }
-
-  Future<void> _handleSignup() async {
-    final email = _emailCtrl.text.trim();
-    final pass = _passCtrl.text.trim();
-    final name = _nameCtrl.text.trim();
-
-    if (email.isEmpty || pass.length < 6) {
-      setState(() => _error = 'Email aur 6+ character ka password daalein');
-      return;
-    }
-
-    setState(() {
-      _loading = true;
-      _error = '';
-      _successMsg = '';
-    });
-
-    try {
-      await MayaJaalAccount.signUpWithEmail(email, pass, name);
-      await _triggerMagic();
-    } on FirebaseAuthException catch (e) {
-      setState(() => _error = '❌ ${_fbError(e.code)}');
-    } catch (e) {
-      setState(() => _error = '❌ Signup failed: $e');
-    } finally {
-      if (mounted) setState(() => _loading = false);
-    }
   }
 
   Future<void> _handleGoogle() async {
@@ -1669,32 +1583,8 @@ class _LoginScreenState extends State<LoginScreen>
     }
   }
 
-  Future<void> _handleForgot() async {
-    final email = _emailCtrl.text.trim();
-    if (email.isEmpty) {
-      setState(() => _error = 'Pehle email daalein, phir Forgot Password dabayein');
-      return;
-    }
-    try {
-      await MayaJaalAccount.sendPasswordReset(email);
-      setState(() => _successMsg = '✅ Password reset link sent to $email');
-    } catch (e) {
-      setState(() => _error = '❌ $e');
-    }
-  }
-
   String _fbError(String code) {
     switch (code) {
-      case 'user-not-found':
-        return 'Is email ka koi account nahi hai';
-      case 'wrong-password':
-        return 'Password galat hai';
-      case 'invalid-email':
-        return 'Email galat format me hai';
-      case 'email-already-in-use':
-        return 'Ye email already registered hai';
-      case 'weak-password':
-        return 'Password kam se kam 6 character ka ho';
       case 'invalid-credential':
         return 'Email ya password galat hai';
       case 'too-many-requests':
@@ -1722,7 +1612,7 @@ class _LoginScreenState extends State<LoginScreen>
                   builder: (context, child) => Transform.scale(
                     scale: _scaleAnimation.value,
                     child: Container(
-                      padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 24),
+                      padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 30),
                       decoration: BoxDecoration(
                         color: const Color(0xFF021206).withOpacity(0.9),
                         borderRadius: BorderRadius.circular(22),
@@ -1741,248 +1631,138 @@ class _LoginScreenState extends State<LoginScreen>
                   child: Column(
                     mainAxisSize: MainAxisSize.min,
                     children: [
-                      Container(
-                        width: 78,
-                        height: 78,
-                        padding: const EdgeInsets.all(4),
-                        decoration: BoxDecoration(
-                          color: Colors.black,
-                          borderRadius: BorderRadius.circular(22),
-                          border: Border.all(color: kGreen, width: 1.8),
-                          boxShadow: [
-                            BoxShadow(color: kGreen.withOpacity(0.5), blurRadius: 18),
-                          ],
-                        ),
-                        child: ClipRRect(
-                          borderRadius: BorderRadius.circular(18),
-                          child: Image.asset(
-                            'assets/icon/logo.png',
-                            fit: BoxFit.cover,
-                            errorBuilder: (c, e, s) => const Icon(
-                              Icons.change_history,
-                              size: 42,
-                              color: kGreen,
+                      // Logo & Brand Name
+                      Row(
+                        mainAxisAlignment: MainAxisAlignment.center,
+                        children: [
+                          Container(
+                            width: 60,
+                            height: 60,
+                            padding: const EdgeInsets.all(2),
+                            decoration: BoxDecoration(
+                              color: Colors.black,
+                              borderRadius: BorderRadius.circular(16),
+                              border: Border.all(color: kGreen, width: 1.8),
+                              boxShadow: [
+                                BoxShadow(color: kGreen.withOpacity(0.5), blurRadius: 18),
+                              ],
+                            ),
+                            child: ClipRRect(
+                              borderRadius: BorderRadius.circular(14),
+                              child: Image.asset(
+                                'assets/icon/logo.png',
+                                fit: BoxFit.cover,
+                                errorBuilder: (c, e, s) => const Icon(
+                                  Icons.change_history,
+                                  size: 32,
+                                  color: kGreen,
+                                ),
+                              ),
                             ),
                           ),
-                        ),
+                          const SizedBox(width: 12),
+                          const Text(
+                            'MayaJaal',
+                            style: TextStyle(
+                              fontSize: 32,
+                              fontWeight: FontWeight.w900,
+                              color: kGreen,
+                              fontFamily: 'monospace',
+                              letterSpacing: 1,
+                              shadows: [Shadow(color: kGreen, blurRadius: 16)],
+                            ),
+                          ),
+                        ],
                       ),
-                      const SizedBox(height: 16),
+                      const SizedBox(height: 30),
+
+                      // Tagline
                       const Text(
-                        'MAYA JAAL',
+                        'Your Videos.\nYour Links.\nYour Earnings.',
+                        textAlign: TextAlign.center,
                         style: TextStyle(
                           fontSize: 26,
                           fontWeight: FontWeight.w900,
-                          color: kGreen,
-                          fontFamily: 'monospace',
-                          letterSpacing: 5,
-                          shadows: [Shadow(color: kGreen, blurRadius: 16)],
+                          color: Colors.white,
+                          height: 1.2,
+                          letterSpacing: 1,
                         ),
                       ),
-                      const SizedBox(height: 6),
+                      const SizedBox(height: 10),
                       Text(
-                        '> Enter the real world behind\n   the digital veil _',
+                        "World's Smartest Video Sharing Platform",
                         textAlign: TextAlign.center,
                         style: TextStyle(
-                          fontSize: 11,
-                          color: kGreen.withOpacity(0.85),
-                          fontFamily: 'monospace',
-                          letterSpacing: 1.5,
-                          height: 1.3,
+                          fontSize: 12,
+                          color: kGreen.withOpacity(0.8),
+                          letterSpacing: 1,
                         ),
                       ),
-                      const SizedBox(height: 20),
-                      Container(
-                        height: 44,
-                        decoration: BoxDecoration(
-                          color: Colors.black,
-                          borderRadius: BorderRadius.circular(24),
-                          border: Border.all(color: kGreen.withOpacity(0.6)),
-                        ),
-                        child: Row(
-                          children: [
-                            Expanded(
-                              child: _tab('LOGIN', _isLoginTab, () {
-                                Haptic.selection();
-                                setState(() {
-                                  _isLoginTab = true;
-                                  _error = '';
-                                  _successMsg = '';
-                                });
-                              }),
-                            ),
-                            Expanded(
-                              child: _tab('SIGN UP', !_isLoginTab, () {
-                                Haptic.selection();
-                                setState(() {
-                                  _isLoginTab = false;
-                                  _error = '';
-                                  _successMsg = '';
-                                });
-                              }),
-                            ),
-                          ],
-                        ),
-                      ),
-                      const SizedBox(height: 16),
-                      Container(
-                        padding: const EdgeInsets.all(14),
-                        decoration: BoxDecoration(
-                          color: Colors.black.withOpacity(0.6),
-                          borderRadius: BorderRadius.circular(16),
-                          border: Border.all(color: kGreen.withOpacity(0.35)),
-                        ),
-                        child: Column(
-                          children: [
-                            if (!_isLoginTab) ...[
-                              _inputField(_nameCtrl, Icons.person_outline, 'Your Name', false),
-                              const SizedBox(height: 10),
-                            ],
-                            _inputField(_emailCtrl, Icons.email_outlined, 'Email', false),
-                            const SizedBox(height: 10),
-                            _inputField(_passCtrl, Icons.lock_outline, 'Password', true),
-                            const SizedBox(height: 16),
-                            SizedBox(
-                              width: double.infinity,
-                              height: 48,
-                              child: ElevatedButton(
-                                onPressed: _loading
-                                    ? null
-                                    : (_isLoginTab ? _handleLogin : _handleSignup),
-                                style: ElevatedButton.styleFrom(
-                                  backgroundColor: kGreen,
-                                  foregroundColor: Colors.black,
-                                  shape: RoundedRectangleBorder(
-                                    borderRadius: BorderRadius.circular(10),
-                                  ),
-                                  elevation: 8,
-                                ),
-                                child: _loading
-                                    ? const SizedBox(
-                                        width: 22,
-                                        height: 22,
-                                        child: CircularProgressIndicator(
-                                          color: Colors.black,
-                                          strokeWidth: 2.2,
-                                        ),
-                                      )
-                                    : Text(
-                                        _isLoginTab ? 'LOGIN' : 'CREATE ACCOUNT',
-                                        style: const TextStyle(
-                                          fontWeight: FontWeight.w900,
-                                          letterSpacing: 1.5,
-                                          fontSize: 12.5,
-                                        ),
-                                      ),
-                              ),
-                            ),
-                          ],
-                        ),
-                      ),
-                      const SizedBox(height: 16),
-                      Row(children: [
-                        Expanded(child: Divider(color: kGreen.withOpacity(0.3))),
-                        Padding(
-                          padding: const EdgeInsets.symmetric(horizontal: 10),
-                          child: Text(
-                            'OR',
-                            style: TextStyle(
-                              color: kGreen.withOpacity(0.7),
-                              fontSize: 11,
-                              fontWeight: FontWeight.bold,
-                            ),
-                          ),
-                        ),
-                        Expanded(child: Divider(color: kGreen.withOpacity(0.3))),
-                      ]),
-                      const SizedBox(height: 16),
+
+                      const SizedBox(height: 40),
+
+                      // Google Login Button
                       SizedBox(
                         width: double.infinity,
-                        height: 48,
+                        height: 54,
                         child: ElevatedButton(
                           onPressed: _loading ? null : _handleGoogle,
                           style: ElevatedButton.styleFrom(
                             backgroundColor: Colors.white,
                             foregroundColor: Colors.black87,
                             shape: RoundedRectangleBorder(
-                              borderRadius: BorderRadius.circular(24),
+                              borderRadius: BorderRadius.circular(27),
                             ),
+                            elevation: 8,
                           ),
-                          child: Row(
-                            mainAxisAlignment: MainAxisAlignment.center,
-                            children: [
-                              Image.network(
-                                'https://developers.google.com/identity/images/g-logo.png',
-                                height: 20,
-                                errorBuilder: (c, e, s) => const Icon(
-                                  Icons.g_mobiledata,
-                                  color: Colors.red,
-                                  size: 24,
+                          child: _loading
+                              ? const SizedBox(
+                                  width: 24,
+                                  height: 24,
+                                  child: CircularProgressIndicator(
+                                    color: Colors.black,
+                                    strokeWidth: 2.5,
+                                  ),
+                                )
+                              : Row(
+                                  mainAxisAlignment: MainAxisAlignment.center,
+                                  children: [
+                                    Image.network(
+                                      'https://developers.google.com/identity/images/g-logo.png',
+                                      height: 24,
+                                      errorBuilder: (c, e, s) => const Icon(
+                                        Icons.g_mobiledata,
+                                        color: Colors.red,
+                                        size: 28,
+                                      ),
+                                    ),
+                                    const SizedBox(width: 12),
+                                    const Text(
+                                      'Sign in with Google',
+                                      style: TextStyle(
+                                        fontSize: 16,
+                                        fontWeight: FontWeight.w800,
+                                      ),
+                                    ),
+                                  ],
                                 ),
-                              ),
-                              const SizedBox(width: 10),
-                              const Text(
-                                'Sign in with Google',
-                                style: TextStyle(
-                                  fontSize: 14,
-                                  fontWeight: FontWeight.w700,
-                                ),
-                              ),
-                            ],
-                          ),
                         ),
                       ),
-                      const SizedBox(height: 12),
-                      if (_isLoginTab)
-                        TextButton(
-                          onPressed: _handleForgot,
-                          child: Text(
-                            'Forgot Password?',
-                            style: TextStyle(
-                              color: kGreen.withOpacity(0.9),
-                              fontSize: 12.5,
-                              fontWeight: FontWeight.w600,
-                            ),
-                          ),
-                        ),
-                      if (_successMsg.isNotEmpty) ...[
-                        const SizedBox(height: 12),
-                        Container(
-                          padding: const EdgeInsets.symmetric(
-                            horizontal: 12,
-                            vertical: 8,
-                          ),
-                          decoration: BoxDecoration(
-                            color: Colors.green.withOpacity(0.2),
-                            border: Border.all(color: kGreen),
-                            borderRadius: BorderRadius.circular(8),
-                          ),
-                          child: Text(
-                            _successMsg,
-                            style: const TextStyle(
-                              color: kGreen,
-                              fontSize: 11.5,
-                            ),
-                            textAlign: TextAlign.center,
-                          ),
-                        ),
-                      ],
+
                       if (_error.isNotEmpty) ...[
-                        const SizedBox(height: 12),
+                        const SizedBox(height: 20),
                         Container(
-                          padding: const EdgeInsets.symmetric(
-                            horizontal: 12,
-                            vertical: 8,
-                          ),
+                          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
                           decoration: BoxDecoration(
                             color: Colors.red.withOpacity(0.15),
                             border: Border.all(color: Colors.redAccent),
-                            borderRadius: BorderRadius.circular(8),
+                            borderRadius: BorderRadius.circular(10),
                           ),
                           child: Text(
                             _error,
                             style: const TextStyle(
                               color: Colors.redAccent,
-                              fontSize: 11,
+                              fontSize: 12,
                             ),
                             textAlign: TextAlign.center,
                           ),
@@ -1998,82 +1778,10 @@ class _LoginScreenState extends State<LoginScreen>
       ),
     );
   }
-
-  Widget _tab(String label, bool active, VoidCallback onTap) {
-    return GestureDetector(
-      onTap: onTap,
-      child: Container(
-        decoration: BoxDecoration(
-          color: active ? const Color(0xFF01240B) : Colors.transparent,
-          borderRadius: BorderRadius.circular(24),
-          border: active ? Border.all(color: kGreen, width: 1.6) : null,
-        ),
-        alignment: Alignment.center,
-        child: Text(
-          label,
-          style: TextStyle(
-            color: active ? kGreen : Colors.white60,
-            fontWeight: FontWeight.bold,
-            letterSpacing: 1.5,
-            fontSize: 12.5,
-          ),
-        ),
-      ),
-    );
-  }
-
-  Widget _inputField(
-    TextEditingController ctrl,
-    IconData icon,
-    String hint,
-    bool isPassword,
-  ) {
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 4),
-      decoration: BoxDecoration(
-        color: const Color(0xFF031A0B),
-        borderRadius: BorderRadius.circular(12),
-        border: Border.all(color: kGreen.withOpacity(0.5)),
-      ),
-      child: TextField(
-        controller: ctrl,
-        obscureText: isPassword ? _obscurePassword : false,
-        style: const TextStyle(
-          color: Colors.white,
-          fontSize: 13,
-          fontFamily: 'monospace',
-        ),
-        decoration: InputDecoration(
-          icon: Icon(icon, color: kGreen, size: 20),
-          suffixIcon: isPassword
-              ? IconButton(
-                  icon: Icon(
-                    _obscurePassword
-                        ? Icons.visibility_off_outlined
-                        : Icons.visibility_outlined,
-                    color: kGreen,
-                    size: 19,
-                  ),
-                  onPressed: () {
-                    Haptic.light();
-                    setState(() => _obscurePassword = !_obscurePassword);
-                  },
-                )
-              : null,
-          hintText: hint,
-          hintStyle: TextStyle(
-            color: Colors.white.withOpacity(0.4),
-            fontSize: 12,
-          ),
-          border: InputBorder.none,
-        ),
-      ),
-    );
-  }
 }
 
 // ═══════════════════════════════════════════════════════
-// MAIN NAVIGATION HOLDER — 4 tabs (Home, Channel, Gallery, History)
+// MAIN NAVIGATION HOLDER
 // ═══════════════════════════════════════════════════════
 class MainNavigationHolder extends StatefulWidget {
   const MainNavigationHolder({super.key});
@@ -2241,7 +1949,7 @@ class _MainNavigationHolderState extends State<MainNavigationHolder> {
 }
 
 // ═══════════════════════════════════════════════════════
-// AD BANNER WIDGET — reusable, clickable to watch ad
+// AD BANNER WIDGET
 // ═══════════════════════════════════════════════════════
 class AdBanner extends StatelessWidget {
   final String slot;
@@ -2340,7 +2048,7 @@ class AdBanner extends StatelessWidget {
 }
 
 // ═══════════════════════════════════════════════════════
-// FIRST TIME ADS POPUP — 7 ads = 24h ad-free
+// FIRST TIME ADS POPUP
 // ═══════════════════════════════════════════════════════
 class FirstTimeAdsPopup {
   static Future<void> show(BuildContext context) async {
@@ -2417,7 +2125,6 @@ class FirstTimeAdsPopup {
                     ),
                   ),
                   const SizedBox(height: 16),
-                  // Progress
                   Row(
                     mainAxisAlignment: MainAxisAlignment.center,
                     children: List.generate(7, (i) {
@@ -2483,7 +2190,6 @@ class FirstTimeAdsPopup {
                 ],
               ),
             ),
-            // Close (X) button top-right
             Positioned(
               right: 6,
               top: 6,
@@ -2516,7 +2222,7 @@ class FirstTimeAdsPopup {
 }
 
 // ═══════════════════════════════════════════════════════
-// HOME SCREEN — Real notifications + Paste Button + Ads
+// HOME SCREEN
 // ═══════════════════════════════════════════════════════
 class HomeScreen extends StatefulWidget {
   final VoidCallback? onMenuTap;
@@ -2894,38 +2600,37 @@ class _HomeScreenState extends State<HomeScreen>
                       },
                     ),
                     Expanded(
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        mainAxisSize: MainAxisSize.min,
+                      child: Row(
                         children: [
-                          Row(children: [
-                            const Text(
-                              'maya',
-                              style: TextStyle(
-                                color: kGreen,
-                                fontSize: 22,
-                                fontWeight: FontWeight.w900,
-                                letterSpacing: 1,
-                                shadows: [Shadow(color: kGreen, blurRadius: 12)],
+                          Container(
+                            width: 32,
+                            height: 32,
+                            decoration: BoxDecoration(
+                              borderRadius: BorderRadius.circular(8),
+                              border: Border.all(color: kGreen, width: 1.5),
+                            ),
+                            child: ClipRRect(
+                              borderRadius: BorderRadius.circular(6),
+                              child: Image.asset(
+                                'assets/icon/logo.png',
+                                fit: BoxFit.cover,
+                                errorBuilder: (c, e, s) => const Icon(
+                                  Icons.change_history,
+                                  color: kGreen,
+                                  size: 18,
+                                ),
                               ),
                             ),
-                            Text(
-                              'Jaal',
-                              style: TextStyle(
-                                color: Colors.white.withOpacity(0.9),
-                                fontSize: 22,
-                                fontWeight: FontWeight.w400,
-                                letterSpacing: 1,
-                              ),
-                            ),
-                          ]),
-                          Text(
-                            'VIDEOS  |  LINKS  |  BEYOND',
+                          ),
+                          const SizedBox(width: 8),
+                          const Text(
+                            'MayaJaal',
                             style: TextStyle(
-                              color: kGreen.withOpacity(0.7),
-                              fontSize: 8,
-                              letterSpacing: 1.5,
-                              fontWeight: FontWeight.w600,
+                              color: kGreen,
+                              fontSize: 22,
+                              fontWeight: FontWeight.w900,
+                              letterSpacing: 1,
+                              shadows: [Shadow(color: kGreen, blurRadius: 12)],
                             ),
                           ),
                         ],
@@ -2992,7 +2697,7 @@ class _HomeScreenState extends State<HomeScreen>
                 ),
               ),
 
-              // ═══ AD SLOT 1 (TOP) ═══
+              // AD SLOT 1
               Padding(
                 padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 6),
                 child: AdBanner(slot: 'home-top'),
@@ -3285,7 +2990,7 @@ class _HomeScreenState extends State<HomeScreen>
                 ),
               ),
 
-              // ═══ AD SLOT 2 (MIDDLE) ═══
+              // AD SLOT 2
               Padding(
                 padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 6),
                 child: AdBanner(slot: 'home-middle'),
@@ -3328,7 +3033,7 @@ class _HomeScreenState extends State<HomeScreen>
                 ),
               ),
 
-              // ═══ AD SLOT 3 (BOTTOM) ═══
+              // AD SLOT 3
               Padding(
                 padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
                 child: AdBanner(slot: 'home-bottom'),
@@ -3355,7 +3060,7 @@ class _HomeScreenState extends State<HomeScreen>
 }
 
 // ═══════════════════════════════════════════════════════
-// MORE DRAWER — Withdrawal, Privacy, Terms (browser)
+// MORE DRAWER
 // ═══════════════════════════════════════════════════════
 class MoreDrawer extends StatefulWidget {
   const MoreDrawer({super.key});
@@ -3787,27 +3492,16 @@ class _MoreDrawerState extends State<MoreDrawer>
                       crossAxisAlignment: CrossAxisAlignment.start,
                       mainAxisSize: MainAxisSize.min,
                       children: [
-                        Row(children: const [
-                          Text(
-                            'maya',
-                            style: TextStyle(
-                              color: kGreen,
-                              fontSize: 18,
-                              fontWeight: FontWeight.w900,
-                              letterSpacing: 0.5,
-                              shadows: [Shadow(color: kGreen, blurRadius: 10)],
-                            ),
+                        const Text(
+                          'MayaJaal',
+                          style: TextStyle(
+                            color: kGreen,
+                            fontSize: 20,
+                            fontWeight: FontWeight.w900,
+                            letterSpacing: 1,
+                            shadows: [Shadow(color: kGreen, blurRadius: 10)],
                           ),
-                          Text(
-                            'Jaal',
-                            style: TextStyle(
-                              color: Colors.white,
-                              fontSize: 18,
-                              fontWeight: FontWeight.w400,
-                              letterSpacing: 0.5,
-                            ),
-                          ),
-                        ]),
+                        ),
                         Text(
                           'MORE OPTIONS',
                           style: TextStyle(
@@ -3898,23 +3592,6 @@ class _MoreDrawerState extends State<MoreDrawer>
                                       'MayaJaal Verified',
                                       style: TextStyle(
                                         color: kGreen.withOpacity(0.7),
-                                        fontSize: 9,
-                                      ),
-                                    ),
-                                    const SizedBox(width: 8),
-                                    Container(
-                                      width: 6,
-                                      height: 6,
-                                      decoration: const BoxDecoration(
-                                        color: kGreen,
-                                        shape: BoxShape.circle,
-                                      ),
-                                    ),
-                                    const SizedBox(width: 3),
-                                    Text(
-                                      'Connected',
-                                      style: TextStyle(
-                                        color: kGreen.withOpacity(0.9),
                                         fontSize: 9,
                                       ),
                                     ),
@@ -4083,7 +3760,7 @@ class _MoreDrawerState extends State<MoreDrawer>
                     ),
                   ),
 
-                  // INSTAGRAM
+                  // SOCIALS
                   _staggered(
                     index: 10,
                     child: _socialItem(
@@ -4101,7 +3778,6 @@ class _MoreDrawerState extends State<MoreDrawer>
                     ),
                   ),
 
-                  // YOUTUBE
                   _staggered(
                     index: 11,
                     child: _socialItem(
@@ -4119,7 +3795,6 @@ class _MoreDrawerState extends State<MoreDrawer>
                     ),
                   ),
 
-                  // TELEGRAM
                   _staggered(
                     index: 12,
                     child: _socialItem(
@@ -4181,7 +3856,7 @@ class _MoreDrawerState extends State<MoreDrawer>
                     ),
                   ),
 
-                  // PRIVACY — Opens browser
+                  // PRIVACY
                   _staggered(
                     index: 15,
                     child: _snakeItem(
@@ -4197,7 +3872,7 @@ class _MoreDrawerState extends State<MoreDrawer>
                     ),
                   ),
 
-                  // TERMS — Opens browser
+                  // TERMS
                   _staggered(
                     index: 16,
                     child: _snakeItem(
@@ -4373,7 +4048,7 @@ class _MoreDrawerState extends State<MoreDrawer>
 }
 
 // ═══════════════════════════════════════════════════════
-// LIVE PULSE CARD (Real-time earnings ticker)
+// LIVE PULSE CARD
 // ═══════════════════════════════════════════════════════
 class _LivePulseCard extends StatefulWidget {
   @override
@@ -4645,7 +4320,7 @@ class ChannelScreen extends StatelessWidget {
 }
 
 // ═══════════════════════════════════════════════════════
-// GALLERY SCREEN — Professional media gallery
+// GALLERY SCREEN
 // ═══════════════════════════════════════════════════════
 class GalleryScreen extends StatefulWidget {
   const GalleryScreen({super.key});
@@ -4659,7 +4334,7 @@ class _GalleryScreenState extends State<GalleryScreen> {
   List<AssetEntity> _images = [];
   bool _loading = true;
   bool _permissionDenied = false;
-  String _selectedTab = 'all'; // 'all', 'videos', 'images'
+  String _selectedTab = 'all';
 
   @override
   void initState() {
@@ -4928,7 +4603,6 @@ class _GalleryScreenState extends State<GalleryScreen> {
               ),
             ),
           ),
-          // Border overlay
           Positioned.fill(
             child: Container(
               decoration: BoxDecoration(
@@ -4937,7 +4611,6 @@ class _GalleryScreenState extends State<GalleryScreen> {
               ),
             ),
           ),
-          // Video indicator
           if (isVideo)
             Positioned(
               left: 4,
@@ -4966,7 +4639,6 @@ class _GalleryScreenState extends State<GalleryScreen> {
                 ),
               ),
             ),
-          // Video top icon
           if (isVideo)
             Positioned(
               right: 4,
@@ -5019,7 +4691,6 @@ class _GalleryScreenState extends State<GalleryScreen> {
                 ),
               ),
             ),
-            // Close button
             Positioned(
               top: 40,
               right: 20,
@@ -5039,7 +4710,6 @@ class _GalleryScreenState extends State<GalleryScreen> {
                 ),
               ),
             ),
-            // Info bottom
             Positioned(
               bottom: 40,
               left: 20,
@@ -5431,7 +5101,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
 }
 
 // ═══════════════════════════════════════════════════════
-// STREAM PREVIEW SCREEN — Thumbnail preview + Red snake play
+// STREAM PREVIEW SCREEN
 // ═══════════════════════════════════════════════════════
 class StreamPreviewScreen extends StatefulWidget {
   final String targetUrl;
@@ -5470,24 +5140,46 @@ class _StreamPreviewScreenState extends State<StreamPreviewScreen>
     )..repeat(reverse: true);
     _pulseAnimation = Tween<double>(begin: 0.96, end: 1.04)
         .animate(CurvedAnimation(parent: _pulseController, curve: Curves.easeInOut));
+
+    if (!MayaJaalAccount.isLoggedIn) {
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            backgroundColor: kCardBg,
+            content: Text(
+              'Please login to watch videos',
+              style: TextStyle(color: kGreen),
+            ),
+          ),
+        );
+        Navigator.pushReplacement(
+          context,
+          MaterialPageRoute(builder: (_) => const LoginScreen()),
+        );
+      });
+      return;
+    }
+
     _fetchStreamMetadata();
   }
+
   void _warmupVideoStream() {
-  if (_streamUrl.isEmpty) return;
-  try {
-    final uri = Uri.parse(_streamUrl);
-    final client = HttpClient();
-    client.getUrl(uri).then((req) {
-      req.headers.set('Range', 'bytes=0-1048575');
-      return req.close();
-    }).then((resp) {
-      resp.listen((_) {}).cancel();
-      debugPrint('⚡ Warmup: ${resp.statusCode}');
-    }).catchError((e) => debugPrint('Warmup: $e'));
-  } catch (e) {
-    debugPrint('Warmup error: $e');
+    if (_streamUrl.isEmpty) return;
+    try {
+      final uri = Uri.parse(_streamUrl);
+      final client = HttpClient();
+      client.getUrl(uri).then((req) {
+        req.headers.set('Range', 'bytes=0-1048575');
+        return req.close();
+      }).then((resp) {
+        resp.listen((_) {}).cancel();
+        debugPrint('⚡ Warmup: ${resp.statusCode}');
+      }).catchError((e) => debugPrint('Warmup: $e'));
+    } catch (e) {
+      debugPrint('Warmup error: $e');
+    }
   }
-}
+
   void _startCountdown() {
     _countdownTimer?.cancel();
     _countdown = 10;
@@ -5616,8 +5308,9 @@ class _StreamPreviewScreenState extends State<StreamPreviewScreen>
     if (!_canProceed) return;
     Haptic.heavy();
     _saveWatchRecord();
-    // pushReplacement ensures single back tap returns to source screen
-    Navigator.pushReplacement(
+    
+    // Using pushAndRemoveUntil so that back from Player goes directly to Home
+    Navigator.pushAndRemoveUntil(
       context,
       MaterialPageRoute(
         builder: (_) => NativeVideoPlayerScreen(
@@ -5628,6 +5321,7 @@ class _StreamPreviewScreenState extends State<StreamPreviewScreen>
           videoId: _rawId,
         ),
       ),
+      (route) => route.isFirst,
     );
   }
 
@@ -5693,7 +5387,6 @@ class _StreamPreviewScreenState extends State<StreamPreviewScreen>
     );
   }
 
-  // Red Snake Play Button
   Widget _buildRedSnakePlayButton() {
     return AnimatedBuilder(
       animation: Listenable.merge([_snakeCtrl, _pulseAnimation]),
@@ -5827,7 +5520,7 @@ class _StreamPreviewScreenState extends State<StreamPreviewScreen>
                   ),
                   const SizedBox(height: 12),
 
-                  // AD SLOT 1 (TOP)
+                  // AD SLOT 1
                   AdBanner(slot: 'preview-top'),
                   const SizedBox(height: 14),
 
@@ -5858,7 +5551,6 @@ class _StreamPreviewScreenState extends State<StreamPreviewScreen>
                         child: Stack(
                           alignment: Alignment.center,
                           children: [
-                            // Thumbnail placeholder (gradient + logo)
                             Container(
                               decoration: BoxDecoration(
                                 gradient: LinearGradient(
@@ -5885,11 +5577,8 @@ class _StreamPreviewScreenState extends State<StreamPreviewScreen>
                                 ),
                               ),
                             ),
-                            // Dark overlay
                             Container(color: Colors.black.withOpacity(0.35)),
-                            // Countdown circle
                             _buildCountdownCircle(),
-                            // HD badge
                             Positioned(
                               top: 8,
                               left: 8,
@@ -5918,6 +5607,31 @@ class _StreamPreviewScreenState extends State<StreamPreviewScreen>
                       ),
                     ),
                   ),
+                  const SizedBox(height: 14),
+
+                  // RED SNAKE PLAY BUTTON (Immediately below Video)
+                  if (_canProceed)
+                    _buildRedSnakePlayButton()
+                  else
+                    Container(
+                      width: double.infinity,
+                      height: 64,
+                      decoration: BoxDecoration(
+                        color: Colors.grey[850],
+                        borderRadius: BorderRadius.circular(32),
+                      ),
+                      child: Center(
+                        child: Text(
+                          'UNLOCK IN $_countdown SEC',
+                          style: const TextStyle(
+                            color: Colors.white54,
+                            fontSize: 14,
+                            fontWeight: FontWeight.w900,
+                            letterSpacing: 2,
+                          ),
+                        ),
+                      ),
+                    ),
                   const SizedBox(height: 16),
 
                   // VIDEO INFO
@@ -6029,31 +5743,6 @@ class _StreamPreviewScreenState extends State<StreamPreviewScreen>
                   ),
                   const SizedBox(height: 16),
 
-                  // RED SNAKE PLAY BUTTON (only after countdown)
-                  if (_canProceed)
-                    _buildRedSnakePlayButton()
-                  else
-                    Container(
-                      width: double.infinity,
-                      height: 64,
-                      decoration: BoxDecoration(
-                        color: Colors.grey[850],
-                        borderRadius: BorderRadius.circular(32),
-                      ),
-                      child: Center(
-                        child: Text(
-                          'UNLOCK IN $_countdown SEC',
-                          style: const TextStyle(
-                            color: Colors.white54,
-                            fontSize: 14,
-                            fontWeight: FontWeight.w900,
-                            letterSpacing: 2,
-                          ),
-                        ),
-                      ),
-                    ),
-                  const SizedBox(height: 14),
-
                   // SHARE BUTTON
                   SizedBox(
                     width: double.infinity,
@@ -6103,11 +5792,11 @@ class _StreamPreviewScreenState extends State<StreamPreviewScreen>
                   ),
                   const SizedBox(height: 14),
 
-                  // AD SLOT 2 (MIDDLE)
+                  // AD SLOT 2
                   AdBanner(slot: 'preview-middle'),
                   const SizedBox(height: 14),
 
-                  // AD SLOT 3 (BOTTOM)
+                  // AD SLOT 3
                   AdBanner(slot: 'preview-bottom'),
                   const SizedBox(height: 20),
                 ],
@@ -6305,71 +5994,68 @@ class _NativeVideoPlayerScreenState extends State<NativeVideoPlayerScreen> {
     } catch (_) {}
   }
 
-    Future<void> _initVideo() async {
-  final headers = {
-    'User-Agent':
-        'Mozilla/5.0 (Linux; Android 10) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Mobile Safari/537.36',
-    'Referer': 'https://www.mayajaal.online/',
-    'Accept': '*/*',
-    'Accept-Encoding': 'identity',
-    'Connection': 'keep-alive',
-  };
+  Future<void> _initVideo() async {
+    final headers = {
+      'User-Agent':
+          'Mozilla/5.0 (Linux; Android 10) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Mobile Safari/537.36',
+      'Referer': 'https://www.mayajaal.online/',
+      'Accept': '*/*',
+      'Accept-Encoding': 'identity',
+      'Connection': 'keep-alive',
+    };
 
-  // ⚡ FAST LOAD: Agar already direct R2 URL hai to API call skip karo
-  String realVideoUrl = widget.videoUrl;
-  final isDirectUrl = widget.videoUrl.contains('.r2.dev') ||
-                       widget.videoUrl.contains('cloudflarestorage') ||
-                       widget.videoUrl.contains('.mp4');
+    String realVideoUrl = widget.videoUrl;
+    final isDirectUrl = widget.videoUrl.contains('.r2.dev') ||
+                         widget.videoUrl.contains('cloudflarestorage') ||
+                         widget.videoUrl.contains('.mp4');
 
-  if (!isDirectUrl) {
-    try {
-      final uri = Uri.parse(widget.sourcePageUrl);
-      final token = uri.queryParameters['t'] ?? uri.queryParameters['s'] ?? '';
+    if (!isDirectUrl) {
+      try {
+        final uri = Uri.parse(widget.sourcePageUrl);
+        final token = uri.queryParameters['t'] ?? uri.queryParameters['s'] ?? '';
 
-      final apiResp = await http.get(
-        Uri.parse('$kBackendBaseUrl/api/stream-info/${widget.videoId}?t=$token'),
-        headers: {'User-Agent': 'MayaJaalApp/1.0'},
-      ).timeout(const Duration(seconds: 8));
+        final apiResp = await http.get(
+          Uri.parse('$kBackendBaseUrl/api/stream-info/${widget.videoId}?t=$token'),
+          headers: {'User-Agent': 'MayaJaalApp/1.0'},
+        ).timeout(const Duration(seconds: 8));
 
-      if (apiResp.statusCode == 200) {
-        final apiData = jsonDecode(apiResp.body);
-        if (apiData['success'] == true && apiData['url'] != null) {
-          realVideoUrl = apiData['url'];
-          debugPrint('✅ API R2 URL: $realVideoUrl');
+        if (apiResp.statusCode == 200) {
+          final apiData = jsonDecode(apiResp.body);
+          if (apiData['success'] == true && apiData['url'] != null) {
+            realVideoUrl = apiData['url'];
+            debugPrint('✅ API R2 URL: $realVideoUrl');
+          }
         }
+      } catch (e) {
+        debugPrint('⚠️ API fallback: $e');
       }
-    } catch (e) {
-      debugPrint('⚠️ API fallback: $e');
+    } else {
+      debugPrint('⚡ Direct R2 URL — skipping API call');
     }
-  } else {
-    debugPrint('⚡ Direct R2 URL — skipping API call');
+
+    _controller = VideoPlayerController.networkUrl(
+      Uri.parse(realVideoUrl),
+      httpHeaders: headers,
+      videoPlayerOptions: VideoPlayerOptions(mixWithOthers: true),
+    );
+
+    try {
+      await _controller.initialize();
+      _controller.play();
+      _controller.setPlaybackSpeed(_playbackSpeed);
+      _controller.setVolume(_volume);
+
+      _controller.addListener(() {
+        if (mounted) setState(() {});
+      });
+      setState(() => _isInitialized = true);
+      _resetControlTimer();
+      _startWatchTracking();
+    } catch (e) {
+      debugPrint("Player Init Error: $e");
+      setState(() => _hasError = true);
+    }
   }
-
-  // ✅ Player initialize karo (turant)
-  _controller = VideoPlayerController.networkUrl(
-    Uri.parse(realVideoUrl),
-    httpHeaders: headers,
-    videoPlayerOptions: VideoPlayerOptions(mixWithOthers: true),
-  );
-
-  try {
-    await _controller.initialize();
-    _controller.play();
-    _controller.setPlaybackSpeed(_playbackSpeed);
-    _controller.setVolume(_volume);
-
-    _controller.addListener(() {
-      if (mounted) setState(() {});
-    });
-    setState(() => _isInitialized = true);
-    _resetControlTimer();
-    _startWatchTracking();
-  } catch (e) {
-    debugPrint("Player Init Error: $e");
-    setState(() => _hasError = true);
-  }
-}
-
 
   @override
   void dispose() {
@@ -6381,6 +6067,7 @@ class _NativeVideoPlayerScreenState extends State<NativeVideoPlayerScreen> {
     _watchTimer?.cancel();
     _controller.dispose();
     SystemChrome.setPreferredOrientations([DeviceOrientation.portraitUp]);
+    SystemChrome.setEnabledSystemUIMode(SystemUiMode.edgeToEdge);
     super.dispose();
   }
 
@@ -6462,9 +6149,11 @@ class _NativeVideoPlayerScreenState extends State<NativeVideoPlayerScreen> {
   void _toggleSmartFullscreen() {
     Haptic.light();
     setState(() => _isFullscreen = !_isFullscreen);
-    final isWide = _controller.value.aspectRatio >= 1.2;
-
+    
     if (_isFullscreen) {
+      // IMMERSIVE FULLSCREEN - NO EMPTY SPACE
+      SystemChrome.setEnabledSystemUIMode(SystemUiMode.immersiveSticky);
+      final isWide = _controller.value.aspectRatio >= 1.2;
       if (isWide) {
         SystemChrome.setPreferredOrientations([
           DeviceOrientation.landscapeLeft,
@@ -6474,6 +6163,7 @@ class _NativeVideoPlayerScreenState extends State<NativeVideoPlayerScreen> {
         SystemChrome.setPreferredOrientations([DeviceOrientation.portraitUp]);
       }
     } else {
+      SystemChrome.setEnabledSystemUIMode(SystemUiMode.edgeToEdge);
       SystemChrome.setPreferredOrientations([DeviceOrientation.portraitUp]);
     }
   }
@@ -6859,7 +6549,6 @@ class _NativeVideoPlayerScreenState extends State<NativeVideoPlayerScreen> {
     _resetControlTimer();
   }
 
-  // Water-fill download button
   Widget _buildWaterFillDownloadButton() {
     return GestureDetector(
       onTap: _isDownloading ? null : _startInAppDownload,
@@ -6873,7 +6562,6 @@ class _NativeVideoPlayerScreenState extends State<NativeVideoPlayerScreen> {
         ),
         child: Stack(
           children: [
-            // Water fill
             if (_isDownloading)
               Positioned(
                 bottom: 0,
@@ -6890,7 +6578,6 @@ class _NativeVideoPlayerScreenState extends State<NativeVideoPlayerScreen> {
                   ),
                 ),
               ),
-            // Content
             Center(
               child: Row(
                 mainAxisAlignment: MainAxisAlignment.center,
@@ -6925,9 +6612,219 @@ class _NativeVideoPlayerScreenState extends State<NativeVideoPlayerScreen> {
 
   @override
   Widget build(BuildContext context) {
+    // FULLSCREEN MODE - NO SAFE AREA, NO TOP EMPTY SPACE
+    if (_isFullscreen) {
+      return Scaffold(
+        backgroundColor: Colors.black,
+        body: LayoutBuilder(
+          builder: (context, constraints) {
+            final w = constraints.maxWidth;
+            final h = constraints.maxHeight;
+            return GestureDetector(
+              onTap: _onScreenTapped,
+              onDoubleTapDown: (d) => _onDoubleTap(d, w),
+              onDoubleTap: () {},
+              onLongPressStart: (_) => _onLongPressStart(),
+              onLongPressEnd: (_) => _onLongPressEnd(),
+              onVerticalDragStart: (d) => _onVerticalDragStart(d, w),
+              onVerticalDragUpdate: (d) => _onVerticalDragUpdate(d, h),
+              onVerticalDragEnd: _onVerticalDragEnd,
+              behavior: HitTestBehavior.opaque,
+              child: Stack(
+                alignment: Alignment.center,
+                children: [
+                  _buildScaledVideo(),
+                  if (_brightness < 1.0)
+                    Positioned.fill(
+                      child: IgnorePointer(
+                        child: Container(
+                          color: Colors.black.withOpacity(1.0 - _brightness),
+                        ),
+                      ),
+                    ),
+                  if (_showControls) ...[
+                    Positioned(
+                      top: 20,
+                      left: 20,
+                      child: GestureDetector(
+                        onTap: _toggleSmartFullscreen,
+                        child: Container(
+                          padding: const EdgeInsets.all(8),
+                          decoration: BoxDecoration(
+                            color: Colors.black.withOpacity(0.6),
+                            shape: BoxShape.circle,
+                          ),
+                          child: const Icon(
+                            Icons.fullscreen_exit,
+                            color: Colors.white,
+                            size: 28,
+                          ),
+                        ),
+                      ),
+                    ),
+                    Row(
+                      mainAxisAlignment: MainAxisAlignment.center,
+                      children: [
+                        GestureDetector(
+                          onTap: () => _seekRelative(-10),
+                          child: Container(
+                            padding: const EdgeInsets.all(8),
+                            decoration: BoxDecoration(
+                              color: Colors.black.withOpacity(0.5),
+                              shape: BoxShape.circle,
+                            ),
+                            child: const Icon(
+                              Icons.replay_10,
+                              color: Colors.white,
+                              size: 30,
+                            ),
+                          ),
+                        ),
+                        const SizedBox(width: 30),
+                        GestureDetector(
+                          onTap: () {
+                            Haptic.light();
+                            setState(() {
+                              _controller.value.isPlaying
+                                  ? _controller.pause()
+                                  : _controller.play();
+                            });
+                            _resetControlTimer();
+                          },
+                          child: Container(
+                            width: 70,
+                            height: 70,
+                            decoration: BoxDecoration(
+                              color: Colors.black.withOpacity(0.6),
+                              shape: BoxShape.circle,
+                              border: Border.all(color: Colors.white, width: 2),
+                            ),
+                            child: Icon(
+                              _controller.value.isPlaying
+                                  ? Icons.pause
+                                  : Icons.play_arrow,
+                              color: Colors.white,
+                              size: 40,
+                            ),
+                          ),
+                        ),
+                        const SizedBox(width: 30),
+                        GestureDetector(
+                          onTap: () => _seekRelative(10),
+                          child: Container(
+                            padding: const EdgeInsets.all(8),
+                            decoration: BoxDecoration(
+                              color: Colors.black.withOpacity(0.5),
+                              shape: BoxShape.circle,
+                            ),
+                            child: const Icon(
+                              Icons.forward_10,
+                              color: Colors.white,
+                              size: 30,
+                            ),
+                          ),
+                        ),
+                      ],
+                    ),
+                    Positioned(
+                      bottom: 20,
+                      left: 20,
+                      right: 20,
+                      child: Row(
+                        children: [
+                          Text(
+                            _formatDuration(_controller.value.position),
+                            style: const TextStyle(
+                              color: Colors.white,
+                              fontSize: 12,
+                              fontFamily: 'monospace',
+                            ),
+                          ),
+                          const SizedBox(width: 8),
+                          Expanded(
+                            child: SliderTheme(
+                              data: SliderTheme.of(context).copyWith(
+                                trackHeight: 3,
+                                activeTrackColor: kGreen,
+                                inactiveTrackColor: Colors.white30,
+                                thumbColor: kGreen,
+                                thumbShape: const RoundSliderThumbShape(
+                                  enabledThumbRadius: 6,
+                                ),
+                              ),
+                              child: Slider(
+                                value: _controller.value.position.inSeconds
+                                    .toDouble()
+                                    .clamp(
+                                  0.0,
+                                  _controller.value.duration.inSeconds
+                                              .toDouble() <=
+                                          0
+                                      ? 1.0
+                                      : _controller.value.duration.inSeconds
+                                          .toDouble(),
+                                ),
+                                min: 0.0,
+                                max: _controller.value.duration.inSeconds
+                                            .toDouble() >
+                                        0
+                                    ? _controller.value.duration.inSeconds
+                                        .toDouble()
+                                    : 1.0,
+                                onChanged: (val) {
+                                  _controller.seekTo(
+                                    Duration(seconds: val.toInt()),
+                                  );
+                                },
+                              ),
+                            ),
+                          ),
+                          const SizedBox(width: 8),
+                          Text(
+                            _formatDuration(_controller.value.duration),
+                            style: const TextStyle(
+                              color: Colors.white,
+                              fontSize: 12,
+                              fontFamily: 'monospace',
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ],
+                  if (_flashFeedback.isNotEmpty)
+                    Center(
+                      child: Container(
+                        padding: const EdgeInsets.symmetric(
+                          horizontal: 16,
+                          vertical: 10,
+                        ),
+                        decoration: BoxDecoration(
+                          color: Colors.black.withOpacity(0.8),
+                          borderRadius: BorderRadius.circular(10),
+                          border: Border.all(color: kGreen, width: 1),
+                        ),
+                        child: Text(
+                          _flashFeedback,
+                          style: const TextStyle(
+                            color: kGreen,
+                            fontWeight: FontWeight.bold,
+                            fontSize: 18,
+                          ),
+                        ),
+                      ),
+                    ),
+                ],
+              ),
+            );
+          },
+        ),
+      );
+    }
+
+    // NORMAL PORTRAIT MODE
     return WillPopScope(
       onWillPop: () async {
-        // Single back press goes back to source screen (StreamPreview was replaced)
         Navigator.of(context).pop();
         return false;
       },
@@ -6936,99 +6833,94 @@ class _NativeVideoPlayerScreenState extends State<NativeVideoPlayerScreen> {
         body: SafeArea(
           child: Column(
             children: [
-              if (!_isFullscreen)
-                Padding(
-                  padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-                  child: Row(
-                    children: [
-                      IconButton(
-                        icon: const Icon(
-                          Icons.arrow_back_ios_new,
-                          color: kGreen,
-                          size: 22,
-                        ),
-                        onPressed: () {
-                          Haptic.light();
-                          Navigator.pop(context);
-                        },
+              Padding(
+                padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+                child: Row(
+                  children: [
+                    IconButton(
+                      icon: const Icon(
+                        Icons.arrow_back_ios_new,
+                        color: kGreen,
+                        size: 22,
                       ),
-                      Expanded(
-                        child: Column(
-                          mainAxisSize: MainAxisSize.min,
-                          children: [
-                            Row(
-                              mainAxisAlignment: MainAxisAlignment.center,
-                              children: [
-                                Container(
-                                  width: 22,
-                                  height: 22,
-                                  decoration: BoxDecoration(
-                                    shape: BoxShape.circle,
-                                    border: Border.all(color: kGreen, width: 1.5),
-                                  ),
-                                  child: const Center(
-                                    child: Icon(
-                                      Icons.change_history,
-                                      color: kGreen,
-                                      size: 14,
-                                    ),
-                                  ),
+                      onPressed: () {
+                        Haptic.light();
+                        Navigator.pop(context);
+                      },
+                    ),
+                    Expanded(
+                      child: Column(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          Row(
+                            mainAxisAlignment: MainAxisAlignment.center,
+                            children: [
+                              Container(
+                                width: 22,
+                                height: 22,
+                                decoration: BoxDecoration(
+                                  shape: BoxShape.circle,
+                                  border: Border.all(color: kGreen, width: 1.5),
                                 ),
-                                const SizedBox(width: 8),
-                                const Text(
-                                  'MAYA JAAL',
-                                  style: TextStyle(
+                                child: const Center(
+                                  child: Icon(
+                                    Icons.change_history,
                                     color: kGreen,
-                                    fontSize: 19,
-                                    fontWeight: FontWeight.w900,
-                                    letterSpacing: 2,
-                                    shadows: [
-                                      Shadow(color: kGreen, blurRadius: 10),
-                                    ],
+                                    size: 14,
                                   ),
                                 ),
-                              ],
-                            ),
-                            Text(
-                              '— STREAM BEYOND LIMITS —',
-                              style: TextStyle(
-                                color: kGreen.withOpacity(0.8),
-                                fontSize: 8.5,
-                                letterSpacing: 2,
-                                fontWeight: FontWeight.bold,
                               ),
+                              const SizedBox(width: 8),
+                              const Text(
+                                'MayaJaal',
+                                style: TextStyle(
+                                  color: kGreen,
+                                  fontSize: 19,
+                                  fontWeight: FontWeight.w900,
+                                  letterSpacing: 1,
+                                  shadows: [
+                                    Shadow(color: kGreen, blurRadius: 10),
+                                  ],
+                                ),
+                              ),
+                            ],
+                          ),
+                          Text(
+                            '— STREAM BEYOND LIMITS —',
+                            style: TextStyle(
+                              color: kGreen.withOpacity(0.8),
+                              fontSize: 8.5,
+                              letterSpacing: 2,
+                              fontWeight: FontWeight.bold,
                             ),
-                          ],
-                        ),
+                          ),
+                        ],
                       ),
-                      IconButton(
-                        icon: const Icon(Icons.share, color: kGreen, size: 22),
-                        onPressed: _shareVideoLink,
-                      ),
-                    ],
-                  ),
+                    ),
+                    IconButton(
+                      icon: const Icon(Icons.share, color: kGreen, size: 22),
+                      onPressed: _shareVideoLink,
+                    ),
+                  ],
                 ),
+              ),
               Expanded(
-                flex: _isFullscreen ? 1 : 0,
+                flex: 0,
                 child: Padding(
-                  padding: EdgeInsets.symmetric(
-                    horizontal: _isFullscreen ? 0 : 12,
-                    vertical: 4,
-                  ),
+                  padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
                   child: Container(
                     width: double.infinity,
-                    height: _isFullscreen ? double.infinity : 230,
+                    height: 230,
                     decoration: BoxDecoration(
                       color: Colors.black,
-                      borderRadius: BorderRadius.circular(_isFullscreen ? 0 : 16),
+                      borderRadius: BorderRadius.circular(16),
                       border: Border.all(
                         color: kGreen.withOpacity(0.55),
                         width: 1.5,
                       ),
                     ),
                     child: ClipRRect(
-                      borderRadius:
-                          BorderRadius.circular(_isFullscreen ? 0 : 15),
+                      borderRadius: BorderRadius.circular(15),
                       child: _hasError
                           ? Center(
                               child: Column(
@@ -7080,7 +6972,6 @@ class _NativeVideoPlayerScreenState extends State<NativeVideoPlayerScreen> {
                                         alignment: Alignment.center,
                                         children: [
                                           _buildScaledVideo(),
-                                          // Brightness overlay
                                           if (_brightness < 1.0)
                                             Positioned.fill(
                                               child: IgnorePointer(
@@ -7091,7 +6982,6 @@ class _NativeVideoPlayerScreenState extends State<NativeVideoPlayerScreen> {
                                                 ),
                                               ),
                                             ),
-                                          // Quality Badge
                                           Positioned(
                                             top: 10,
                                             left: 10,
@@ -7139,7 +7029,6 @@ class _NativeVideoPlayerScreenState extends State<NativeVideoPlayerScreen> {
                                               ),
                                             ),
                                           ),
-                                          // Speed Badge
                                           Positioned(
                                             top: 10,
                                             right: 10,
@@ -7172,13 +7061,11 @@ class _NativeVideoPlayerScreenState extends State<NativeVideoPlayerScreen> {
                                               ),
                                             ),
                                           ),
-                                          // CENTER CONTROLS (only on tap)
                                           if (_showControls && !_isLongPressBoost)
                                             Row(
                                               mainAxisAlignment:
                                                   MainAxisAlignment.center,
                                               children: [
-                                                // Back 10s
                                                 GestureDetector(
                                                   onTap: () =>
                                                       _seekRelative(-10),
@@ -7198,7 +7085,6 @@ class _NativeVideoPlayerScreenState extends State<NativeVideoPlayerScreen> {
                                                   ),
                                                 ),
                                                 const SizedBox(width: 20),
-                                                // Play/Pause
                                                 GestureDetector(
                                                   onTap: () {
                                                     Haptic.light();
@@ -7233,7 +7119,6 @@ class _NativeVideoPlayerScreenState extends State<NativeVideoPlayerScreen> {
                                                   ),
                                                 ),
                                                 const SizedBox(width: 20),
-                                                // Forward 10s
                                                 GestureDetector(
                                                   onTap: () =>
                                                       _seekRelative(10),
@@ -7254,7 +7139,6 @@ class _NativeVideoPlayerScreenState extends State<NativeVideoPlayerScreen> {
                                                 ),
                                               ],
                                             ),
-                                          // Feedback
                                           if (_flashFeedback.isNotEmpty)
                                             Center(
                                               child: Container(
@@ -7283,7 +7167,6 @@ class _NativeVideoPlayerScreenState extends State<NativeVideoPlayerScreen> {
                                                 ),
                                               ),
                                             ),
-                                          // BOTTOM PROGRESS (only on tap)
                                           if (_showControls)
                                             Positioned(
                                               bottom: 6,
@@ -7395,323 +7278,319 @@ class _NativeVideoPlayerScreenState extends State<NativeVideoPlayerScreen> {
                   ),
                 ),
               ),
-              if (!_isFullscreen)
-                Expanded(
-                  child: SingleChildScrollView(
-                    padding:
-                        const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
-                    child: Column(
-                      children: [
-                        // Video Info Card
-                        Container(
-                          padding: const EdgeInsets.all(12),
-                          decoration: BoxDecoration(
-                            color: const Color(0xFF031408),
-                            borderRadius: BorderRadius.circular(16),
-                            border:
-                                Border.all(color: kGreen.withOpacity(0.55)),
-                          ),
-                          child: Column(
-                            crossAxisAlignment: CrossAxisAlignment.start,
-                            children: [
-                              Row(
-                                children: [
-                                  const Icon(
-                                    Icons.play_circle_fill,
-                                    color: kGreen,
-                                    size: 26,
-                                  ),
-                                  const SizedBox(width: 8),
-                                  Expanded(
-                                    child: Text(
-                                      widget.title,
-                                      style: const TextStyle(
-                                        color: Colors.white,
-                                        fontSize: 14,
-                                        fontWeight: FontWeight.bold,
-                                      ),
-                                      maxLines: 1,
-                                      overflow: TextOverflow.ellipsis,
-                                    ),
-                                  ),
-                                  Container(
-                                    padding: const EdgeInsets.symmetric(
-                                      horizontal: 7,
-                                      vertical: 3,
-                                    ),
-                                    decoration: BoxDecoration(
-                                      borderRadius: BorderRadius.circular(6),
-                                      border: Border.all(color: kGreen),
-                                    ),
-                                    child: const Text(
-                                      'HD',
-                                      style: TextStyle(
-                                        color: kGreen,
-                                        fontSize: 10,
-                                        fontWeight: FontWeight.bold,
-                                      ),
-                                    ),
-                                  ),
-                                ],
-                              ),
-                              const SizedBox(height: 8),
-                              Row(
-                                children: [
-                                  const Icon(
-                                    Icons.account_circle,
-                                    color: kGreen,
-                                    size: 14,
-                                  ),
-                                  const SizedBox(width: 4),
-                                  Text(
-                                    'Uploaded by: ${widget.uploader}',
+              Expanded(
+                child: SingleChildScrollView(
+                  padding:
+                      const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+                  child: Column(
+                    children: [
+                      Container(
+                        padding: const EdgeInsets.all(12),
+                        decoration: BoxDecoration(
+                          color: const Color(0xFF031408),
+                          borderRadius: BorderRadius.circular(16),
+                          border:
+                              Border.all(color: kGreen.withOpacity(0.55)),
+                        ),
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Row(
+                              children: [
+                                const Icon(
+                                  Icons.play_circle_fill,
+                                  color: kGreen,
+                                  size: 26,
+                                ),
+                                const SizedBox(width: 8),
+                                Expanded(
+                                  child: Text(
+                                    widget.title,
                                     style: const TextStyle(
+                                      color: Colors.white,
+                                      fontSize: 14,
+                                      fontWeight: FontWeight.bold,
+                                    ),
+                                    maxLines: 1,
+                                    overflow: TextOverflow.ellipsis,
+                                  ),
+                                ),
+                                Container(
+                                  padding: const EdgeInsets.symmetric(
+                                    horizontal: 7,
+                                    vertical: 3,
+                                  ),
+                                  decoration: BoxDecoration(
+                                    borderRadius: BorderRadius.circular(6),
+                                    border: Border.all(color: kGreen),
+                                  ),
+                                  child: const Text(
+                                    'HD',
+                                    style: TextStyle(
                                       color: kGreen,
                                       fontSize: 10,
+                                      fontWeight: FontWeight.bold,
                                     ),
                                   ),
-                                  const SizedBox(width: 8),
-                                  Text(
-                                    '|   👁 ${_stats['views']} views',
-                                    style: TextStyle(
-                                      color: Colors.white.withOpacity(0.6),
-                                      fontSize: 10,
-                                    ),
+                                ),
+                              ],
+                            ),
+                            const SizedBox(height: 8),
+                            Row(
+                              children: [
+                                const Icon(
+                                  Icons.account_circle,
+                                  color: kGreen,
+                                  size: 14,
+                                ),
+                                const SizedBox(width: 4),
+                                Text(
+                                  'Uploaded by: ${widget.uploader}',
+                                  style: const TextStyle(
+                                    color: kGreen,
+                                    fontSize: 10,
                                   ),
-                                ],
-                              ),
-                              const SizedBox(height: 12),
-                              Row(
-                                children: [
-                                  Expanded(
-                                    child: InkWell(
-                                      onTap: _handleLike,
-                                      child: Container(
-                                        padding: const EdgeInsets.symmetric(
-                                          vertical: 8,
+                                ),
+                                const SizedBox(width: 8),
+                                Text(
+                                  '|   👁 ${_stats['views']} views',
+                                  style: TextStyle(
+                                    color: Colors.white.withOpacity(0.6),
+                                    fontSize: 10,
+                                  ),
+                                ),
+                              ],
+                            ),
+                            const SizedBox(height: 12),
+                            Row(
+                              children: [
+                                Expanded(
+                                  child: InkWell(
+                                    onTap: _handleLike,
+                                    child: Container(
+                                      padding: const EdgeInsets.symmetric(
+                                        vertical: 8,
+                                      ),
+                                      decoration: BoxDecoration(
+                                        color: Colors.black,
+                                        borderRadius:
+                                            BorderRadius.circular(8),
+                                        border: Border.all(
+                                          color: _isLiked
+                                              ? kGreen
+                                              : kGreen.withOpacity(0.4),
                                         ),
-                                        decoration: BoxDecoration(
-                                          color: Colors.black,
-                                          borderRadius:
-                                              BorderRadius.circular(8),
-                                          border: Border.all(
-                                            color: _isLiked
-                                                ? kGreen
-                                                : kGreen.withOpacity(0.4),
-                                          ),
-                                        ),
-                                        child: Column(
-                                          children: [
-                                            Row(
-                                              mainAxisAlignment:
-                                                  MainAxisAlignment.center,
-                                              children: [
-                                                Icon(
-                                                  _isLiked
-                                                      ? Icons.thumb_up
-                                                      : Icons
-                                                          .thumb_up_alt_outlined,
-                                                  color: kGreen,
-                                                  size: 14,
-                                                ),
-                                                const SizedBox(width: 4),
-                                                Text(
-                                                  '${_stats['likes']}',
-                                                  style: const TextStyle(
-                                                    color: Colors.white,
-                                                    fontSize: 11,
-                                                    fontWeight: FontWeight.bold,
-                                                  ),
-                                                ),
-                                              ],
-                                            ),
-                                            const Text(
-                                              'Like',
-                                              style: TextStyle(
-                                                color: Colors.white54,
-                                                fontSize: 9,
+                                      ),
+                                      child: Column(
+                                        children: [
+                                          Row(
+                                            mainAxisAlignment:
+                                                MainAxisAlignment.center,
+                                            children: [
+                                              Icon(
+                                                _isLiked
+                                                    ? Icons.thumb_up
+                                                    : Icons
+                                                        .thumb_up_alt_outlined,
+                                                color: kGreen,
+                                                size: 14,
                                               ),
+                                              const SizedBox(width: 4),
+                                              Text(
+                                                '${_stats['likes']}',
+                                                style: const TextStyle(
+                                                  color: Colors.white,
+                                                  fontSize: 11,
+                                                  fontWeight: FontWeight.bold,
+                                                ),
+                                              ),
+                                            ],
+                                          ),
+                                          const Text(
+                                            'Like',
+                                            style: TextStyle(
+                                              color: Colors.white54,
+                                              fontSize: 9,
                                             ),
-                                          ],
-                                        ),
+                                          ),
+                                        ],
                                       ),
                                     ),
                                   ),
-                                  const SizedBox(width: 6),
-                                  Expanded(
-                                    child: InkWell(
-                                      onTap: _handleDislike,
-                                      child: Container(
-                                        padding: const EdgeInsets.symmetric(
-                                          vertical: 8,
+                                ),
+                                const SizedBox(width: 6),
+                                Expanded(
+                                  child: InkWell(
+                                    onTap: _handleDislike,
+                                    child: Container(
+                                      padding: const EdgeInsets.symmetric(
+                                        vertical: 8,
+                                      ),
+                                      decoration: BoxDecoration(
+                                        color: Colors.black,
+                                        borderRadius:
+                                            BorderRadius.circular(8),
+                                        border: Border.all(
+                                          color: _isUnliked
+                                              ? Colors.redAccent
+                                              : kGreen.withOpacity(0.4),
                                         ),
-                                        decoration: BoxDecoration(
-                                          color: Colors.black,
-                                          borderRadius:
-                                              BorderRadius.circular(8),
-                                          border: Border.all(
-                                            color: _isUnliked
-                                                ? Colors.redAccent
-                                                : kGreen.withOpacity(0.4),
-                                          ),
-                                        ),
-                                        child: Column(
-                                          children: [
-                                            Row(
-                                              mainAxisAlignment:
-                                                  MainAxisAlignment.center,
-                                              children: [
-                                                Icon(
-                                                  _isUnliked
-                                                      ? Icons.thumb_down
-                                                      : Icons
-                                                          .thumb_down_alt_outlined,
-                                                  color: Colors.redAccent,
-                                                  size: 14,
-                                                ),
-                                                const SizedBox(width: 4),
-                                                Text(
-                                                  '${_stats['unlikes']}',
-                                                  style: const TextStyle(
-                                                    color: Colors.white,
-                                                    fontSize: 11,
-                                                    fontWeight: FontWeight.bold,
-                                                  ),
-                                                ),
-                                              ],
-                                            ),
-                                            const Text(
-                                              'Dislike',
-                                              style: TextStyle(
-                                                color: Colors.white54,
-                                                fontSize: 9,
+                                      ),
+                                      child: Column(
+                                        children: [
+                                          Row(
+                                            mainAxisAlignment:
+                                                MainAxisAlignment.center,
+                                            children: [
+                                              Icon(
+                                                _isUnliked
+                                                    ? Icons.thumb_down
+                                                    : Icons
+                                                        .thumb_down_alt_outlined,
+                                                color: Colors.redAccent,
+                                                size: 14,
                                               ),
+                                              const SizedBox(width: 4),
+                                              Text(
+                                                '${_stats['unlikes']}',
+                                                style: const TextStyle(
+                                                  color: Colors.white,
+                                                  fontSize: 11,
+                                                  fontWeight: FontWeight.bold,
+                                                ),
+                                              ),
+                                            ],
+                                          ),
+                                          const Text(
+                                            'Dislike',
+                                            style: TextStyle(
+                                              color: Colors.white54,
+                                              fontSize: 9,
                                             ),
-                                          ],
-                                        ),
+                                          ),
+                                        ],
                                       ),
                                     ),
                                   ),
-                                  const SizedBox(width: 6),
-                                  Expanded(
-                                    child: InkWell(
-                                      onTap: _toggleSave,
-                                      child: Container(
-                                        padding: const EdgeInsets.symmetric(
-                                          vertical: 8,
+                                ),
+                                const SizedBox(width: 6),
+                                Expanded(
+                                  child: InkWell(
+                                    onTap: _toggleSave,
+                                    child: Container(
+                                      padding: const EdgeInsets.symmetric(
+                                        vertical: 8,
+                                      ),
+                                      decoration: BoxDecoration(
+                                        color: Colors.black,
+                                        borderRadius:
+                                            BorderRadius.circular(8),
+                                        border: Border.all(
+                                          color: _isSaved
+                                              ? kGreen
+                                              : kGreen.withOpacity(0.4),
                                         ),
-                                        decoration: BoxDecoration(
-                                          color: Colors.black,
-                                          borderRadius:
-                                              BorderRadius.circular(8),
-                                          border: Border.all(
+                                      ),
+                                      child: Column(
+                                        children: [
+                                          Icon(
+                                            _isSaved
+                                                ? Icons.bookmark
+                                                : Icons.bookmark_border,
                                             color: _isSaved
                                                 ? kGreen
-                                                : kGreen.withOpacity(0.4),
+                                                : Colors.white,
+                                            size: 14,
                                           ),
-                                        ),
-                                        child: Column(
-                                          children: [
-                                            Icon(
-                                              _isSaved
-                                                  ? Icons.bookmark
-                                                  : Icons.bookmark_border,
-                                              color: _isSaved
-                                                  ? kGreen
-                                                  : Colors.white,
-                                              size: 14,
+                                          const Text(
+                                            'Save',
+                                            style: TextStyle(
+                                              color: Colors.white54,
+                                              fontSize: 9,
                                             ),
-                                            const Text(
-                                              'Save',
-                                              style: TextStyle(
-                                                color: Colors.white54,
-                                                fontSize: 9,
-                                              ),
-                                            ),
-                                          ],
-                                        ),
+                                          ),
+                                        ],
                                       ),
                                     ),
                                   ),
-                                  const SizedBox(width: 8),
-                                  _buildWaterFillDownloadButton(),
-                                ],
-                              ),
-                            ],
-                          ),
-                        ),
-                        const SizedBox(height: 12),
-                        // AD
-                        AdBanner(slot: 'player-mid'),
-                        const SizedBox(height: 12),
-                        // Related Videos
-                        Row(
-                          children: const [
-                            Icon(
-                              Icons.play_circle_outline,
-                              color: kGreen,
-                              size: 18,
-                            ),
-                            SizedBox(width: 6),
-                            Text(
-                              'Related Videos',
-                              style: TextStyle(
-                                color: Colors.white,
-                                fontSize: 13,
-                                fontWeight: FontWeight.bold,
-                              ),
+                                ),
+                                const SizedBox(width: 8),
+                                _buildWaterFillDownloadButton(),
+                              ],
                             ),
                           ],
                         ),
-                        const SizedBox(height: 10),
-                        _relatedLoading
-                            ? const Center(
-                                child: Padding(
-                                  padding: EdgeInsets.all(20),
-                                  child: CircularProgressIndicator(
-                                    color: kGreen,
-                                    strokeWidth: 2,
+                      ),
+                      const SizedBox(height: 12),
+                      AdBanner(slot: 'player-mid'),
+                      const SizedBox(height: 12),
+                      Row(
+                        children: const [
+                          Icon(
+                            Icons.play_circle_outline,
+                            color: kGreen,
+                            size: 18,
+                          ),
+                          SizedBox(width: 6),
+                          Text(
+                            'Related Videos',
+                            style: TextStyle(
+                              color: Colors.white,
+                              fontSize: 13,
+                              fontWeight: FontWeight.bold,
+                            ),
+                          ),
+                        ],
+                      ),
+                      const SizedBox(height: 10),
+                      _relatedLoading
+                          ? const Center(
+                              child: Padding(
+                                padding: EdgeInsets.all(20),
+                                child: CircularProgressIndicator(
+                                  color: kGreen,
+                                  strokeWidth: 2,
+                                ),
+                              ),
+                            )
+                          : _relatedVideos.isEmpty
+                              ? Container(
+                                  padding: const EdgeInsets.all(20),
+                                  decoration: BoxDecoration(
+                                    color: const Color(0xFF031408),
+                                    borderRadius: BorderRadius.circular(12),
+                                    border: Border.all(
+                                      color: kGreen.withOpacity(0.3),
+                                    ),
+                                  ),
+                                  child: const Center(
+                                    child: Text(
+                                      'No related videos yet',
+                                      style: TextStyle(
+                                        color: Colors.white54,
+                                        fontSize: 12,
+                                      ),
+                                    ),
+                                  ),
+                                )
+                              : SizedBox(
+                                  height: 155,
+                                  child: ListView.builder(
+                                    scrollDirection: Axis.horizontal,
+                                    itemCount: _relatedVideos.length,
+                                    itemBuilder: (context, i) {
+                                      final v = _relatedVideos[i];
+                                      return _buildRelatedCard(v);
+                                    },
                                   ),
                                 ),
-                              )
-                            : _relatedVideos.isEmpty
-                                ? Container(
-                                    padding: const EdgeInsets.all(20),
-                                    decoration: BoxDecoration(
-                                      color: const Color(0xFF031408),
-                                      borderRadius: BorderRadius.circular(12),
-                                      border: Border.all(
-                                        color: kGreen.withOpacity(0.3),
-                                      ),
-                                    ),
-                                    child: const Center(
-                                      child: Text(
-                                        'No related videos yet',
-                                        style: TextStyle(
-                                          color: Colors.white54,
-                                          fontSize: 12,
-                                        ),
-                                      ),
-                                    ),
-                                  )
-                                : SizedBox(
-                                    height: 155,
-                                    child: ListView.builder(
-                                      scrollDirection: Axis.horizontal,
-                                      itemCount: _relatedVideos.length,
-                                      itemBuilder: (context, i) {
-                                        final v = _relatedVideos[i];
-                                        return _buildRelatedCard(v);
-                                      },
-                                    ),
-                                  ),
-                        const SizedBox(height: 12),
-                        AdBanner(slot: 'player-bottom'),
-                        const SizedBox(height: 16),
-                      ],
-                    ),
+                      const SizedBox(height: 12),
+                      AdBanner(slot: 'player-bottom'),
+                      const SizedBox(height: 16),
+                    ],
                   ),
                 ),
+              ),
             ],
           ),
         ),
@@ -7731,11 +7610,12 @@ class _NativeVideoPlayerScreenState extends State<NativeVideoPlayerScreen> {
         onTap: () {
           Haptic.medium();
           final url = '$kBackendBaseUrl/v/$id';
-          Navigator.pushReplacement(
+          Navigator.pushAndRemoveUntil(
             context,
             MaterialPageRoute(
               builder: (_) => StreamPreviewScreen(targetUrl: url),
             ),
+            (route) => route.isFirst,
           );
         },
         borderRadius: BorderRadius.circular(12),
@@ -7838,7 +7718,7 @@ class _NativeVideoPlayerScreenState extends State<NativeVideoPlayerScreen> {
 }
 
 // ═══════════════════════════════════════════════════════
-// WITHDRAW SCREEN (new) — min $5, disabled by default
+// WITHDRAW SCREEN
 // ═══════════════════════════════════════════════════════
 class WithdrawScreen extends StatefulWidget {
   const WithdrawScreen({super.key});
@@ -7969,7 +7849,6 @@ class _WithdrawScreenState extends State<WithdrawScreen> {
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  // Balance card
                   Container(
                     width: double.infinity,
                     padding: const EdgeInsets.all(22),
