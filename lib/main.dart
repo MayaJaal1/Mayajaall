@@ -1234,8 +1234,7 @@ class _MyAppState extends State<MyApp> {
         uri.host == 'watch' ||
         uri.scheme == 'mayajaall') {
       String videoId = '';
-      final token =
-          uri.queryParameters['t'] ?? uri.queryParameters['s'] ?? '';
+      final token = uri.queryParameters['t'] ?? uri.queryParameters['s'] ?? '';
 
       if (uri.path.startsWith('/v/') || uri.path.startsWith('/s/')) {
         videoId = uri.pathSegments.isNotEmpty ? uri.pathSegments.last : '';
@@ -1265,6 +1264,7 @@ class _MyAppState extends State<MyApp> {
         return;
       }
 
+      // ✅ ALWAYS push to 10-second preview page. NEVER HOME.
       navigator.push(MaterialPageRoute(
         builder: (_) => StreamPreviewScreen(targetUrl: targetUrl),
       ));
@@ -1353,7 +1353,6 @@ class AuthGate extends StatelessWidget {
             await MayaJaalAccount.syncUserToRTDB(user);
             await MayaJaalAccount.loadApiKey();
           });
-          // ✅ Permission screen removed, directly to Home
           return const MainNavigationHolder();
         }
         return const LoginScreen();
@@ -1702,7 +1701,7 @@ class _LoginScreenState extends State<LoginScreen>
 }
 
 // ═══════════════════════════════════════════════════════
-// MAIN NAVIGATION HOLDER
+// MAIN NAVIGATION HOLDER (With Notification Bell Shake)
 // ═══════════════════════════════════════════════════════
 class MainNavigationHolder extends StatefulWidget {
   const MainNavigationHolder({super.key});
@@ -1710,9 +1709,32 @@ class MainNavigationHolder extends StatefulWidget {
   State<MainNavigationHolder> createState() => _MainNavigationHolderState();
 }
 
-class _MainNavigationHolderState extends State<MainNavigationHolder> {
+class _MainNavigationHolderState extends State<MainNavigationHolder> with TickerProviderStateMixin {
   final GlobalKey<ScaffoldState> _scaffoldKey = GlobalKey<ScaffoldState>();
   int _currentIndex = 0;
+  int _lastUnreadCount = 0;
+
+  late AnimationController _shakeController;
+  late Animation<double> _shakeAnimation;
+
+  @override
+  void initState() {
+    super.initState();
+    _shakeController = AnimationController(vsync: this, duration: const Duration(milliseconds: 500));
+    _shakeAnimation = TweenSequence<double>([
+      TweenSequenceItem(tween: Tween(begin: 0.0, end: 10.0), weight: 1),
+      TweenSequenceItem(tween: Tween(begin: 10.0, end: -10.0), weight: 2),
+      TweenSequenceItem(tween: Tween(begin: -10.0, end: 10.0), weight: 2),
+      TweenSequenceItem(tween: Tween(begin: 10.0, end: -10.0), weight: 2),
+      TweenSequenceItem(tween: Tween(begin: -10.0, end: 0.0), weight: 1),
+    ]).animate(CurvedAnimation(parent: _shakeController, curve: Curves.easeInOut));
+  }
+
+  @override
+  void dispose() {
+    _shakeController.dispose();
+    super.dispose();
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -1748,6 +1770,14 @@ class _MainNavigationHolderState extends State<MainNavigationHolder> {
               : Stream.value(0),
           builder: (context, snapshot) {
             final unread = snapshot.data ?? 0;
+
+            // ✅ TRIGGER SHAKE ANIMATION ON NEW NOTIFICATION
+            if (unread > _lastUnreadCount && _lastUnreadCount != 0) {
+              _shakeController.forward(from: 0);
+              Haptic.heavy();
+            }
+            _lastUnreadCount = unread;
+
             return BottomNavigationBar(
               currentIndex: _currentIndex,
               backgroundColor: Colors.transparent,
@@ -1778,69 +1808,81 @@ class _MainNavigationHolderState extends State<MainNavigationHolder> {
                   label: 'Gallery',
                 ),
                 BottomNavigationBarItem(
-                  icon: Stack(
-                    clipBehavior: Clip.none,
-                    children: [
-                      const Icon(Icons.history_outlined),
-                      if (unread > 0)
-                        Positioned(
-                          right: -4,
-                          top: -4,
-                          child: Container(
-                            padding: const EdgeInsets.symmetric(
-                              horizontal: 4,
-                              vertical: 1,
-                            ),
-                            decoration: BoxDecoration(
-                              color: Colors.redAccent,
-                              borderRadius: BorderRadius.circular(8),
-                            ),
-                            constraints: const BoxConstraints(minWidth: 14),
-                            child: Text(
-                              unread > 9 ? '9+' : '$unread',
-                              style: const TextStyle(
-                                color: Colors.white,
-                                fontSize: 8,
-                                fontWeight: FontWeight.bold,
-                              ),
-                              textAlign: TextAlign.center,
-                            ),
+                  icon: AnimatedBuilder(
+                    animation: _shakeAnimation,
+                    builder: (c, _) => Transform.translate(
+                      offset: Offset(_shakeAnimation.value, 0),
+                      child: Stack(
+                        clipBehavior: Clip.none,
+                        children: [
+                          Icon(
+                            Icons.notifications_outlined,
+                            color: unread > 0 ? Colors.redAccent : Colors.white54,
                           ),
-                        ),
-                    ],
-                  ),
-                  activeIcon: Stack(
-                    clipBehavior: Clip.none,
-                    children: [
-                      const Icon(Icons.history, color: kGreen),
-                      if (unread > 0)
-                        Positioned(
-                          right: -4,
-                          top: -4,
-                          child: Container(
-                            padding: const EdgeInsets.symmetric(
-                              horizontal: 4,
-                              vertical: 1,
-                            ),
-                            decoration: BoxDecoration(
-                              color: Colors.redAccent,
-                              borderRadius: BorderRadius.circular(8),
-                            ),
-                            constraints: const BoxConstraints(minWidth: 14),
-                            child: Text(
-                              unread > 9 ? '9+' : '$unread',
-                              style: const TextStyle(
-                                color: Colors.white,
-                                fontSize: 8,
-                                fontWeight: FontWeight.bold,
+                          if (unread > 0)
+                            Positioned(
+                              right: -4,
+                              top: -4,
+                              child: Container(
+                                padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 1),
+                                decoration: BoxDecoration(
+                                  color: Colors.redAccent,
+                                  borderRadius: BorderRadius.circular(8),
+                                ),
+                                constraints: const BoxConstraints(minWidth: 14),
+                                child: Text(
+                                  unread > 9 ? '9+' : '$unread',
+                                  style: const TextStyle(
+                                    color: Colors.white,
+                                    fontSize: 8,
+                                    fontWeight: FontWeight.bold,
+                                  ),
+                                  textAlign: TextAlign.center,
+                                ),
                               ),
-                              textAlign: TextAlign.center,
                             ),
-                          ),
-                        ),
-                    ],
+                        ],
+                      ),
+                    ),
                   ),
-                  label: 'History',
+                  activeIcon: AnimatedBuilder(
+                    animation: _shakeAnimation,
+                    builder: (c, _) => Transform.translate(
+                      offset: Offset(_shakeAnimation.value, 0),
+                      child: Stack(
+                        clipBehavior: Clip.none,
+                        children: [
+                          Icon(
+                            Icons.notifications,
+                            color: unread > 0 ? Colors.redAccent : kGreen,
+                          ),
+                          if (unread > 0)
+                            Positioned(
+                              right: -4,
+                              top: -4,
+                              child: Container(
+                                padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 1),
+                                decoration: BoxDecoration(
+                                  color: Colors.redAccent,
+                                  borderRadius: BorderRadius.circular(8),
+                                ),
+                                constraints: const BoxConstraints(minWidth: 14),
+                                child: Text(
+                                  unread > 9 ? '9+' : '$unread',
+                                  style: const TextStyle(
+                                    color: Colors.white,
+                                    fontSize: 8,
+                                    fontWeight: FontWeight.bold,
+                                  ),
+                                  textAlign: TextAlign.center,
+                                ),
+                              ),
+                            ),
+                        ],
+                      ),
+                    ),
+                  ),
+                  label: 'Alerts',
                 ),
               ],
             );
@@ -2402,6 +2444,8 @@ class _HomeScreenState extends State<HomeScreen>
         return Icons.share;
       case 'upload':
         return Icons.upload;
+      case 'expiry':
+        return Icons.timer;
       default:
         return Icons.notifications;
     }
@@ -2490,7 +2534,6 @@ class _HomeScreenState extends State<HomeScreen>
         child: SingleChildScrollView(
           child: Column(
             children: [
-              // Header (Updated to match login page MayaJaal branding)
               Padding(
                 padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
                 child: Row(
@@ -2502,9 +2545,10 @@ class _HomeScreenState extends State<HomeScreen>
                         widget.onMenuTap?.call();
                       },
                     ),
+                    // ✅ Updated Home Page Logo (Maya White + Jaal Green)
                     Container(
-                      width: 40,
-                      height: 40,
+                      width: 36,
+                      height: 36,
                       decoration: BoxDecoration(
                         color: Colors.black,
                         borderRadius: BorderRadius.circular(10),
@@ -2521,7 +2565,7 @@ class _HomeScreenState extends State<HomeScreen>
                           errorBuilder: (c, e, s) => const Icon(
                             Icons.change_history,
                             color: kGreen,
-                            size: 22,
+                            size: 20,
                           ),
                         ),
                       ),
@@ -2564,9 +2608,9 @@ class _HomeScreenState extends State<HomeScreen>
                         final unread = snapshot.data ?? 0;
                         return Stack(children: [
                           IconButton(
-                            icon: const Icon(
+                            icon: Icon(
                               Icons.notifications_none,
-                              color: kGreen,
+                              color: unread > 0 ? Colors.redAccent : kGreen,
                               size: 24,
                             ),
                             onPressed: () {
@@ -3390,15 +3434,28 @@ class _MoreDrawerState extends State<MoreDrawer>
                       crossAxisAlignment: CrossAxisAlignment.start,
                       mainAxisSize: MainAxisSize.min,
                       children: [
-                        const Text(
-                          'MayaJaal',
-                          style: TextStyle(
-                            color: kGreen,
-                            fontSize: 20,
-                            fontWeight: FontWeight.w900,
-                            letterSpacing: 1,
-                            shadows: [Shadow(color: kGreen, blurRadius: 10)],
-                          ),
+                        Row(
+                          children: const [
+                            Text(
+                              'Maya',
+                              style: TextStyle(
+                                color: Colors.white,
+                                fontSize: 20,
+                                fontWeight: FontWeight.w900,
+                                letterSpacing: 1,
+                              ),
+                            ),
+                            Text(
+                              'Jaal',
+                              style: TextStyle(
+                                color: kGreen,
+                                fontSize: 20,
+                                fontWeight: FontWeight.w900,
+                                letterSpacing: 1,
+                                shadows: [Shadow(color: kGreen, blurRadius: 10)],
+                              ),
+                            ),
+                          ],
                         ),
                         Text(
                           'MORE OPTIONS',
@@ -4656,7 +4713,7 @@ class _SavedVideosScreenState extends State<SavedVideosScreen> {
 }
 
 // ═══════════════════════════════════════════════════════
-// HISTORY SCREEN (With Save Feature & Thumbnail)
+// HISTORY SCREEN
 // ═══════════════════════════════════════════════════════
 class HistoryScreen extends StatefulWidget {
   const HistoryScreen({super.key});
@@ -4981,7 +5038,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
 }
 
 // ═══════════════════════════════════════════════════════
-// STREAM PREVIEW SCREEN (10-Sec Page - Strict Rules)
+// STREAM PREVIEW SCREEN (Strict 10-Sec Rule)
 // ═══════════════════════════════════════════════════════
 class StreamPreviewScreen extends StatefulWidget {
   final String targetUrl;
@@ -4990,22 +5047,33 @@ class StreamPreviewScreen extends StatefulWidget {
   State<StreamPreviewScreen> createState() => _StreamPreviewScreenState();
 }
 
-class _StreamPreviewScreenState extends State<StreamPreviewScreen> {
+class _StreamPreviewScreenState extends State<StreamPreviewScreen>
+    with TickerProviderStateMixin {
   bool _loading = true;
   String _streamUrl = '';
   String _videoTitle = 'MayaJaal Video';
   String _uploaderName = '@mayajaal';
   String _rawId = '';
   String _token = '';
-  String _thumbnailUrl = ''; // Backend se aayega
+  
+  // Thumbnail state
+  String _thumbnailUrl = ''; 
 
   int _countdown = 10;
   Timer? _countdownTimer;
-  bool _isNavigatingToPlayer = false;
+  bool _isReadyToPlay = false; // ✅ 10s ke baad true hoga
+
+  late AnimationController _snakeCtrl;
+  late AnimationController _pulseController;
+  late Animation<double> _pulseAnimation;
 
   @override
   void initState() {
     super.initState();
+    _snakeCtrl = AnimationController(vsync: this, duration: const Duration(seconds: 2))..repeat();
+    _pulseController = AnimationController(vsync: this, duration: const Duration(milliseconds: 1400))..repeat(reverse: true);
+    _pulseAnimation = Tween<double>(begin: 0.96, end: 1.04).animate(CurvedAnimation(parent: _pulseController, curve: Curves.easeInOut));
+
     if (!MayaJaalAccount.isLoggedIn) {
       WidgetsBinding.instance.addPostFrameCallback((_) {
         ScaffoldMessenger.of(context).showSnackBar(
@@ -5021,8 +5089,11 @@ class _StreamPreviewScreenState extends State<StreamPreviewScreen> {
 
   void _startCountdown() {
     _countdownTimer?.cancel();
-    setState(() => _countdown = 10);
-    
+    setState(() {
+      _countdown = 10;
+      _isReadyToPlay = false;
+    });
+
     _countdownTimer = Timer.periodic(const Duration(seconds: 1), (timer) {
       if (!mounted) return;
       setState(() {
@@ -5030,9 +5101,9 @@ class _StreamPreviewScreenState extends State<StreamPreviewScreen> {
           _countdown--;
           if (_countdown <= 3 && _countdown > 0) Haptic.light();
         } else {
-          _countdownTimer?.cancel();
           Haptic.heavy();
-          _launchNativePlayer(); // ✅ Auto play after 10 sec
+          _countdownTimer?.cancel();
+          setState(() => _isReadyToPlay = true); // ✅ 10s khatam, play button ready
         }
       });
     });
@@ -5041,6 +5112,8 @@ class _StreamPreviewScreenState extends State<StreamPreviewScreen> {
   @override
   void dispose() {
     _countdownTimer?.cancel();
+    _snakeCtrl.dispose();
+    _pulseController.dispose();
     super.dispose();
   }
 
@@ -5072,7 +5145,7 @@ class _StreamPreviewScreenState extends State<StreamPreviewScreen> {
             _streamUrl = data['url'] ?? data['video_url'];
             _videoTitle = data['title'] ?? data['file_name'] ?? _rawId;
             _uploaderName = data['uploader'] ?? '@mayajaal';
-            _thumbnailUrl = data['thumbnail'] ?? data['poster'] ?? ''; // Fetch thumbnail
+            _thumbnailUrl = data['thumbnail'] ?? data['poster'] ?? ''; // ✅ Backend Thumbnail
             _loading = false;
           });
           _startCountdown();
@@ -5115,7 +5188,7 @@ class _StreamPreviewScreenState extends State<StreamPreviewScreen> {
       'title': _videoTitle,
       'uploader': _uploaderName,
       'id': _rawId,
-      'thumbnail': _thumbnailUrl, // Save thumbnail for history
+      'thumbnail': _thumbnailUrl,
       'time': DateTime.now().toIso8601String(),
     };
 
@@ -5127,11 +5200,9 @@ class _StreamPreviewScreenState extends State<StreamPreviewScreen> {
   }
 
   void _launchNativePlayer() {
-    if (_isNavigatingToPlayer) return;
-    _isNavigatingToPlayer = true;
     _saveWatchRecord();
 
-    // ✅ Strict Navigation: Push and wait for return to restart countdown
+    // ✅ Normal Push: Strict Navigation to Player
     Navigator.of(context).push(
       MaterialPageRoute(
         builder: (_) => NativeVideoPlayerScreen(
@@ -5143,9 +5214,9 @@ class _StreamPreviewScreenState extends State<StreamPreviewScreen> {
         ),
       ),
     ).then((_) {
-      _isNavigatingToPlayer = false;
+      // ✅ Back aane par timer restart hoga (10s)
       if (mounted) {
-        _startCountdown(); // ✅ Restarts 10s timer when user comes back
+        _startCountdown();
       }
     });
   }
@@ -5195,6 +5266,46 @@ class _StreamPreviewScreenState extends State<StreamPreviewScreen> {
     );
   }
 
+  Widget _buildRedSnakePlayButton() {
+    return AnimatedBuilder(
+      animation: Listenable.merge([_snakeCtrl, _pulseAnimation]),
+      builder: (c, _) => Transform.scale(
+        scale: _pulseAnimation.value,
+        child: GestureDetector(
+          onTap: _launchNativePlayer,
+          child: Container(
+            width: double.infinity,
+            height: 64,
+            decoration: BoxDecoration(
+              color: Colors.black,
+              borderRadius: BorderRadius.circular(32),
+              boxShadow: [BoxShadow(color: kRed.withOpacity(0.5), blurRadius: 22, spreadRadius: 1)],
+            ),
+            child: Stack(
+              alignment: Alignment.center,
+              children: [
+                Positioned.fill(
+                  child: CustomPaint(painter: SnakeBorderPainter(progress: _snakeCtrl.value, color: kRed)),
+                ),
+                Row(
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  children: const [
+                    Icon(Icons.play_arrow_rounded, color: kRed, size: 32),
+                    SizedBox(width: 8),
+                    Text(
+                      'PLAY NOW',
+                      style: TextStyle(color: kRed, fontSize: 15, fontWeight: FontWeight.w900, letterSpacing: 2.5, shadows: [Shadow(color: kRed, blurRadius: 14)]),
+                    ),
+                  ],
+                ),
+              ],
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     if (_loading) return const ProfessionalLoader(message: 'DECRYPTING STREAM...');
@@ -5216,7 +5327,7 @@ class _StreamPreviewScreenState extends State<StreamPreviewScreen> {
                         icon: const Icon(Icons.arrow_back_ios_new, color: kGreen, size: 22),
                         onPressed: () {
                           Haptic.light();
-                          Navigator.pop(context); // Goes back to History/Home
+                          Navigator.pop(context);
                         },
                       ),
                       Expanded(
@@ -5243,41 +5354,41 @@ class _StreamPreviewScreenState extends State<StreamPreviewScreen> {
                   ),
                   const SizedBox(height: 12),
                   
-                  // ✅ Video Preview Box (Thumbnail Only, No Auto-Play)
+                  // ✅ Video Preview Box (No Video Playback during 10s)
                   Container(
-                    padding: const EdgeInsets.all(2),
+                    padding: const EdgeInsets.all(4),
                     decoration: BoxDecoration(
                       color: const Color(0xFF011206),
-                      borderRadius: BorderRadius.circular(16),
-                      border: Border.all(color: Colors.orangeAccent.withOpacity(0.6), width: 1.8),
-                      boxShadow: [BoxShadow(color: Colors.orangeAccent.withOpacity(0.2), blurRadius: 20)],
+                      borderRadius: BorderRadius.circular(20),
+                      border: Border.all(color: _isReadyToPlay ? kGreen : Colors.orangeAccent.withOpacity(0.6), width: 1.8),
+                      boxShadow: [BoxShadow(color: (_isReadyToPlay ? kGreen : Colors.orangeAccent).withOpacity(0.25), blurRadius: 30)],
                     ),
                     child: ClipRRect(
-                      borderRadius: BorderRadius.circular(14),
+                      borderRadius: BorderRadius.circular(16),
                       child: AspectRatio(
                         aspectRatio: 16 / 9,
                         child: Stack(
                           fit: StackFit.expand,
                           alignment: Alignment.center,
                           children: [
-                            // ✅ Thumbnail / Placeholder (Full Image - No Zoom)
+                            // ✅ Static Thumbnail (Backend or Placeholder)
                             if (_thumbnailUrl.isNotEmpty)
                               Container(
                                 color: Colors.black,
                                 child: Image.network(
                                   _thumbnailUrl,
-                                  fit: BoxFit.contain, // ✅ Full video dikhegi, zoom nahi hogi
+                                  fit: BoxFit.contain, // ✅ Full Image, No Zoom
                                   errorBuilder: (c, e, s) => _buildPlaceholder(),
                                 ),
                               )
                             else
                               _buildPlaceholder(),
                               
-                            // Dark Overlay for Visibility
-                            Container(color: Colors.black.withOpacity(0.5)),
+                            // Dark Overlay for Countdown visibility
+                            Container(color: Colors.black.withOpacity(0.4)),
                             
-                            // Countdown
-                            _buildCountdownCircle(),
+                            // 10s Countdown Circle
+                            if (!_isReadyToPlay) _buildCountdownCircle(),
                             
                             // HD Badge
                             Positioned(
@@ -5296,7 +5407,42 @@ class _StreamPreviewScreenState extends State<StreamPreviewScreen> {
                   ),
                   const SizedBox(height: 16),
 
-                  // ✅ Info Box
+                  // ✅ Play Button (Appears ONLY after 10s)
+                  if (_isReadyToPlay)
+                    _buildRedSnakePlayButton()
+                  else
+                    Container(
+                      width: double.infinity,
+                      height: 64,
+                      decoration: BoxDecoration(color: Colors.grey[850], borderRadius: BorderRadius.circular(32)),
+                      child: Center(
+                        child: Text(
+                          'PLEASE WAIT $_countdown SEC...',
+                          style: const TextStyle(color: Colors.white54, fontSize: 14, fontWeight: FontWeight.w900, letterSpacing: 2),
+                        ),
+                      ),
+                    ),
+                  
+                  const SizedBox(height: 12),
+
+                  // ✅ Home Button
+                  SizedBox(
+                    width: double.infinity,
+                    height: 50,
+                    child: OutlinedButton.icon(
+                      onPressed: _goToHome,
+                      icon: const Icon(Icons.home, color: Colors.white54, size: 20),
+                      label: const Text('GO TO HOME PAGE', style: TextStyle(color: Colors.white54, fontSize: 12, fontWeight: FontWeight.bold, letterSpacing: 1.5)),
+                      style: OutlinedButton.styleFrom(
+                        side: BorderSide(color: Colors.white24, width: 1.5),
+                        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(25)),
+                      ),
+                    ),
+                  ),
+
+                  const SizedBox(height: 16),
+                  
+                  // Info Box
                   Container(
                     padding: const EdgeInsets.all(14),
                     decoration: BoxDecoration(
@@ -5354,8 +5500,8 @@ class _StreamPreviewScreenState extends State<StreamPreviewScreen> {
                     ),
                   ),
                   const SizedBox(height: 16),
-
-                  // ✅ Share Button
+                  
+                  // Share Button
                   SizedBox(
                     width: double.infinity,
                     height: 52,
@@ -5372,23 +5518,6 @@ class _StreamPreviewScreenState extends State<StreamPreviewScreen> {
                       ),
                     ),
                   ),
-                  
-                  const SizedBox(height: 16),
-
-                  // ✅ Home Button (If user wants to skip)
-                  SizedBox(
-                    width: double.infinity,
-                    height: 45,
-                    child: TextButton.icon(
-                      onPressed: _goToHome,
-                      icon: const Icon(Icons.home, color: Colors.white54, size: 18),
-                      label: const Text('GO TO HOME PAGE', style: TextStyle(color: Colors.white54, fontSize: 12, fontWeight: FontWeight.bold, letterSpacing: 1.5)),
-                      style: TextButton.styleFrom(
-                        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(25)),
-                      ),
-                    ),
-                  ),
-
                   const SizedBox(height: 20),
                 ],
               ),
@@ -6194,7 +6323,7 @@ class _NativeVideoPlayerScreenState extends State<NativeVideoPlayerScreen> {
 
     return WillPopScope(
       onWillPop: () async {
-        Navigator.pop(context); // ✅ Goes back to preview screen
+        Navigator.pop(context);
         return false;
       },
       child: Scaffold(
@@ -6210,7 +6339,7 @@ class _NativeVideoPlayerScreenState extends State<NativeVideoPlayerScreen> {
                       icon: const Icon(Icons.arrow_back_ios_new, color: kGreen, size: 22),
                       onPressed: () {
                         Haptic.light();
-                        Navigator.pop(context); // ✅ Goes back to preview screen
+                        Navigator.pop(context);
                       },
                     ),
                     Expanded(
@@ -6560,7 +6689,6 @@ class _NativeVideoPlayerScreenState extends State<NativeVideoPlayerScreen> {
         onTap: () {
           Haptic.medium();
           final url = '$kBackendBaseUrl/v/$id';
-          // ✅ PushReplacement keeps the 10s page in the history stack
           Navigator.pushReplacement(
             context,
             MaterialPageRoute(
