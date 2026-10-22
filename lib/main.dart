@@ -177,19 +177,6 @@ class AdTracker {
       return false;
     }
   }
-
-  static Future<int> hoursRemaining() async {
-    try {
-      final prefs = await SharedPreferences.getInstance();
-      final lastTime = prefs.getInt(_kLastTimeKey) ?? 0;
-      if (lastTime == 0) return 0;
-      final diff = DateTime.now().millisecondsSinceEpoch - lastTime;
-      final remaining = 24 * 60 * 60 * 1000 - diff;
-      return remaining > 0 ? (remaining / (60 * 60 * 1000)).ceil() : 0;
-    } catch (_) {
-      return 0;
-    }
-  }
 }
 
 // ═══════════════════════════════════════════════════════
@@ -484,25 +471,6 @@ class FirebaseService {
     });
   }
 
-  static Future<Map<String, dynamic>?> getProfile(String uid) async {
-    try {
-      final snap = await _rtdb.child('users/$uid').once();
-      final val = snap.snapshot.value;
-      if (val == null) return null;
-      return Map<String, dynamic>.from(val as Map);
-    } catch (e) {
-      return null;
-    }
-  }
-
-  static Future<void> updateProfile(String uid, Map<String, dynamic> data) async {
-    try {
-      await _rtdb.child('users/$uid').update(data);
-    } catch (e) {
-      debugPrint('updateProfile error: $e');
-    }
-  }
-
   static Future<List<Map<String, dynamic>>> searchUsers(String query) async {
     if (query.trim().isEmpty) return [];
     final q = query.trim().toLowerCase();
@@ -592,17 +560,6 @@ class FirebaseService {
     return _rtdb.child('users/$channelUid/subscribersCount').onValue.map((e) {
       return (e.snapshot.value ?? 0) as int;
     });
-  }
-
-  static Future<List<String>> getUserSubscriptions(String subscriberUid) async {
-    try {
-      final snap = await _rtdb.child('userSubs/$subscriberUid').once();
-      final val = snap.snapshot.value;
-      if (val == null) return [];
-      return (val as Map).keys.map((k) => k.toString()).toList();
-    } catch (_) {
-      return [];
-    }
   }
 
   static Future<List<Map<String, dynamic>>> getUserVideos(String uid, {int limit = 30}) async {
@@ -1221,6 +1178,11 @@ class _MyAppState extends State<MyApp> {
       if (initial != null) {
         _initialLink = initial;
         debugPrint('Initial deep link: $initial');
+        if (MayaJaalAccount.isLoggedIn) {
+          WidgetsBinding.instance.addPostFrameCallback((_) {
+            _handleDeepLink(_initialLink!);
+          });
+        }
       }
     } catch (e) {
       debugPrint('Initial link error: $e');
@@ -1277,19 +1239,6 @@ class _MyAppState extends State<MyApp> {
   void dispose() {
     _linkSub?.cancel();
     super.dispose();
-  }
-
-  String _buildUrlFromLink(Uri uri) {
-    String videoId = '';
-    final token = uri.queryParameters['t'] ?? uri.queryParameters['s'] ?? '';
-    if (uri.path.startsWith('/v/') || uri.path.startsWith('/s/')) {
-      videoId = uri.pathSegments.isNotEmpty ? uri.pathSegments.last : '';
-    } else if (uri.queryParameters['v'] != null) {
-      videoId = uri.queryParameters['v']!;
-    }
-    return token.isNotEmpty
-        ? 'https://www.mayajaal.online/v/$videoId?t=$token'
-        : 'https://www.mayajaal.online/v/$videoId';
   }
 
   @override
@@ -1515,7 +1464,7 @@ class _PermissionItem extends StatelessWidget {
 }
 
 // ═══════════════════════════════════════════════════════
-// LOGIN SCREEN — Only Google Login + Tagline
+// LOGIN SCREEN — Screenshot Matched
 // ═══════════════════════════════════════════════════════
 class LoginScreen extends StatefulWidget {
   const LoginScreen({super.key});
@@ -1523,44 +1472,9 @@ class LoginScreen extends StatefulWidget {
   State<LoginScreen> createState() => _LoginScreenState();
 }
 
-class _LoginScreenState extends State<LoginScreen>
-    with SingleTickerProviderStateMixin {
+class _LoginScreenState extends State<LoginScreen> {
   bool _loading = false;
   String _error = '';
-
-  late AnimationController _magicController;
-  late Animation<double> _glowAnimation;
-  late Animation<double> _scaleAnimation;
-
-  @override
-  void initState() {
-    super.initState();
-    _magicController = AnimationController(
-      vsync: this,
-      duration: const Duration(milliseconds: 1200),
-    );
-    _glowAnimation = Tween<double>(begin: 0.0, end: 40.0).animate(
-      CurvedAnimation(parent: _magicController, curve: Curves.easeInOut),
-    );
-    _scaleAnimation = Tween<double>(begin: 1.0, end: 1.04).animate(
-      CurvedAnimation(parent: _magicController, curve: Curves.easeInOut),
-    );
-  }
-
-  @override
-  void dispose() {
-    _magicController.dispose();
-    super.dispose();
-  }
-
-  Future<void> _triggerMagic() async {
-    try {
-      await SystemSound.play(SystemSoundType.click);
-      await HapticFeedback.heavyImpact();
-    } catch (_) {}
-    await _magicController.forward();
-    await Future.delayed(const Duration(milliseconds: 400));
-  }
 
   Future<void> _handleGoogle() async {
     setState(() {
@@ -1573,7 +1487,6 @@ class _LoginScreenState extends State<LoginScreen>
         setState(() => _loading = false);
         return;
       }
-      await _triggerMagic();
     } on FirebaseAuthException catch (e) {
       setState(() => _error = '❌ ${_fbError(e.code)}');
     } catch (e) {
@@ -1602,174 +1515,137 @@ class _LoginScreenState extends State<LoginScreen>
       backgroundColor: Colors.black,
       body: Stack(
         children: [
-          const MatrixRain(opacity: 0.5),
+          const MatrixRain(opacity: 0.45),
           SafeArea(
             child: Center(
               child: SingleChildScrollView(
                 padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 20),
-                child: AnimatedBuilder(
-                  animation: _magicController,
-                  builder: (context, child) => Transform.scale(
-                    scale: _scaleAnimation.value,
-                    child: Container(
-                      padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 30),
-                      decoration: BoxDecoration(
-                        color: const Color(0xFF021206).withOpacity(0.9),
-                        borderRadius: BorderRadius.circular(22),
-                        border: Border.all(color: kGreen, width: 1.5),
-                        boxShadow: [
-                          BoxShadow(
-                            color: kGreen.withOpacity(0.2),
-                            blurRadius: _glowAnimation.value + 15,
-                            spreadRadius: 2,
-                          ),
-                        ],
-                      ),
-                      child: child,
-                    ),
-                  ),
-                  child: Column(
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      // Logo & Brand Name
-                      Row(
-                        mainAxisAlignment: MainAxisAlignment.center,
-                        children: [
-                          Container(
-                            width: 60,
-                            height: 60,
-                            padding: const EdgeInsets.all(2),
-                            decoration: BoxDecoration(
-                              color: Colors.black,
-                              borderRadius: BorderRadius.circular(16),
-                              border: Border.all(color: kGreen, width: 1.8),
-                              boxShadow: [
-                                BoxShadow(color: kGreen.withOpacity(0.5), blurRadius: 18),
-                              ],
-                            ),
-                            child: ClipRRect(
-                              borderRadius: BorderRadius.circular(14),
-                              child: Image.asset(
-                                'assets/icon/logo.png',
-                                fit: BoxFit.cover,
-                                errorBuilder: (c, e, s) => const Icon(
-                                  Icons.change_history,
-                                  size: 32,
-                                  color: kGreen,
-                                ),
-                              ),
-                            ),
-                          ),
-                          const SizedBox(width: 12),
-                          const Text(
-                            'MayaJaal',
-                            style: TextStyle(
-                              fontSize: 32,
-                              fontWeight: FontWeight.w900,
-                              color: kGreen,
-                              fontFamily: 'monospace',
-                              letterSpacing: 1,
-                              shadows: [Shadow(color: kGreen, blurRadius: 16)],
-                            ),
-                          ),
-                        ],
-                      ),
-                      const SizedBox(height: 30),
-
-                      // Tagline
-                      const Text(
-                        'Your Videos.\nYour Links.\nYour Earnings.',
-                        textAlign: TextAlign.center,
-                        style: TextStyle(
-                          fontSize: 26,
-                          fontWeight: FontWeight.w900,
-                          color: Colors.white,
-                          height: 1.2,
-                          letterSpacing: 1,
-                        ),
-                      ),
-                      const SizedBox(height: 10),
-                      Text(
-                        "World's Smartest Video Sharing Platform",
-                        textAlign: TextAlign.center,
-                        style: TextStyle(
-                          fontSize: 12,
-                          color: kGreen.withOpacity(0.8),
-                          letterSpacing: 1,
-                        ),
-                      ),
-
-                      const SizedBox(height: 40),
-
-                      // Google Login Button
-                      SizedBox(
-                        width: double.infinity,
-                        height: 54,
-                        child: ElevatedButton(
-                          onPressed: _loading ? null : _handleGoogle,
-                          style: ElevatedButton.styleFrom(
-                            backgroundColor: Colors.white,
-                            foregroundColor: Colors.black87,
-                            shape: RoundedRectangleBorder(
-                              borderRadius: BorderRadius.circular(27),
-                            ),
-                            elevation: 8,
-                          ),
-                          child: _loading
-                              ? const SizedBox(
-                                  width: 24,
-                                  height: 24,
-                                  child: CircularProgressIndicator(
-                                    color: Colors.black,
-                                    strokeWidth: 2.5,
-                                  ),
-                                )
-                              : Row(
-                                  mainAxisAlignment: MainAxisAlignment.center,
-                                  children: [
-                                    Image.network(
-                                      'https://developers.google.com/identity/images/g-logo.png',
-                                      height: 24,
-                                      errorBuilder: (c, e, s) => const Icon(
-                                        Icons.g_mobiledata,
-                                        color: Colors.red,
-                                        size: 28,
-                                      ),
-                                    ),
-                                    const SizedBox(width: 12),
-                                    const Text(
-                                      'Sign in with Google',
-                                      style: TextStyle(
-                                        fontSize: 16,
-                                        fontWeight: FontWeight.w800,
-                                      ),
-                                    ),
-                                  ],
-                                ),
-                        ),
-                      ),
-
-                      if (_error.isNotEmpty) ...[
-                        const SizedBox(height: 20),
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    // Logo & Brand Name
+                    Row(
+                      mainAxisAlignment: MainAxisAlignment.center,
+                      children: [
                         Container(
-                          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+                          width: 70,
+                          height: 70,
+                          padding: const EdgeInsets.all(4),
                           decoration: BoxDecoration(
-                            color: Colors.red.withOpacity(0.15),
-                            border: Border.all(color: Colors.redAccent),
-                            borderRadius: BorderRadius.circular(10),
+                            color: Colors.black,
+                            borderRadius: BorderRadius.circular(20),
+                            border: Border.all(color: kGreen, width: 2),
+                            boxShadow: [
+                              BoxShadow(color: kGreen.withOpacity(0.4), blurRadius: 20, spreadRadius: 2),
+                            ],
                           ),
-                          child: Text(
-                            _error,
-                            style: const TextStyle(
-                              color: Colors.redAccent,
-                              fontSize: 12,
+                          child: ClipRRect(
+                            borderRadius: BorderRadius.circular(16),
+                            child: Image.asset(
+                              'assets/icon/logo.png',
+                              fit: BoxFit.cover,
+                              errorBuilder: (c, e, s) => const Icon(Icons.change_history, color: kGreen, size: 40),
                             ),
-                            textAlign: TextAlign.center,
                           ),
+                        ),
+                        const SizedBox(width: 16),
+                        Row(
+                          crossAxisAlignment: CrossAxisAlignment.baseline,
+                          textBaseline: TextBaseline.alphabetic,
+                          children: const [
+                            Text(
+                              'Maya',
+                              style: TextStyle(fontSize: 38, fontWeight: FontWeight.bold, color: Colors.white),
+                            ),
+                            Text(
+                              'Jaal',
+                              style: TextStyle(fontSize: 38, fontWeight: FontWeight.bold, color: kGreen),
+                            ),
+                          ],
                         ),
                       ],
+                    ),
+                    const SizedBox(height: 50),
+                    
+                    // Tagline
+                    const Text(
+                      'Your Videos.\nYour Links.',
+                      style: TextStyle(fontSize: 34, fontWeight: FontWeight.w900, color: Colors.white, height: 1.1, letterSpacing: 1),
+                    ),
+                    const Text(
+                      'Your Earnings.',
+                      style: TextStyle(fontSize: 34, fontWeight: FontWeight.w900, color: kGreen, height: 1.2, letterSpacing: 1),
+                    ),
+                    const SizedBox(height: 16),
+                    Text(
+                      "World's Smartest Video Sharing\nPlatform",
+                      style: TextStyle(fontSize: 14, color: kGreen.withOpacity(0.8), fontFamily: 'monospace', letterSpacing: 1, height: 1.4),
+                    ),
+                    
+                    const SizedBox(height: 60),
+                    
+                    // Google Sign In Button
+                    SizedBox(
+                      width: double.infinity,
+                      height: 56,
+                      child: ElevatedButton(
+                        onPressed: _loading ? null : _handleGoogle,
+                        style: ElevatedButton.styleFrom(
+                          backgroundColor: Colors.white,
+                          foregroundColor: Colors.black,
+                          shape: RoundedRectangleBorder(
+                            borderRadius: BorderRadius.circular(28),
+                          ),
+                          elevation: 8,
+                          shadowColor: kGreen.withOpacity(0.5),
+                        ),
+                        child: _loading
+                            ? const SizedBox(width: 24, height: 24, child: CircularProgressIndicator(color: Colors.black, strokeWidth: 2.5))
+                            : Stack(
+                                alignment: Alignment.center,
+                                children: [
+                                  Row(
+                                    mainAxisAlignment: MainAxisAlignment.center,
+                                    children: [
+                                      Image.network(
+                                        'https://developers.google.com/identity/images/g-logo.png',
+                                        height: 26,
+                                        errorBuilder: (c, e, s) => const Icon(Icons.g_mobiledata, color: Colors.red, size: 30),
+                                      ),
+                                      const SizedBox(width: 12),
+                                      const Text(
+                                        'Sign in with Google',
+                                        style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold, color: Colors.black),
+                                      ),
+                                    ],
+                                  ),
+                                  Positioned(
+                                    right: 24,
+                                    child: Icon(Icons.arrow_forward, color: Colors.black.withOpacity(0.8), size: 24),
+                                  ),
+                                ],
+                              ),
+                      ),
+                    ),
+                    
+                    if (_error.isNotEmpty) ...[
+                      const SizedBox(height: 20),
+                      Container(
+                        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+                        decoration: BoxDecoration(
+                          color: Colors.red.withOpacity(0.15),
+                          border: Border.all(color: Colors.redAccent),
+                          borderRadius: BorderRadius.circular(10),
+                        ),
+                        child: Text(
+                          _error,
+                          style: const TextStyle(color: Colors.redAccent, fontSize: 12),
+                          textAlign: TextAlign.center,
+                        ),
+                      ),
                     ],
-                  ),
+                  ],
                 ),
               ),
             ),
@@ -3098,7 +2974,10 @@ class _MoreDrawerState extends State<MoreDrawer>
     Haptic.heavy();
     await MayaJaalAccount.signOut();
     if (context.mounted) {
-      Navigator.of(context).popUntil((route) => route.isFirst);
+      Navigator.of(context).pushAndRemoveUntil(
+        MaterialPageRoute(builder: (_) => const LoginScreen()),
+        (route) => false,
+      );
     }
   }
 
@@ -5101,7 +4980,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
 }
 
 // ═══════════════════════════════════════════════════════
-// STREAM PREVIEW SCREEN
+// STREAM PREVIEW SCREEN (10 Sec Countdown & Play Button)
 // ═══════════════════════════════════════════════════════
 class StreamPreviewScreen extends StatefulWidget {
   final String targetUrl;
@@ -5140,25 +5019,6 @@ class _StreamPreviewScreenState extends State<StreamPreviewScreen>
     )..repeat(reverse: true);
     _pulseAnimation = Tween<double>(begin: 0.96, end: 1.04)
         .animate(CurvedAnimation(parent: _pulseController, curve: Curves.easeInOut));
-
-    if (!MayaJaalAccount.isLoggedIn) {
-      WidgetsBinding.instance.addPostFrameCallback((_) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
-            backgroundColor: kCardBg,
-            content: Text(
-              'Please login to watch videos',
-              style: TextStyle(color: kGreen),
-            ),
-          ),
-        );
-        Navigator.pushReplacement(
-          context,
-          MaterialPageRoute(builder: (_) => const LoginScreen()),
-        );
-      });
-      return;
-    }
 
     _fetchStreamMetadata();
   }
@@ -5328,58 +5188,42 @@ class _StreamPreviewScreenState extends State<StreamPreviewScreen>
   Widget _buildCountdownCircle() {
     final progress = 1.0 - (_countdown / 10.0);
     return SizedBox(
-      width: 130,
-      height: 130,
+      width: 110,
+      height: 110,
       child: Stack(
         alignment: Alignment.center,
         children: [
           SizedBox(
-            width: 130,
-            height: 130,
+            width: 110,
+            height: 110,
             child: CircularProgressIndicator(
               value: progress,
-              strokeWidth: 7,
+              strokeWidth: 6,
               backgroundColor: Colors.white12,
-              valueColor: AlwaysStoppedAnimation<Color>(
-                _canProceed ? kGreen : Colors.orangeAccent,
-              ),
+              valueColor: const AlwaysStoppedAnimation<Color>(Colors.orangeAccent),
             ),
           ),
           Column(
             mainAxisAlignment: MainAxisAlignment.center,
             children: [
-              Icon(
-                _canProceed ? Icons.check_circle_outline : Icons.timer,
-                color: _canProceed ? kGreen : Colors.orangeAccent,
-                size: 40,
+              const Icon(
+                Icons.timer,
+                color: Colors.orangeAccent,
+                size: 30,
               ),
               const SizedBox(height: 4),
               Text(
-                _canProceed ? 'READY' : '$_countdown',
-                style: TextStyle(
-                  color: _canProceed ? kGreen : Colors.orangeAccent,
-                  fontSize: _canProceed ? 18 : 36,
+                '$_countdown',
+                style: const TextStyle(
+                  color: Colors.orangeAccent,
+                  fontSize: 30,
                   fontWeight: FontWeight.w900,
                   letterSpacing: 2,
                   shadows: [
-                    Shadow(
-                      color: (_canProceed ? kGreen : Colors.orangeAccent)
-                          .withOpacity(0.7),
-                      blurRadius: 15,
-                    ),
+                    Shadow(color: Colors.orangeAccent, blurRadius: 15),
                   ],
                 ),
               ),
-              if (!_canProceed)
-                Text(
-                  'SEC',
-                  style: TextStyle(
-                    color: Colors.orangeAccent.withOpacity(0.8),
-                    fontSize: 10,
-                    letterSpacing: 3,
-                    fontWeight: FontWeight.bold,
-                  ),
-                ),
             ],
           ),
         ],
@@ -5395,16 +5239,16 @@ class _StreamPreviewScreenState extends State<StreamPreviewScreen>
         child: GestureDetector(
           onTap: _launchNativePlayer,
           child: Container(
-            width: double.infinity,
-            height: 64,
+            width: 150,
+            height: 60,
             decoration: BoxDecoration(
               color: Colors.black,
-              borderRadius: BorderRadius.circular(32),
+              borderRadius: BorderRadius.circular(30),
               boxShadow: [
                 BoxShadow(
-                  color: kRed.withOpacity(0.5),
-                  blurRadius: 22,
-                  spreadRadius: 1,
+                  color: kRed.withOpacity(0.6),
+                  blurRadius: 25,
+                  spreadRadius: 2,
                 ),
               ],
             ),
@@ -5425,17 +5269,17 @@ class _StreamPreviewScreenState extends State<StreamPreviewScreen>
                     Icon(
                       Icons.play_arrow_rounded,
                       color: kRed,
-                      size: 32,
+                      size: 28,
                     ),
-                    SizedBox(width: 8),
+                    SizedBox(width: 6),
                     Text(
                       'PLAY NOW',
                       style: TextStyle(
                         color: kRed,
-                        fontSize: 15,
+                        fontSize: 14,
                         fontWeight: FontWeight.w900,
-                        letterSpacing: 2.5,
-                        shadows: [Shadow(color: kRed, blurRadius: 14)],
+                        letterSpacing: 1.5,
+                        shadows: [Shadow(color: kRed, blurRadius: 10)],
                       ),
                     ),
                   ],
@@ -5524,7 +5368,7 @@ class _StreamPreviewScreenState extends State<StreamPreviewScreen>
                   AdBanner(slot: 'preview-top'),
                   const SizedBox(height: 14),
 
-                  // VIDEO PREVIEW BOX with thumbnail
+                  // VIDEO PREVIEW BOX with thumbnail & dynamic overlay
                   Container(
                     padding: const EdgeInsets.all(4),
                     decoration: BoxDecoration(
@@ -5551,6 +5395,7 @@ class _StreamPreviewScreenState extends State<StreamPreviewScreen>
                         child: Stack(
                           alignment: Alignment.center,
                           children: [
+                            // Background Gradient / Thumbnail
                             Container(
                               decoration: BoxDecoration(
                                 gradient: LinearGradient(
@@ -5578,7 +5423,18 @@ class _StreamPreviewScreenState extends State<StreamPreviewScreen>
                               ),
                             ),
                             Container(color: Colors.black.withOpacity(0.35)),
-                            _buildCountdownCircle(),
+                            
+                            // CENTER WIDGET: Countdown or Play Button
+                            AnimatedSwitcher(
+                              duration: const Duration(milliseconds: 400),
+                              transitionBuilder: (Widget child, Animation<double> animation) {
+                                return ScaleTransition(scale: animation, child: FadeTransition(opacity: animation, child: child));
+                              },
+                              child: _canProceed
+                                  ? _buildRedSnakePlayButton()
+                                  : _buildCountdownCircle(),
+                            ),
+
                             Positioned(
                               top: 8,
                               left: 8,
@@ -5607,31 +5463,6 @@ class _StreamPreviewScreenState extends State<StreamPreviewScreen>
                       ),
                     ),
                   ),
-                  const SizedBox(height: 14),
-
-                  // RED SNAKE PLAY BUTTON (Immediately below Video)
-                  if (_canProceed)
-                    _buildRedSnakePlayButton()
-                  else
-                    Container(
-                      width: double.infinity,
-                      height: 64,
-                      decoration: BoxDecoration(
-                        color: Colors.grey[850],
-                        borderRadius: BorderRadius.circular(32),
-                      ),
-                      child: Center(
-                        child: Text(
-                          'UNLOCK IN $_countdown SEC',
-                          style: const TextStyle(
-                            color: Colors.white54,
-                            fontSize: 14,
-                            fontWeight: FontWeight.w900,
-                            letterSpacing: 2,
-                          ),
-                        ),
-                      ),
-                    ),
                   const SizedBox(height: 16),
 
                   // VIDEO INFO
@@ -6497,7 +6328,7 @@ class _NativeVideoPlayerScreenState extends State<NativeVideoPlayerScreen> {
     if (_isFullscreen) {
       return SizedBox.expand(
         child: FittedBox(
-          fit: BoxFit.cover,
+          fit: BoxFit.contain, // PURA VIDEO DIKHEGA, KUCH NHI KATEGA
           child: SizedBox(
             width: _controller.value.size.width,
             height: _controller.value.size.height,
