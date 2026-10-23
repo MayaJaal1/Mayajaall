@@ -85,7 +85,7 @@ jobs:
           name: mayajaal
           description: Mayajaal App
           publish_to: 'none'
-          version: 1.1.2+${{ github.run_number }}
+          version: 1.2.0+${{ github.run_number }}
 
           environment:
             sdk: '>=3.0.0 <4.0.0'
@@ -112,6 +112,7 @@ jobs:
             permission_handler: ^11.3.1
             photo_manager: ^3.6.4
             photo_manager_image_provider: ^2.1.1
+            crypto: ^3.0.3
 
           dev_dependencies:
             flutter_test:
@@ -140,6 +141,7 @@ jobs:
           mkdir -p android/app/src/main/kotlin/com/mayajaal/online
           mkdir -p android/app/src/main/res/values
           mkdir -p android/app/src/main/res/values-night
+          mkdir -p android/app/src/main/res/xml
 
           cp mayajaal-release.jks android/app/mayajaal-release.jks
 
@@ -175,32 +177,67 @@ jobs:
           </resources>
           EOF
 
+      - name: Create Network Security Config
+        shell: bash
+        run: |
+          cat > android/app/src/main/res/xml/network_security_config.xml <<'EOF'
+          <?xml version="1.0" encoding="utf-8"?>
+          <network-security-config>
+              <base-config cleartextTrafficPermitted="false">
+                  <trust-anchors>
+                      <certificates src="system" />
+                  </trust-anchors>
+              </base-config>
+              <domain-config cleartextTrafficPermitted="false">
+                  <domain includeSubdomains="true">mayajaal.online</domain>
+                  <domain includeSubdomains="true">www.mayajaal.online</domain>
+                  <domain includeSubdomains="true">m.mayajaal.online</domain>
+                  <domain includeSubdomains="true">mayajaal-app.firebaseapp.com</domain>
+                  <domain includeSubdomains="true">mayajaal-app-default-rtdb.asia-southeast1.firebasedatabase.app</domain>
+                  <domain includeSubdomains="true">mayajaal-app.firebasestorage.app</domain>
+                  <domain includeSubdomains="true">googleapis.com</domain>
+                  <domain includeSubdomains="true">gstatic.com</domain>
+                  <domain includeSubdomains="true">onesignal.com</domain>
+                  <domain includeSubdomains="true">r2.dev</domain>
+                  <domain includeSubdomains="true">cloudflarestorage.com</domain>
+                  <domain includeSubdomains="true">t.me</domain>
+                  <domain includeSubdomains="true">telegram.org</domain>
+                  <domain includeSubdomains="true">youtube.com</domain>
+                  <domain includeSubdomains="true">instagram.com</domain>
+                  <trust-anchors>
+                      <certificates src="system" />
+                  </trust-anchors>
+              </domain-config>
+          </network-security-config>
+          EOF
+
       - name: Create AndroidManifest.xml
         shell: bash
         run: |
           cat > android/app/src/main/AndroidManifest.xml <<'EOF'
-          <manifest xmlns:android="http://schemas.android.com/apk/res/android">
+          <manifest xmlns:android="http://schemas.android.com/apk/res/android"
+              xmlns:tools="http://schemas.android.com/tools">
 
               <uses-permission android:name="android.permission.INTERNET"/>
               <uses-permission android:name="android.permission.ACCESS_NETWORK_STATE"/>
-              <uses-permission android:name="android.permission.READ_EXTERNAL_STORAGE" android:maxSdkVersion="32"/>
-              <uses-permission android:name="android.permission.WRITE_EXTERNAL_STORAGE" android:maxSdkVersion="32"/>
-              <uses-permission android:name="android.permission.READ_MEDIA_VIDEO"/>
-              <uses-permission android:name="android.permission.READ_MEDIA_AUDIO"/>
               <uses-permission android:name="android.permission.READ_MEDIA_IMAGES"/>
+              <uses-permission android:name="android.permission.READ_MEDIA_VIDEO"/>
               <uses-permission android:name="android.permission.READ_MEDIA_VISUAL_USER_SELECTED"/>
-              <uses-permission android:name="android.permission.ACCESS_MEDIA_LOCATION"/>
-              <uses-permission android:name="android.permission.CAMERA"/>
+              <uses-permission android:name="android.permission.READ_EXTERNAL_STORAGE" android:maxSdkVersion="32"/>
+              <uses-permission android:name="android.permission.WRITE_EXTERNAL_STORAGE" android:maxSdkVersion="28"/>
               <uses-permission android:name="android.permission.POST_NOTIFICATIONS"/>
               <uses-permission android:name="android.permission.WAKE_LOCK"/>
+              <uses-permission android:name="android.permission.FOREGROUND_SERVICE"/>
+              <uses-permission android:name="android.permission.FOREGROUND_SERVICE_DATA_SYNC"/>
 
               <application
                   android:label="MayaJaal"
                   android:name="${applicationName}"
                   android:icon="@mipmap/ic_launcher"
                   android:hardwareAccelerated="true"
-                  android:requestLegacyExternalStorage="true"
-                  android:usesCleartextTraffic="true">
+                  android:networkSecurityConfig="@xml/network_security_config"
+                  android:usesCleartextTraffic="false"
+                  tools:targetApi="34">
 
                   <activity
                       android:name=".MainActivity"
@@ -256,6 +293,29 @@ jobs:
                       android:value="2"/>
 
               </application>
+
+              <queries>
+                  <intent>
+                      <action android:name="android.intent.action.PROCESS_TEXT"/>
+                      <data android:mimeType="text/plain"/>
+                  </intent>
+                  <intent>
+                      <action android:name="android.intent.action.VIEW"/>
+                      <data android:scheme="https"/>
+                  </intent>
+                  <intent>
+                      <action android:name="android.intent.action.VIEW"/>
+                      <data android:scheme="http"/>
+                  </intent>
+                  <intent>
+                      <action android:name="android.intent.action.SENDTO"/>
+                      <data android:scheme="mailto"/>
+                  </intent>
+                  <intent>
+                      <action android:name="android.intent.action.SEND"/>
+                      <data android:mimeType="text/plain"/>
+                  </intent>
+              </queries>
           </manifest>
           EOF
 
@@ -305,7 +365,7 @@ jobs:
                   minSdkVersion 23
                   targetSdkVersion 35
                   versionCode ${{ github.run_number }}
-                  versionName "1.1.2"
+                  versionName "1.2.0"
                   multiDexEnabled true
               }
 
@@ -451,14 +511,15 @@ jobs:
         if: github.ref == 'refs/heads/main'
         uses: softprops/action-gh-release@v2
         with:
-          tag_name: v1.1.2-${{ github.run_number }}
-          name: MayaJaal Release v1.1.2 Build ${{ github.run_number }}
+          tag_name: v1.2.0-${{ github.run_number }}
+          name: MayaJaal Release v1.2.0 Build ${{ github.run_number }}
           repository: MayaJaal1/MayaJaal-Downloads
           token: ${{ secrets.PAT_TOKEN }}
           body: |
             MayaJaal Android APK.
-            Version: 1.1.2
+            Version: 1.2.0
             Version Code: ${{ github.run_number }}
+            Security: Gmail-Only, HMAC, HTTPS-Only, Anti-Hack
           draft: false
           prerelease: false
           make_latest: true
