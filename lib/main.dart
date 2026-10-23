@@ -344,23 +344,18 @@ class SecurityGuard {
   // ─────────────────────────────────────────────
   // 8. PACKAGE / SIGNATURE INTEGRITY (best-effort)
   // ─────────────────────────────────────────────
-  static Future<bool> isPackageIntact() async {
-    try {
-      // Best-effort: verify app id matches expected via device_info
-      if (Platform.isAndroid) {
-        final info = DeviceInfoPlugin();
-        final a = await info.androidInfo;
-        // packageName exposed on Android
-        // If the app was repacked, packageName / appId may still match
-        // For real integrity use Play Integrity API.
-        if (a.packageName.isEmpty) return false;
-        return true;
-      }
-      return true;
-    } catch (_) {
-      return true;
+static Future<bool> isPackageIntact() async {
+  try {
+    // Note: DeviceInfoPlugin me packageName nahi hota. 
+    // App integrity ke liye Play Integrity API best hai (production me).
+    if (Platform.isAndroid) {
+      return true; 
     }
+    return true;
+  } catch (_) {
+    return true;
   }
+}
 
   // ─────────────────────────────────────────────
   // 9. RATE LIMIT (login attempts)
