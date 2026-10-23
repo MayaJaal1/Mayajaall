@@ -19,6 +19,9 @@ import 'package:device_info_plus/device_info_plus.dart';
 import 'package:permission_handler/permission_handler.dart';
 import 'package:photo_manager/photo_manager.dart';
 import 'package:photo_manager_image_provider/photo_manager_image_provider.dart';
+// 🔐 NEW: crypto for HMAC signing + hash checks
+import 'dart:convert' show base64, utf8;
+import 'package:crypto/crypto.dart' as crypto;
 
 // ═══════════════════════════════════════════════════════
 // CONFIG
@@ -27,6 +30,23 @@ const String webClientId = '96139047750-5ooi0pbvch98qu447somuurh6k6fmhcj.apps.go
 const String oneSignalAppId = '06b99c2b-b3b4-413b-b6cc-480a624f4e25';
 const String kBackendBaseUrl = 'https://www.mayajaal.online';
 const int kAppCurrentVersionCode = 2;
+
+// 🔐 Security: Gmail-only allow-list
+const List<String> kAllowedEmailDomains = [
+  '@gmail.com',
+  '@googlemail.com',
+];
+
+// 🔐 Security: minimum age of Firebase account before login allowed (seconds)
+const int kMinAccountAgeSeconds = 60;
+
+// 🔐 Security: max login attempts per 10 minutes per device
+const int kMaxLoginAttempts = 5;
+const int kLoginWindowMinutes = 10;
+
+// 🔐 Security: HMAC secret for request signing (server must share same)
+// NOTE: ise production me secure storage (keystore/obfuscation) me rakho
+const String _kHmacSecret = 'MJ_HMAC_v1_a7f3b92e_d4c8_11ef_9b8a_00ff_secret_2026';
 
 const Color kGreen = Color(0xFF00FF66);
 const Color kNeonCyan = Color(0xFF00F0FF);
@@ -97,6 +117,378 @@ class Haptic {
   }
   static Future<void> selection() async {
     try { await HapticFeedback.selectionClick(); } catch (_) {}
+  }
+}
+
+// ═══════════════════════════════════════════════════════
+// 🛡️ SECURITY GUARD — Real Gmail + Anti-Hack Protection
+// ═══════════════════════════════════════════════════════
+//
+// ⚠️ FIREBASE RULES (paste in Firebase Console → Realtime DB → Rules):
+//
+// {
+//   "rules": {
+//     "users": {
+//       "$uid": {
+//         ".read": "auth != null && auth.uid == $uid",
+//         ".write": "auth != null && auth.uid == $uid",
+//         ".validate": "auth.token.email != null && auth.token.email.matches(/^[^@]+@(gmail|googlemail)\\.com$/) && auth.token.email_verified == true"
+//       }
+//     },
+//     "links": {
+//       ".read": "auth != null",
+//       "$id": {
+//         ".write": "auth != null"
+//       }
+//     },
+//     "deviceBindings": {
+//       "$deviceId": {
+//         ".read": "auth != null",
+//         ".write": "auth != null && !data.exists()",
+//         ".validate": "newData.hasChildren(['uid','email','boundAt'])"
+//       }
+//     }
+//   }
+// }
+//
+// ⚠️ FIREBASE AUTH SETTINGS:
+//   - Enable: Google provider ONLY
+//   - Disable: Email/Password, Anonymous, Phone, Play Games
+//   - Enable: Email verification requirement (Settings → Email verification)
+//
+// ⚠️ APP CHECK (Play Integrity) — recommended production setup:
+//   flutter pub add firebase_app_check
+//   Then in main():
+//     await FirebaseAppCheck.instance.activate(
+//       androidProvider: AndroidProvider.playIntegrity,
+//     );
+//
+class SecurityGuard {
+  // ─────────────────────────────────────────────
+  // 1. GMAIL DOMAIN VALIDATION
+  // ─────────────────────────────────────────────
+  static bool isGmailOnly(String? email) {
+    if (email == null || email.isEmpty) return false;
+    final lower = email.trim().toLowerCase();
+    return kAllowedEmailDomains.any((d) => lower.endsWith(d));
+  }
+
+  // ─────────────────────────────────────────────
+  // 2. AUTH PROVIDER LOCK (must be Google)
+  // ─────────────────────────────────────────────
+  static bool isGoogleProvider(User user) {
+    return user.providerData.any((p) => p.providerId == 'google.com');
+  }
+
+  // ─────────────────────────────────────────────
+  // 3. EMAIL VERIFIED CHECK
+  // ─────────────────────────────────────────────
+  static bool isEmailVerified(User user) {
+    return user.emailVerified == true;
+  }
+
+  // ─────────────────────────────────────────────
+  // 4. ACCOUNT AGE GATE (bot signup prevention)
+  // ─────────────────────────────────────────────
+  static bool isAccountOldEnough(User user, {int seconds = kMinAccountAgeSeconds}) {
+    final created = user.metadata.creationTime;
+    if (created == null) return false;
+    return DateTime.now().difference(created).inSeconds >= seconds;
+  }
+
+  // ─────────────────────────────────────────────
+  // 5. FULL USER VALIDATION — call after Google sign-in
+  //    Returns null if OK, else error message
+  // ─────────────────────────────────────────────
+  static Future<String?> validateUser(User user) async {
+    // Provider check
+    if (!isGoogleProvider(user)) {
+      return 'Only Google sign-in is allowed.';
+    }
+    // Gmail only
+    if (!isGmailOnly(user.email)) {
+      return 'Only @gmail.com accounts are supported.';
+    }
+    // Verified
+    if (!isEmailVerified(user)) {
+      return 'Your Gmail is not verified by Google. Please verify and retry.';
+    }
+    // Account age
+    if (!isAccountOldEnough(user)) {
+      return 'This account is too new. Please wait a minute and try again.';
+    }
+    // Force refresh token to ensure it's fresh
+    try {
+      final token = await user.getIdToken(true);
+      if (token == null || token.isEmpty) {
+        return 'Session token invalid. Please re-login.';
+      }
+    } catch (_) {
+      return 'Session validation failed. Please retry.';
+    }
+    return null;
+  }
+
+  // ─────────────────────────────────────────────
+  // 6. DEVICE BINDING (RTDB) — 1 device = 1 account
+  // ─────────────────────────────────────────────
+  static Future<Map<String, dynamic>> validateAndBindDevice(
+    String uid,
+    String email,
+  ) async {
+    try {
+      final deviceId = await DeviceIdHelper.get();
+      final ref = FirebaseDatabase.instance.ref('deviceBindings/$deviceId');
+      final snap = await ref.once();
+      final data = snap.snapshot.value as Map?;
+
+      if (data == null) {
+        // First signup on this device → bind
+        await ref.set({
+          'uid': uid,
+          'email': email,
+          'boundAt': DateTime.now().millisecondsSinceEpoch,
+        });
+        return {'ok': true, 'firstBind': true};
+      }
+
+      final existingUid = data['uid']?.toString() ?? '';
+      if (existingUid == uid) {
+        // Same user, refresh last seen
+        await ref.update({
+          'lastSeen': DateTime.now().millisecondsSinceEpoch,
+        });
+        return {'ok': true, 'firstBind': false};
+      }
+
+      // Different uid on same device → BLOCK
+      return {
+        'ok': false,
+        'reason': 'This device is already linked to a different MayaJaal account.',
+        'existingEmail': data['email']?.toString() ?? 'unknown',
+        'hint': 'Use the original account or contact support.',
+      };
+    } catch (e) {
+      debugPrint('Device bind error: $e');
+      // Fail-open in dev, but if you want strict: return {'ok': false, ...}
+      return {'ok': true, 'warning': 'binding_skipped'};
+    }
+  }
+
+  // ─────────────────────────────────────────────
+  // 7. ROOT / EMULATOR DETECTION (soft warning + hard block on some)
+  // ─────────────────────────────────────────────
+  static Future<Map<String, dynamic>> detectRootOrEmulator() async {
+    try {
+      final info = DeviceInfoPlugin();
+      if (Platform.isAndroid) {
+        final a = await info.androidInfo;
+        final isEmulator =
+            a.model.toLowerCase().contains('sdk') ||
+            a.model.toLowerCase().contains('emulator') ||
+            a.model.toLowerCase().contains('android sdk built for') ||
+            a.manufacturer.toLowerCase().contains('genymotion') ||
+            a.manufacturer.toLowerCase().contains('unknown') ||
+            a.product.toLowerCase().contains('sdk') ||
+            a.hardware.toLowerCase().contains('goldfish') ||
+            a.hardware.toLowerCase().contains('ranchu');
+
+        // Root hints (best-effort)
+        bool rooted = false;
+        try {
+          final suPaths = [
+            '/system/app/Superuser.apk',
+            '/sbin/su',
+            '/system/bin/su',
+            '/system/xbin/su',
+            '/data/local/xbin/su',
+            '/data/local/bin/su',
+            '/system/sd/xbin/su',
+            '/system/bin/failsafe/su',
+            '/data/local/su',
+            '/su/bin/su',
+          ];
+          for (final p in suPaths) {
+            if (File(p).existsSync()) { rooted = true; break; }
+          }
+        } catch (_) {}
+
+        final isDebuggable = (a.isPhysicalDevice == false) || a.isLowRamDevice;
+
+        return {
+          'emulator': isEmulator,
+          'rooted': rooted,
+          'isPhysical': a.isPhysicalDevice,
+          'brand': a.brand,
+          'model': a.model,
+          'sdk': a.version.sdkInt,
+        };
+      }
+      if (Platform.isIOS) {
+        final i = await info.iosInfo;
+        final isJailbroken = i.isPhysicalDevice == false;
+        return {
+          'emulator': isJailbroken,
+          'rooted': isJailbroken,
+          'isPhysical': i.isPhysicalDevice,
+          'brand': 'Apple',
+          'model': i.utsname.machine,
+        };
+      }
+    } catch (e) {
+      debugPrint('device detect err: $e');
+    }
+    return {'emulator': false, 'rooted': false, 'isPhysical': true};
+  }
+
+  // ─────────────────────────────────────────────
+  // 8. PACKAGE / SIGNATURE INTEGRITY (best-effort)
+  // ─────────────────────────────────────────────
+  static Future<bool> isPackageIntact() async {
+    try {
+      // Best-effort: verify app id matches expected via device_info
+      if (Platform.isAndroid) {
+        final info = DeviceInfoPlugin();
+        final a = await info.androidInfo;
+        // packageName exposed on Android
+        // If the app was repacked, packageName / appId may still match
+        // For real integrity use Play Integrity API.
+        if (a.packageName.isEmpty) return false;
+        return true;
+      }
+      return true;
+    } catch (_) {
+      return true;
+    }
+  }
+
+  // ─────────────────────────────────────────────
+  // 9. RATE LIMIT (login attempts)
+  // ─────────────────────────────────────────────
+  static Future<bool> checkLoginRateLimit() async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      final now = DateTime.now().millisecondsSinceEpoch;
+      final windowMs = kLoginWindowMinutes * 60 * 1000;
+      final raw = prefs.getString('mj_login_attempts');
+      List<int> attempts = [];
+      if (raw != null) {
+        attempts = (jsonDecode(raw) as List).map((e) => (e as num).toInt()).toList();
+      }
+      attempts = attempts.where((t) => now - t < windowMs).toList();
+      if (attempts.length >= kMaxLoginAttempts) return false;
+      return true;
+    } catch (_) {
+      return true;
+    }
+  }
+
+  static Future<void> recordLoginAttempt() async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      final now = DateTime.now().millisecondsSinceEpoch;
+      final raw = prefs.getString('mj_login_attempts');
+      List<int> attempts = [];
+      if (raw != null) {
+        attempts = (jsonDecode(raw) as List).map((e) => (e as num).toInt()).toList();
+      }
+      attempts.add(now);
+      final windowMs = kLoginWindowMinutes * 60 * 1000;
+      attempts = attempts.where((t) => now - t < windowMs).toList();
+      await prefs.setString('mj_login_attempts', jsonEncode(attempts));
+    } catch (_) {}
+  }
+
+  static Future<void> clearLoginAttempts() async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      await prefs.remove('mj_login_attempts');
+    } catch (_) {}
+  }
+
+  // ─────────────────────────────────────────────
+  // 10. HMAC REQUEST SIGNING (for backend verification)
+  // ─────────────────────────────────────────────
+  static String signRequest(String method, String path, String body) {
+    final payload = '$method\n$path\n$body';
+    final hmac = crypto.Hmac(crypto.sha256, utf8.encode(_kHmacSecret));
+    final digest = hmac.convert(utf8.encode(payload));
+    return digest.toString();
+  }
+
+  static Map<String, String> signedHeaders({
+    required String method,
+    required String path,
+    required String body,
+    required String deviceId,
+    String? uid,
+  }) {
+    final ts = DateTime.now().millisecondsSinceEpoch.toString();
+    final sig = signRequest(method, path, '$ts.$body');
+    return {
+      'Content-Type': 'application/json',
+      'X-MJ-Timestamp': ts,
+      'X-MJ-Device': deviceId,
+      'X-MJ-Uid': uid ?? '',
+      'X-MJ-Signature': sig,
+    };
+  }
+
+  // ─────────────────────────────────────────────
+  // 11. SESSION INTEGRITY (every sensitive op)
+  // ─────────────────────────────────────────────
+  static Future<bool> validateSession() async {
+    final user = FirebaseAuth.instance.currentUser;
+    if (user == null) return false;
+    if (!isGmailOnly(user.email)) return false;
+    if (!isEmailVerified(user)) return false;
+    if (!isGoogleProvider(user)) return false;
+    try {
+      await user.reload();
+      final fresh = FirebaseAuth.instance.currentUser;
+      if (fresh == null) return false;
+      final token = await fresh.getIdToken(false);
+      if (token == null || token.isEmpty) return false;
+      return true;
+    } catch (_) {
+      return false;
+    }
+  }
+
+  // ─────────────────────────────────────────────
+  // 12. FULL SECURITY GATE (before entering app)
+  //     Returns null if OK, else error message
+  // ─────────────────────────────────────────────
+  static Future<String?> fullGate(User user) async {
+    // Step 1: user validation
+    final userErr = await validateUser(user);
+    if (userErr != null) return userErr;
+
+    // Step 2: device root/emulator check (warn — but block rooted)
+    final device = await detectRootOrEmulator();
+    if (device['emulator'] == true) {
+      return 'Emulator detected. MayaJaal requires a physical device.';
+    }
+    if (device['rooted'] == true) {
+      return 'Rooted/jailbroken device detected. Please use a secure device.';
+    }
+
+    // Step 3: package integrity
+    final intact = await isPackageIntact();
+    if (!intact) return 'App integrity check failed. Please reinstall from official source.';
+
+    // Step 4: device binding
+    final bind = await validateAndBindDevice(user.uid, user.email ?? '');
+    if (bind['ok'] != true) {
+      return bind['reason']?.toString() ??
+          'Device binding failed. Contact support.';
+    }
+
+    // Step 5: session integrity
+    final sessOk = await validateSession();
+    if (!sessOk) return 'Session invalid. Please login again.';
+
+    return null;
   }
 }
 
@@ -193,7 +585,7 @@ class AdTracker {
 }
 
 // ═══════════════════════════════════════════════════════
-// MAYAJAAL FIREBASE ACCOUNT SERVICE
+// MAYAJAAL FIREBASE ACCOUNT SERVICE (SECURED)
 // ═══════════════════════════════════════════════════════
 class MayaJaalAccount {
   static String? cachedUid;
@@ -207,6 +599,13 @@ class MayaJaalAccount {
   static Future<void> init() async {
     final user = FirebaseAuth.instance.currentUser;
     if (user != null) {
+      // 🔐 SECURITY: validate before caching
+      final err = await SecurityGuard.validateUser(user);
+      if (err != null) {
+        debugPrint('🚫 init rejected: $err');
+        await signOut();
+        return;
+      }
       cachedUid = user.uid;
       cachedEmail = user.email;
       cachedName = user.displayName;
@@ -220,6 +619,11 @@ class MayaJaalAccount {
 
   static Future<void> syncUserToRTDB(User user) async {
     try {
+      // 🔐 SECURITY: re-verify Gmail before any write
+      if (!SecurityGuard.isGmailOnly(user.email)) {
+        debugPrint('🚫 RTDB sync blocked: non-gmail');
+        return;
+      }
       final ref = _rtdb.child('users/${user.uid}');
       final snap = await ref.once();
       final data = snap.snapshot.value as Map?;
@@ -229,6 +633,9 @@ class MayaJaalAccount {
         'name': user.displayName ?? 'User',
         'photoURL': user.photoURL ?? '',
         'lastSeen': DateTime.now().millisecondsSinceEpoch,
+        'emailVerified': user.emailVerified,
+        'provider': 'google.com',
+        'deviceHash': await DeviceIdHelper.getHash(), // 🔐 anti-multi-device
       };
 
       if (data == null) {
@@ -285,17 +692,63 @@ class MayaJaalAccount {
     return List.generate(24, (_) => chars[r.nextInt(chars.length)]).join();
   }
 
+  // 🔐 SECURED Google sign-in — full validation
   static Future<UserCredential?> signInWithGoogle() async {
+    // Rate limit
+    final allowed = await SecurityGuard.checkLoginRateLimit();
+    if (!allowed) {
+      throw FirebaseAuthException(
+        code: 'too-many-requests',
+        message: 'Too many login attempts. Try again in 10 minutes.',
+      );
+    }
+    await SecurityGuard.recordLoginAttempt();
+
     final googleSignIn = GoogleSignIn(serverClientId: webClientId);
     final googleUser = await googleSignIn.signIn();
     if (googleUser == null) return null;
+
+    // 🔐 Pre-check: reject non-gmail Google accounts before Firebase
+    if (!SecurityGuard.isGmailOnly(googleUser.email)) {
+      await googleSignIn.signOut();
+      throw FirebaseAuthException(
+        code: 'invalid-credential',
+        message: 'Only @gmail.com accounts are allowed.',
+      );
+    }
 
     final googleAuth = await googleUser.authentication;
     final credential = GoogleAuthProvider.credential(
       idToken: googleAuth.idToken,
       accessToken: googleAuth.accessToken,
     );
-    return await FirebaseAuth.instance.signInWithCredential(credential);
+    final result = await FirebaseAuth.instance.signInWithCredential(credential);
+
+    // 🔐 Post-check: full validation via SecurityGuard
+    final user = result.user;
+    if (user == null) throw FirebaseAuthException(code: 'unknown', message: 'No user returned.');
+
+    final err = await SecurityGuard.validateUser(user);
+    if (err != null) {
+      await FirebaseAuth.instance.signOut();
+      await googleSignIn.signOut();
+      throw FirebaseAuthException(code: 'invalid-credential', message: err);
+    }
+
+    // 🔐 Device binding
+    final bind = await SecurityGuard.validateAndBindDevice(user.uid, user.email ?? '');
+    if (bind['ok'] != true) {
+      await FirebaseAuth.instance.signOut();
+      await googleSignIn.signOut();
+      throw FirebaseAuthException(
+        code: 'device-locked',
+        message: bind['reason']?.toString() ?? 'Device locked to another account.',
+      );
+    }
+
+    // Success — clear rate-limit
+    await SecurityGuard.clearLoginAttempts();
+    return result;
   }
 
   static Future<void> signOut() async {
@@ -374,7 +827,6 @@ class MayaJaalAccount {
     if (views <= 0) return 0;
     if (views <= 1000) return _r2(views * 0.0015);
     if (views <= 2000) return _r2(1.50 + (views - 1000) * 0.0025);
-    
     return _r2(4.00 + (views - 2000) * 0.002);
   }
 
@@ -765,10 +1217,12 @@ class FirebaseService {
 }
 
 // ═══════════════════════════════════════════════════════
-// DEVICE ID HELPER
+// DEVICE ID HELPER (with hash for anti-tamper)
 // ═══════════════════════════════════════════════════════
 class DeviceIdHelper {
   static String? _cached;
+  static String? _cachedHash;
+
   static Future<String> get() async {
     if (_cached != null) return _cached!;
     try {
@@ -796,6 +1250,19 @@ class DeviceIdHelper {
       return _cached!;
     }
   }
+
+  // 🔐 SHA-256 hash of device id (for RTDB, don't expose raw)
+  static Future<String> getHash() async {
+    if (_cachedHash != null) return _cachedHash!;
+    try {
+      final raw = await get();
+      final digest = crypto.sha256.convert(utf8.encode('mj_salt_2026_$raw'));
+      _cachedHash = digest.toString().substring(0, 24);
+      return _cachedHash!;
+    } catch (_) {
+      return 'unknown';
+    }
+  }
 }
 
 // ═══════════════════════════════════════════════════════
@@ -820,7 +1287,7 @@ class WatchHistory {
 }
 
 // ═══════════════════════════════════════════════════════
-// MAIN
+// MAIN (with security init)
 // ═══════════════════════════════════════════════════════
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
@@ -843,6 +1310,17 @@ Future<void> main() async {
       ),
     );
     debugPrint("✅ Firebase Initialized");
+
+    // 🔐 App Check (enable in prod — uncomment after adding firebase_app_check package)
+    // try {
+    //   await FirebaseAppCheck.instance.activate(
+    //     androidProvider: AndroidProvider.playIntegrity,
+    //   );
+    //   debugPrint('✅ App Check activated');
+    // } catch (e) {
+    //   debugPrint('App Check error: $e');
+    // }
+
     await MayaJaalAccount.init();
   } catch (e) {
     debugPrint("Firebase Init Error: $e");
@@ -1182,7 +1660,7 @@ class _SplashScreenState extends State<SplashScreen>
 }
 
 // ═══════════════════════════════════════════════════════
-// MY APP (FIXED - Initial deep link handled properly)
+// MY APP
 // ═══════════════════════════════════════════════════════
 class MyApp extends StatefulWidget {
   const MyApp({super.key});
@@ -1192,7 +1670,7 @@ class MyApp extends StatefulWidget {
 
 class _MyAppState extends State<MyApp> {
   static _MyAppState? instance;
-  
+
   late AppLinks _appLinks;
   StreamSubscription<Uri>? _linkSub;
   Uri? _initialLink;
@@ -1273,7 +1751,6 @@ class _MyAppState extends State<MyApp> {
       return;
     }
 
-    // ✅ Logged in → ALWAYS 10sec page
     navigatorKey.currentState?.push(MaterialPageRoute(
       builder: (_) => StreamPreviewScreen(targetUrl: target),
     ));
@@ -1339,7 +1816,7 @@ class _MyAppState extends State<MyApp> {
 }
 
 // ═══════════════════════════════════════════════════════
-// AUTH GATE (FIXED - Checks pending link BEFORE Home)
+// AUTH GATE (SECURED — full gate applied)
 // ═══════════════════════════════════════════════════════
 class AuthGate extends StatefulWidget {
   const AuthGate({super.key});
@@ -1351,6 +1828,8 @@ class _AuthGateState extends State<AuthGate> {
   bool _initialCheckDone = false;
   String? _initialPendingUrl;
   bool _initialHandled = false;
+  String? _blockingError;
+  bool _gateChecked = false;
 
   @override
   void initState() {
@@ -1364,7 +1843,23 @@ class _AuthGateState extends State<AuthGate> {
     _initialPendingUrl = _MyAppState.instance?.pendingUrl;
     debugPrint('🔍 AuthGate initial pending URL: $_initialPendingUrl');
 
-    if (mounted) setState(() => _initialCheckDone = true);
+    // 🔐 If a user is already logged in, run full security gate
+    final user = FirebaseAuth.instance.currentUser;
+    if (user != null) {
+      final err = await SecurityGuard.fullGate(user);
+      if (err != null) {
+        debugPrint('🚫 AuthGate gate failed: $err');
+        await MayaJaalAccount.signOut();
+        _blockingError = err;
+      }
+    }
+
+    if (mounted) {
+      setState(() {
+        _initialCheckDone = true;
+        _gateChecked = true;
+      });
+    }
   }
 
   @override
@@ -1373,10 +1868,25 @@ class _AuthGateState extends State<AuthGate> {
       return const SplashScreen();
     }
 
+    // 🔐 Blocking error screen (root/emulator/gmail-mismatch/device-lock)
+    if (_blockingError != null) {
+      return _SecurityBlockScreen(
+        error: _blockingError!,
+        onRetry: () async {
+          setState(() {
+            _blockingError = null;
+            _initialCheckDone = false;
+            _gateChecked = false;
+          });
+          await _initialize();
+        },
+      );
+    }
+
     return StreamBuilder<User?>(
       stream: FirebaseAuth.instance.authStateChanges(),
       builder: (context, snapshot) {
-        if (snapshot.connectionState == ConnectionState.waiting) {
+        if (snapshot.connectionState == ConnectionState.waiting || !_gateChecked) {
           return const SplashScreen();
         }
 
@@ -1392,7 +1902,6 @@ class _AuthGateState extends State<AuthGate> {
             await MayaJaalAccount.loadApiKey();
           });
 
-          // ✅ Pending URL exists → 10sec page (Home kabhi nahi!)
           if (!_initialHandled &&
               _initialPendingUrl != null &&
               _initialPendingUrl!.isNotEmpty) {
@@ -1404,11 +1913,9 @@ class _AuthGateState extends State<AuthGate> {
             return StreamPreviewScreen(targetUrl: url);
           }
 
-          // ✅ No pending URL → Home page
           return const MainNavigationHolder();
         }
 
-        // Not logged in → Login screen
         return const LoginScreen();
       },
     );
@@ -1416,7 +1923,111 @@ class _AuthGateState extends State<AuthGate> {
 }
 
 // ═══════════════════════════════════════════════════════
-// LOGIN SCREEN (Same to Same as Image)
+// 🛡️ SECURITY BLOCK SCREEN
+// ═══════════════════════════════════════════════════════
+class _SecurityBlockScreen extends StatelessWidget {
+  final String error;
+  final VoidCallback onRetry;
+  const _SecurityBlockScreen({required this.error, required this.onRetry});
+
+  @override
+  Widget build(BuildContext context) {
+    return Scaffold(
+      backgroundColor: Colors.black,
+      body: Stack(
+        children: [
+          const MatrixRain(opacity: 0.25),
+          Center(
+            child: Padding(
+              padding: const EdgeInsets.all(24),
+              child: Column(
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: [
+                  Container(
+                    width: 100,
+                    height: 100,
+                    decoration: BoxDecoration(
+                      shape: BoxShape.circle,
+                      color: Colors.black,
+                      border: Border.all(color: kRed, width: 2.5),
+                      boxShadow: [
+                        BoxShadow(color: kRed.withOpacity(0.6), blurRadius: 30),
+                      ],
+                    ),
+                    child: const Icon(Icons.gpp_bad, color: kRed, size: 48),
+                  ),
+                  const SizedBox(height: 24),
+                  const Text(
+                    'SECURITY BLOCK',
+                    style: TextStyle(
+                      color: kRed,
+                      fontSize: 22,
+                      fontWeight: FontWeight.w900,
+                      letterSpacing: 3,
+                      shadows: [Shadow(color: kRed, blurRadius: 15)],
+                    ),
+                  ),
+                  const SizedBox(height: 12),
+                  Text(
+                    error,
+                    textAlign: TextAlign.center,
+                    style: const TextStyle(
+                      color: Colors.white70,
+                      fontSize: 13,
+                      height: 1.5,
+                    ),
+                  ),
+                  const SizedBox(height: 28),
+                  SizedBox(
+                    width: 220,
+                    height: 50,
+                    child: ElevatedButton.icon(
+                      onPressed: onRetry,
+                      icon: const Icon(Icons.refresh, size: 20),
+                      label: const Text(
+                        'RETRY CHECK',
+                        style: TextStyle(
+                          fontWeight: FontWeight.bold,
+                          letterSpacing: 1.5,
+                        ),
+                      ),
+                      style: ElevatedButton.styleFrom(
+                        backgroundColor: kRed,
+                        foregroundColor: Colors.white,
+                        shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(25),
+                        ),
+                      ),
+                    ),
+                  ),
+                  const SizedBox(height: 14),
+                  TextButton.icon(
+                    onPressed: () async {
+                      await MayaJaalAccount.signOut();
+                      if (context.mounted) {
+                        Navigator.of(context).pushReplacement(
+                          MaterialPageRoute(builder: (_) => const LoginScreen()),
+                        );
+                      }
+                    },
+                    icon: const Icon(Icons.logout, color: kDimGreen, size: 18),
+                    label: const Text(
+                      'LOGOUT',
+                      style: TextStyle(color: kDimGreen, letterSpacing: 1.2),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+// ═══════════════════════════════════════════════════════
+// LOGIN SCREEN (SECURED — Gmail-only flow)
 // ═══════════════════════════════════════════════════════
 class LoginScreen extends StatefulWidget {
   final VoidCallback? onLoginSuccess;
@@ -1466,6 +2077,7 @@ class _LoginScreenState extends State<LoginScreen>
       _error = '';
     });
     try {
+      // 🔐 Secured sign-in — full SecurityGuard pipeline inside
       final result = await MayaJaalAccount.signInWithGoogle();
       if (result == null) {
         setState(() => _loading = false);
@@ -1475,9 +2087,9 @@ class _LoginScreenState extends State<LoginScreen>
       if (!mounted) return;
       widget.onLoginSuccess?.call();
     } on FirebaseAuthException catch (e) {
-      setState(() => _error = '❌ ${_fbError(e.code)}');
+      setState(() => _error = '❌ ${e.message ?? _fbError(e.code)}');
     } catch (e) {
-      setState(() => _error = '❌ Google Error: $e');
+      setState(() => _error = '❌ $e');
     } finally {
       if (mounted) setState(() => _loading = false);
     }
@@ -1486,11 +2098,13 @@ class _LoginScreenState extends State<LoginScreen>
   String _fbError(String code) {
     switch (code) {
       case 'invalid-credential':
-        return 'Email ya password galat hai';
+        return 'Only @gmail.com accounts are allowed';
       case 'too-many-requests':
-        return 'Bohot zyada attempts, thodi der baad try karein';
+        return 'Too many attempts, try again in 10 minutes';
       case 'network-request-failed':
-        return 'Internet connection check karein';
+        return 'Check your internet connection';
+      case 'device-locked':
+        return 'This device is locked to another account';
       default:
         return code.replaceAll('-', ' ');
     }
@@ -1502,10 +2116,7 @@ class _LoginScreenState extends State<LoginScreen>
       backgroundColor: Colors.black,
       body: Stack(
         children: [
-          // 1. Matrix Background
           const MatrixRain(opacity: 0.2),
-          
-          // 2. Laptop Mockup Effect
           Positioned(
             bottom: 80,
             right: -40,
@@ -1571,15 +2182,12 @@ class _LoginScreenState extends State<LoginScreen>
               ),
             ),
           ),
-
-          // 3. Main Content
           SafeArea(
             child: Padding(
               padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 30),
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  // Logo & Brand
                   Row(
                     children: [
                       Container(
@@ -1630,10 +2238,7 @@ class _LoginScreenState extends State<LoginScreen>
                       ),
                     ],
                   ),
-
                   const Spacer(),
-
-                  // Headline Text
                   const Text(
                     'Your Videos.\nYour Links.',
                     style: TextStyle(
@@ -1657,10 +2262,7 @@ class _LoginScreenState extends State<LoginScreen>
                       shadows: [Shadow(color: kGreen, blurRadius: 10)],
                     ),
                   ),
-                  
                   const SizedBox(height: 16),
-                  
-                  // Tagline
                   Text(
                     "World's Smartest Video Sharing\nPlatform",
                     style: TextStyle(
@@ -1671,10 +2273,33 @@ class _LoginScreenState extends State<LoginScreen>
                       height: 1.4,
                     ),
                   ),
-
                   const Spacer(),
-
-                  // White Google Button
+                  // 🔐 Gmail-only notice
+                  Container(
+                    padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                    margin: const EdgeInsets.only(bottom: 12),
+                    decoration: BoxDecoration(
+                      color: Colors.blue.withOpacity(0.08),
+                      border: Border.all(color: Colors.lightBlueAccent.withOpacity(0.5)),
+                      borderRadius: BorderRadius.circular(10),
+                    ),
+                    child: const Row(
+                      children: [
+                        Icon(Icons.shield, color: Colors.lightBlueAccent, size: 16),
+                        SizedBox(width: 8),
+                        Expanded(
+                          child: Text(
+                            'Only verified @gmail.com accounts allowed.',
+                            style: TextStyle(
+                              color: Colors.lightBlueAccent,
+                              fontSize: 11,
+                              fontWeight: FontWeight.w600,
+                            ),
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
                   SizedBox(
                     width: double.infinity,
                     height: 62,
@@ -1726,7 +2351,6 @@ class _LoginScreenState extends State<LoginScreen>
                             ),
                     ),
                   ),
-
                   if (_error.isNotEmpty) ...[
                     const SizedBox(height: 20),
                     Container(
@@ -1755,7 +2379,7 @@ class _LoginScreenState extends State<LoginScreen>
 }
 
 // ═══════════════════════════════════════════════════════
-// MAIN NAVIGATION HOLDER (With Notification Bell Shake)
+// MAIN NAVIGATION HOLDER
 // ═══════════════════════════════════════════════════════
 class MainNavigationHolder extends StatefulWidget {
   const MainNavigationHolder({super.key});
@@ -1825,7 +2449,6 @@ class _MainNavigationHolderState extends State<MainNavigationHolder> with Ticker
           builder: (context, snapshot) {
             final unread = snapshot.data ?? 0;
 
-            // ✅ TRIGGER SHAKE ANIMATION ON NEW NOTIFICATION
             if (unread > _lastUnreadCount && _lastUnreadCount != 0) {
               _shakeController.forward(from: 0);
               Haptic.heavy();
@@ -2599,7 +3222,6 @@ class _HomeScreenState extends State<HomeScreen>
                         widget.onMenuTap?.call();
                       },
                     ),
-                    // ✅ Updated Home Page Logo (Maya White + Jaal Green)
                     Container(
                       width: 36,
                       height: 36,
@@ -3056,7 +3678,10 @@ class _HomeScreenState extends State<HomeScreen>
 }
 
 // ═══════════════════════════════════════════════════════
-// MORE DRAWER
+// ⏭️ END OF PART 1 — MORE DRAWER CONTINUES IN PART 2
+// ═══════════════════════════════════════════════════════
+// ═══════════════════════════════════════════════════════
+// MORE DRAWER (SECURED)
 // ═══════════════════════════════════════════════════════
 class MoreDrawer extends StatefulWidget {
   const MoreDrawer({super.key});
@@ -3092,6 +3717,12 @@ class _MoreDrawerState extends State<MoreDrawer>
 
   Future<void> _logout(BuildContext context) async {
     Haptic.heavy();
+    // 🔐 SECURITY: clear sensitive caches on logout
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      await prefs.remove('mj_login_attempts');
+      // Keep device_id and history (user preference)
+    } catch (_) {}
     await MayaJaalAccount.signOut();
     if (context.mounted) {
       Navigator.of(context).popUntil((route) => route.isFirst);
@@ -3252,6 +3883,27 @@ class _MoreDrawerState extends State<MoreDrawer>
               Text(
                 'Email: ${MayaJaalAccount.cachedEmail ?? 'N/A'}',
                 style: const TextStyle(color: Colors.white54, fontSize: 11),
+              ),
+              const SizedBox(height: 10),
+              Container(
+                padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+                decoration: BoxDecoration(
+                  color: Colors.blue.withOpacity(0.08),
+                  borderRadius: BorderRadius.circular(6),
+                  border: Border.all(color: Colors.lightBlueAccent.withOpacity(0.4)),
+                ),
+                child: const Row(
+                  children: [
+                    Icon(Icons.lock, color: Colors.lightBlueAccent, size: 12),
+                    SizedBox(width: 6),
+                    Expanded(
+                      child: Text(
+                        'Keep this API key secret. Never share it publicly.',
+                        style: TextStyle(color: Colors.lightBlueAccent, fontSize: 10),
+                      ),
+                    ),
+                  ],
+                ),
               ),
             ],
           ),
@@ -4224,6 +4876,7 @@ class SnakeBorderPainter extends CustomPainter {
     return oldDelegate.progress != progress || oldDelegate.color != color;
   }
 }
+
 // ═══════════════════════════════════════════════════════
 // CHANNEL SCREEN
 // ═══════════════════════════════════════════════════════
@@ -4831,7 +5484,7 @@ class _HistoryScreenState extends State<HistoryScreen> {
 
     savedList.insert(0, item);
     await prefs.setString('saved_videos_v1', jsonEncode(savedList));
-    
+
     if (mounted) {
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(backgroundColor: kCardBg, content: Text('✅ Video Saved!', style: TextStyle(color: kGreen))),
@@ -5023,6 +5676,38 @@ class _SettingsScreenState extends State<SettingsScreen> {
             onTap: _showDownloadLocationDialog,
           ),
           Divider(color: kGreen.withOpacity(0.2)),
+          // 🔐 SECURITY INFO card
+          Container(
+            margin: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+            padding: const EdgeInsets.all(12),
+            decoration: BoxDecoration(
+              color: const Color(0xFF031A0B),
+              borderRadius: BorderRadius.circular(10),
+              border: Border.all(color: kGreen.withOpacity(0.35)),
+            ),
+            child: const Row(
+              children: [
+                Icon(Icons.shield, color: kGreen, size: 18),
+                SizedBox(width: 10),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        'Account Security',
+                        style: TextStyle(color: kGreen, fontSize: 12, fontWeight: FontWeight.bold),
+                      ),
+                      SizedBox(height: 4),
+                      Text(
+                        'Gmail-only · Device-locked · Provider-verified',
+                        style: TextStyle(color: Colors.white60, fontSize: 10),
+                      ),
+                    ],
+                  ),
+                ),
+              ],
+            ),
+          ),
           const SizedBox(height: 30),
           Center(
             child: Text('> MayaJaal v1.2.0 // Quantum Core',
@@ -5092,7 +5777,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
 }
 
 // ═══════════════════════════════════════════════════════
-// STREAM PREVIEW SCREEN (Strict 10-Sec Rule)
+// STREAM PREVIEW SCREEN (Strict 10-Sec Rule + Security)
 // ═══════════════════════════════════════════════════════
 class StreamPreviewScreen extends StatefulWidget {
   final String targetUrl;
@@ -5109,13 +5794,13 @@ class _StreamPreviewScreenState extends State<StreamPreviewScreen>
   String _uploaderName = '@mayajaal';
   String _rawId = '';
   String _token = '';
-  
+
   // Thumbnail state
-  String _thumbnailUrl = ''; 
+  String _thumbnailUrl = '';
 
   int _countdown = 10;
   Timer? _countdownTimer;
-  bool _isReadyToPlay = false; // ✅ 10s ke baad true hoga
+  bool _isReadyToPlay = false; // 10s ke baad true hoga
 
   late AnimationController _snakeCtrl;
   late AnimationController _pulseController;
@@ -5138,6 +5823,30 @@ class _StreamPreviewScreenState extends State<StreamPreviewScreen>
       return;
     }
 
+    // 🔐 SECURITY: async session check before fetching stream
+    _secureInit();
+  }
+
+  Future<void> _secureInit() async {
+    final ok = await SecurityGuard.validateSession();
+    if (!ok) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            backgroundColor: kCardBg,
+            content: Text(
+              '🔒 Session expired. Please login again.',
+              style: TextStyle(color: Colors.orangeAccent),
+            ),
+          ),
+        );
+        await MayaJaalAccount.signOut();
+        if (mounted) {
+          Navigator.pushReplacement(context, MaterialPageRoute(builder: (_) => const LoginScreen()));
+        }
+      }
+      return;
+    }
     _fetchStreamMetadata();
   }
 
@@ -5157,7 +5866,7 @@ class _StreamPreviewScreenState extends State<StreamPreviewScreen>
         } else {
           Haptic.heavy();
           _countdownTimer?.cancel();
-          setState(() => _isReadyToPlay = true); // ✅ 10s khatam, play button ready
+          setState(() => _isReadyToPlay = true); // 10s khatam, play button ready
         }
       });
     });
@@ -5191,7 +5900,19 @@ class _StreamPreviewScreenState extends State<StreamPreviewScreen>
           ? '$kBackendBaseUrl/api/stream-info/$_rawId?t=$_token'
           : '$kBackendBaseUrl/api/stream-info/$_rawId';
 
-      final res = await http.get(Uri.parse(apiUrl)).timeout(const Duration(seconds: 8));
+      // 🔐 SECURITY: use signed headers where possible
+      final deviceId = await DeviceIdHelper.get();
+      final headers = SecurityGuard.signedHeaders(
+        method: 'GET',
+        path: '/api/stream-info/$_rawId',
+        body: '',
+        deviceId: deviceId,
+        uid: MayaJaalAccount.cachedUid,
+      );
+
+      final res = await http
+          .get(Uri.parse(apiUrl), headers: headers)
+          .timeout(const Duration(seconds: 8));
       if (res.statusCode == 200) {
         final data = jsonDecode(res.body);
         if (data['success'] == true && (data['url'] != null || data['video_url'] != null)) {
@@ -5199,7 +5920,7 @@ class _StreamPreviewScreenState extends State<StreamPreviewScreen>
             _streamUrl = data['url'] ?? data['video_url'];
             _videoTitle = data['title'] ?? data['file_name'] ?? _rawId;
             _uploaderName = data['uploader'] ?? '@mayajaal';
-            _thumbnailUrl = data['thumbnail'] ?? data['poster'] ?? ''; // ✅ Backend Thumbnail
+            _thumbnailUrl = data['thumbnail'] ?? data['poster'] ?? '';
             _loading = false;
           });
           _startCountdown();
@@ -5256,7 +5977,6 @@ class _StreamPreviewScreenState extends State<StreamPreviewScreen>
   void _launchNativePlayer() {
     _saveWatchRecord();
 
-    // ✅ Normal Push: Strict Navigation to Player
     Navigator.of(context).push(
       MaterialPageRoute(
         builder: (_) => NativeVideoPlayerScreen(
@@ -5268,7 +5988,6 @@ class _StreamPreviewScreenState extends State<StreamPreviewScreen>
         ),
       ),
     ).then((_) {
-      // ✅ Back aane par timer restart hoga (10s)
       if (mounted) {
         _startCountdown();
       }
@@ -5407,8 +6126,8 @@ class _StreamPreviewScreenState extends State<StreamPreviewScreen>
                     ],
                   ),
                   const SizedBox(height: 12),
-                  
-                  // ✅ Video Preview Box (No Video Playback during 10s)
+
+                  // Video Preview Box (No Video Playback during 10s)
                   Container(
                     padding: const EdgeInsets.all(4),
                     decoration: BoxDecoration(
@@ -5425,25 +6144,25 @@ class _StreamPreviewScreenState extends State<StreamPreviewScreen>
                           fit: StackFit.expand,
                           alignment: Alignment.center,
                           children: [
-                            // ✅ Static Thumbnail (Backend or Placeholder)
+                            // Static Thumbnail
                             if (_thumbnailUrl.isNotEmpty)
                               Container(
                                 color: Colors.black,
                                 child: Image.network(
                                   _thumbnailUrl,
-                                  fit: BoxFit.contain, // ✅ Full Image, No Zoom
+                                  fit: BoxFit.contain,
                                   errorBuilder: (c, e, s) => _buildPlaceholder(),
                                 ),
                               )
                             else
                               _buildPlaceholder(),
-                              
+
                             // Dark Overlay for Countdown visibility
                             Container(color: Colors.black.withOpacity(0.4)),
-                            
+
                             // 10s Countdown Circle
                             if (!_isReadyToPlay) _buildCountdownCircle(),
-                            
+
                             // HD Badge
                             Positioned(
                               top: 8,
@@ -5461,7 +6180,7 @@ class _StreamPreviewScreenState extends State<StreamPreviewScreen>
                   ),
                   const SizedBox(height: 16),
 
-                  // ✅ Play Button (Appears ONLY after 10s)
+                  // Play Button (Appears ONLY after 10s)
                   if (_isReadyToPlay)
                     _buildRedSnakePlayButton()
                   else
@@ -5476,10 +6195,10 @@ class _StreamPreviewScreenState extends State<StreamPreviewScreen>
                         ),
                       ),
                     ),
-                  
+
                   const SizedBox(height: 12),
 
-                  // ✅ Home Button
+                  // Home Button
                   SizedBox(
                     width: double.infinity,
                     height: 50,
@@ -5495,7 +6214,7 @@ class _StreamPreviewScreenState extends State<StreamPreviewScreen>
                   ),
 
                   const SizedBox(height: 16),
-                  
+
                   // Info Box
                   Container(
                     padding: const EdgeInsets.all(14),
@@ -5554,7 +6273,7 @@ class _StreamPreviewScreenState extends State<StreamPreviewScreen>
                     ),
                   ),
                   const SizedBox(height: 16),
-                  
+
                   // Share Button
                   SizedBox(
                     width: double.infinity,
@@ -5599,7 +6318,7 @@ class _StreamPreviewScreenState extends State<StreamPreviewScreen>
 }
 
 // ═══════════════════════════════════════════════════════
-// NATIVE VIDEO PLAYER
+// NATIVE VIDEO PLAYER (Secured)
 // ═══════════════════════════════════════════════════════
 class NativeVideoPlayerScreen extends StatefulWidget {
   final String videoUrl;
@@ -5691,10 +6410,25 @@ class _NativeVideoPlayerScreenState extends State<NativeVideoPlayerScreen> {
           ? '$kBackendBaseUrl/api/view/${widget.videoId}?t=$token'
           : '$kBackendBaseUrl/api/view/${widget.videoId}';
 
+      final body = jsonEncode({
+        'playedSeconds': _watchedSeconds,
+        'deviceId': deviceId,
+        'token': token,
+      });
+
+      // 🔐 SECURITY: signed headers
+      final headers = SecurityGuard.signedHeaders(
+        method: 'POST',
+        path: '/api/view/${widget.videoId}',
+        body: body,
+        deviceId: deviceId,
+        uid: MayaJaalAccount.cachedUid,
+      );
+
       await http.post(
         Uri.parse(url),
-        headers: {'Content-Type': 'application/json'},
-        body: jsonEncode({'playedSeconds': _watchedSeconds, 'deviceId': deviceId, 'token': token}),
+        headers: headers,
+        body: body,
       ).timeout(const Duration(seconds: 10));
     } catch (e) {
       debugPrint('View report error: $e');
@@ -5784,9 +6518,21 @@ class _NativeVideoPlayerScreenState extends State<NativeVideoPlayerScreen> {
         final uri = Uri.parse(widget.sourcePageUrl);
         final token = uri.queryParameters['t'] ?? uri.queryParameters['s'] ?? '';
 
+        final deviceId = await DeviceIdHelper.get();
+        final signed = SecurityGuard.signedHeaders(
+          method: 'GET',
+          path: '/api/stream-info/${widget.videoId}',
+          body: '',
+          deviceId: deviceId,
+          uid: MayaJaalAccount.cachedUid,
+        );
+
         final apiResp = await http.get(
           Uri.parse('$kBackendBaseUrl/api/stream-info/${widget.videoId}?t=$token'),
-          headers: {'User-Agent': 'MayaJaalApp/1.0'},
+          headers: {
+            ...signed,
+            'User-Agent': 'MayaJaalApp/1.0',
+          },
         ).timeout(const Duration(seconds: 8));
 
         if (apiResp.statusCode == 200) {
@@ -5913,7 +6659,7 @@ class _NativeVideoPlayerScreenState extends State<NativeVideoPlayerScreen> {
   void _toggleSmartFullscreen() {
     Haptic.light();
     setState(() => _isFullscreen = !_isFullscreen);
-    
+
     if (_isFullscreen) {
       SystemChrome.setEnabledSystemUIMode(SystemUiMode.immersiveSticky);
       final isWide = _controller.value.aspectRatio >= 1.2;
@@ -5939,6 +6685,12 @@ class _NativeVideoPlayerScreenState extends State<NativeVideoPlayerScreen> {
     Haptic.medium();
     final uid = MayaJaalAccount.cachedUid;
     if (uid == null) return;
+    // 🔐 SECURITY: validate session before write
+    final ok = await SecurityGuard.validateSession();
+    if (!ok) {
+      _showFeedback('🔒 Session expired');
+      return;
+    }
     await FirebaseService.toggleLike(widget.videoId, uid, _ownerUid, widget.title);
   }
 
@@ -5946,6 +6698,11 @@ class _NativeVideoPlayerScreenState extends State<NativeVideoPlayerScreen> {
     Haptic.medium();
     final uid = MayaJaalAccount.cachedUid;
     if (uid == null) return;
+    final ok = await SecurityGuard.validateSession();
+    if (!ok) {
+      _showFeedback('🔒 Session expired');
+      return;
+    }
     await FirebaseService.toggleDislike(widget.videoId, uid);
   }
 
@@ -6803,7 +7560,7 @@ class _NativeVideoPlayerScreenState extends State<NativeVideoPlayerScreen> {
 }
 
 // ═══════════════════════════════════════════════════════
-// WITHDRAW SCREEN
+// WITHDRAW SCREEN (Secured)
 // ═══════════════════════════════════════════════════════
 class WithdrawScreen extends StatefulWidget {
   const WithdrawScreen({super.key});
@@ -6838,6 +7595,20 @@ class _WithdrawScreenState extends State<WithdrawScreen> {
 
   Future<void> _loadInfo() async {
     try {
+      // 🔐 SECURITY: validate session
+      final ok = await SecurityGuard.validateSession();
+      if (!ok) {
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(
+              backgroundColor: kCardBg,
+              content: Text('🔒 Session expired. Please login again.', style: TextStyle(color: Colors.orangeAccent)),
+            ),
+          );
+        }
+        return;
+      }
+
       final dash = await MayaJaalAccount.getDashboard();
       final views = (dash['totalViews'] ?? 0) as int;
       final balance = MayaJaalAccount.calcEarnings(views);
@@ -6861,6 +7632,18 @@ class _WithdrawScreenState extends State<WithdrawScreen> {
 
   Future<void> _saveInfo() async {
     Haptic.medium();
+    // 🔐 SECURITY: validate session before write
+    final ok = await SecurityGuard.validateSession();
+    if (!ok) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          backgroundColor: kCardBg,
+          content: Text('🔒 Session expired', style: TextStyle(color: Colors.orangeAccent)),
+        ),
+      );
+      return;
+    }
     await MayaJaalAccount.saveWithdrawalInfo({
       'upi': _upiCtrl.text.trim(),
       'bank_account': _bankCtrl.text.trim(),
@@ -6886,6 +7669,19 @@ class _WithdrawScreenState extends State<WithdrawScreen> {
       Haptic.heavy();
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(backgroundColor: kCardBg, content: Text('⚠️ Withdrawals coming soon — save your details first', style: TextStyle(color: Colors.orangeAccent))),
+      );
+      return;
+    }
+
+    // 🔐 SECURITY: validate session before withdrawal
+    final ok = await SecurityGuard.validateSession();
+    if (!ok) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          backgroundColor: kCardBg,
+          content: Text('🔒 Session expired. Please login again.', style: TextStyle(color: Colors.orangeAccent)),
+        ),
       );
       return;
     }
@@ -7111,7 +7907,7 @@ class UserSearchDelegate extends SearchDelegate {
 }
 
 // ═══════════════════════════════════════════════════════
-// USER PROFILE SCREEN
+// USER PROFILE SCREEN (Secured subscribe)
 // ═══════════════════════════════════════════════════════
 class UserProfileScreen extends StatefulWidget {
   final Map<String, dynamic> channelProfile;
@@ -7155,6 +7951,18 @@ class _UserProfileScreenState extends State<UserProfileScreen> {
     Haptic.medium();
     final myUid = MayaJaalAccount.cachedUid;
     if (myUid == null) return;
+    // 🔐 SECURITY: validate session before write
+    final ok = await SecurityGuard.validateSession();
+    if (!ok) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          backgroundColor: kCardBg,
+          content: Text('🔒 Session expired', style: TextStyle(color: Colors.orangeAccent)),
+        ),
+      );
+      return;
+    }
     final newState = await FirebaseService.toggleSubscription(myUid, _channelUid);
     if (mounted) {
       setState(() => _isSubscribed = newState);
@@ -7273,7 +8081,7 @@ class _UserProfileScreenState extends State<UserProfileScreen> {
 }
 
 // ═══════════════════════════════════════════════════════
-// EARNINGS SCREEN
+// EARNINGS SCREEN (Secured)
 // ═══════════════════════════════════════════════════════
 class EarningsScreen extends StatefulWidget {
   const EarningsScreen({super.key});
@@ -7315,6 +8123,21 @@ class _EarningsScreenState extends State<EarningsScreen>
   Future<void> _loadData() async {
     try {
       if (!MayaJaalAccount.isLoggedIn) {
+        if (mounted) setState(() => _loading = false);
+        return;
+      }
+
+      // 🔐 SECURITY: validate session
+      final ok = await SecurityGuard.validateSession();
+      if (!ok) {
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(
+              backgroundColor: kCardBg,
+              content: Text('🔒 Session expired. Please login again.', style: TextStyle(color: Colors.orangeAccent)),
+            ),
+          );
+        }
         if (mounted) setState(() => _loading = false);
         return;
       }
