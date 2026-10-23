@@ -1,0 +1,31 @@
+<?xml version="1.0" encoding="utf-8"?>
+<network-security-config>
+    <!-- 🔐 Default: HTTPS ONLY — blocks all HTTP (MITM protection) -->
+    <base-config cleartextTrafficPermitted="false">
+        <trust-anchors>
+            <certificates src="system" />
+        </trust-anchors>
+    </base-config>
+
+    <!-- 🔐 Enforce TLS 1.2+ for our backend domain -->
+    <domain-config cleartextTrafficPermitted="false">
+        <domain includeSubdomains="true">mayajaal.online</domain>
+        <domain includeSubdomains="true">www.mayajaal.online</domain>
+        <domain includeSubdomains="true">m.mayajaal.online</domain>
+        <domain includeSubdomains="true">mayajaal-app.firebaseapp.com</domain>
+        <domain includeSubdomains="true">mayajaal-app-default-rtdb.asia-southeast1.firebasedatabase.app</domain>
+        <domain includeSubdomains="true">mayajaal-app.firebasestorage.app</domain>
+        <domain includeSubdomains="true">googleapis.com</domain>
+        <domain includeSubdomains="true">gstatic.com</domain>
+        <domain includeSubdomains="true">onesignal.com</domain>
+        <domain includeSubdomains="true">r2.dev</domain>
+        <domain includeSubdomains="true">cloudflarestorage.com</domain>
+        <domain includeSubdomains="true">t.me</domain>
+        <domain includeSubdomains="true">telegram.org</domain>
+        <domain includeSubdomains="true">youtube.com</domain>
+        <domain includeSubdomains="true">instagram.com</domain>
+        <trust-anchors>
+            <certificates src="system" />
+        </trust-anchors>
+    </domain-config>
+</network-security-config>
