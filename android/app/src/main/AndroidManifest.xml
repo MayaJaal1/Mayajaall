@@ -1,37 +1,50 @@
-<manifest xmlns:android="http://schemas.android.com/apk/res/android">
+<manifest xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:tools="http://schemas.android.com/tools">
 
-    <!-- PERMISSIONS -->
+    <!-- ═══════════════════════════════════════════════════ -->
+    <!-- PERMISSIONS                                         -->
+    <!-- ═══════════════════════════════════════════════════ -->
+
+    <!-- 🔐 Network (required for streaming & API) -->
     <uses-permission android:name="android.permission.INTERNET"/>
     <uses-permission android:name="android.permission.ACCESS_NETWORK_STATE"/>
-    
-    <!-- Storage & Downloads (Android 12 aur purane devices ke liye) -->
-    <uses-permission android:name="android.permission.READ_EXTERNAL_STORAGE" android:maxSdkVersion="32"/>
-    <uses-permission android:name="android.permission.WRITE_EXTERNAL_STORAGE" android:maxSdkVersion="32"/>
-    
-    <!-- Modern Media Permissions (Android 13+ ke liye video stream/download support) -->
-    <uses-permission android:name="android.permission.READ_MEDIA_VIDEO"/>
-    <uses-permission android:name="android.permission.READ_MEDIA_AUDIO"/>
+
+    <!-- 📸 Gallery — Android 13+ (API 33+) -->
     <uses-permission android:name="android.permission.READ_MEDIA_IMAGES"/>
-    
-    <!-- Android 14+ Partial Media Access -->
+    <uses-permission android:name="android.permission.READ_MEDIA_VIDEO"/>
+
+    <!-- 📸 Gallery — Android 14+ (Partial media access) -->
     <uses-permission android:name="android.permission.READ_MEDIA_VISUAL_USER_SELECTED"/>
-    
-    <!-- Photo/Video Metadata access (Gallery ke liye) -->
-    <uses-permission android:name="android.permission.ACCESS_MEDIA_LOCATION"/>
 
-    <!-- Other App Features -->
-    <uses-permission android:name="android.permission.CAMERA"/>
+    <!-- 📸 Gallery — Android 12 and below (API 32-) -->
+    <uses-permission android:name="android.permission.READ_EXTERNAL_STORAGE"
+        android:maxSdkVersion="32"/>
+
+    <!-- 💾 Downloads — Android 9 and below (API 28-) -->
+    <uses-permission android:name="android.permission.WRITE_EXTERNAL_STORAGE"
+        android:maxSdkVersion="28"/>
+
+    <!-- 🔔 Push Notifications — Android 13+ (API 33+) -->
     <uses-permission android:name="android.permission.POST_NOTIFICATIONS"/>
-    <uses-permission android:name="android.permission.WAKE_LOCK"/>
-    <uses-permission android:name="android.permission.FOREGROUND_SERVICE"/>
 
+    <!-- ▶️ Video Playback — keep screen awake during video -->
+    <uses-permission android:name="android.permission.WAKE_LOCK"/>
+
+    <!-- 📥 In-app downloads — Android 14+ (API 34+) foreground service -->
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE"/>
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE_DATA_SYNC"/>
+
+    <!-- ═══════════════════════════════════════════════════ -->
+    <!-- APPLICATION                                         -->
+    <!-- ═══════════════════════════════════════════════════ -->
     <application
         android:label="MayaJaal"
         android:name="${applicationName}"
         android:icon="@mipmap/ic_launcher"
         android:hardwareAccelerated="true"
-        android:requestLegacyExternalStorage="true"
-        android:usesCleartextTraffic="true">
+        android:networkSecurityConfig="@xml/network_security_config"
+        android:usesCleartextTraffic="false"
+        tools:targetApi="34">
 
         <activity
             android:name=".MainActivity"
@@ -50,37 +63,37 @@
               android:resource="@style/NormalTheme"
               />
 
-            <!-- Default launcher intent -->
+            <!-- 🏠 Default launcher intent -->
             <intent-filter>
                 <action android:name="android.intent.action.MAIN"/>
                 <category android:name="android.intent.category.LAUNCHER"/>
             </intent-filter>
 
-            <!-- Auto-Verify: video/stream/short links app me khulenge -->
+            <!-- 🔗 Auto-Verify: video/stream/short links app me khulenge -->
             <intent-filter android:autoVerify="true">
                 <action android:name="android.intent.action.VIEW" />
                 <category android:name="android.intent.category.DEFAULT" />
                 <category android:name="android.intent.category.BROWSABLE" />
 
-                <!-- mayajaal.online (no www) -->
+                <!-- ── mayajaal.online (no www) ── -->
                 <data android:scheme="https" android:host="mayajaal.online" android:pathPrefix="/v/" />
                 <data android:scheme="https" android:host="mayajaal.online" android:pathPrefix="/stream/" />
                 <data android:scheme="https" android:host="mayajaal.online" android:pathPrefix="/api/v/" />
                 <data android:scheme="https" android:host="mayajaal.online" android:pathPrefix="/tb/" />
                 <data android:scheme="https" android:host="mayajaal.online" android:pathPrefix="/s/" />
 
-                <!-- www.mayajaal.online -->
+                <!-- ── www.mayajaal.online ── -->
                 <data android:scheme="https" android:host="www.mayajaal.online" android:pathPrefix="/v/" />
                 <data android:scheme="https" android:host="www.mayajaal.online" android:pathPrefix="/stream/" />
                 <data android:scheme="https" android:host="www.mayajaal.online" android:pathPrefix="/api/v/" />
                 <data android:scheme="https" android:host="www.mayajaal.online" android:pathPrefix="/tb/" />
                 <data android:scheme="https" android:host="www.mayajaal.online" android:pathPrefix="/s/" />
 
-                <!-- Short links subdomain -->
+                <!-- ── Short links subdomain ── -->
                 <data android:scheme="https" android:host="m.mayajaal.online" />
             </intent-filter>
 
-            <!-- Custom scheme fallback -->
+            <!-- 🔗 Custom scheme fallback -->
             <intent-filter>
                 <action android:name="android.intent.action.VIEW" />
                 <category android:name="android.intent.category.DEFAULT" />
@@ -89,17 +102,20 @@
             </intent-filter>
         </activity>
 
-        <!-- OneSignal push notification -->
+        <!-- 🔔 OneSignal Push Notification Extension -->
         <meta-data
             android:name="com.onesignal.NotificationServiceExtension"
             android:value="com.onesignal.notifications.internal.service.impl.NotificationServiceExtension"/>
 
+        <!-- Flutter Embedding -->
         <meta-data
             android:name="flutterEmbedding"
             android:value="2" />
     </application>
 
-    <!-- Required queries for URL launcher, share, etc. -->
+    <!-- ═══════════════════════════════════════════════════ -->
+    <!-- QUERIES (for url_launcher, share, mail, etc.)      -->
+    <!-- ═══════════════════════════════════════════════════ -->
     <queries>
         <intent>
             <action android:name="android.intent.action.PROCESS_TEXT"/>
@@ -120,6 +136,11 @@
         <intent>
             <action android:name="android.intent.action.SEND"/>
             <data android:mimeType="text/plain"/>
+        </intent>
+        <!-- Telegram, WhatsApp share -->
+        <intent>
+            <action android:name="android.intent.action.SEND"/>
+            <data android:mimeType="image/*"/>
         </intent>
     </queries>
 </manifest>
