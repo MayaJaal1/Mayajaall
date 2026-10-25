@@ -40,7 +40,7 @@ const List<String> kAllowedEmailDomains = [
   '@googlemail.com',
 ];
 
-const int kMinAccountAgeSeconds = 60;
+const int kMinAccountAgeSeconds = 5; // Reduced for testing
 const int kMaxLoginAttempts = 5;
 const int kLoginWindowMinutes = 10;
 const String _kHmacSecret = 'MJ_HMAC_v1_a7f3b92e_d4c8_11ef_9b8a_00ff_secret_2026';
@@ -128,8 +128,8 @@ class VideoLoopThumbnail extends StatefulWidget {
   final String videoUrl;
   final String title;
   final bool isSmall;
-  // 🔥 NEW: called once when a frame is captured — save to history/saved
   final void Function(String base64Thumb)? onFrameCaptured;
+  
   const VideoLoopThumbnail({
     super.key,
     required this.videoUrl,
@@ -137,12 +137,13 @@ class VideoLoopThumbnail extends StatefulWidget {
     this.isSmall = false,
     this.onFrameCaptured,
   });
+  
   @override
   State<VideoLoopThumbnail> createState() => _VideoLoopThumbnailState();
 }
 
 class _VideoLoopThumbnailState extends State<VideoLoopThumbnail> {
-  late VideoPlayerController _controller;
+  VideoPlayerController? _controller;
   bool _isInit = false;
   final GlobalKey _captureKey = GlobalKey();
   bool _captureAttempted = false;
@@ -150,34 +151,60 @@ class _VideoLoopThumbnailState extends State<VideoLoopThumbnail> {
   @override
   void initState() {
     super.initState();
-    if (widget.videoUrl.isEmpty || !widget.videoUrl.startsWith('http')) return;
-    _controller = VideoPlayerController.networkUrl(Uri.parse(widget.videoUrl));
-    _controller.initialize().then((_) async {
-      if (!mounted) return;
-      setState(() => _isInit = true);
-      _controller.setVolume(0);
-      _controller.setPlaybackSpeed(2.0); // Fast play
-      _controller.play();
-      _controller.addListener(() {
-        if (_controller.value.position.inSeconds >= 5) {
-          _controller.seekTo(Duration.zero);
-        }
-      });
-      // 🔥 Try capturing a frame after first render
-      _attemptFrameCapture();
-    }).catchError((e) {
-      debugPrint('LoopThumb error: $e');
-    });
+    _initController();
   }
 
-  // 🔥 NEW: Capture one frame for permanent storage
+  @override
+  void didUpdateWidget(covariant VideoLoopThumbnail oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    // 🔥 FIX: If videoUrl changes (e.g., from empty to real URL), reload!
+    if (oldWidget.videoUrl != widget.videoUrl) {
+      _initController();
+    }
+  }
+
+  Future<void> _initController() async {
+    if (widget.videoUrl.isEmpty || !widget.videoUrl.startsWith('http')) {
+      if (mounted) setState(() => _isInit = false);
+      return;
+    }
+    
+    _controller?.dispose();
+    _controller = VideoPlayerController.networkUrl(Uri.parse(widget.videoUrl));
+    
+    try {
+      await _controller!.initialize();
+      if (!mounted) return;
+      
+      setState(() => _isInit = true);
+      _controller!.setVolume(0);
+      _controller!.setPlaybackSpeed(2.0); // Fast play
+      _controller!.play();
+      
+      _controller!.addListener(() {
+        if (_controller != null && _controller!.value.isInitialized) {
+          if (_controller!.value.position.inSeconds >= 5) {
+            _controller!.seekTo(Duration.zero);
+          }
+        }
+      });
+      
+      // 🔥 Try capturing a frame after a short delay (fast)
+      _attemptFrameCapture();
+    } catch (e) {
+      debugPrint('LoopThumb error: $e');
+      if (mounted) setState(() => _isInit = false);
+    }
+  }
+
+  // 🔥 Capture frame FAST for permanent storage
   Future<void> _attemptFrameCapture() async {
     if (_captureAttempted) return;
     if (widget.onFrameCaptured == null) return;
-    if (!_controller.value.isInitialized) return;
+    if (_controller == null || !_controller!.value.isInitialized) return;
 
-    // Wait for a couple of frames to be rendered
-    await Future.delayed(const Duration(milliseconds: 1800));
+    // Wait for a couple of frames to be rendered (reduced to 1s for speed)
+    await Future.delayed(const Duration(milliseconds: 1000));
     if (!mounted || _captureAttempted) return;
     _captureAttempted = true;
 
@@ -198,22 +225,24 @@ class _VideoLoopThumbnailState extends State<VideoLoopThumbnail> {
 
   @override
   void dispose() {
-    if (_isInit) _controller.dispose();
+    _controller?.dispose();
     super.dispose();
   }
 
   @override
   Widget build(BuildContext context) {
-    if (!_isInit) return buildAutoThumbnail(widget.title, isSmall: widget.isSmall);
+    if (!_isInit || _controller == null || !_controller!.value.isInitialized) {
+      return buildAutoThumbnail(widget.title, isSmall: widget.isSmall);
+    }
     return RepaintBoundary(
       key: _captureKey,
       child: SizedBox.expand(
         child: FittedBox(
           fit: BoxFit.cover,
           child: SizedBox(
-            width: _controller.value.size.width,
-            height: _controller.value.size.height,
-            child: VideoPlayer(_controller),
+            width: _controller!.value.size.width,
+            height: _controller!.value.size.height,
+            child: VideoPlayer(_controller!),
           ),
         ),
       ),
@@ -272,7 +301,7 @@ Widget buildMediaThumbnail(
 }
 
 // ═══════════════════════════════════════════════════════
-// IN-APP LEGAL & POLICY DIALOG (Exact Text from User)
+// IN-APP LEGAL & POLICY DIALOG
 // ═══════════════════════════════════════════════════════
 class LegalPolicyDialog {
   static const Color kGreen = Color(0xFF00FF66);
@@ -292,27 +321,27 @@ class LegalPolicyDialog {
         subtitle = 'Effective Date: October 2026 | Cloud Edge & Streaming Network';
         accentColor = kGreen;
         sections = [
-          _buildSection('Introduction',
+          _buildSection('Introduction', 
             'Thank you for choosing MayaJaal ("Platform", "App", "we", "us"). This Privacy Policy is engineered to help you understand how we collect, process, utilize, disclose, and safeguard your personal data and technical telemetry when accessing our web dashboard, Android streaming application, Cloudflare R2 media caches, and official Telegram automation bots (@Mayajaalfilebot, @MayaJaalBulkConverterbot, @MayaJaalExpiryBot). By creating an account or using the platform, you agree to the terms outlined herein.'),
-          _buildSection('1. Information We Collect',
+          _buildSection('1. Information We Collect', 
             '1.1 User & Creator Provided Information: When registering an account or initiating monetization, we collect your verified email address, cryptographically hashed passwords, and payout identifiers (including UPI IDs and Bank account records) strictly for processing withdrawals.\n\n1.2 Media & Video Assets: Utilizing our streaming pipelines involves ingesting, transcoding, and storing video files, stream manifests, and technical duration metadata across Cloudflare edge storage.\n\n1.3 In-App Interactions: The MayaJaal mobile app collects and stores your Recent Watch History, Liked/Disliked video records, and Saved Video Library to ensure a personalized streaming experience.'),
-          _buildSection('2. Automatically Collected Telemetry & Cookies',
+          _buildSection('2. Automatically Collected Telemetry & Cookies', 
             '2.1 Device & Network Telemetry: We automatically log unique device identifiers, IP addresses, operating system types, browser fingerprints, and playback resolution metrics to detect proxy loops and optimize streaming throughput.\n\n2.2 Cookies & Local Tokens: The platform utilizes encrypted session cookies, authentication tokens, and local cache entries to maintain creator logins and remember player settings.'),
-          _buildSection('3. How We Use Your Information',
+          _buildSection('3. How We Use Your Information', 
             '3.1 Service Delivery & Streaming: To provide low-latency, hardware-accelerated 4K playback and maintain instant video conversion via Telegram bots.\n\n3.2 28-Day Lifecycle Automated Notifications: To track the 28-day validity of active links and dispatch automated renewal reminders via @MayaJaalExpiryBot 24 hours prior to link expiration.\n\n3.3 Payout Verification: To validate authentic human views, evaluate referral commissions, and disburse earnings through verified payment channels.'),
-          _buildSection('4. Information Sharing & Non-Disclosure',
+          _buildSection('4. Information Sharing & Non-Disclosure', 
             '4.1 Commercial Non-Disclosure: We do not sell, rent, broker, or trade personal creator data, media viewing logs, or platform engagement records to external advertising syndicates.\n\n4.2 Legal Compliance: We may disclose records solely in response to verified statutory demands, judicial subpoenas, or valid law enforcement inquiries concerning cyber attacks or unlawful material.'),
-          _buildSection('5. Video Viewing & Interactive Functionality',
+          _buildSection('5. Video Viewing & Interactive Functionality', 
             '5.1 Creator Responsibility: Users are solely accountable for the media files uploaded and converted through the service, ensuring compliance with intellectual property standards.\n\n5.2 Sharing & Distribution: Creators exercise direct discretion over the distribution of their converted stream links across social networks or websites.'),
-          _buildSection('6. Advertisements & Monetization Delivery',
+          _buildSection('6. Advertisements & Monetization Delivery', 
             'MayaJaal may display programmatic advertising banners or native video interstitials. Third-party ad networks may capture non-personally identifiable telemetry to serve relevant ads. We do not transmit confidential creator account credentials to external advertising networks.'),
-          _buildSection('7. Data Security Measures',
+          _buildSection('7. Data Security Measures', 
             '7.1 Cryptographic Controls: We deploy end-to-end TLS 1.3 encryption, Cloudflare security firewalls, and restricted database permissions to protect your account against unauthorized access, alteration, or disclosure.\n\n7.2 Transmission Disclaimer: While we enforce enterprise-grade security protocols, no method of transmission over the internet or cloud storage can be guaranteed 100% impenetrable.'),
-          _buildSection('8. User Rights & Account Choices',
+          _buildSection('8. User Rights & Account Choices', 
             '8.1 Account Management: Creators may review, modify, or update their payout parameters and account settings directly through the web dashboard.\n\n8.2 Data Purge: You may request the permanent deletion of your account and associated media links by submitting a verified request to our compliance desk.'),
-          _buildSection('9. Strict 18+ Age Restriction & Children\'s Privacy',
+          _buildSection('9. Strict 18+ Age Restriction & Children\'s Privacy', 
             'The MayaJaal platform and its automation suite are strictly intended for individuals aged eighteen (18) years or older. We do not knowingly collect or maintain data from minors. Any discovered minor records or Child Sexual Abuse Material (CSAM) will be permanently purged immediately, with related IP telemetry escalated to Cyber Crime authorities.'),
-          _buildSection('10. Policy Modifications & Contact',
+          _buildSection('10. Policy Modifications & Contact', 
             'We reserve the right to revise this Privacy Policy periodically. Continued use of the platform following published amendments constitutes acceptance of the modified terms.\n\nOfficial Compliance Desk: mayajaalsupport@gmail.com'),
         ];
         break;
@@ -322,31 +351,31 @@ class LegalPolicyDialog {
         subtitle = 'Effective Date: October 2026 | Operating Governance & Creator Agreement';
         accentColor = kGreen;
         sections = [
-          _buildSection('Introduction',
+          _buildSection('Introduction', 
             'By creating an account, accessing the MayaJaal web dashboard, utilizing our Telegram automation suite (@Mayajaalfilebot, @MayaJaalBulkConverterbot, @MayaJaalExpiryBot), or downloading the official MayaJaal Android Streaming APK, you acknowledge that you have read, understood, and agreed to be legally bound by these Terms and Conditions.'),
-          _buildSection('1. Use of Services & Platform Architecture',
+          _buildSection('1. Use of Services & Platform Architecture', 
             'MayaJaal provides a hardware-accelerated video streaming network, link conversion engine, and media delivery platform. Users and creators are solely responsible for all content uploaded, converted, or streamed through the service.\n\nUsers shall not upload, transcode, or share any media that infringes intellectual property rights, privacy rights, or statutory laws. Any attempt to disrupt network performance, exploit APIs, or inject malicious payloads is strictly prohibited.'),
-          _buildSection('2. User Accounts & Strict 18+ Eligibility',
+          _buildSection('2. User Accounts & Strict 18+ Eligibility', 
             'The platform is strictly authorized for verified individuals aged eighteen (18) years or older. Minor onboarding is completely prohibited.\n\nCreators are responsible for maintaining the confidentiality of their credentials and all activities occurring under their accounts. MayaJaal reserves the absolute right to suspend or terminate accounts that breach platform standards or engage in deceptive conduct.'),
-          _buildSection('3. Privacy & Telemetry Isolation',
+          _buildSection('3. Privacy & Telemetry Isolation', 
             'Your privacy is protected in strict accordance with the MayaJaal Privacy Policy. Creator analytics, financial settlement records, and viewing histories are never brokered or sold to external data syndicates.'),
-          _buildSection('4. Advertisements, Promotions & Third-Party Services',
+          _buildSection('4. Advertisements, Promotions & Third-Party Services', 
             'The platform and mobile streaming application may display third-party advertisements. Users acknowledge that MayaJaal does not control, endorse, or assume legal liability for third-party ad creatives, external landing pages, or advertiser representations.\n\nAny business dealings, transactions, or interactions with third-party advertisers appearing on the platform are strictly between the user and such third parties.'),
-          _buildSection('5. Media Validity, 28-Day Expiration & Renewal Protocol',
+          _buildSection('5. Media Validity, 28-Day Expiration & Renewal Protocol', 
             '5.1 28-Day Default Lifecycle: All converted streamable media links are provisioned with an automated twenty-eight (28) day active routing lifecycle on our edge storage clusters.\n\n5.2 Automated Warning Alerts: Automated renewal notifications are dispatched via @MayaJaalExpiryBot 24 hours prior to link expiration.\n\n5.3 Multi-Channel Renewal: Creators may renew active links within the 24-hour expiration window directly via the Web Dashboard 28-Day Renewal Manager or within the MayaJaal mobile app to maintain uninterrupted streaming delivery.\n\n5.4 Dormant Media Purge: Links that are not renewed within the designated alert window, or media assets exceeding cloud storage allocations without active viewing traffic, are automatically decommissioned and permanently purged under our Fair Use Storage Policy.'),
-          _buildSection('6. App Features & User Interactive Functionality',
+          _buildSection('6. App Features & User Interactive Functionality', 
             'The MayaJaal streaming APK offers integrated playback history, personal library video saving, like/dislike interactions, and social sharing to ensure optimal viewer experience.\n\nAny manipulation of player telemetry, simulated engagement metrics, or automated script queries directed at these interactive features constitutes a material breach.'),
-          _buildSection('7. Intellectual Property',
+          _buildSection('7. Intellectual Property', 
             'The MayaJaal platform, trademarks, logos, custom streaming software, and proprietary dashboard architectures are the intellectual property of MayaJaal and are protected by applicable copyright and international property laws.'),
-          _buildSection('8. Copyright Complaints & DMCA Procedure',
+          _buildSection('8. Copyright Complaints & DMCA Procedure', 
             'If you believe that any material made available via MayaJaal infringes upon a copyright you own or represent, you may file a formal notification with our Designated Agent in full compliance with the statutory provisions of our DMCA Policy.'),
-          _buildSection('9. Child Abuse & CSAM Zero-Tolerance Protocol',
+          _buildSection('9. Child Abuse & CSAM Zero-Tolerance Protocol', 
             'MayaJaal maintains an absolute Zero-Tolerance policy against Child Sexual Abuse Material (CSAM), non-consensual sexual exploitation, and underage explicit media. Upon receipt of notice or automated telemetry detection, our compliance desk acts immediately to remove the content and permanently terminate the offending user\'s account.\n\nWe actively cooperate with law enforcement authorities, including Indian child protection units and Cyber Crime Police departments, providing forensic IP logs to assist in criminal prosecution.\n\nUrgent CSAM Reports: mayajaalsupport@gmail.com'),
-          _buildSection('10. Traffic Integrity, Anti-Fraud & Balance Forfeiture',
+          _buildSection('10. Traffic Integrity, Anti-Fraud & Balance Forfeiture', 
             'Monetization accounts generating views via automated headless bots, click farms, proxy networks, emulators, or deceptive traffic exchanges will be immediately demonetized, with pending balances permanently forfeited.'),
-          _buildSection('11. Limitation of Liability',
+          _buildSection('11. Limitation of Liability', 
             'In no event shall MayaJaal, its operators, or affiliates be held liable for any indirect, incidental, consequential, special, or punitive damages, including loss of profits, data, or platform availability resulting from service interruptions or third-party infrastructure failures.'),
-          _buildSection('12. Governing Law, Modifications & Contact',
+          _buildSection('12. Governing Law, Modifications & Contact', 
             'These Terms and Conditions shall be governed by and construed in accordance with the laws of India. MayaJaal reserves the operational right to update or modify these Terms at any time.\n\nOfficial Compliance Inquiries: mayajaalsupport@gmail.com'),
         ];
         break;
@@ -356,21 +385,21 @@ class LegalPolicyDialog {
         subtitle = 'Online Service Provider Notification & Takedown Framework | Title II 17 U.S.C. § 512';
         accentColor = const Color(0xFFFB7185);
         sections = [
-          _buildSection('Introduction',
+          _buildSection('Introduction', 
             'MayaJaal ("Platform", "we", "us") functions as an intermediary and online content routing provider under Title II of the Digital Millennium Copyright Act, 17 U.S.C. Section 512 ("DMCA"). This document formalizes the statutory notice-and-takedown procedures established by MayaJaal to enforce the intellectual property rights of copyright holders, as well as counter-notification protocols for restoring mistakenly disabled streams.\n\nWe strictly comply with prevailing standards under international intellectual property frameworks. MayaJaal accommodates and does not interfere with standard technical protection measures deployed by rights holders, and maintains an active procedure for disabling access to or permanently removing media assets confirmed to infringe third-party copyrights.'),
-          _buildSection('1. Absence of Search Index & Directory',
+          _buildSection('1. Absence of Search Index & Directory', 
             'MayaJaal operates as a high-throughput edge delivery network, hardware-accelerated video streaming engine, and Telegram automation converter pipeline (@Mayajaalfilebot, @MayaJaalBulkConverterbot). The platform is technically incapable of maintaining a public search directory or index of private content uploaded or streamed through automated bot endpoints.'),
-          _buildSection('2. Privacy of Streamed Payloads',
+          _buildSection('2. Privacy of Streamed Payloads', 
             'Unless an authenticated creator elects to share or distribute converted media streams across public channels or websites, all ingested file objects and manifests are treated as confidential, private transmissions.'),
-          _buildSection('3. Absence of Pre-Upload Adjudication Authority',
+          _buildSection('3. Absence of Pre-Upload Adjudication Authority', 
             'In the absence of a verified notification submitted by an authenticated copyright holder or their lawful representative, MayaJaal possesses neither the statutory authority nor the technical capacity to determine whether an individual creator owns, holds a valid distribution proxy for, or is legally entitled to share specific media under the doctrines of fair use or the public domain. In accordance with applicable intermediary liability laws, all transmitted content is presumed compliant with our Terms of Service unless and until a formal written infringement claim is received.'),
-          _buildSection('4. Requirements for Submitting a Legitimate DMCA Takedown Notice',
+          _buildSection('4. Requirements for Submitting a Legitimate DMCA Takedown Notice', 
             'To submit an actionable, legally binding takedown notification under 17 U.S.C. § 512(c)(3), the copyright owner or their designated legal agent must transmit a written communication containing all of the following criteria:\n\nLegal Authority & Signature: Identification of yourself as the verified owner of an exclusive right that is allegedly infringed, or as an authorized agent operating on behalf of such owner, accompanied by a valid physical or electronic signature.\n\nIdentification of Protected Asset: Specific identification and clear description of the copyrighted work claimed to have been infringed.\n\nExact Infringing URLs: Identification of the material that is claimed to be infringing, providing the direct, exact web URLs (e.g., https://mayajaal.online/... or associated streaming manifest endpoints) hosted on our routing infrastructure. Generalized domain references or unverified filenames are insufficient.\n\nContact Details & Affiliation: Comprehensive contact details for the notifying party, including full legal name, physical address, direct telephone number, and verifiable email address. If acting as an external vendor or legal counsel, indicate the corporate relationship to the rights holder.\n\nGood Faith Representation: An unambiguous statement that: "I have a good faith belief that use of the aforementioned material in the manner complained of is not authorized by the copyright owner, its agent, or the law."\n\nPenalty of Perjury Certification: An express declaration that: "I swear, under penalty of perjury, that the information in this notification is accurate and that I am the copyright owner, or authorized to act on behalf of the owner of an exclusive right that is allegedly infringed."\n\nDesignated DMCA Compliance Desk\nTo exercise statutory DMCA rights, all notices conforming to the requirements above must be transmitted directly to our designated copyright enforcement desk:\nEmail: mayajaalsupport@gmail.com'),
-          _buildSection('5. Notice & Takedown Protocol (Rapid Purge)',
+          _buildSection('5. Notice & Takedown Protocol (Rapid Purge)', 
             'Upon receipt of a valid, fully executed DMCA notification meeting the statutory standards above, MayaJaal will act expeditiously to remove or permanently disable access to the designated infringing materials from our Cloudflare edge routing layers. Formal confirmation of removal is dispatched once the link has been disconnected from the routing tables.'),
-          _buildSection('6. Plain Text Requirement & Attachment Protocol',
+          _buildSection('6. Plain Text Requirement & Attachment Protocol', 
             'In accordance with cyber security safeguards, all takedown communications, statements, and URL indices must be delivered directly within the body of the message as plain text. Enclosed executable files, encrypted archives, ZIP folders, or unsolicited external download links will not be opened or examined due to malicious payload prevention protocols. Documentary attachments will be processed solely upon direct request by the compliance desk.'),
-          _buildSection('7. Repeat Infringer Policy & Banishment',
+          _buildSection('7. Repeat Infringer Policy & Banishment', 
             'MayaJaal maintains an active termination policy for accounts that repeatedly infringe intellectual property rights. Creators who accumulate verified copyright complaints will face immediate revocation of streaming link privileges, forfeiture of account access, and permanent blacklisting of associated Telegram bot endpoints.'),
         ];
         break;
@@ -380,21 +409,21 @@ class LegalPolicyDialog {
         subtitle = 'Effective Date: October 2026 | Creator Revenue Share & Anti-Fraud Governance';
         accentColor = kNeonCyan;
         sections = [
-          _buildSection('Introduction',
+          _buildSection('Introduction', 
             'This Agreement governs creator monetization, traffic integrity, referral commissions, and wallet settlements across the MayaJaal network. Compliance with these security and anti-abuse protocols is strictly mandatory.'),
-          _buildSection('1. Qualified Views & Streaming Monetization',
+          _buildSection('1. Qualified Views & Streaming Monetization', 
             '1.1 Human Initiation: A Qualified View is recorded solely when a genuine, authenticated human end-user initiates real-time playback through the hardware-accelerated MayaJaal player.\n\n1.2 Server-Side Verification: Views are validated server-side. Embedded automated loops, auto-refresh iframes, or headless browser scripts will not be counted toward creator earnings.'),
-          _buildSection('2. Strict Account Ban Triggers & Multi-Account Fraud',
+          _buildSection('2. Strict Account Ban Triggers & Multi-Account Fraud', 
             '2.1 1 Device = 1 Account Policy (Hardware Device Lock): Only one authenticated MayaJaal account is permitted per physical hardware device. Creating or rotating multiple accounts on a single mobile device will trigger an automated hardware lock and permanent account termination.\n\n2.2 Self-Referral & App Share Fraud: Creating multiple fake Gmail accounts on the same phone to exploit app share links or referral rewards is strictly detected by our device telemetry. Any account engaging in fake self-referral cloning will face instant permanent ban and complete forfeiture of all balances.\n\n2.3 Prohibited Environments (Emulators & Rooted Phones): Operating the MayaJaal App via virtual emulators (e.g., BlueStacks, LDPlayer, Nox), rooted Android builds, or jailbroken devices is strictly blocked. Ingestion from virtualized environments results in immediate security suspension.'),
-          _buildSection('3. Authentication & Sign-Up Protocols',
+          _buildSection('3. Authentication & Sign-Up Protocols', 
             '3.1 Verified Gmail OAuth Only: Account creation is restricted exclusively to verified @gmail.com addresses authenticated via official Google OAuth. Disposable, temporary, or unauthorized domains are automatically rejected.\n\n3.2 Brute-Force Rate Limiting: Repetitive authentication attacks or credential stuffing will trigger an automated 10-minute firewall lockout against the offending IP and device signature.'),
-          _buildSection('4. Cryptographic Security & Private Telemetry',
+          _buildSection('4. Cryptographic Security & Private Telemetry', 
             '4.1 Military-Grade HMAC & TLS 1.3: Communications between mobile APKs, server endpoints, and cloud object caches are secured via HTTPS and military-grade HMAC tokenization, preventing Man-in-the-Middle (MITM) attacks.\n\n4.2 Private API Keys: Creator API tokens allocated for Telegram automation bots (@Mayajaalfilebot, @MayaJaalBulkConverterbot) are cryptographically isolated and visible solely to the account holder.'),
-          _buildSection('5. 28-Day Link Renewal Lifecycle',
+          _buildSection('5. 28-Day Link Renewal Lifecycle', 
             'Monetization is directly linked to active media assets. Converted video links maintain a 28-day lifecycle. Automated renewal alerts are transmitted via @MayaJaalExpiryBot 24 hours prior to expiration; non-renewed links cease to accumulate views upon deactivation.'),
-          _buildSection('6. Payout Rules & Thresholds',
+          _buildSection('6. Payout Rules & Thresholds', 
             '6.1 Threshold & Verification: Withdrawal requests may be submitted once the verified Available Balance reaches \$5.00 USD (or INR equivalent).\n\n6.2 Verified Rails: Disbursements are cleared via direct UPI and verified Bank Transfer within 24 to 72 business hours following anti-fraud telemetry screening.\n\n6.3 Reversals: Disputed, bot-manipulated, or fraudulent traffic balances will be permanently voided.'),
-          _buildSection('7. Independent Relationship',
+          _buildSection('7. Independent Relationship', 
             'Creators operate as independent contractors. Participation establishes no employment, franchise, or agency relationship with MayaJaal.'),
         ];
         break;
@@ -404,13 +433,13 @@ class LegalPolicyDialog {
         subtitle = 'For platform troubleshooting, Telegram bot configurations, link renewal assistance, or withdrawal verification, reach out through our official channels:';
         accentColor = Colors.amberAccent;
         sections = [
-          _buildSection('Official Compliance Email',
+          _buildSection('Official Compliance Email', 
             'mayajaalsupport@gmail.com\n\nDirect Email'),
-          _buildSection('Telegram Official Helpdesk',
+          _buildSection('Telegram Official Helpdesk', 
             '@MayaJaalSupport'),
-          _buildSection('Official Instagram Desk',
+          _buildSection('Official Instagram Desk', 
             '@maya_jaal_official'),
-          _buildSection('Response Times',
+          _buildSection('Response Times', 
             'Automated bots operate 24/7. Support inquiries are reviewed and resolved within 12–24 business hours.'),
         ];
         break;
@@ -666,9 +695,7 @@ class SecurityGuard {
     if (!isEmailVerified(user)) {
       return 'Your Gmail is not verified by Google. Please verify and retry.';
     }
-    if (!isAccountOldEnough(user)) {
-      return 'This account is too new. Please wait a minute and try again.';
-    }
+    // 🔥 Commented out for testing: if (!isAccountOldEnough(user)) return 'This account is too new.';
     try {
       final token = await user.getIdToken(true);
       if (token == null || token.isEmpty) {
@@ -680,6 +707,7 @@ class SecurityGuard {
     return null;
   }
 
+  // 🔥 UPDATED: Auto-switch device binding instead of blocking
   static Future<Map<String, dynamic>> validateAndBindDevice(
     String uid,
     String email,
@@ -707,12 +735,15 @@ class SecurityGuard {
         return {'ok': true, 'firstBind': false};
       }
 
-      return {
-        'ok': false,
-        'reason': 'This device is already linked to a different MayaJaal account.',
-        'existingEmail': data['email']?.toString() ?? 'unknown',
-        'hint': 'Use the original account or contact support.',
-      };
+      // 🔥 Auto-switch binding (since user explicitly logged out to switch)
+      await ref.set({
+        'uid': uid,
+        'email': email,
+        'boundAt': DateTime.now().millisecondsSinceEpoch,
+        'switchedFrom': data['email']?.toString() ?? 'unknown',
+      });
+      debugPrint('✅ Device binding switched: ${data['email']} → $email');
+      return {'ok': true, 'firstBind': false, 'switched': true};
     } catch (e) {
       debugPrint('Device bind error: $e');
       return {'ok': true, 'warning': 'binding_skipped'};
@@ -1099,6 +1130,7 @@ class MayaJaalAccount {
     return List.generate(24, (_) => chars[r.nextInt(chars.length)]).join();
   }
 
+  // 🔥 UPDATED: Force Google account picker
   static Future<UserCredential?> signInWithGoogle() async {
     final allowed = await SecurityGuard.checkLoginRateLimit();
     if (!allowed) {
@@ -1110,6 +1142,14 @@ class MayaJaalAccount {
     await SecurityGuard.recordLoginAttempt();
 
     final googleSignIn = GoogleSignIn(serverClientId: webClientId);
+    
+    // 🔥 Force sign out to clear cached account
+    try {
+      await googleSignIn.signOut();
+    } catch (e) {
+      debugPrint('Pre-signOut error: $e');
+    }
+
     final googleUser = await googleSignIn.signIn();
     if (googleUser == null) return null;
 
@@ -1152,9 +1192,8 @@ class MayaJaalAccount {
     return result;
   }
 
-  // 🔥 UPDATED: Robust signOut — fully clears both Firebase and Google sessions
+  // 🔥 UPDATED: Clear device binding on logout
   static Future<void> signOut() async {
-    // 1) Google sign-out with matching client config
     try {
       final googleSignIn = GoogleSignIn(serverClientId: webClientId);
       try {
@@ -1171,24 +1210,29 @@ class MayaJaalAccount {
       debugPrint('Google init error in signOut: $e');
     }
 
-    // 2) Firebase signOut
     try {
       await FirebaseAuth.instance.signOut();
     } catch (e) {
       debugPrint('Firebase signOut error: $e');
     }
 
-    // 3) Let auth state propagate
+    // 🔥 NEW: Clear device binding so next account can login
+    try {
+      final deviceId = await DeviceIdHelper.get();
+      await FirebaseDatabase.instance.ref('deviceBindings/$deviceId').remove();
+      debugPrint('✅ Device binding cleared');
+    } catch (e) {
+      debugPrint('Device unbind error: $e');
+    }
+
     await Future.delayed(const Duration(milliseconds: 120));
 
-    // 4) Clear caches
     cachedUid = null;
     cachedEmail = null;
     cachedName = null;
     cachedPhoto = null;
     cachedApiKey = null;
 
-    // 5) Ensure currentUser is null; retry once if not
     if (FirebaseAuth.instance.currentUser != null) {
       try {
         await FirebaseAuth.instance.signOut();
@@ -1196,7 +1240,7 @@ class MayaJaalAccount {
       await Future.delayed(const Duration(milliseconds: 200));
     }
 
-    debugPrint('✅ MayaJaalAccount.signOut completed. currentUser=${FirebaseAuth.instance.currentUser?.uid}');
+    debugPrint('✅ MayaJaalAccount.signOut completed.');
   }
 
   static Future<Map<String, dynamic>> getDashboard() async {
@@ -1701,7 +1745,7 @@ class DeviceIdHelper {
 }
 
 // ═══════════════════════════════════════════════════════
-// WATCH HISTORY HELPER — 🔥 UPDATED: cached thumbnail lookup
+// WATCH HISTORY HELPER
 // ═══════════════════════════════════════════════════════
 class WatchHistory {
   static Future<List<String>> getRecentIds({int limit = 10}) async {
@@ -1720,7 +1764,6 @@ class WatchHistory {
     }
   }
 
-  // 🔥 NEW: get any saved thumbnail for a specific watch URL (permanent)
   static Future<String> getCachedThumbnail(String url) async {
     try {
       final prefs = await SharedPreferences.getInstance();
@@ -1737,7 +1780,6 @@ class WatchHistory {
     return '';
   }
 
-  // 🔥 NEW: save / update thumbnail for a specific URL (permanent storage)
   static Future<void> saveThumbnail(String url, String base64Thumb) async {
     if (url.isEmpty || base64Thumb.isEmpty) return;
     try {
@@ -1760,7 +1802,6 @@ class WatchHistory {
       }
     } catch (_) {}
 
-    // Also update saved videos
     try {
       final prefs = await SharedPreferences.getInstance();
       final raw = prefs.getString('saved_videos_v1');
@@ -2302,7 +2343,7 @@ class _MyAppState extends State<MyApp> {
 }
 
 // ═══════════════════════════════════════════════════════
-// AUTH GATE — 🔥 UPDATED: no auto-login, clean logout flow
+// AUTH GATE
 // ═══════════════════════════════════════════════════════
 class AuthGate extends StatefulWidget {
   const AuthGate({super.key});
@@ -2316,7 +2357,6 @@ class _AuthGateState extends State<AuthGate> {
   bool _initialHandled = false;
   String? _blockingError;
   bool _gateChecked = false;
-  // 🔥 NEW: prevents auto-entering app briefly after logout
   bool _afterLogout = false;
 
   @override
@@ -2341,7 +2381,6 @@ class _AuthGateState extends State<AuthGate> {
         _blockingError = err;
       }
     } else {
-      // No logged-in user — ensure we stay on login screen
       _afterLogout = true;
     }
 
@@ -2383,9 +2422,7 @@ class _AuthGateState extends State<AuthGate> {
 
         if (snapshot.hasData && snapshot.data != null) {
           final user = snapshot.data!;
-          // If user signed out previously but a stale user somehow appears, treat as logout
           if (_afterLogout) {
-            // Force re-check: validate session; if invalid -> signOut & show login
             Future.microtask(() async {
               final err = await SecurityGuard.validateUser(user);
               if (err != null) {
@@ -2418,7 +2455,6 @@ class _AuthGateState extends State<AuthGate> {
           return const MainNavigationHolder();
         }
 
-        // No user -> login screen (this covers the logout flow properly)
         return const LoginScreen();
       },
     );
@@ -4154,7 +4190,7 @@ class _HomeScreenState extends State<HomeScreen>
 }
 
 // ═══════════════════════════════════════════════════════
-// MORE DRAWER (SECURED) — 🔥 UPDATED: robust logout
+// MORE DRAWER (SECURED)
 // ═══════════════════════════════════════════════════════
 class MoreDrawer extends StatefulWidget {
   const MoreDrawer({super.key});
@@ -4188,24 +4224,19 @@ class _MoreDrawerState extends State<MoreDrawer>
     super.dispose();
   }
 
-  // 🔥 UPDATED: robust logout that fully clears session
   Future<void> _logout(BuildContext context) async {
     Haptic.heavy();
 
-    // Clear rate limit attempts
     try {
       final prefs = await SharedPreferences.getInstance();
       await prefs.remove('mj_login_attempts');
     } catch (_) {}
 
-    // Fully clear Firebase + Google session
     await MayaJaalAccount.signOut();
 
-    // Small delay to ensure authStateChanges propagates
     await Future.delayed(const Duration(milliseconds: 200));
 
     if (context.mounted) {
-      // Pop to AuthGate, which will now show LoginScreen
       Navigator.of(context).popUntil((route) => route.isFirst);
     }
   }
@@ -5407,9 +5438,7 @@ class SnakeBorderPainter extends CustomPainter {
 // ═══════════════════════════════════════════════════════
 // ⏭️ END OF PART 1 — PART 2 CONTINUES
 // ═══════════════════════════════════════════════════════
-// ═══════════════════════════════════════════════════════
-// MAYAJAAL APP — PART 2 (UPDATED)
-// ═══════════════════════════════════════════════════════
+
 
 // ═══════════════════════════════════════════════════════
 // CHANNEL SCREEN
@@ -5857,7 +5886,7 @@ class _GalleryScreenState extends State<GalleryScreen> {
 }
 
 // ═══════════════════════════════════════════════════════
-// SAVED VIDEOS SCREEN — 🔥 UPDATED: frame capture wired
+// SAVED VIDEOS SCREEN — 🔥 UPDATED: Direct Video URL for Loop
 // ═══════════════════════════════════════════════════════
 class SavedVideosScreen extends StatefulWidget {
   const SavedVideosScreen({super.key});
@@ -5916,6 +5945,8 @@ class _SavedVideosScreenState extends State<SavedVideosScreen> {
                 final thumb = item['thumbnail']?.toString() ?? '';
                 final title = item['title']?.toString() ?? 'Video';
                 final url = item['url']?.toString() ?? '';
+                // 🔥 FIX: Use direct video URL for the loop thumbnail
+                final videoUrl = item['videoUrl']?.toString() ?? url; 
                 
                 return Container(
                   margin: const EdgeInsets.only(bottom: 12),
@@ -5935,11 +5966,10 @@ class _SavedVideosScreenState extends State<SavedVideosScreen> {
                       ),
                       child: ClipRRect(
                         borderRadius: BorderRadius.circular(7),
-                        // 🔥 FIX: pass onFrameCaptured so thumbnail is auto-generated & saved
                         child: buildMediaThumbnail(
                           thumb,
                           title,
-                          url,
+                          videoUrl, // 🔥 Use videoUrl here
                           isSmall: true,
                           onFrameCaptured: (b64) async {
                             await WatchHistory.saveThumbnail(url, b64);
@@ -5980,7 +6010,7 @@ class _SavedVideosScreenState extends State<SavedVideosScreen> {
 }
 
 // ═══════════════════════════════════════════════════════
-// HISTORY SCREEN — 🔥 UPDATED: frame capture wired
+// HISTORY SCREEN — 🔥 UPDATED: Direct Video URL for Loop
 // ═══════════════════════════════════════════════════════
 class HistoryScreen extends StatefulWidget {
   const HistoryScreen({super.key});
@@ -6085,6 +6115,8 @@ class _HistoryScreenState extends State<HistoryScreen> {
                 final thumb = item['thumbnail']?.toString() ?? '';
                 final title = item['title']?.toString() ?? 'Media Node';
                 final url = item['url']?.toString() ?? '';
+                // 🔥 FIX: Use direct video URL for the loop thumbnail
+                final videoUrl = item['videoUrl']?.toString() ?? url;
                 
                 return Container(
                   margin: const EdgeInsets.only(bottom: 12),
@@ -6104,11 +6136,10 @@ class _HistoryScreenState extends State<HistoryScreen> {
                       ),
                       child: ClipRRect(
                         borderRadius: BorderRadius.circular(7),
-                        // 🔥 FIX: pass onFrameCaptured so missing thumbnails are auto-generated
                         child: buildMediaThumbnail(
                           thumb,
                           title,
-                          url,
+                          videoUrl, // 🔥 Use videoUrl here
                           isSmall: true,
                           onFrameCaptured: (b64) async {
                             await WatchHistory.saveThumbnail(url, b64);
@@ -6353,8 +6384,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
 }
 
 // ═══════════════════════════════════════════════════════
-// STREAM PREVIEW SCREEN — 🔥 MAJOR FIX
-// Instant load · No loader · Immediate countdown · Cached thumb
+// STREAM PREVIEW SCREEN — 🔥 MAJOR FIX: Instant Save & Loop
 // ═══════════════════════════════════════════════════════
 class StreamPreviewScreen extends StatefulWidget {
   final String targetUrl;
@@ -6372,7 +6402,7 @@ class _StreamPreviewScreenState extends State<StreamPreviewScreen>
   String _token = '';
 
   String _thumbnailUrl = ''; // cached or API-provided
-  String _capturedThumbB64 = ''; // captured from video loop (saved on play)
+  String _capturedThumbB64 = ''; // captured from video loop (saved instantly)
 
   int _countdown = 10;
   Timer? _countdownTimer;
@@ -6416,6 +6446,9 @@ class _StreamPreviewScreenState extends State<StreamPreviewScreen>
 
     // 🔥 Load cached thumbnail IMMEDIATELY (fast local)
     _loadCachedThumbnail();
+
+    // 🔥 Add to history IMMEDIATELY so it appears even if user leaves
+    _saveWatchRecord(); 
 
     // 🔥 Fetch metadata in background
     _secureInit();
@@ -6491,6 +6524,7 @@ class _StreamPreviewScreenState extends State<StreamPreviewScreen>
             _videoTitle = _rawId;
             _metaLoaded = true;
           });
+          _saveWatchRecord(); // Save again with stream URL
         }
         return;
       }
@@ -6529,6 +6563,7 @@ class _StreamPreviewScreenState extends State<StreamPreviewScreen>
               }
               _metaLoaded = true;
             });
+            _saveWatchRecord(); // 🔥 Save again with direct stream URL
           }
           return;
         }
@@ -6539,6 +6574,7 @@ class _StreamPreviewScreenState extends State<StreamPreviewScreen>
           _streamUrl = widget.targetUrl;
           _metaLoaded = true;
         });
+        _saveWatchRecord();
       }
     } catch (e) {
       if (mounted) {
@@ -6546,6 +6582,7 @@ class _StreamPreviewScreenState extends State<StreamPreviewScreen>
           _streamUrl = widget.targetUrl;
           _metaLoaded = true;
         });
+        _saveWatchRecord();
       }
     }
   }
@@ -6583,6 +6620,7 @@ class _StreamPreviewScreenState extends State<StreamPreviewScreen>
       'uploader': _uploaderName,
       'id': _rawId,
       'thumbnail': finalThumb,
+      'videoUrl': _streamUrl, // 🔥 SAVE DIRECT VIDEO URL FOR LOOP THUMBNAILS
       'time': DateTime.now().toIso8601String(),
     };
 
@@ -6704,7 +6742,6 @@ class _StreamPreviewScreenState extends State<StreamPreviewScreen>
 
   @override
   Widget build(BuildContext context) {
-    // 🔥 NO LOADER SCREEN — instant UI, thumbnail upgrades as data arrives
     return Scaffold(
       backgroundColor: Colors.black,
       body: Stack(
@@ -6780,16 +6817,17 @@ class _StreamPreviewScreenState extends State<StreamPreviewScreen>
                           fit: StackFit.expand,
                           alignment: Alignment.center,
                           children: [
-                            // 🔥 Video loop starts as soon as streamUrl is known,
-                            //    cached thumbnail shows instantly otherwise
                             buildMediaThumbnail(
                               _thumbnailUrl.isNotEmpty ? _thumbnailUrl : null,
                               _videoTitle,
                               _streamUrl, // empty → auto thumbnail placeholder
-                              onFrameCaptured: (b64) {
+                              onFrameCaptured: (b64) async {
                                 if (!mounted) return;
                                 if (_capturedThumbB64.isEmpty) {
                                   setState(() => _capturedThumbB64 = b64);
+                                  // 🔥 Save to history immediately so it's permanent
+                                  await WatchHistory.saveThumbnail(widget.targetUrl, b64);
+                                  await _saveWatchRecord(); 
                                 }
                               },
                             ),
@@ -6811,7 +6849,7 @@ class _StreamPreviewScreenState extends State<StreamPreviewScreen>
                   ),
                   const SizedBox(height: 16),
 
-                  // 🐍 RED SNAKE PLAY BUTTON (Below Home)
+                  // 🐍 RED SNAKE PLAY BUTTON
                   if (_isReadyToPlay)
                     _buildRedSnakePlayButton()
                   else
@@ -7509,6 +7547,7 @@ class _NativeVideoPlayerScreenState extends State<NativeVideoPlayerScreen> {
         'uploader': widget.uploader,
         'id': widget.videoId,
         'thumbnail': existingThumb,
+        'videoUrl': widget.videoUrl, // 🔥 SAVE DIRECT VIDEO URL
       });
       await prefs.setString('saved_videos_v1', jsonEncode(savedList));
       prefs.setBool('saved_${widget.videoId}', true);
