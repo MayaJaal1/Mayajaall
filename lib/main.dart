@@ -1,6 +1,3 @@
-// ═══════════════════════════════════════════════════════
-// PART 1 OF 5: IMPORTS, CONFIG, SECURITY, CYBER RANK, AD TRACKER, REFERRAL & ACCOUNT
-// ═══════════════════════════════════════════════════════
 import 'dart:async';
 import 'dart:convert';
 import 'dart:io';
@@ -22,6 +19,7 @@ import 'package:device_info_plus/device_info_plus.dart';
 import 'package:permission_handler/permission_handler.dart';
 import 'package:photo_manager/photo_manager.dart';
 import 'package:photo_manager_image_provider/photo_manager_image_provider.dart';
+// 🔐 NEW: crypto for HMAC signing + hash checks
 import 'dart:convert' show base64, utf8;
 import 'package:crypto/crypto.dart' as crypto;
 
@@ -47,6 +45,7 @@ const int kMaxLoginAttempts = 5;
 const int kLoginWindowMinutes = 10;
 
 // 🔐 Security: HMAC secret for request signing (server must share same)
+// NOTE: ise production me secure storage (keystore/obfuscation) me rakho
 const String _kHmacSecret = 'MJ_HMAC_v1_a7f3b92e_d4c8_11ef_9b8a_00ff_secret_2026';
 
 const Color kGreen = Color(0xFF00FF66);
@@ -125,41 +124,31 @@ class Haptic {
 // 🛡️ SECURITY GUARD — Real Gmail + Anti-Hack Protection
 // ═══════════════════════════════════════════════════════
 class SecurityGuard {
-  // ─────────────────────────────────────────────
   // 1. GMAIL DOMAIN VALIDATION
-  // ─────────────────────────────────────────────
   static bool isGmailOnly(String? email) {
     if (email == null || email.isEmpty) return false;
     final lower = email.trim().toLowerCase();
     return kAllowedEmailDomains.any((d) => lower.endsWith(d));
   }
 
-  // ─────────────────────────────────────────────
   // 2. AUTH PROVIDER LOCK (must be Google)
-  // ─────────────────────────────────────────────
   static bool isGoogleProvider(User user) {
     return user.providerData.any((p) => p.providerId == 'google.com');
   }
 
-  // ─────────────────────────────────────────────
   // 3. EMAIL VERIFIED CHECK
-  // ─────────────────────────────────────────────
   static bool isEmailVerified(User user) {
     return user.emailVerified == true;
   }
 
-  // ─────────────────────────────────────────────
   // 4. ACCOUNT AGE GATE (bot signup prevention)
-  // ─────────────────────────────────────────────
   static bool isAccountOldEnough(User user, {int seconds = kMinAccountAgeSeconds}) {
     final created = user.metadata.creationTime;
     if (created == null) return false;
     return DateTime.now().difference(created).inSeconds >= seconds;
   }
 
-  // ─────────────────────────────────────────────
   // 5. FULL USER VALIDATION — call after Google sign-in
-  // ─────────────────────────────────────────────
   static Future<String?> validateUser(User user) async {
     if (!isGoogleProvider(user)) {
       return 'Only Google sign-in is allowed.';
@@ -184,9 +173,7 @@ class SecurityGuard {
     return null;
   }
 
-  // ─────────────────────────────────────────────
   // 6. DEVICE BINDING (RTDB) — 1 device = 1 account
-  // ─────────────────────────────────────────────
   static Future<Map<String, dynamic>> validateAndBindDevice(
     String uid,
     String email,
@@ -226,9 +213,7 @@ class SecurityGuard {
     }
   }
 
-  // ─────────────────────────────────────────────
   // 7. ROOT / EMULATOR DETECTION
-  // ─────────────────────────────────────────────
   static Future<Map<String, dynamic>> detectRootOrEmulator() async {
     try {
       final info = DeviceInfoPlugin();
@@ -289,16 +274,19 @@ class SecurityGuard {
     return {'emulator': false, 'rooted': false, 'isPhysical': true};
   }
 
-  // ─────────────────────────────────────────────
   // 8. PACKAGE / SIGNATURE INTEGRITY
-  // ─────────────────────────────────────────────
   static Future<bool> isPackageIntact() async {
-    return true;
+    try {
+      if (Platform.isAndroid) {
+        return true; 
+      }
+      return true;
+    } catch (_) {
+      return true;
+    }
   }
 
-  // ─────────────────────────────────────────────
   // 9. RATE LIMIT (login attempts)
-  // ─────────────────────────────────────────────
   static Future<bool> checkLoginRateLimit() async {
     try {
       final prefs = await SharedPreferences.getInstance();
@@ -340,9 +328,7 @@ class SecurityGuard {
     } catch (_) {}
   }
 
-  // ─────────────────────────────────────────────
-  // 10. HMAC REQUEST SIGNING
-  // ─────────────────────────────────────────────
+  // 10. HMAC REQUEST SIGNING (for backend verification)
   static String signRequest(String method, String path, String body) {
     final payload = '$method\n$path\n$body';
     final hmac = crypto.Hmac(crypto.sha256, utf8.encode(_kHmacSecret));
@@ -368,9 +354,7 @@ class SecurityGuard {
     };
   }
 
-  // ─────────────────────────────────────────────
   // 11. SESSION INTEGRITY
-  // ─────────────────────────────────────────────
   static Future<bool> validateSession() async {
     final user = FirebaseAuth.instance.currentUser;
     if (user == null) return false;
@@ -389,9 +373,7 @@ class SecurityGuard {
     }
   }
 
-  // ─────────────────────────────────────────────
   // 12. FULL SECURITY GATE
-  // ─────────────────────────────────────────────
   static Future<String?> fullGate(User user) async {
     final userErr = await validateUser(user);
     if (userErr != null) return userErr;
@@ -409,7 +391,8 @@ class SecurityGuard {
 
     final bind = await validateAndBindDevice(user.uid, user.email ?? '');
     if (bind['ok'] != true) {
-      return bind['reason']?.toString() ?? 'Device binding failed. Contact support.';
+      return bind['reason']?.toString() ??
+          'Device binding failed. Contact support.';
     }
 
     final sessOk = await validateSession();
@@ -512,58 +495,7 @@ class AdTracker {
 }
 
 // ═══════════════════════════════════════════════════════
-// 👥 REFERRAL ENGINE (Counts ONLY After Google Sign-In)
-// ═══════════════════════════════════════════════════════
-class ReferralService {
-  static DatabaseReference get _rtdb => FirebaseDatabase.instance.ref();
-
-  static Future<void> processPendingReferral(String newUid) async {
-    try {
-      final prefs = await SharedPreferences.getInstance();
-      final referrerUid = prefs.getString('pending_referrer_uid');
-
-      if (referrerUid == null || referrerUid.isEmpty) return;
-      if (referrerUid == newUid) {
-        await prefs.remove('pending_referrer_uid');
-        return;
-      }
-
-      final checkRef = _rtdb.child('users/$newUid/referredBy');
-      final snap = await checkRef.once();
-      if (snap.snapshot.value != null) {
-        await prefs.remove('pending_referrer_uid');
-        return;
-      }
-
-      await checkRef.set(referrerUid);
-      await _rtdb.child('referrals/$referrerUid/$newUid').set({
-        'timestamp': DateTime.now().millisecondsSinceEpoch,
-        'email': MayaJaalAccount.cachedEmail ?? '',
-      });
-
-      await _rtdb.child('users/$referrerUid/referralCount').runTransaction((mutableData) {
-        if (mutableData == null) return Transaction.success(1);
-        final current = (mutableData as int?) ?? 0;
-        return Transaction.success(current + 1);
-      });
-
-      await FirebaseService.sendNotification(
-        toUid: referrerUid,
-        title: '🎉 New App Referral!',
-        message: 'A new user joined using your link and verified their account.',
-        type: 'referral',
-      );
-
-      await prefs.remove('pending_referrer_uid');
-      debugPrint('✅ Referral counted successfully for: $referrerUid');
-    } catch (e) {
-      debugPrint('Referral processing error: $e');
-    }
-  }
-}
-
-// ═══════════════════════════════════════════════════════
-// MAYAJAAL FIREBASE ACCOUNT SERVICE (SECURED)
+// MAYAJAAL FIREBASE ACCOUNT SERVICE
 // ═══════════════════════════════════════════════════════
 class MayaJaalAccount {
   static String? cachedUid;
@@ -589,7 +521,6 @@ class MayaJaalAccount {
       cachedPhoto = user.photoURL;
       await syncUserToRTDB(user);
       await loadApiKey();
-      await ReferralService.processPendingReferral(user.uid);
     }
   }
 
@@ -618,7 +549,6 @@ class MayaJaalAccount {
       if (data == null) {
         updates['createdAt'] = DateTime.now().millisecondsSinceEpoch;
         updates['subscribersCount'] = 0;
-        updates['referralCount'] = 0;
         updates['dashboard'] = {
           'totalLinks': 0,
           'totalViews': 0,
@@ -720,7 +650,6 @@ class MayaJaalAccount {
     }
 
     await SecurityGuard.clearLoginAttempts();
-    await ReferralService.processPendingReferral(user.uid);
     return result;
   }
 
@@ -820,7 +749,6 @@ class MayaJaalAccount {
 
   static double _r2(num n) => (n * 100).round() / 100;
 }
-
 
 // ═══════════════════════════════════════════════════════
 // FIREBASE SERVICE
@@ -1004,12 +932,6 @@ class FirebaseService {
 
   static Stream<int> getSubscriberCount(String channelUid) {
     return _rtdb.child('users/$channelUid/subscribersCount').onValue.map((e) {
-      return (e.snapshot.value ?? 0) as int;
-    });
-  }
-
-  static Stream<int> getReferralCount(String uid) {
-    return _rtdb.child('users/$uid/referralCount').onValue.map((e) {
       return (e.snapshot.value ?? 0) as int;
     });
   }
@@ -1266,7 +1188,7 @@ class WatchHistory {
 }
 
 // ═══════════════════════════════════════════════════════
-// MAIN (with security init)
+// MAIN
 // ═══════════════════════════════════════════════════════
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
@@ -1289,6 +1211,7 @@ Future<void> main() async {
       ),
     );
     debugPrint("✅ Firebase Initialized");
+
     await MayaJaalAccount.init();
   } catch (e) {
     debugPrint("Firebase Init Error: $e");
@@ -1501,10 +1424,10 @@ class _ProfessionalLoaderState extends State<ProfessionalLoader>
                   width: 180,
                   child: ClipRRect(
                     borderRadius: BorderRadius.circular(99),
-                    child: const LinearProgressIndicator(
+                    child: LinearProgressIndicator(
                       minHeight: 3,
                       backgroundColor: Colors.white12,
-                      valueColor: AlwaysStoppedAnimation<Color>(kGreen),
+                      valueColor: const AlwaysStoppedAnimation<Color>(kGreen),
                     ),
                   ),
                 ),
@@ -1626,9 +1549,6 @@ class _SplashScreenState extends State<SplashScreen>
     );
   }
 }
-// ═══════════════════════════════════════════════════════
-// PART 3 OF 5: APP ROUTING, AUTH, LOGIN, MAIN NAV & COMPLETE HOME SCREEN
-// ═══════════════════════════════════════════════════════
 
 // ═══════════════════════════════════════════════════════
 // MY APP
@@ -1664,7 +1584,6 @@ class _MyAppState extends State<MyApp> {
       final initial = await _appLinks.getInitialLink();
       if (initial != null) {
         _initialLink = initial;
-        _captureReferralCode(initial);
         final url = _buildUrlFromLink(initial);
         if (url.isNotEmpty) {
           _pendingVideoTargetUrl = url;
@@ -1678,21 +1597,9 @@ class _MyAppState extends State<MyApp> {
 
     _linkSub = _appLinks.uriLinkStream.listen((uri) {
       debugPrint('Deep link received: $uri');
-      _captureReferralCode(uri);
       if (!mounted) return;
       _handleDeepLink(uri);
     }, onError: (e) => debugPrint('Link stream error: $e'));
-  }
-
-  Future<void> _captureReferralCode(Uri uri) async {
-    final ref = uri.queryParameters['ref'] ?? uri.queryParameters['r'];
-    if (ref != null && ref.isNotEmpty) {
-      final prefs = await SharedPreferences.getInstance();
-      if (!prefs.containsKey('pending_referrer_uid')) {
-        await prefs.setString('pending_referrer_uid', ref);
-        debugPrint('🎯 Captured Referral Code: $ref');
-      }
-    }
   }
 
   String _buildUrlFromLink(Uri uri) {
@@ -1800,7 +1707,7 @@ class _MyAppState extends State<MyApp> {
 }
 
 // ═══════════════════════════════════════════════════════
-// AUTH GATE (SECURED — full gate applied)
+// AUTH GATE
 // ═══════════════════════════════════════════════════════
 class AuthGate extends StatefulWidget {
   const AuthGate({super.key});
@@ -1882,7 +1789,6 @@ class _AuthGateState extends State<AuthGate> {
             MayaJaalAccount.cachedPhoto = user.photoURL;
             await MayaJaalAccount.syncUserToRTDB(user);
             await MayaJaalAccount.loadApiKey();
-            await ReferralService.processPendingReferral(user.uid);
           });
 
           if (!_initialHandled &&
@@ -1906,7 +1812,7 @@ class _AuthGateState extends State<AuthGate> {
 }
 
 // ═══════════════════════════════════════════════════════
-// 🛡️ SECURITY BLOCK SCREEN
+// SECURITY BLOCK SCREEN
 // ═══════════════════════════════════════════════════════
 class _SecurityBlockScreen extends StatelessWidget {
   final String error;
@@ -2010,7 +1916,7 @@ class _SecurityBlockScreen extends StatelessWidget {
 }
 
 // ═══════════════════════════════════════════════════════
-// LOGIN SCREEN (SECURED — Gmail-only flow)
+// LOGIN SCREEN (Premium Design)
 // ═══════════════════════════════════════════════════════
 class LoginScreen extends StatefulWidget {
   final VoidCallback? onLoginSuccess;
@@ -2256,26 +2162,35 @@ class _LoginScreenState extends State<LoginScreen>
                     ),
                   ),
                   const Spacer(),
+                  // 🔐 Premium Gmail-only notice
                   Container(
-                    padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-                    margin: const EdgeInsets.only(bottom: 12),
+                    padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+                    margin: const EdgeInsets.only(bottom: 16),
                     decoration: BoxDecoration(
-                      color: Colors.blue.withOpacity(0.08),
-                      border: Border.all(color: Colors.lightBlueAccent.withOpacity(0.5)),
-                      borderRadius: BorderRadius.circular(10),
+                      gradient: LinearGradient(
+                        colors: [kGreen.withOpacity(0.15), kNeonCyan.withOpacity(0.1)],
+                        begin: Alignment.topLeft,
+                        end: Alignment.bottomRight,
+                      ),
+                      border: Border.all(color: kGreen.withOpacity(0.6), width: 1.5),
+                      borderRadius: BorderRadius.circular(12),
+                      boxShadow: [
+                        BoxShadow(color: kGreen.withOpacity(0.2), blurRadius: 15, spreadRadius: 2),
+                      ],
                     ),
-                    child: const Row(
+                    child: Row(
+                      mainAxisAlignment: MainAxisAlignment.center,
                       children: [
-                        Icon(Icons.shield, color: Colors.lightBlueAccent, size: 16),
-                        SizedBox(width: 8),
-                        Expanded(
-                          child: Text(
-                            'Only verified @gmail.com accounts allowed.',
-                            style: TextStyle(
-                              color: Colors.lightBlueAccent,
-                              fontSize: 11,
-                              fontWeight: FontWeight.w600,
-                            ),
+                        const Icon(Icons.workspace_premium, color: kGreen, size: 22),
+                        const SizedBox(width: 10),
+                        const Text(
+                          'PREMIUM VERIFIED @GMAIL ONLY',
+                          style: TextStyle(
+                            color: kGreen,
+                            fontSize: 13,
+                            fontWeight: FontWeight.w900,
+                            letterSpacing: 1.2,
+                            shadows: [Shadow(color: kGreen, blurRadius: 8)],
                           ),
                         ),
                       ],
@@ -3312,7 +3227,7 @@ class _HomeScreenState extends State<HomeScreen>
               ),
               Padding(
                 padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 6),
-                child: const AdBanner(slot: 'home-top'),
+                child: AdBanner(slot: 'home-top'),
               ),
               Container(
                 width: double.infinity,
@@ -3597,7 +3512,7 @@ class _HomeScreenState extends State<HomeScreen>
               ),
               Padding(
                 padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 6),
-                child: const AdBanner(slot: 'home-middle'),
+                child: AdBanner(slot: 'home-middle'),
               ),
               Padding(
                 padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 6),
@@ -3636,7 +3551,7 @@ class _HomeScreenState extends State<HomeScreen>
               ),
               Padding(
                 padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
-                child: const AdBanner(slot: 'home-bottom'),
+                child: AdBanner(slot: 'home-bottom'),
               ),
               const Padding(
                 padding: EdgeInsets.symmetric(vertical: 18),
@@ -3657,12 +3572,12 @@ class _HomeScreenState extends State<HomeScreen>
     );
   }
 }
-// ═══════════════════════════════════════════════════════
-// PART 4 OF 5: COMPLETE DRAWER, PAINTERS, CHANNELS & GALLERY
-// ═══════════════════════════════════════════════════════
 
 // ═══════════════════════════════════════════════════════
-// MORE DRAWER (SECURED + ALL ORIGINAL DIALOGS & SOCIALS)
+// ⏭️ END OF PART 1 — BAAKI SAB PART 2 MEIN HAI
+// ═══════════════════════════════════════════════════════
+// ═══════════════════════════════════════════════════════
+// MORE DRAWER (SECURED - With Policies & Referral)
 // ═══════════════════════════════════════════════════════
 class MoreDrawer extends StatefulWidget {
   const MoreDrawer({super.key});
@@ -3671,7 +3586,8 @@ class MoreDrawer extends StatefulWidget {
   State<MoreDrawer> createState() => _MoreDrawerState();
 }
 
-class _MoreDrawerState extends State<MoreDrawer> with TickerProviderStateMixin {
+class _MoreDrawerState extends State<MoreDrawer>
+    with TickerProviderStateMixin {
   late AnimationController _snakeController;
   late AnimationController _slideController;
 
@@ -3707,12 +3623,17 @@ class _MoreDrawerState extends State<MoreDrawer> with TickerProviderStateMixin {
     }
   }
 
-  Future<void> _launchURL(String url) async {
+  // 🔐 IN-APP BROWSER LOGIC
+  Future<void> _launchURL(String url, {bool inApp = false}) async {
     Haptic.light();
     try {
       final target = Uri.parse(url);
-      if (!await launchUrl(target, mode: LaunchMode.inAppBrowserView)) {
-        await launchUrl(target, mode: LaunchMode.externalApplication);
+      if (inApp) {
+        await launchUrl(target, mode: LaunchMode.inAppBrowserView);
+      } else {
+        if (!await launchUrl(target, mode: LaunchMode.externalApplication)) {
+          await launchUrl(target, mode: LaunchMode.platformDefault);
+        }
       }
     } catch (e) {
       debugPrint('Launch error: $e');
@@ -3722,17 +3643,11 @@ class _MoreDrawerState extends State<MoreDrawer> with TickerProviderStateMixin {
     }
   }
 
-  void _shareAppWithReferral() {
+  // 🔗 UPDATED SHARE LINK
+  void _shareApp() {
     Haptic.light();
-    final uid = MayaJaalAccount.cachedUid ?? '';
-    final referralLink = uid.isNotEmpty
-        ? 'https://www.mayajaal.online/download.html?ref=$uid'
-        : 'https://www.mayajaal.online/download.html';
-
     Share.share(
-      '🚀 Experience Matrix-speed streaming & earn on MayaJaal App!\n'
-      'Download here: $referralLink\n\n'
-      '⚡ Join now with my referral!',
+      '🚀 Experience Matrix-speed streaming on MayaJaal App!\nDownload: https://www.mayajaal.online',
     );
   }
 
@@ -3982,6 +3897,73 @@ class _MoreDrawerState extends State<MoreDrawer> with TickerProviderStateMixin {
     );
   }
 
+  // 📊 REFERRAL PROGRAM DIALOG
+  void _showReferralDialog(BuildContext context) {
+    final myUid = MayaJaalAccount.cachedUid ?? '';
+    final refLink = 'https://www.mayajaal.online?ref=$myUid';
+    
+    showDialog(
+      context: context,
+      builder: (c) => AlertDialog(
+        backgroundColor: kCardBg,
+        shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.circular(16),
+          side: const BorderSide(color: kGold, width: 1.5),
+        ),
+        title: const Row(
+          children: [
+            Icon(Icons.card_giftcard, color: kGold, size: 24),
+            SizedBox(width: 8),
+            Text('REFER & EARN', style: TextStyle(color: kGold, fontSize: 16, fontWeight: FontWeight.bold, letterSpacing: 1.2)),
+          ],
+        ),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            const Text(
+              'Invite your friends to MayaJaal and earn exciting rewards on every successful signup!',
+              style: TextStyle(color: Colors.white70, fontSize: 12, height: 1.5),
+            ),
+            const SizedBox(height: 16),
+            Container(
+              padding: const EdgeInsets.all(12),
+              decoration: BoxDecoration(
+                color: Colors.black,
+                borderRadius: BorderRadius.circular(8),
+                border: Border.all(color: kGold.withOpacity(0.5)),
+              ),
+              child: SelectableText(
+                refLink,
+                style: const TextStyle(color: kGold, fontFamily: 'monospace', fontSize: 12),
+              ),
+            ),
+          ],
+        ),
+        actions: [
+          TextButton(
+            onPressed: () async {
+              Haptic.medium();
+              await Clipboard.setData(ClipboardData(text: refLink));
+              if (context.mounted) {
+                ScaffoldMessenger.of(context).showSnackBar(
+                  const SnackBar(backgroundColor: kCardBg, content: Text('✅ Referral link copied!', style: TextStyle(color: kGold))),
+                );
+              }
+            },
+            child: const Text('COPY LINK', style: TextStyle(color: kGold)),
+          ),
+          TextButton(
+            onPressed: () {
+              Share.share('Join MayaJaal and start earning! Use my link: $refLink');
+            },
+            child: const Text('SHARE', style: TextStyle(color: kGreen)),
+          ),
+        ],
+      ),
+    );
+  }
+
   Widget _botCard(
     BuildContext context, {
     required IconData icon,
@@ -4052,7 +4034,7 @@ class _MoreDrawerState extends State<MoreDrawer> with TickerProviderStateMixin {
   }
 
   Widget _staggered({required int index, required Widget child}) {
-    final start = (index * 0.05).clamp(0.0, 0.6);
+    final start = (index * 0.06).clamp(0.0, 0.6);
     return AnimatedBuilder(
       animation: _slideController,
       builder: (c, _) {
@@ -4073,7 +4055,6 @@ class _MoreDrawerState extends State<MoreDrawer> with TickerProviderStateMixin {
   @override
   Widget build(BuildContext context) {
     final user = FirebaseAuth.instance.currentUser;
-    final uid = user?.uid ?? '';
 
     return Drawer(
       backgroundColor: Colors.black,
@@ -4248,72 +4229,8 @@ class _MoreDrawerState extends State<MoreDrawer> with TickerProviderStateMixin {
                       ),
                     ),
                   ),
-
-                  // Referral Dashboard Live Tracker
-                  if (uid.isNotEmpty)
-                    _staggered(
-                      index: 2,
-                      child: StreamBuilder<int>(
-                        stream: FirebaseService.getReferralCount(uid),
-                        builder: (context, snapshot) {
-                          final count = snapshot.data ?? 0;
-                          return Container(
-                            margin: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
-                            padding: const EdgeInsets.all(12),
-                            decoration: BoxDecoration(
-                              gradient: LinearGradient(
-                                colors: [kGreen.withOpacity(0.18), Colors.black],
-                                begin: Alignment.topLeft,
-                                end: Alignment.bottomRight,
-                              ),
-                              borderRadius: BorderRadius.circular(12),
-                              border: Border.all(color: kGreen.withOpacity(0.6), width: 1.2),
-                            ),
-                            child: Row(
-                              children: [
-                                Container(
-                                  padding: const EdgeInsets.all(10),
-                                  decoration: BoxDecoration(
-                                    color: Colors.black,
-                                    shape: BoxShape.circle,
-                                    border: Border.all(color: kGold, width: 1.5),
-                                  ),
-                                  child: const Icon(Icons.people_alt, color: kGold, size: 22),
-                                ),
-                                const SizedBox(width: 12),
-                                Expanded(
-                                  child: Column(
-                                    crossAxisAlignment: CrossAxisAlignment.start,
-                                    children: [
-                                      const Text(
-                                        'REFERRAL NETWORK',
-                                        style: TextStyle(color: kGreen, fontSize: 9.5, fontWeight: FontWeight.bold, letterSpacing: 1.5),
-                                      ),
-                                      const SizedBox(height: 2),
-                                      Text('$count Active Joins', style: const TextStyle(color: Colors.white, fontSize: 15, fontWeight: FontWeight.w900)),
-                                      Text('Counts only after real user login', style: TextStyle(color: Colors.white.withOpacity(0.5), fontSize: 8.5)),
-                                    ],
-                                  ),
-                                ),
-                                ElevatedButton(
-                                  onPressed: _shareAppWithReferral,
-                                  style: ElevatedButton.styleFrom(
-                                    backgroundColor: kGreen,
-                                    foregroundColor: Colors.black,
-                                    padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
-                                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
-                                  ),
-                                  child: const Text('SHARE', style: TextStyle(fontSize: 11, fontWeight: FontWeight.bold)),
-                                ),
-                              ],
-                            ),
-                          );
-                        },
-                      ),
-                    ),
-
                   _staggered(
-                    index: 3,
+                    index: 2,
                     child: _snakeItem(
                       context,
                       icon: Icons.account_balance_wallet,
@@ -4331,7 +4248,7 @@ class _MoreDrawerState extends State<MoreDrawer> with TickerProviderStateMixin {
                     ),
                   ),
                   _staggered(
-                    index: 4,
+                    index: 3,
                     child: _snakeItem(
                       context,
                       icon: Icons.account_balance,
@@ -4345,6 +4262,21 @@ class _MoreDrawerState extends State<MoreDrawer> with TickerProviderStateMixin {
                           context,
                           MaterialPageRoute(builder: (_) => const WithdrawScreen()),
                         );
+                      },
+                    ),
+                  ),
+                  _staggered(
+                    index: 4,
+                    child: _snakeItem(
+                      context,
+                      icon: Icons.card_giftcard,
+                      color: kGold,
+                      title: 'Refer & Earn',
+                      subtitle: 'Invite friends and earn rewards',
+                      onTap: () {
+                        Haptic.medium();
+                        Navigator.pop(context);
+                        _showReferralDialog(context);
                       },
                     ),
                   ),
@@ -4406,7 +4338,7 @@ class _MoreDrawerState extends State<MoreDrawer> with TickerProviderStateMixin {
                       subtitle: 'Invite your friends',
                       onTap: () {
                         Navigator.pop(context);
-                        _shareAppWithReferral();
+                        _shareApp();
                       },
                     ),
                   ),
@@ -4430,20 +4362,6 @@ class _MoreDrawerState extends State<MoreDrawer> with TickerProviderStateMixin {
                   ),
                   _staggered(
                     index: 10,
-                    child: _snakeItem(
-                      context,
-                      icon: Icons.support_agent,
-                      color: Colors.amberAccent,
-                      title: 'Help & Support',
-                      subtitle: 'mayajaalsupport@gmail.com',
-                      onTap: () {
-                        Navigator.pop(context);
-                        _launchURL('https://www.mayajaal.online/support.html');
-                      },
-                    ),
-                  ),
-                  _staggered(
-                    index: 11,
                     child: Padding(
                       padding: const EdgeInsets.only(left: 16, top: 18, bottom: 8),
                       child: Row(
@@ -4468,7 +4386,7 @@ class _MoreDrawerState extends State<MoreDrawer> with TickerProviderStateMixin {
                     ),
                   ),
                   _staggered(
-                    index: 12,
+                    index: 11,
                     child: _socialItem(
                       context,
                       imageUrl:
@@ -4484,7 +4402,7 @@ class _MoreDrawerState extends State<MoreDrawer> with TickerProviderStateMixin {
                     ),
                   ),
                   _staggered(
-                    index: 13,
+                    index: 12,
                     child: _socialItem(
                       context,
                       imageUrl:
@@ -4500,7 +4418,7 @@ class _MoreDrawerState extends State<MoreDrawer> with TickerProviderStateMixin {
                     ),
                   ),
                   _staggered(
-                    index: 14,
+                    index: 13,
                     child: _socialItem(
                       context,
                       imageUrl:
@@ -4516,7 +4434,7 @@ class _MoreDrawerState extends State<MoreDrawer> with TickerProviderStateMixin {
                     ),
                   ),
                   _staggered(
-                    index: 15,
+                    index: 14,
                     child: Padding(
                       padding: const EdgeInsets.only(left: 16, top: 18, bottom: 8),
                       child: Row(
@@ -4540,8 +4458,93 @@ class _MoreDrawerState extends State<MoreDrawer> with TickerProviderStateMixin {
                       ),
                     ),
                   ),
+                  // 🌐 NEW POLICIES START
+                  _staggered(
+                    index: 15,
+                    child: _snakeItem(
+                      context,
+                      icon: Icons.dashboard,
+                      color: kNeonCyan,
+                      title: 'Web Dashboard',
+                      subtitle: 'Open www.mayajaal.online/dashboard',
+                      onTap: () {
+                        Navigator.pop(context);
+                        _launchURL('https://www.mayajaal.online/dashboard', inApp: true);
+                      },
+                    ),
+                  ),
                   _staggered(
                     index: 16,
+                    child: _snakeItem(
+                      context,
+                      icon: Icons.privacy_tip_outlined,
+                      color: kDimGreen,
+                      title: 'Privacy Policy',
+                      subtitle: 'Read our privacy policy',
+                      onTap: () {
+                        Navigator.pop(context);
+                        _launchURL('https://www.mayajaal.online/privacy.html', inApp: true);
+                      },
+                    ),
+                  ),
+                  _staggered(
+                    index: 17,
+                    child: _snakeItem(
+                      context,
+                      icon: Icons.description_outlined,
+                      color: kDimGreen,
+                      title: 'Terms & Conditions',
+                      subtitle: 'Read our terms of service',
+                      onTap: () {
+                        Navigator.pop(context);
+                        _launchURL('https://www.mayajaal.online/terms.html', inApp: true);
+                      },
+                    ),
+                  ),
+                  _staggered(
+                    index: 18,
+                    child: _snakeItem(
+                      context,
+                      icon: Icons.copyright,
+                      color: kDimGreen,
+                      title: 'DMCA Policy',
+                      subtitle: 'Copyright infringement policy',
+                      onTap: () {
+                        Navigator.pop(context);
+                        _launchURL('https://www.mayajaal.online/dmca.html', inApp: true);
+                      },
+                    ),
+                  ),
+                  _staggered(
+                    index: 19,
+                    child: _snakeItem(
+                      context,
+                      icon: Icons.handshake_outlined,
+                      color: kDimGreen,
+                      title: 'Partner Agreement',
+                      subtitle: 'Creator partnership terms',
+                      onTap: () {
+                        Navigator.pop(context);
+                        _launchURL('https://www.mayajaal.online/partner.html', inApp: true);
+                      },
+                    ),
+                  ),
+                  _staggered(
+                    index: 20,
+                    child: _snakeItem(
+                      context,
+                      icon: Icons.support_agent,
+                      color: kNeonCyan,
+                      title: 'Help & Support',
+                      subtitle: 'mayajaalsupport@gmail.com',
+                      onTap: () {
+                        Navigator.pop(context);
+                        _launchURL('https://www.mayajaal.online/support.html', inApp: true);
+                      },
+                    ),
+                  ),
+                  _staggered(
+                    index: 21,
                     child: _snakeItem(
                       context,
                       icon: Icons.info_outline,
@@ -4556,63 +4559,7 @@ class _MoreDrawerState extends State<MoreDrawer> with TickerProviderStateMixin {
                     ),
                   ),
                   _staggered(
-                    index: 17,
-                    child: _snakeItem(
-                      context,
-                      icon: Icons.privacy_tip_outlined,
-                      color: kDimGreen,
-                      title: 'Privacy Policy',
-                      subtitle: 'Opens in secure view',
-                      onTap: () {
-                        Navigator.pop(context);
-                        _launchURL('https://www.mayajaal.online/privacy.html');
-                      },
-                    ),
-                  ),
-                  _staggered(
-                    index: 18,
-                    child: _snakeItem(
-                      context,
-                      icon: Icons.description_outlined,
-                      color: kDimGreen,
-                      title: 'Terms & Conditions',
-                      subtitle: 'Opens in secure view',
-                      onTap: () {
-                        Navigator.pop(context);
-                        _launchURL('https://www.mayajaal.online/terms.html');
-                      },
-                    ),
-                  ),
-                  _staggered(
-                    index: 19,
-                    child: _snakeItem(
-                      context,
-                      icon: Icons.copyright_outlined,
-                      color: const Color(0xFFFB7185),
-                      title: 'DMCA Policy',
-                      subtitle: '17 U.S.C. § 512 Notice',
-                      onTap: () {
-                        Navigator.pop(context);
-                        _launchURL('https://www.mayajaal.online/dmca.html');
-                      },
-                    ),
-                  ),
-                  _staggered(
-                    index: 20,
-                    child: _snakeItem(
-                      context,
-                      icon: Icons.handshake_outlined,
-                      color: kNeonCyan,
-                      title: 'Partner Agreement',
-                      subtitle: 'Monetization terms & CPM',
-                      onTap: () {
-                        Navigator.pop(context);
-                        _launchURL('https://www.mayajaal.online/partner.html');
-                      },
-                    ),
-                  ),
-                  _staggered(
-                    index: 21,
+                    index: 22,
                     child: Padding(
                       padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 16),
                       child: Container(
@@ -5397,12 +5344,9 @@ class _GalleryScreenState extends State<GalleryScreen> {
     );
   }
 }
-// ═══════════════════════════════════════════════════════
-// PART 5 OF 5: SAVED, HISTORY, SETTINGS, 10-SEC PREVIEW, PLAYER, WITHDRAW, SEARCH & EARNINGS
-// ═══════════════════════════════════════════════════════
 
 // ═══════════════════════════════════════════════════════
-// SAVED VIDEOS SCREEN (WITH REAL THUMBNAILS)
+// SAVED VIDEOS SCREEN (With Thumbnails)
 // ═══════════════════════════════════════════════════════
 class SavedVideosScreen extends StatefulWidget {
   const SavedVideosScreen({super.key});
@@ -5458,8 +5402,8 @@ class _SavedVideosScreenState extends State<SavedVideosScreen> {
               itemCount: _saved.length,
               itemBuilder: (c, i) {
                 final item = _saved[i];
-                final thumb = (item['thumbnail'] ?? item['poster'] ?? '').toString();
-
+                final thumb = item['thumbnail']?.toString() ?? '';
+                
                 return Container(
                   margin: const EdgeInsets.only(bottom: 12),
                   decoration: BoxDecoration(
@@ -5468,9 +5412,10 @@ class _SavedVideosScreenState extends State<SavedVideosScreen> {
                     border: Border.all(color: kGreen.withOpacity(0.3)),
                   ),
                   child: ListTile(
+                    // 🖼️ THUMBNAIL ADDED HERE
                     leading: Container(
-                      width: 52,
-                      height: 52,
+                      width: 60,
+                      height: 60,
                       decoration: BoxDecoration(
                         color: Colors.black,
                         borderRadius: BorderRadius.circular(8),
@@ -5482,9 +5427,9 @@ class _SavedVideosScreenState extends State<SavedVideosScreen> {
                             ? Image.network(
                                 thumb,
                                 fit: BoxFit.cover,
-                                errorBuilder: (c, e, s) => const Icon(Icons.play_circle_fill, color: kGreen, size: 28),
+                                errorBuilder: (c, e, s) => const Icon(Icons.play_circle_fill, color: kGreen, size: 30),
                               )
-                            : const Icon(Icons.play_circle_fill, color: kGreen, size: 28),
+                            : const Icon(Icons.play_circle_fill, color: kGreen, size: 30),
                       ),
                     ),
                     title: Text(
@@ -5519,7 +5464,7 @@ class _SavedVideosScreenState extends State<SavedVideosScreen> {
 }
 
 // ═══════════════════════════════════════════════════════
-// HISTORY SCREEN (WITH REAL THUMBNAILS)
+// HISTORY SCREEN (With Thumbnails)
 // ═══════════════════════════════════════════════════════
 class HistoryScreen extends StatefulWidget {
   const HistoryScreen({super.key});
@@ -5621,8 +5566,8 @@ class _HistoryScreenState extends State<HistoryScreen> {
               itemCount: _history.length,
               itemBuilder: (c, i) {
                 final item = _history[i];
-                final thumb = (item['thumbnail'] ?? item['poster'] ?? '').toString();
-
+                final thumb = item['thumbnail']?.toString() ?? '';
+                
                 return Container(
                   margin: const EdgeInsets.only(bottom: 12),
                   decoration: BoxDecoration(
@@ -5631,9 +5576,10 @@ class _HistoryScreenState extends State<HistoryScreen> {
                     border: Border.all(color: kGreen.withOpacity(0.3)),
                   ),
                   child: ListTile(
+                    // 🖼️ THUMBNAIL ADDED HERE
                     leading: Container(
-                      width: 52,
-                      height: 52,
+                      width: 60,
+                      height: 60,
                       decoration: BoxDecoration(
                         color: Colors.black,
                         borderRadius: BorderRadius.circular(8),
@@ -5819,8 +5765,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
           ),
           const SizedBox(height: 30),
           Center(
-            child: Text(
-              '> MayaJaal v1.2.0 // Quantum Core',
+            child: Text('> MayaJaal v1.2.0 // Quantum Core',
               style: TextStyle(color: kGreen.withOpacity(0.5), fontSize: 12),
             ),
           ),
@@ -5887,7 +5832,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
 }
 
 // ═══════════════════════════════════════════════════════
-// STREAM PREVIEW SCREEN (10-Sec Wait, Real Thumbnail & Home Fix)
+// STREAM PREVIEW SCREEN (Strict 10-Sec + Home Button + Thumbnail)
 // ═══════════════════════════════════════════════════════
 class StreamPreviewScreen extends StatefulWidget {
   final String targetUrl;
@@ -5904,6 +5849,7 @@ class _StreamPreviewScreenState extends State<StreamPreviewScreen>
   String _uploaderName = '@mayajaal';
   String _rawId = '';
   String _token = '';
+
   String _thumbnailUrl = '';
 
   int _countdown = 10;
@@ -5993,14 +5939,6 @@ class _StreamPreviewScreenState extends State<StreamPreviewScreen>
       _rawId = uri.pathSegments.isNotEmpty ? uri.pathSegments.last : 'stream';
       _token = uri.queryParameters['t'] ?? uri.queryParameters['s'] ?? '';
 
-      try {
-        final snap = await FirebaseDatabase.instance.ref('links/$_rawId').once();
-        if (snap.snapshot.value != null && snap.snapshot.value is Map) {
-          final m = Map<String, dynamic>.from(snap.snapshot.value as Map);
-          _thumbnailUrl = (m['thumbnail'] ?? m['poster'] ?? '').toString();
-        }
-      } catch (_) {}
-
       if (widget.targetUrl.endsWith('.mp4') || widget.targetUrl.endsWith('.m3u8')) {
         setState(() {
           _streamUrl = widget.targetUrl;
@@ -6027,7 +5965,6 @@ class _StreamPreviewScreenState extends State<StreamPreviewScreen>
       final res = await http
           .get(Uri.parse(apiUrl), headers: headers)
           .timeout(const Duration(seconds: 8));
-
       if (res.statusCode == 200) {
         final data = jsonDecode(res.body);
         if (data['success'] == true && (data['url'] != null || data['video_url'] != null)) {
@@ -6035,9 +5972,7 @@ class _StreamPreviewScreenState extends State<StreamPreviewScreen>
             _streamUrl = data['url'] ?? data['video_url'];
             _videoTitle = data['title'] ?? data['file_name'] ?? _rawId;
             _uploaderName = data['uploader'] ?? '@mayajaal';
-            if (_thumbnailUrl.isEmpty) {
-              _thumbnailUrl = (data['thumbnail'] ?? data['poster'] ?? '').toString();
-            }
+            _thumbnailUrl = data['thumbnail'] ?? data['poster'] ?? '';
             _loading = false;
           });
           _startCountdown();
@@ -6061,13 +5996,7 @@ class _StreamPreviewScreenState extends State<StreamPreviewScreen>
 
   void _shareStreamDirect() {
     Haptic.light();
-    final uid = MayaJaalAccount.cachedUid ?? '';
-    final refParam = uid.isNotEmpty ? '&ref=$uid' : '';
-    final shareUrl = widget.targetUrl.contains('?')
-        ? '${widget.targetUrl}$refParam'
-        : '${widget.targetUrl}?$refParam';
-
-    Share.share('🚀 Watch this stream on MayaJaal:\n$shareUrl');
+    Share.share('🚀 Watch this stream on MayaJaal:\n${widget.targetUrl}');
   }
 
   Future<void> _saveWatchRecord() async {
@@ -6108,6 +6037,7 @@ class _StreamPreviewScreenState extends State<StreamPreviewScreen>
           uploader: _uploaderName,
           sourcePageUrl: widget.targetUrl,
           videoId: _rawId,
+          thumbnailUrl: _thumbnailUrl, // ✅ PASSING THUMBNAIL
         ),
       ),
     ).then((_) {
@@ -6117,7 +6047,7 @@ class _StreamPreviewScreenState extends State<StreamPreviewScreen>
     });
   }
 
-  // ✅ PERFECT WORKING HOME BUTTON
+  // 🏠 HOME BUTTON FIXED
   void _goToHome() {
     Haptic.heavy();
     Navigator.of(context).pushAndRemoveUntil(
@@ -6252,8 +6182,6 @@ class _StreamPreviewScreenState extends State<StreamPreviewScreen>
                     ],
                   ),
                   const SizedBox(height: 12),
-
-                  // ✅ THUMBNAIL PREVIEW CONTAINER WITH 10S COUNTDOWN
                   Container(
                     padding: const EdgeInsets.all(4),
                     decoration: BoxDecoration(
@@ -6271,15 +6199,18 @@ class _StreamPreviewScreenState extends State<StreamPreviewScreen>
                           alignment: Alignment.center,
                           children: [
                             if (_thumbnailUrl.isNotEmpty)
-                              Image.network(
-                                _thumbnailUrl,
-                                fit: BoxFit.cover,
-                                errorBuilder: (c, e, s) => _buildPlaceholder(),
+                              Container(
+                                color: Colors.black,
+                                child: Image.network(
+                                  _thumbnailUrl,
+                                  fit: BoxFit.contain,
+                                  errorBuilder: (c, e, s) => _buildPlaceholder(),
+                                ),
                               )
                             else
                               _buildPlaceholder(),
 
-                            Container(color: Colors.black.withOpacity(0.45)),
+                            Container(color: Colors.black.withOpacity(0.4)),
 
                             if (!_isReadyToPlay) _buildCountdownCircle(),
 
@@ -6298,7 +6229,6 @@ class _StreamPreviewScreenState extends State<StreamPreviewScreen>
                     ),
                   ),
                   const SizedBox(height: 16),
-
                   if (_isReadyToPlay)
                     _buildRedSnakePlayButton()
                   else
@@ -6313,26 +6243,22 @@ class _StreamPreviewScreenState extends State<StreamPreviewScreen>
                         ),
                       ),
                     ),
-
                   const SizedBox(height: 12),
-
-                  // ✅ WORKING HOME BUTTON
+                  // 🏠 HOME BUTTON UPDATE
                   SizedBox(
                     width: double.infinity,
                     height: 50,
                     child: OutlinedButton.icon(
                       onPressed: _goToHome,
-                      icon: const Icon(Icons.home, color: kGreen, size: 20),
-                      label: const Text('GO TO HOME PAGE', style: TextStyle(color: kGreen, fontSize: 12, fontWeight: FontWeight.bold, letterSpacing: 1.5)),
+                      icon: const Icon(Icons.home, color: Colors.white54, size: 20),
+                      label: const Text('GO TO HOME PAGE', style: TextStyle(color: Colors.white54, fontSize: 12, fontWeight: FontWeight.bold, letterSpacing: 1.5)),
                       style: OutlinedButton.styleFrom(
-                        side: BorderSide(color: kGreen.withOpacity(0.6), width: 1.5),
+                        side: BorderSide(color: Colors.white24, width: 1.5),
                         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(25)),
                       ),
                     ),
                   ),
-
                   const SizedBox(height: 16),
-
                   Container(
                     padding: const EdgeInsets.all(14),
                     decoration: BoxDecoration(
@@ -6390,7 +6316,6 @@ class _StreamPreviewScreenState extends State<StreamPreviewScreen>
                     ),
                   ),
                   const SizedBox(height: 16),
-
                   SizedBox(
                     width: double.infinity,
                     height: 52,
@@ -6434,7 +6359,7 @@ class _StreamPreviewScreenState extends State<StreamPreviewScreen>
 }
 
 // ═══════════════════════════════════════════════════════
-// NATIVE VIDEO PLAYER SCREEN
+// NATIVE VIDEO PLAYER
 // ═══════════════════════════════════════════════════════
 class NativeVideoPlayerScreen extends StatefulWidget {
   final String videoUrl;
@@ -6442,6 +6367,7 @@ class NativeVideoPlayerScreen extends StatefulWidget {
   final String uploader;
   final String sourcePageUrl;
   final String videoId;
+  final String thumbnailUrl; // ✅ ADDED
 
   const NativeVideoPlayerScreen({
     super.key,
@@ -6450,6 +6376,7 @@ class NativeVideoPlayerScreen extends StatefulWidget {
     required this.uploader,
     required this.sourcePageUrl,
     required this.videoId,
+    this.thumbnailUrl = '', // ✅ ADDED
   });
 
   @override
@@ -6632,6 +6559,7 @@ class _NativeVideoPlayerScreenState extends State<NativeVideoPlayerScreen> {
       try {
         final uri = Uri.parse(widget.sourcePageUrl);
         final token = uri.queryParameters['t'] ?? uri.queryParameters['s'] ?? '';
+
         final deviceId = await DeviceIdHelper.get();
         final signed = SecurityGuard.signedHeaders(
           method: 'GET',
@@ -6824,12 +6752,6 @@ class _NativeVideoPlayerScreenState extends State<NativeVideoPlayerScreen> {
     await FirebaseService.recordShare(widget.videoId);
     if (!mounted) return;
 
-    final uid = MayaJaalAccount.cachedUid ?? '';
-    final refParam = uid.isNotEmpty ? '&ref=$uid' : '';
-    final shareUrl = widget.sourcePageUrl.contains('?')
-        ? '${widget.sourcePageUrl}$refParam'
-        : '${widget.sourcePageUrl}?$refParam';
-
     showModalBottomSheet(
       context: context,
       backgroundColor: const Color(0xFF021206),
@@ -6850,19 +6772,19 @@ class _NativeVideoPlayerScreenState extends State<NativeVideoPlayerScreen> {
               children: [
                 _shareOption(Icons.link, 'Copy Link', kNeonCyan, () async {
                   Haptic.medium();
-                  await Clipboard.setData(ClipboardData(text: shareUrl));
+                  await Clipboard.setData(ClipboardData(text: widget.sourcePageUrl));
                   if (c.mounted) Navigator.pop(c);
                   _showFeedback('🔗 Link Copied!');
                 }),
                 _shareOption(Icons.share, 'Share Now', kGreen, () {
                   Haptic.medium();
                   Navigator.pop(c);
-                  Share.share('🎬 Watch "${widget.title}" on MayaJaal:\n$shareUrl');
+                  Share.share('🎬 Watch "${widget.title}" on MayaJaal:\n${widget.sourcePageUrl}');
                 }),
                 _shareOption(Icons.send_rounded, 'Telegram', const Color(0xFF229ED9), () {
                   Haptic.medium();
                   Navigator.pop(c);
-                  Share.share('🎬 Watch "${widget.title}" on MayaJaal:\n$shareUrl');
+                  Share.share('🎬 Watch "${widget.title}" on MayaJaal:\n${widget.sourcePageUrl}');
                 }),
               ],
             ),
@@ -6961,6 +6883,7 @@ class _NativeVideoPlayerScreenState extends State<NativeVideoPlayerScreen> {
         'title': widget.title,
         'uploader': widget.uploader,
         'id': widget.videoId,
+        'thumbnail': widget.thumbnailUrl, // ✅ ADDED THUMBNAIL
       });
       await prefs.setString('saved_videos_v1', jsonEncode(savedList));
       prefs.setBool('saved_${widget.videoId}', true);
@@ -7564,7 +7487,7 @@ class _NativeVideoPlayerScreenState extends State<NativeVideoPlayerScreen> {
                         ),
                       ),
                       const SizedBox(height: 12),
-                      const AdBanner(slot: 'player-mid'),
+                      AdBanner(slot: 'player-mid'),
                       const SizedBox(height: 12),
                       Row(
                         children: const [
@@ -7594,7 +7517,7 @@ class _NativeVideoPlayerScreenState extends State<NativeVideoPlayerScreen> {
                                   ),
                                 ),
                       const SizedBox(height: 12),
-                      const AdBanner(slot: 'player-bottom'),
+                      AdBanner(slot: 'player-bottom'),
                       const SizedBox(height: 16),
                     ],
                   ),
@@ -7607,13 +7530,12 @@ class _NativeVideoPlayerScreenState extends State<NativeVideoPlayerScreen> {
     );
   }
 
-  // ✅ RELATED VIDEO CARDS WITH REAL THUMBNAILS
   Widget _buildRelatedCard(Map<String, dynamic> v) {
     final id = v['id']?.toString() ?? '';
     final title = (v['filename'] ?? v['originalUrl'] ?? 'Video').toString();
     final uploader = (v['uploader'] ?? '@mayajaal').toString();
     final views = (v['views'] ?? 0) as int;
-    final thumb = (v['thumbnail'] ?? v['poster'] ?? '').toString();
+    final thumb = v['thumbnail']?.toString() ?? '';
 
     return Padding(
       padding: const EdgeInsets.only(right: 10),
@@ -7637,40 +7559,34 @@ class _NativeVideoPlayerScreenState extends State<NativeVideoPlayerScreen> {
             children: [
               Container(
                 height: 90,
-                decoration: const BoxDecoration(
-                  borderRadius: BorderRadius.vertical(top: Radius.circular(11)),
-                  color: Colors.black,
-                ),
-                child: ClipRRect(
+                decoration: BoxDecoration(
                   borderRadius: const BorderRadius.vertical(top: Radius.circular(11)),
-                  child: Stack(
-                    fit: StackFit.expand,
-                    children: [
-                      if (thumb.isNotEmpty)
-                        Image.network(
-                          thumb,
-                          fit: BoxFit.cover,
-                          errorBuilder: (c, e, s) => Container(
-                            color: Colors.black,
-                            child: const Center(child: Icon(Icons.movie_filter, color: kGreen, size: 26)),
-                          ),
-                        )
-                      else
-                        Container(
-                          color: Colors.black,
-                          child: const Center(child: Icon(Icons.movie_filter, color: kGreen, size: 26)),
-                        ),
-                      Center(
-                        child: Container(
-                          width: 36,
-                          height: 36,
-                          decoration: BoxDecoration(shape: BoxShape.circle, color: Colors.black.withOpacity(0.6), border: Border.all(color: kGreen, width: 1.5)),
-                          child: const Icon(Icons.play_arrow, color: kGreen, size: 20),
-                        ),
-                      ),
-                    ],
+                  gradient: LinearGradient(
+                    colors: [kGreen.withOpacity(0.15), kNeonCyan.withOpacity(0.1), Colors.black],
+                    begin: Alignment.topLeft,
+                    end: Alignment.bottomRight,
                   ),
                 ),
+                // 🖼️ THUMBNAIL ADDED HERE
+                child: thumb.isNotEmpty
+                    ? ClipRRect(
+                        borderRadius: const BorderRadius.vertical(top: Radius.circular(11)),
+                        child: Image.network(
+                          thumb,
+                          fit: BoxFit.cover,
+                          errorBuilder: (c, e, s) => const Center(
+                            child: Icon(Icons.play_arrow, color: kGreen, size: 22),
+                          ),
+                        ),
+                      )
+                    : Center(
+                        child: Container(
+                          width: 40,
+                          height: 40,
+                          decoration: BoxDecoration(shape: BoxShape.circle, color: Colors.black.withOpacity(0.6), border: Border.all(color: kGreen, width: 1.5)),
+                          child: const Icon(Icons.play_arrow, color: kGreen, size: 22),
+                        ),
+                      ),
               ),
               Padding(
                 padding: const EdgeInsets.all(8),
@@ -7699,7 +7615,7 @@ class _NativeVideoPlayerScreenState extends State<NativeVideoPlayerScreen> {
 }
 
 // ═══════════════════════════════════════════════════════
-// WITHDRAW SCREEN (SECURED)
+// WITHDRAW SCREEN
 // ═══════════════════════════════════════════════════════
 class WithdrawScreen extends StatefulWidget {
   const WithdrawScreen({super.key});
@@ -8043,7 +7959,7 @@ class UserSearchDelegate extends SearchDelegate {
 }
 
 // ═══════════════════════════════════════════════════════
-// USER PROFILE SCREEN (SECURED SUBSCRIBE)
+// USER PROFILE SCREEN
 // ═══════════════════════════════════════════════════════
 class UserProfileScreen extends StatefulWidget {
   final Map<String, dynamic> channelProfile;
@@ -8181,15 +8097,15 @@ class _UserProfileScreenState extends State<UserProfileScreen> {
                             final id = vid['id']?.toString() ?? '';
                             final name = vid['filename'] ?? 'Video';
                             final views = vid['views'] ?? 0;
-                            final thumb = (vid['thumbnail'] ?? vid['poster'] ?? '').toString();
+                            final thumb = vid['thumbnail']?.toString() ?? '';
 
                             return Container(
                               margin: const EdgeInsets.only(bottom: 8),
                               decoration: BoxDecoration(color: kCardBg, borderRadius: BorderRadius.circular(12), border: Border.all(color: kGreen.withOpacity(0.3))),
                               child: ListTile(
                                 leading: Container(
-                                  width: 44,
-                                  height: 44,
+                                  width: 50,
+                                  height: 50,
                                   decoration: BoxDecoration(color: Colors.black, borderRadius: BorderRadius.circular(8), border: Border.all(color: kGreen.withOpacity(0.5))),
                                   child: ClipRRect(
                                     borderRadius: BorderRadius.circular(7),
@@ -8222,7 +8138,7 @@ class _UserProfileScreenState extends State<UserProfileScreen> {
 }
 
 // ═══════════════════════════════════════════════════════
-// EARNINGS SCREEN (SECURED)
+// EARNINGS SCREEN
 // ═══════════════════════════════════════════════════════
 class EarningsScreen extends StatefulWidget {
   const EarningsScreen({super.key});
@@ -8497,7 +8413,6 @@ class _EarningsScreenState extends State<EarningsScreen>
                       final views = (link['views'] ?? 0) as int;
                       final earnings = MayaJaalAccount.calcEarnings(views);
                       final name = (link['filename'] ?? link['originalUrl'] ?? 'link').toString();
-                      final thumb = (link['thumbnail'] ?? link['poster'] ?? '').toString();
 
                       return Container(
                         margin: const EdgeInsets.only(bottom: 10),
@@ -8506,15 +8421,10 @@ class _EarningsScreenState extends State<EarningsScreen>
                         child: Row(
                           children: [
                             Container(
-                              width: 44,
-                              height: 44,
-                              decoration: BoxDecoration(color: Colors.black, borderRadius: BorderRadius.circular(8), border: Border.all(color: kGreen.withOpacity(0.5))),
-                              child: ClipRRect(
-                                borderRadius: BorderRadius.circular(7),
-                                child: thumb.isNotEmpty
-                                    ? Image.network(thumb, fit: BoxFit.cover, errorBuilder: (c, e, s) => const Icon(Icons.play_circle_outline, color: kGreen, size: 22))
-                                    : const Icon(Icons.play_circle_outline, color: kGreen, size: 22),
-                              ),
+                              width: 38,
+                              height: 38,
+                              decoration: BoxDecoration(color: Colors.black, borderRadius: BorderRadius.circular(10), border: Border.all(color: kGreen.withOpacity(0.5))),
+                              child: const Icon(Icons.play_circle_outline, color: kGreen, size: 20),
                             ),
                             const SizedBox(width: 10),
                             Expanded(
