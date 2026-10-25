@@ -69,28 +69,18 @@
                 <category android:name="android.intent.category.LAUNCHER"/>
             </intent-filter>
 
-            <!-- 🔗 Auto-Verify: video/stream/short links app me khulenge -->
+            <!-- 🔗 Auto-Verify: ONLY www.mayajaal.online -->
             <intent-filter android:autoVerify="true">
                 <action android:name="android.intent.action.VIEW" />
                 <category android:name="android.intent.category.DEFAULT" />
                 <category android:name="android.intent.category.BROWSABLE" />
 
-                <!-- ── mayajaal.online (no www) ── -->
-                <data android:scheme="https" android:host="mayajaal.online" android:pathPrefix="/v/" />
-                <data android:scheme="https" android:host="mayajaal.online" android:pathPrefix="/stream/" />
-                <data android:scheme="https" android:host="mayajaal.online" android:pathPrefix="/api/v/" />
-                <data android:scheme="https" android:host="mayajaal.online" android:pathPrefix="/tb/" />
-                <data android:scheme="https" android:host="mayajaal.online" android:pathPrefix="/s/" />
-
-                <!-- ── www.mayajaal.online ── -->
+                <!-- Sirf www.mayajaal.online routes -->
                 <data android:scheme="https" android:host="www.mayajaal.online" android:pathPrefix="/v/" />
                 <data android:scheme="https" android:host="www.mayajaal.online" android:pathPrefix="/stream/" />
                 <data android:scheme="https" android:host="www.mayajaal.online" android:pathPrefix="/api/v/" />
                 <data android:scheme="https" android:host="www.mayajaal.online" android:pathPrefix="/tb/" />
                 <data android:scheme="https" android:host="www.mayajaal.online" android:pathPrefix="/s/" />
-
-                <!-- ── Short links subdomain ── -->
-                <data android:scheme="https" android:host="m.mayajaal.online" />
             </intent-filter>
 
             <!-- 🔗 Custom scheme fallback -->
