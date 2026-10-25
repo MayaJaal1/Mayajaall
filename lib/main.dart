@@ -19,7 +19,6 @@ import 'package:device_info_plus/device_info_plus.dart';
 import 'package:permission_handler/permission_handler.dart';
 import 'package:photo_manager/photo_manager.dart';
 import 'package:photo_manager_image_provider/photo_manager_image_provider.dart';
-// 🔐 NEW: crypto for HMAC signing + hash checks
 import 'dart:convert' show base64, utf8;
 import 'package:crypto/crypto.dart' as crypto;
 
@@ -31,21 +30,14 @@ const String oneSignalAppId = '06b99c2b-b3b4-413b-b6cc-480a624f4e25';
 const String kBackendBaseUrl = 'https://www.mayajaal.online';
 const int kAppCurrentVersionCode = 2;
 
-// 🔐 Security: Gmail-only allow-list
 const List<String> kAllowedEmailDomains = [
   '@gmail.com',
   '@googlemail.com',
 ];
 
-// 🔐 Security: minimum age of Firebase account before login allowed (seconds)
 const int kMinAccountAgeSeconds = 60;
-
-// 🔐 Security: max login attempts per 10 minutes per device
 const int kMaxLoginAttempts = 5;
 const int kLoginWindowMinutes = 10;
-
-// 🔐 Security: HMAC secret for request signing (server must share same)
-// NOTE: ise production me secure storage (keystore/obfuscation) me rakho
 const String _kHmacSecret = 'MJ_HMAC_v1_a7f3b92e_d4c8_11ef_9b8a_00ff_secret_2026';
 
 const Color kGreen = Color(0xFF00FF66);
@@ -121,103 +113,42 @@ class Haptic {
 }
 
 // ═══════════════════════════════════════════════════════
-// 🛡️ SECURITY GUARD — Real Gmail + Anti-Hack Protection
+// 🛡️ SECURITY GUARD
 // ═══════════════════════════════════════════════════════
-//
-// ⚠️ FIREBASE RULES (paste in Firebase Console → Realtime DB → Rules):
-//
-// {
-//   "rules": {
-//     "users": {
-//       "$uid": {
-//         ".read": "auth != null && auth.uid == $uid",
-//         ".write": "auth != null && auth.uid == $uid",
-//         ".validate": "auth.token.email != null && auth.token.email.matches(/^[^@]+@(gmail|googlemail)\\.com$/) && auth.token.email_verified == true"
-//       }
-//     },
-//     "links": {
-//       ".read": "auth != null",
-//       "$id": {
-//         ".write": "auth != null"
-//       }
-//     },
-//     "deviceBindings": {
-//       "$deviceId": {
-//         ".read": "auth != null",
-//         ".write": "auth != null && !data.exists()",
-//         ".validate": "newData.hasChildren(['uid','email','boundAt'])"
-//       }
-//     }
-//   }
-// }
-//
-// ⚠️ FIREBASE AUTH SETTINGS:
-//   - Enable: Google provider ONLY
-//   - Disable: Email/Password, Anonymous, Phone, Play Games
-//   - Enable: Email verification requirement (Settings → Email verification)
-//
-// ⚠️ APP CHECK (Play Integrity) — recommended production setup:
-//   flutter pub add firebase_app_check
-//   Then in main():
-//     await FirebaseAppCheck.instance.activate(
-//       androidProvider: AndroidProvider.playIntegrity,
-//     );
-//
 class SecurityGuard {
-  // ─────────────────────────────────────────────
-  // 1. GMAIL DOMAIN VALIDATION
-  // ─────────────────────────────────────────────
   static bool isGmailOnly(String? email) {
     if (email == null || email.isEmpty) return false;
     final lower = email.trim().toLowerCase();
     return kAllowedEmailDomains.any((d) => lower.endsWith(d));
   }
 
-  // ─────────────────────────────────────────────
-  // 2. AUTH PROVIDER LOCK (must be Google)
-  // ─────────────────────────────────────────────
   static bool isGoogleProvider(User user) {
     return user.providerData.any((p) => p.providerId == 'google.com');
   }
 
-  // ─────────────────────────────────────────────
-  // 3. EMAIL VERIFIED CHECK
-  // ─────────────────────────────────────────────
   static bool isEmailVerified(User user) {
     return user.emailVerified == true;
   }
 
-  // ─────────────────────────────────────────────
-  // 4. ACCOUNT AGE GATE (bot signup prevention)
-  // ─────────────────────────────────────────────
   static bool isAccountOldEnough(User user, {int seconds = kMinAccountAgeSeconds}) {
     final created = user.metadata.creationTime;
     if (created == null) return false;
     return DateTime.now().difference(created).inSeconds >= seconds;
   }
 
-  // ─────────────────────────────────────────────
-  // 5. FULL USER VALIDATION — call after Google sign-in
-  //    Returns null if OK, else error message
-  // ─────────────────────────────────────────────
   static Future<String?> validateUser(User user) async {
-    // Provider check
     if (!isGoogleProvider(user)) {
       return 'Only Google sign-in is allowed.';
     }
-    // Gmail only
     if (!isGmailOnly(user.email)) {
       return 'Only @gmail.com accounts are supported.';
     }
-    // Verified
     if (!isEmailVerified(user)) {
       return 'Your Gmail is not verified by Google. Please verify and retry.';
     }
-    // Account age
     if (!isAccountOldEnough(user)) {
       return 'This account is too new. Please wait a minute and try again.';
     }
-    // Force refresh token to ensure it's fresh
     try {
       final token = await user.getIdToken(true);
       if (token == null || token.isEmpty) {
@@ -229,9 +160,6 @@ class SecurityGuard {
     return null;
   }
 
-  // ─────────────────────────────────────────────
-  // 6. DEVICE BINDING (RTDB) — 1 device = 1 account
-  // ─────────────────────────────────────────────
   static Future<Map<String, dynamic>> validateAndBindDevice(
     String uid,
     String email,
@@ -243,7 +171,6 @@ class SecurityGuard {
       final data = snap.snapshot.value as Map?;
 
       if (data == null) {
-        // First signup on this device → bind
         await ref.set({
           'uid': uid,
           'email': email,
@@ -254,14 +181,12 @@ class SecurityGuard {
 
       final existingUid = data['uid']?.toString() ?? '';
       if (existingUid == uid) {
-        // Same user, refresh last seen
         await ref.update({
           'lastSeen': DateTime.now().millisecondsSinceEpoch,
         });
         return {'ok': true, 'firstBind': false};
       }
 
-      // Different uid on same device → BLOCK
       return {
         'ok': false,
         'reason': 'This device is already linked to a different MayaJaal account.',
@@ -270,14 +195,10 @@ class SecurityGuard {
       };
     } catch (e) {
       debugPrint('Device bind error: $e');
-      // Fail-open in dev, but if you want strict: return {'ok': false, ...}
       return {'ok': true, 'warning': 'binding_skipped'};
     }
   }
 
-  // ─────────────────────────────────────────────
-  // 7. ROOT / EMULATOR DETECTION (soft warning + hard block on some)
-  // ─────────────────────────────────────────────
   static Future<Map<String, dynamic>> detectRootOrEmulator() async {
     try {
       final info = DeviceInfoPlugin();
@@ -293,7 +214,6 @@ class SecurityGuard {
             a.hardware.toLowerCase().contains('goldfish') ||
             a.hardware.toLowerCase().contains('ranchu');
 
-        // Root hints (best-effort)
         bool rooted = false;
         try {
           final suPaths = [
@@ -312,8 +232,6 @@ class SecurityGuard {
             if (File(p).existsSync()) { rooted = true; break; }
           }
         } catch (_) {}
-
-        final isDebuggable = (a.isPhysicalDevice == false) || a.isLowRamDevice;
 
         return {
           'emulator': isEmulator,
@@ -341,25 +259,10 @@ class SecurityGuard {
     return {'emulator': false, 'rooted': false, 'isPhysical': true};
   }
 
-  // ─────────────────────────────────────────────
-  // 8. PACKAGE / SIGNATURE INTEGRITY (best-effort)
-  // ─────────────────────────────────────────────
-static Future<bool> isPackageIntact() async {
-  try {
-    // Note: DeviceInfoPlugin me packageName nahi hota. 
-    // App integrity ke liye Play Integrity API best hai (production me).
-    if (Platform.isAndroid) {
-      return true; 
-    }
-    return true;
-  } catch (_) {
+  static Future<bool> isPackageIntact() async {
     return true;
   }
-}
 
-  // ─────────────────────────────────────────────
-  // 9. RATE LIMIT (login attempts)
-  // ─────────────────────────────────────────────
   static Future<bool> checkLoginRateLimit() async {
     try {
       final prefs = await SharedPreferences.getInstance();
@@ -401,9 +304,6 @@ static Future<bool> isPackageIntact() async {
     } catch (_) {}
   }
 
-  // ─────────────────────────────────────────────
-  // 10. HMAC REQUEST SIGNING (for backend verification)
-  // ─────────────────────────────────────────────
   static String signRequest(String method, String path, String body) {
     final payload = '$method\n$path\n$body';
     final hmac = crypto.Hmac(crypto.sha256, utf8.encode(_kHmacSecret));
@@ -429,9 +329,6 @@ static Future<bool> isPackageIntact() async {
     };
   }
 
-  // ─────────────────────────────────────────────
-  // 11. SESSION INTEGRITY (every sensitive op)
-  // ─────────────────────────────────────────────
   static Future<bool> validateSession() async {
     final user = FirebaseAuth.instance.currentUser;
     if (user == null) return false;
@@ -450,16 +347,10 @@ static Future<bool> isPackageIntact() async {
     }
   }
 
-  // ─────────────────────────────────────────────
-  // 12. FULL SECURITY GATE (before entering app)
-  //     Returns null if OK, else error message
-  // ─────────────────────────────────────────────
   static Future<String?> fullGate(User user) async {
-    // Step 1: user validation
     final userErr = await validateUser(user);
     if (userErr != null) return userErr;
 
-    // Step 2: device root/emulator check (warn — but block rooted)
     final device = await detectRootOrEmulator();
     if (device['emulator'] == true) {
       return 'Emulator detected. MayaJaal requires a physical device.';
@@ -468,18 +359,14 @@ static Future<bool> isPackageIntact() async {
       return 'Rooted/jailbroken device detected. Please use a secure device.';
     }
 
-    // Step 3: package integrity
     final intact = await isPackageIntact();
     if (!intact) return 'App integrity check failed. Please reinstall from official source.';
 
-    // Step 4: device binding
     final bind = await validateAndBindDevice(user.uid, user.email ?? '');
     if (bind['ok'] != true) {
-      return bind['reason']?.toString() ??
-          'Device binding failed. Contact support.';
+      return bind['reason']?.toString() ?? 'Device binding failed. Contact support.';
     }
 
-    // Step 5: session integrity
     final sessOk = await validateSession();
     if (!sessOk) return 'Session invalid. Please login again.';
 
@@ -488,99 +375,58 @@ static Future<bool> isPackageIntact() async {
 }
 
 // ═══════════════════════════════════════════════════════
-// CYBER RANK SYSTEM
+// 👥 REFERRAL ENGINE (Real Login Required Verification)
 // ═══════════════════════════════════════════════════════
-class CyberRank {
-  static const List<Map<String, dynamic>> ranks = [
-    {'name': 'Neon Rookie', 'emoji': '🥉', 'color': kSilver, 'min': 0},
-    {'name': 'Cyber Trader', 'emoji': '🥈', 'color': kNeonCyan, 'min': 1000},
-    {'name': 'Matrix Master', 'emoji': '🥇', 'color': kGreen, 'min': 10000},
-    {'name': 'Quantum Elite', 'emoji': '💎', 'color': kNeonPurple, 'min': 100000},
-    {'name': 'MayaJaal Legend', 'emoji': '👑', 'color': kGold, 'min': 1000000},
-  ];
+class ReferralService {
+  static DatabaseReference get _rtdb => FirebaseDatabase.instance.ref();
 
-  static Map<String, dynamic> get(int views) {
-    Map<String, dynamic> current = ranks[0];
-    for (final r in ranks) {
-      if (views >= (r['min'] as int)) current = r;
-    }
-    return current;
-  }
-
-  static Map<String, dynamic>? next(int views) {
-    for (final r in ranks) {
-      if (views < (r['min'] as int)) return r;
-    }
-    return null;
-  }
-
-  static int getIndex(int views) {
-    int idx = 0;
-    for (int i = 0; i < ranks.length; i++) {
-      if (views >= (ranks[i]['min'] as int)) idx = i;
-    }
-    return idx;
-  }
-}
-
-// ═══════════════════════════════════════════════════════
-// AD TRACKER
-// ═══════════════════════════════════════════════════════
-class AdTracker {
-  static const String _kCountKey = 'ads_watched_count';
-  static const String _kLastTimeKey = 'ads_last_reset_time';
-
-  static Future<int> getWatchedCount() async {
+  static Future<void> processPendingReferral(String newUid) async {
     try {
       final prefs = await SharedPreferences.getInstance();
-      return prefs.getInt(_kCountKey) ?? 0;
-    } catch (_) {
-      return 0;
-    }
-  }
+      final referrerUid = prefs.getString('pending_referrer_uid');
 
-  static Future<void> increment() async {
-    try {
-      final prefs = await SharedPreferences.getInstance();
-      final current = prefs.getInt(_kCountKey) ?? 0;
-      final newCount = current + 1;
-      if (newCount >= 7) {
-        await prefs.setInt(_kCountKey, 0);
-        await prefs.setInt(_kLastTimeKey, DateTime.now().millisecondsSinceEpoch);
-      } else {
-        await prefs.setInt(_kCountKey, newCount);
+      if (referrerUid == null || referrerUid.isEmpty) return;
+      if (referrerUid == newUid) {
+        await prefs.remove('pending_referrer_uid');
+        return;
       }
-    } catch (_) {}
-  }
 
-  static Future<bool> isAdFreeWindow() async {
-    try {
-      final prefs = await SharedPreferences.getInstance();
-      final lastTime = prefs.getInt(_kLastTimeKey) ?? 0;
-      if (lastTime == 0) return false;
-      final diff = DateTime.now().millisecondsSinceEpoch - lastTime;
-      return diff < 24 * 60 * 60 * 1000;
-    } catch (_) {
-      return false;
-    }
-  }
+      final checkRef = _rtdb.child('users/$newUid/referredBy');
+      final snap = await checkRef.once();
+      if (snap.snapshot.value != null) {
+        await prefs.remove('pending_referrer_uid');
+        return;
+      }
 
-  static Future<int> hoursRemaining() async {
-    try {
-      final prefs = await SharedPreferences.getInstance();
-      final lastTime = prefs.getInt(_kLastTimeKey) ?? 0;
-      if (lastTime == 0) return 0;
-      final diff = DateTime.now().millisecondsSinceEpoch - lastTime;
-      final remaining = 24 * 60 * 60 * 1000 - diff;
-      return remaining > 0 ? (remaining / (60 * 60 * 1000)).ceil() : 0;
-    } catch (_) {
-      return 0;
+      await checkRef.set(referrerUid);
+      await _rtdb.child('referrals/$referrerUid/$newUid').set({
+        'timestamp': DateTime.now().millisecondsSinceEpoch,
+        'email': MayaJaalAccount.cachedEmail ?? '',
+      });
+
+      await _rtdb.child('users/$referrerUid/referralCount').runTransaction((mutableData) {
+        if (mutableData == null) return Transaction.success(1);
+        final current = (mutableData as int?) ?? 0;
+        return Transaction.success(current + 1);
+      });
+
+      await FirebaseService.sendNotification(
+        toUid: referrerUid,
+        title: '🎉 New App Referral!',
+        message: 'A new user joined using your link and verified their account.',
+        type: 'referral',
+      );
+
+      await prefs.remove('pending_referrer_uid');
+      debugPrint('✅ Referral counted successfully for: $referrerUid');
+    } catch (e) {
+      debugPrint('Referral processing error: $e');
     }
   }
 }
 
 // ═══════════════════════════════════════════════════════
-// MAYAJAAL FIREBASE ACCOUNT SERVICE (SECURED)
+// MAYAJAAL FIREBASE ACCOUNT SERVICE
 // ═══════════════════════════════════════════════════════
 class MayaJaalAccount {
   static String? cachedUid;
@@ -594,7 +440,6 @@ class MayaJaalAccount {
   static Future<void> init() async {
     final user = FirebaseAuth.instance.currentUser;
     if (user != null) {
-      // 🔐 SECURITY: validate before caching
       final err = await SecurityGuard.validateUser(user);
       if (err != null) {
         debugPrint('🚫 init rejected: $err');
@@ -607,6 +452,7 @@ class MayaJaalAccount {
       cachedPhoto = user.photoURL;
       await syncUserToRTDB(user);
       await loadApiKey();
+      await ReferralService.processPendingReferral(user.uid);
     }
   }
 
@@ -614,11 +460,7 @@ class MayaJaalAccount {
 
   static Future<void> syncUserToRTDB(User user) async {
     try {
-      // 🔐 SECURITY: re-verify Gmail before any write
-      if (!SecurityGuard.isGmailOnly(user.email)) {
-        debugPrint('🚫 RTDB sync blocked: non-gmail');
-        return;
-      }
+      if (!SecurityGuard.isGmailOnly(user.email)) return;
       final ref = _rtdb.child('users/${user.uid}');
       final snap = await ref.once();
       final data = snap.snapshot.value as Map?;
@@ -630,12 +472,13 @@ class MayaJaalAccount {
         'lastSeen': DateTime.now().millisecondsSinceEpoch,
         'emailVerified': user.emailVerified,
         'provider': 'google.com',
-        'deviceHash': await DeviceIdHelper.getHash(), // 🔐 anti-multi-device
+        'deviceHash': await DeviceIdHelper.getHash(),
       };
 
       if (data == null) {
         updates['createdAt'] = DateTime.now().millisecondsSinceEpoch;
         updates['subscribersCount'] = 0;
+        updates['referralCount'] = 0;
         updates['dashboard'] = {
           'totalLinks': 0,
           'totalViews': 0,
@@ -656,7 +499,6 @@ class MayaJaalAccount {
       }
 
       await ref.update(updates);
-      debugPrint('✅ User synced to RTDB: ${user.uid}');
     } catch (e) {
       debugPrint('RTDB sync error: $e');
     }
@@ -687,9 +529,7 @@ class MayaJaalAccount {
     return List.generate(24, (_) => chars[r.nextInt(chars.length)]).join();
   }
 
-  // 🔐 SECURED Google sign-in — full validation
   static Future<UserCredential?> signInWithGoogle() async {
-    // Rate limit
     final allowed = await SecurityGuard.checkLoginRateLimit();
     if (!allowed) {
       throw FirebaseAuthException(
@@ -703,7 +543,6 @@ class MayaJaalAccount {
     final googleUser = await googleSignIn.signIn();
     if (googleUser == null) return null;
 
-    // 🔐 Pre-check: reject non-gmail Google accounts before Firebase
     if (!SecurityGuard.isGmailOnly(googleUser.email)) {
       await googleSignIn.signOut();
       throw FirebaseAuthException(
@@ -719,7 +558,6 @@ class MayaJaalAccount {
     );
     final result = await FirebaseAuth.instance.signInWithCredential(credential);
 
-    // 🔐 Post-check: full validation via SecurityGuard
     final user = result.user;
     if (user == null) throw FirebaseAuthException(code: 'unknown', message: 'No user returned.');
 
@@ -730,7 +568,6 @@ class MayaJaalAccount {
       throw FirebaseAuthException(code: 'invalid-credential', message: err);
     }
 
-    // 🔐 Device binding
     final bind = await SecurityGuard.validateAndBindDevice(user.uid, user.email ?? '');
     if (bind['ok'] != true) {
       await FirebaseAuth.instance.signOut();
@@ -741,8 +578,8 @@ class MayaJaalAccount {
       );
     }
 
-    // Success — clear rate-limit
     await SecurityGuard.clearLoginAttempts();
+    await ReferralService.processPendingReferral(user.uid);
     return result;
   }
 
@@ -842,6 +679,9 @@ class MayaJaalAccount {
 
   static double _r2(num n) => (n * 100).round() / 100;
 }
+// ═══════════════════════════════════════════════════════
+// PART 2 OF 5: FIREBASE SERVICE, HELPERS, MAIN & CORE ANIMATIONS
+// ═══════════════════════════════════════════════════════
 
 // ═══════════════════════════════════════════════════════
 // FIREBASE SERVICE
@@ -1025,6 +865,12 @@ class FirebaseService {
 
   static Stream<int> getSubscriberCount(String channelUid) {
     return _rtdb.child('users/$channelUid/subscribersCount').onValue.map((e) {
+      return (e.snapshot.value ?? 0) as int;
+    });
+  }
+
+  static Stream<int> getReferralCount(String uid) {
+    return _rtdb.child('users/$uid/referralCount').onValue.map((e) {
       return (e.snapshot.value ?? 0) as int;
     });
   }
@@ -1246,7 +1092,6 @@ class DeviceIdHelper {
     }
   }
 
-  // 🔐 SHA-256 hash of device id (for RTDB, don't expose raw)
   static Future<String> getHash() async {
     if (_cachedHash != null) return _cachedHash!;
     try {
@@ -1305,17 +1150,6 @@ Future<void> main() async {
       ),
     );
     debugPrint("✅ Firebase Initialized");
-
-    // 🔐 App Check (enable in prod — uncomment after adding firebase_app_check package)
-    // try {
-    //   await FirebaseAppCheck.instance.activate(
-    //     androidProvider: AndroidProvider.playIntegrity,
-    //   );
-    //   debugPrint('✅ App Check activated');
-    // } catch (e) {
-    //   debugPrint('App Check error: $e');
-    // }
-
     await MayaJaalAccount.init();
   } catch (e) {
     debugPrint("Firebase Init Error: $e");
@@ -1528,10 +1362,10 @@ class _ProfessionalLoaderState extends State<ProfessionalLoader>
                   width: 180,
                   child: ClipRRect(
                     borderRadius: BorderRadius.circular(99),
-                    child: LinearProgressIndicator(
+                    child: const LinearProgressIndicator(
                       minHeight: 3,
                       backgroundColor: Colors.white12,
-                      valueColor: const AlwaysStoppedAnimation<Color>(kGreen),
+                      valueColor: AlwaysStoppedAnimation<Color>(kGreen),
                     ),
                   ),
                 ),
@@ -1653,6 +1487,9 @@ class _SplashScreenState extends State<SplashScreen>
     );
   }
 }
+// ═══════════════════════════════════════════════════════
+// PART 3 OF 5: APP ROUTING, AUTH, LOGIN, MAIN NAV & COMPLETE HOME SCREEN
+// ═══════════════════════════════════════════════════════
 
 // ═══════════════════════════════════════════════════════
 // MY APP
@@ -1688,6 +1525,7 @@ class _MyAppState extends State<MyApp> {
       final initial = await _appLinks.getInitialLink();
       if (initial != null) {
         _initialLink = initial;
+        _captureReferralCode(initial);
         final url = _buildUrlFromLink(initial);
         if (url.isNotEmpty) {
           _pendingVideoTargetUrl = url;
@@ -1701,9 +1539,21 @@ class _MyAppState extends State<MyApp> {
 
     _linkSub = _appLinks.uriLinkStream.listen((uri) {
       debugPrint('Deep link received: $uri');
+      _captureReferralCode(uri);
       if (!mounted) return;
       _handleDeepLink(uri);
     }, onError: (e) => debugPrint('Link stream error: $e'));
+  }
+
+  Future<void> _captureReferralCode(Uri uri) async {
+    final ref = uri.queryParameters['ref'] ?? uri.queryParameters['r'];
+    if (ref != null && ref.isNotEmpty) {
+      final prefs = await SharedPreferences.getInstance();
+      if (!prefs.containsKey('pending_referrer_uid')) {
+        await prefs.setString('pending_referrer_uid', ref);
+        debugPrint('🎯 Captured Referral Code: $ref');
+      }
+    }
   }
 
   String _buildUrlFromLink(Uri uri) {
@@ -1838,7 +1688,6 @@ class _AuthGateState extends State<AuthGate> {
     _initialPendingUrl = _MyAppState.instance?.pendingUrl;
     debugPrint('🔍 AuthGate initial pending URL: $_initialPendingUrl');
 
-    // 🔐 If a user is already logged in, run full security gate
     final user = FirebaseAuth.instance.currentUser;
     if (user != null) {
       final err = await SecurityGuard.fullGate(user);
@@ -1863,7 +1712,6 @@ class _AuthGateState extends State<AuthGate> {
       return const SplashScreen();
     }
 
-    // 🔐 Blocking error screen (root/emulator/gmail-mismatch/device-lock)
     if (_blockingError != null) {
       return _SecurityBlockScreen(
         error: _blockingError!,
@@ -1895,6 +1743,7 @@ class _AuthGateState extends State<AuthGate> {
             MayaJaalAccount.cachedPhoto = user.photoURL;
             await MayaJaalAccount.syncUserToRTDB(user);
             await MayaJaalAccount.loadApiKey();
+            await ReferralService.processPendingReferral(user.uid);
           });
 
           if (!_initialHandled &&
@@ -2072,7 +1921,6 @@ class _LoginScreenState extends State<LoginScreen>
       _error = '';
     });
     try {
-      // 🔐 Secured sign-in — full SecurityGuard pipeline inside
       final result = await MayaJaalAccount.signInWithGoogle();
       if (result == null) {
         setState(() => _loading = false);
@@ -2269,7 +2117,6 @@ class _LoginScreenState extends State<LoginScreen>
                     ),
                   ),
                   const Spacer(),
-                  // 🔐 Gmail-only notice
                   Container(
                     padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
                     margin: const EdgeInsets.only(bottom: 12),
@@ -3326,7 +3173,7 @@ class _HomeScreenState extends State<HomeScreen>
               ),
               Padding(
                 padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 6),
-                child: AdBanner(slot: 'home-top'),
+                child: const AdBanner(slot: 'home-top'),
               ),
               Container(
                 width: double.infinity,
@@ -3611,7 +3458,7 @@ class _HomeScreenState extends State<HomeScreen>
               ),
               Padding(
                 padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 6),
-                child: AdBanner(slot: 'home-middle'),
+                child: const AdBanner(slot: 'home-middle'),
               ),
               Padding(
                 padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 6),
@@ -3650,7 +3497,7 @@ class _HomeScreenState extends State<HomeScreen>
               ),
               Padding(
                 padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
-                child: AdBanner(slot: 'home-bottom'),
+                child: const AdBanner(slot: 'home-bottom'),
               ),
               const Padding(
                 padding: EdgeInsets.symmetric(vertical: 18),
@@ -3671,12 +3518,12 @@ class _HomeScreenState extends State<HomeScreen>
     );
   }
 }
+// ═══════════════════════════════════════════════════════
+// PART 4 OF 5: COMPLETE DRAWER, PAINTERS, CHANNELS & GALLERY
+// ═══════════════════════════════════════════════════════
 
 // ═══════════════════════════════════════════════════════
-// ⏭️ END OF PART 1 — MORE DRAWER CONTINUES IN PART 2
-// ═══════════════════════════════════════════════════════
-// ═══════════════════════════════════════════════════════
-// MORE DRAWER (SECURED)
+// MORE DRAWER (SECURED + ALL ORIGINAL DIALOGS & SOCIALS)
 // ═══════════════════════════════════════════════════════
 class MoreDrawer extends StatefulWidget {
   const MoreDrawer({super.key});
@@ -3685,8 +3532,7 @@ class MoreDrawer extends StatefulWidget {
   State<MoreDrawer> createState() => _MoreDrawerState();
 }
 
-class _MoreDrawerState extends State<MoreDrawer>
-    with TickerProviderStateMixin {
+class _MoreDrawerState extends State<MoreDrawer> with TickerProviderStateMixin {
   late AnimationController _snakeController;
   late AnimationController _slideController;
 
@@ -3712,11 +3558,9 @@ class _MoreDrawerState extends State<MoreDrawer>
 
   Future<void> _logout(BuildContext context) async {
     Haptic.heavy();
-    // 🔐 SECURITY: clear sensitive caches on logout
     try {
       final prefs = await SharedPreferences.getInstance();
       await prefs.remove('mj_login_attempts');
-      // Keep device_id and history (user preference)
     } catch (_) {}
     await MayaJaalAccount.signOut();
     if (context.mounted) {
@@ -3728,8 +3572,8 @@ class _MoreDrawerState extends State<MoreDrawer>
     Haptic.light();
     try {
       final target = Uri.parse(url);
-      if (!await launchUrl(target, mode: LaunchMode.externalApplication)) {
-        await launchUrl(target, mode: LaunchMode.platformDefault);
+      if (!await launchUrl(target, mode: LaunchMode.inAppBrowserView)) {
+        await launchUrl(target, mode: LaunchMode.externalApplication);
       }
     } catch (e) {
       debugPrint('Launch error: $e');
@@ -3739,10 +3583,17 @@ class _MoreDrawerState extends State<MoreDrawer>
     }
   }
 
-  void _shareApp() {
+  void _shareAppWithReferral() {
     Haptic.light();
+    final uid = MayaJaalAccount.cachedUid ?? '';
+    final referralLink = uid.isNotEmpty
+        ? 'https://www.mayajaal.online/download.html?ref=$uid'
+        : 'https://www.mayajaal.online/download.html';
+
     Share.share(
-      '🚀 Experience Matrix-speed streaming on MayaJaal App!\nDownload: https://www.mayajaal.online/download.html',
+      '🚀 Experience Matrix-speed streaming & earn on MayaJaal App!\n'
+      'Download here: $referralLink\n\n'
+      '⚡ Join now with my referral!',
     );
   }
 
@@ -4062,7 +3913,7 @@ class _MoreDrawerState extends State<MoreDrawer>
   }
 
   Widget _staggered({required int index, required Widget child}) {
-    final start = (index * 0.06).clamp(0.0, 0.6);
+    final start = (index * 0.05).clamp(0.0, 0.6);
     return AnimatedBuilder(
       animation: _slideController,
       builder: (c, _) {
@@ -4083,6 +3934,7 @@ class _MoreDrawerState extends State<MoreDrawer>
   @override
   Widget build(BuildContext context) {
     final user = FirebaseAuth.instance.currentUser;
+    final uid = user?.uid ?? '';
 
     return Drawer(
       backgroundColor: Colors.black,
@@ -4257,8 +4109,72 @@ class _MoreDrawerState extends State<MoreDrawer>
                       ),
                     ),
                   ),
+
+                  // Referral Dashboard Live Tracker
+                  if (uid.isNotEmpty)
+                    _staggered(
+                      index: 2,
+                      child: StreamBuilder<int>(
+                        stream: FirebaseService.getReferralCount(uid),
+                        builder: (context, snapshot) {
+                          final count = snapshot.data ?? 0;
+                          return Container(
+                            margin: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+                            padding: const EdgeInsets.all(12),
+                            decoration: BoxDecoration(
+                              gradient: LinearGradient(
+                                colors: [kGreen.withOpacity(0.18), Colors.black],
+                                begin: Alignment.topLeft,
+                                end: Alignment.bottomRight,
+                              ),
+                              borderRadius: BorderRadius.circular(12),
+                              border: Border.all(color: kGreen.withOpacity(0.6), width: 1.2),
+                            ),
+                            child: Row(
+                              children: [
+                                Container(
+                                  padding: const EdgeInsets.all(10),
+                                  decoration: BoxDecoration(
+                                    color: Colors.black,
+                                    shape: BoxShape.circle,
+                                    border: Border.all(color: kGold, width: 1.5),
+                                  ),
+                                  child: const Icon(Icons.people_alt, color: kGold, size: 22),
+                                ),
+                                const SizedBox(width: 12),
+                                Expanded(
+                                  child: Column(
+                                    crossAxisAlignment: CrossAxisAlignment.start,
+                                    children: [
+                                      const Text(
+                                        'REFERRAL NETWORK',
+                                        style: TextStyle(color: kGreen, fontSize: 9.5, fontWeight: FontWeight.bold, letterSpacing: 1.5),
+                                      ),
+                                      const SizedBox(height: 2),
+                                      Text('$count Active Joins', style: const TextStyle(color: Colors.white, fontSize: 15, fontWeight: FontWeight.w900)),
+                                      Text('Counts only after real user login', style: TextStyle(color: Colors.white.withOpacity(0.5), fontSize: 8.5)),
+                                    ],
+                                  ),
+                                ),
+                                ElevatedButton(
+                                  onPressed: _shareAppWithReferral,
+                                  style: ElevatedButton.styleFrom(
+                                    backgroundColor: kGreen,
+                                    foregroundColor: Colors.black,
+                                    padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+                                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+                                  ),
+                                  child: const Text('SHARE', style: TextStyle(fontSize: 11, fontWeight: FontWeight.bold)),
+                                ),
+                              ],
+                            ),
+                          );
+                        },
+                      ),
+                    ),
+
                   _staggered(
-                    index: 2,
+                    index: 3,
                     child: _snakeItem(
                       context,
                       icon: Icons.account_balance_wallet,
@@ -4276,7 +4192,7 @@ class _MoreDrawerState extends State<MoreDrawer>
                     ),
                   ),
                   _staggered(
-                    index: 3,
+                    index: 4,
                     child: _snakeItem(
                       context,
                       icon: Icons.account_balance,
@@ -4294,7 +4210,7 @@ class _MoreDrawerState extends State<MoreDrawer>
                     ),
                   ),
                   _staggered(
-                    index: 4,
+                    index: 5,
                     child: _snakeItem(
                       context,
                       icon: Icons.bookmark,
@@ -4312,7 +4228,7 @@ class _MoreDrawerState extends State<MoreDrawer>
                     ),
                   ),
                   _staggered(
-                    index: 5,
+                    index: 6,
                     child: _snakeItem(
                       context,
                       icon: Icons.vpn_key,
@@ -4327,7 +4243,7 @@ class _MoreDrawerState extends State<MoreDrawer>
                     ),
                   ),
                   _staggered(
-                    index: 6,
+                    index: 7,
                     child: _snakeItem(
                       context,
                       icon: Icons.smart_toy,
@@ -4342,7 +4258,7 @@ class _MoreDrawerState extends State<MoreDrawer>
                     ),
                   ),
                   _staggered(
-                    index: 7,
+                    index: 8,
                     child: _snakeItem(
                       context,
                       icon: Icons.share,
@@ -4351,12 +4267,12 @@ class _MoreDrawerState extends State<MoreDrawer>
                       subtitle: 'Invite your friends',
                       onTap: () {
                         Navigator.pop(context);
-                        _shareApp();
+                        _shareAppWithReferral();
                       },
                     ),
                   ),
                   _staggered(
-                    index: 8,
+                    index: 9,
                     child: _snakeItem(
                       context,
                       icon: Icons.settings,
@@ -4374,7 +4290,7 @@ class _MoreDrawerState extends State<MoreDrawer>
                     ),
                   ),
                   _staggered(
-                    index: 9,
+                    index: 10,
                     child: _snakeItem(
                       context,
                       icon: Icons.support_agent,
@@ -4383,14 +4299,12 @@ class _MoreDrawerState extends State<MoreDrawer>
                       subtitle: 'mayajaalsupport@gmail.com',
                       onTap: () {
                         Navigator.pop(context);
-                        _launchURL(
-                          'mailto:mayajaalsupport@gmail.com?subject=MayaJaal%20Support',
-                        );
+                        _launchURL('https://www.mayajaal.online/support.html');
                       },
                     ),
                   ),
                   _staggered(
-                    index: 10,
+                    index: 11,
                     child: Padding(
                       padding: const EdgeInsets.only(left: 16, top: 18, bottom: 8),
                       child: Row(
@@ -4415,7 +4329,7 @@ class _MoreDrawerState extends State<MoreDrawer>
                     ),
                   ),
                   _staggered(
-                    index: 11,
+                    index: 12,
                     child: _socialItem(
                       context,
                       imageUrl:
@@ -4431,7 +4345,7 @@ class _MoreDrawerState extends State<MoreDrawer>
                     ),
                   ),
                   _staggered(
-                    index: 12,
+                    index: 13,
                     child: _socialItem(
                       context,
                       imageUrl:
@@ -4447,7 +4361,7 @@ class _MoreDrawerState extends State<MoreDrawer>
                     ),
                   ),
                   _staggered(
-                    index: 13,
+                    index: 14,
                     child: _socialItem(
                       context,
                       imageUrl:
@@ -4463,7 +4377,7 @@ class _MoreDrawerState extends State<MoreDrawer>
                     ),
                   ),
                   _staggered(
-                    index: 14,
+                    index: 15,
                     child: Padding(
                       padding: const EdgeInsets.only(left: 16, top: 18, bottom: 8),
                       child: Row(
@@ -4471,7 +4385,7 @@ class _MoreDrawerState extends State<MoreDrawer>
                           Container(width: 14, height: 1.5, color: kNeonCyan),
                           const SizedBox(width: 6),
                           const Text(
-                            'INFORMATION',
+                            'INFORMATION & LEGAL',
                             style: TextStyle(
                               color: kNeonCyan,
                               fontSize: 11,
@@ -4488,7 +4402,7 @@ class _MoreDrawerState extends State<MoreDrawer>
                     ),
                   ),
                   _staggered(
-                    index: 15,
+                    index: 16,
                     child: _snakeItem(
                       context,
                       icon: Icons.info_outline,
@@ -4503,13 +4417,13 @@ class _MoreDrawerState extends State<MoreDrawer>
                     ),
                   ),
                   _staggered(
-                    index: 16,
+                    index: 17,
                     child: _snakeItem(
                       context,
                       icon: Icons.privacy_tip_outlined,
                       color: kDimGreen,
                       title: 'Privacy Policy',
-                      subtitle: 'Opens in browser',
+                      subtitle: 'Opens in secure view',
                       onTap: () {
                         Navigator.pop(context);
                         _launchURL('https://www.mayajaal.online/privacy.html');
@@ -4517,13 +4431,13 @@ class _MoreDrawerState extends State<MoreDrawer>
                     ),
                   ),
                   _staggered(
-                    index: 17,
+                    index: 18,
                     child: _snakeItem(
                       context,
                       icon: Icons.description_outlined,
                       color: kDimGreen,
                       title: 'Terms & Conditions',
-                      subtitle: 'Opens in browser',
+                      subtitle: 'Opens in secure view',
                       onTap: () {
                         Navigator.pop(context);
                         _launchURL('https://www.mayajaal.online/terms.html');
@@ -4531,7 +4445,35 @@ class _MoreDrawerState extends State<MoreDrawer>
                     ),
                   ),
                   _staggered(
-                    index: 18,
+                    index: 19,
+                    child: _snakeItem(
+                      context,
+                      icon: Icons.copyright_outlined,
+                      color: const Color(0xFFFB7185),
+                      title: 'DMCA Policy',
+                      subtitle: '17 U.S.C. § 512 Notice',
+                      onTap: () {
+                        Navigator.pop(context);
+                        _launchURL('https://www.mayajaal.online/dmca.html');
+                      },
+                    ),
+                  ),
+                  _staggered(
+                    index: 20,
+                    child: _snakeItem(
+                      context,
+                      icon: Icons.handshake_outlined,
+                      color: kNeonCyan,
+                      title: 'Partner Agreement',
+                      subtitle: 'Monetization terms & CPM',
+                      onTap: () {
+                        Navigator.pop(context);
+                        _launchURL('https://www.mayajaal.online/partner.html');
+                      },
+                    ),
+                  ),
+                  _staggered(
+                    index: 21,
                     child: Padding(
                       padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 16),
                       child: Container(
@@ -5316,9 +5258,12 @@ class _GalleryScreenState extends State<GalleryScreen> {
     );
   }
 }
+// ═══════════════════════════════════════════════════════
+// PART 5 OF 5: SAVED, HISTORY, SETTINGS, 10-SEC PREVIEW, PLAYER, WITHDRAW, SEARCH & EARNINGS
+// ═══════════════════════════════════════════════════════
 
 // ═══════════════════════════════════════════════════════
-// SAVED VIDEOS SCREEN
+// SAVED VIDEOS SCREEN (WITH REAL THUMBNAILS)
 // ═══════════════════════════════════════════════════════
 class SavedVideosScreen extends StatefulWidget {
   const SavedVideosScreen({super.key});
@@ -5374,6 +5319,8 @@ class _SavedVideosScreenState extends State<SavedVideosScreen> {
               itemCount: _saved.length,
               itemBuilder: (c, i) {
                 final item = _saved[i];
+                final thumb = (item['thumbnail'] ?? item['poster'] ?? '').toString();
+
                 return Container(
                   margin: const EdgeInsets.only(bottom: 12),
                   decoration: BoxDecoration(
@@ -5382,7 +5329,25 @@ class _SavedVideosScreenState extends State<SavedVideosScreen> {
                     border: Border.all(color: kGreen.withOpacity(0.3)),
                   ),
                   child: ListTile(
-                    leading: const Icon(Icons.play_circle_fill, color: kGreen, size: 30),
+                    leading: Container(
+                      width: 52,
+                      height: 52,
+                      decoration: BoxDecoration(
+                        color: Colors.black,
+                        borderRadius: BorderRadius.circular(8),
+                        border: Border.all(color: kGreen.withOpacity(0.5)),
+                      ),
+                      child: ClipRRect(
+                        borderRadius: BorderRadius.circular(7),
+                        child: thumb.isNotEmpty
+                            ? Image.network(
+                                thumb,
+                                fit: BoxFit.cover,
+                                errorBuilder: (c, e, s) => const Icon(Icons.play_circle_fill, color: kGreen, size: 28),
+                              )
+                            : const Icon(Icons.play_circle_fill, color: kGreen, size: 28),
+                      ),
+                    ),
                     title: Text(
                       item['title'] ?? 'Video',
                       style: const TextStyle(fontSize: 13, color: kGreen, fontWeight: FontWeight.bold),
@@ -5415,7 +5380,7 @@ class _SavedVideosScreenState extends State<SavedVideosScreen> {
 }
 
 // ═══════════════════════════════════════════════════════
-// HISTORY SCREEN
+// HISTORY SCREEN (WITH REAL THUMBNAILS)
 // ═══════════════════════════════════════════════════════
 class HistoryScreen extends StatefulWidget {
   const HistoryScreen({super.key});
@@ -5517,6 +5482,8 @@ class _HistoryScreenState extends State<HistoryScreen> {
               itemCount: _history.length,
               itemBuilder: (c, i) {
                 final item = _history[i];
+                final thumb = (item['thumbnail'] ?? item['poster'] ?? '').toString();
+
                 return Container(
                   margin: const EdgeInsets.only(bottom: 12),
                   decoration: BoxDecoration(
@@ -5526,14 +5493,23 @@ class _HistoryScreenState extends State<HistoryScreen> {
                   ),
                   child: ListTile(
                     leading: Container(
-                      width: 50,
-                      height: 50,
+                      width: 52,
+                      height: 52,
                       decoration: BoxDecoration(
                         color: Colors.black,
                         borderRadius: BorderRadius.circular(8),
                         border: Border.all(color: kGreen.withOpacity(0.5)),
                       ),
-                      child: const Icon(Icons.play_circle_outline, color: kGreen, size: 28),
+                      child: ClipRRect(
+                        borderRadius: BorderRadius.circular(7),
+                        child: thumb.isNotEmpty
+                            ? Image.network(
+                                thumb,
+                                fit: BoxFit.cover,
+                                errorBuilder: (c, e, s) => const Icon(Icons.play_circle_outline, color: kGreen, size: 28),
+                              )
+                            : const Icon(Icons.play_circle_outline, color: kGreen, size: 28),
+                      ),
                     ),
                     title: Text(
                       item['title'] ?? 'Media Node',
@@ -5671,7 +5647,6 @@ class _SettingsScreenState extends State<SettingsScreen> {
             onTap: _showDownloadLocationDialog,
           ),
           Divider(color: kGreen.withOpacity(0.2)),
-          // 🔐 SECURITY INFO card
           Container(
             margin: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
             padding: const EdgeInsets.all(12),
@@ -5705,7 +5680,8 @@ class _SettingsScreenState extends State<SettingsScreen> {
           ),
           const SizedBox(height: 30),
           Center(
-            child: Text('> MayaJaal v1.2.0 // Quantum Core',
+            child: Text(
+              '> MayaJaal v1.2.0 // Quantum Core',
               style: TextStyle(color: kGreen.withOpacity(0.5), fontSize: 12),
             ),
           ),
@@ -5772,7 +5748,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
 }
 
 // ═══════════════════════════════════════════════════════
-// STREAM PREVIEW SCREEN (Strict 10-Sec Rule + Security)
+// STREAM PREVIEW SCREEN (10-Sec Wait, Real Thumbnail & Home Fix)
 // ═══════════════════════════════════════════════════════
 class StreamPreviewScreen extends StatefulWidget {
   final String targetUrl;
@@ -5789,13 +5765,11 @@ class _StreamPreviewScreenState extends State<StreamPreviewScreen>
   String _uploaderName = '@mayajaal';
   String _rawId = '';
   String _token = '';
-
-  // Thumbnail state
   String _thumbnailUrl = '';
 
   int _countdown = 10;
   Timer? _countdownTimer;
-  bool _isReadyToPlay = false; // 10s ke baad true hoga
+  bool _isReadyToPlay = false;
 
   late AnimationController _snakeCtrl;
   late AnimationController _pulseController;
@@ -5818,7 +5792,6 @@ class _StreamPreviewScreenState extends State<StreamPreviewScreen>
       return;
     }
 
-    // 🔐 SECURITY: async session check before fetching stream
     _secureInit();
   }
 
@@ -5861,7 +5834,7 @@ class _StreamPreviewScreenState extends State<StreamPreviewScreen>
         } else {
           Haptic.heavy();
           _countdownTimer?.cancel();
-          setState(() => _isReadyToPlay = true); // 10s khatam, play button ready
+          setState(() => _isReadyToPlay = true);
         }
       });
     });
@@ -5881,6 +5854,14 @@ class _StreamPreviewScreenState extends State<StreamPreviewScreen>
       _rawId = uri.pathSegments.isNotEmpty ? uri.pathSegments.last : 'stream';
       _token = uri.queryParameters['t'] ?? uri.queryParameters['s'] ?? '';
 
+      try {
+        final snap = await FirebaseDatabase.instance.ref('links/$_rawId').once();
+        if (snap.snapshot.value != null && snap.snapshot.value is Map) {
+          final m = Map<String, dynamic>.from(snap.snapshot.value as Map);
+          _thumbnailUrl = (m['thumbnail'] ?? m['poster'] ?? '').toString();
+        }
+      } catch (_) {}
+
       if (widget.targetUrl.endsWith('.mp4') || widget.targetUrl.endsWith('.m3u8')) {
         setState(() {
           _streamUrl = widget.targetUrl;
@@ -5895,7 +5876,6 @@ class _StreamPreviewScreenState extends State<StreamPreviewScreen>
           ? '$kBackendBaseUrl/api/stream-info/$_rawId?t=$_token'
           : '$kBackendBaseUrl/api/stream-info/$_rawId';
 
-      // 🔐 SECURITY: use signed headers where possible
       final deviceId = await DeviceIdHelper.get();
       final headers = SecurityGuard.signedHeaders(
         method: 'GET',
@@ -5908,6 +5888,7 @@ class _StreamPreviewScreenState extends State<StreamPreviewScreen>
       final res = await http
           .get(Uri.parse(apiUrl), headers: headers)
           .timeout(const Duration(seconds: 8));
+
       if (res.statusCode == 200) {
         final data = jsonDecode(res.body);
         if (data['success'] == true && (data['url'] != null || data['video_url'] != null)) {
@@ -5915,7 +5896,9 @@ class _StreamPreviewScreenState extends State<StreamPreviewScreen>
             _streamUrl = data['url'] ?? data['video_url'];
             _videoTitle = data['title'] ?? data['file_name'] ?? _rawId;
             _uploaderName = data['uploader'] ?? '@mayajaal';
-            _thumbnailUrl = data['thumbnail'] ?? data['poster'] ?? '';
+            if (_thumbnailUrl.isEmpty) {
+              _thumbnailUrl = (data['thumbnail'] ?? data['poster'] ?? '').toString();
+            }
             _loading = false;
           });
           _startCountdown();
@@ -5939,7 +5922,13 @@ class _StreamPreviewScreenState extends State<StreamPreviewScreen>
 
   void _shareStreamDirect() {
     Haptic.light();
-    Share.share('🚀 Watch this stream on MayaJaal:\n${widget.targetUrl}');
+    final uid = MayaJaalAccount.cachedUid ?? '';
+    final refParam = uid.isNotEmpty ? '&ref=$uid' : '';
+    final shareUrl = widget.targetUrl.contains('?')
+        ? '${widget.targetUrl}$refParam'
+        : '${widget.targetUrl}?$refParam';
+
+    Share.share('🚀 Watch this stream on MayaJaal:\n$shareUrl');
   }
 
   Future<void> _saveWatchRecord() async {
@@ -5989,9 +5978,13 @@ class _StreamPreviewScreenState extends State<StreamPreviewScreen>
     });
   }
 
+  // ✅ PERFECT WORKING HOME BUTTON
   void _goToHome() {
     Haptic.heavy();
-    Navigator.of(context).popUntil((route) => route.isFirst);
+    Navigator.of(context).pushAndRemoveUntil(
+      MaterialPageRoute(builder: (_) => const MainNavigationHolder()),
+      (route) => false,
+    );
   }
 
   Widget _buildCountdownCircle() {
@@ -6088,7 +6081,6 @@ class _StreamPreviewScreenState extends State<StreamPreviewScreen>
               padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
               child: Column(
                 children: [
-                  // Top Bar
                   Row(
                     children: [
                       IconButton(
@@ -6122,7 +6114,7 @@ class _StreamPreviewScreenState extends State<StreamPreviewScreen>
                   ),
                   const SizedBox(height: 12),
 
-                  // Video Preview Box (No Video Playback during 10s)
+                  // ✅ THUMBNAIL PREVIEW CONTAINER WITH 10S COUNTDOWN
                   Container(
                     padding: const EdgeInsets.all(4),
                     decoration: BoxDecoration(
@@ -6139,26 +6131,19 @@ class _StreamPreviewScreenState extends State<StreamPreviewScreen>
                           fit: StackFit.expand,
                           alignment: Alignment.center,
                           children: [
-                            // Static Thumbnail
                             if (_thumbnailUrl.isNotEmpty)
-                              Container(
-                                color: Colors.black,
-                                child: Image.network(
-                                  _thumbnailUrl,
-                                  fit: BoxFit.contain,
-                                  errorBuilder: (c, e, s) => _buildPlaceholder(),
-                                ),
+                              Image.network(
+                                _thumbnailUrl,
+                                fit: BoxFit.cover,
+                                errorBuilder: (c, e, s) => _buildPlaceholder(),
                               )
                             else
                               _buildPlaceholder(),
 
-                            // Dark Overlay for Countdown visibility
-                            Container(color: Colors.black.withOpacity(0.4)),
+                            Container(color: Colors.black.withOpacity(0.45)),
 
-                            // 10s Countdown Circle
                             if (!_isReadyToPlay) _buildCountdownCircle(),
 
-                            // HD Badge
                             Positioned(
                               top: 8,
                               left: 8,
@@ -6175,7 +6160,6 @@ class _StreamPreviewScreenState extends State<StreamPreviewScreen>
                   ),
                   const SizedBox(height: 16),
 
-                  // Play Button (Appears ONLY after 10s)
                   if (_isReadyToPlay)
                     _buildRedSnakePlayButton()
                   else
@@ -6193,16 +6177,16 @@ class _StreamPreviewScreenState extends State<StreamPreviewScreen>
 
                   const SizedBox(height: 12),
 
-                  // Home Button
+                  // ✅ WORKING HOME BUTTON
                   SizedBox(
                     width: double.infinity,
                     height: 50,
                     child: OutlinedButton.icon(
                       onPressed: _goToHome,
-                      icon: const Icon(Icons.home, color: Colors.white54, size: 20),
-                      label: const Text('GO TO HOME PAGE', style: TextStyle(color: Colors.white54, fontSize: 12, fontWeight: FontWeight.bold, letterSpacing: 1.5)),
+                      icon: const Icon(Icons.home, color: kGreen, size: 20),
+                      label: const Text('GO TO HOME PAGE', style: TextStyle(color: kGreen, fontSize: 12, fontWeight: FontWeight.bold, letterSpacing: 1.5)),
                       style: OutlinedButton.styleFrom(
-                        side: BorderSide(color: Colors.white24, width: 1.5),
+                        side: BorderSide(color: kGreen.withOpacity(0.6), width: 1.5),
                         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(25)),
                       ),
                     ),
@@ -6210,7 +6194,6 @@ class _StreamPreviewScreenState extends State<StreamPreviewScreen>
 
                   const SizedBox(height: 16),
 
-                  // Info Box
                   Container(
                     padding: const EdgeInsets.all(14),
                     decoration: BoxDecoration(
@@ -6269,7 +6252,6 @@ class _StreamPreviewScreenState extends State<StreamPreviewScreen>
                   ),
                   const SizedBox(height: 16),
 
-                  // Share Button
                   SizedBox(
                     width: double.infinity,
                     height: 52,
@@ -6313,7 +6295,7 @@ class _StreamPreviewScreenState extends State<StreamPreviewScreen>
 }
 
 // ═══════════════════════════════════════════════════════
-// NATIVE VIDEO PLAYER (Secured)
+// NATIVE VIDEO PLAYER SCREEN
 // ═══════════════════════════════════════════════════════
 class NativeVideoPlayerScreen extends StatefulWidget {
   final String videoUrl;
@@ -6411,7 +6393,6 @@ class _NativeVideoPlayerScreenState extends State<NativeVideoPlayerScreen> {
         'token': token,
       });
 
-      // 🔐 SECURITY: signed headers
       final headers = SecurityGuard.signedHeaders(
         method: 'POST',
         path: '/api/view/${widget.videoId}',
@@ -6512,7 +6493,6 @@ class _NativeVideoPlayerScreenState extends State<NativeVideoPlayerScreen> {
       try {
         final uri = Uri.parse(widget.sourcePageUrl);
         final token = uri.queryParameters['t'] ?? uri.queryParameters['s'] ?? '';
-
         final deviceId = await DeviceIdHelper.get();
         final signed = SecurityGuard.signedHeaders(
           method: 'GET',
@@ -6680,7 +6660,6 @@ class _NativeVideoPlayerScreenState extends State<NativeVideoPlayerScreen> {
     Haptic.medium();
     final uid = MayaJaalAccount.cachedUid;
     if (uid == null) return;
-    // 🔐 SECURITY: validate session before write
     final ok = await SecurityGuard.validateSession();
     if (!ok) {
       _showFeedback('🔒 Session expired');
@@ -6706,6 +6685,12 @@ class _NativeVideoPlayerScreenState extends State<NativeVideoPlayerScreen> {
     await FirebaseService.recordShare(widget.videoId);
     if (!mounted) return;
 
+    final uid = MayaJaalAccount.cachedUid ?? '';
+    final refParam = uid.isNotEmpty ? '&ref=$uid' : '';
+    final shareUrl = widget.sourcePageUrl.contains('?')
+        ? '${widget.sourcePageUrl}$refParam'
+        : '${widget.sourcePageUrl}?$refParam';
+
     showModalBottomSheet(
       context: context,
       backgroundColor: const Color(0xFF021206),
@@ -6726,19 +6711,19 @@ class _NativeVideoPlayerScreenState extends State<NativeVideoPlayerScreen> {
               children: [
                 _shareOption(Icons.link, 'Copy Link', kNeonCyan, () async {
                   Haptic.medium();
-                  await Clipboard.setData(ClipboardData(text: widget.sourcePageUrl));
+                  await Clipboard.setData(ClipboardData(text: shareUrl));
                   if (c.mounted) Navigator.pop(c);
                   _showFeedback('🔗 Link Copied!');
                 }),
                 _shareOption(Icons.share, 'Share Now', kGreen, () {
                   Haptic.medium();
                   Navigator.pop(c);
-                  Share.share('🎬 Watch "${widget.title}" on MayaJaal:\n${widget.sourcePageUrl}');
+                  Share.share('🎬 Watch "${widget.title}" on MayaJaal:\n$shareUrl');
                 }),
                 _shareOption(Icons.send_rounded, 'Telegram', const Color(0xFF229ED9), () {
                   Haptic.medium();
                   Navigator.pop(c);
-                  Share.share('🎬 Watch "${widget.title}" on MayaJaal:\n${widget.sourcePageUrl}');
+                  Share.share('🎬 Watch "${widget.title}" on MayaJaal:\n$shareUrl');
                 }),
               ],
             ),
@@ -7440,7 +7425,7 @@ class _NativeVideoPlayerScreenState extends State<NativeVideoPlayerScreen> {
                         ),
                       ),
                       const SizedBox(height: 12),
-                      AdBanner(slot: 'player-mid'),
+                      const AdBanner(slot: 'player-mid'),
                       const SizedBox(height: 12),
                       Row(
                         children: const [
@@ -7470,7 +7455,7 @@ class _NativeVideoPlayerScreenState extends State<NativeVideoPlayerScreen> {
                                   ),
                                 ),
                       const SizedBox(height: 12),
-                      AdBanner(slot: 'player-bottom'),
+                      const AdBanner(slot: 'player-bottom'),
                       const SizedBox(height: 16),
                     ],
                   ),
@@ -7483,11 +7468,13 @@ class _NativeVideoPlayerScreenState extends State<NativeVideoPlayerScreen> {
     );
   }
 
+  // ✅ RELATED VIDEO CARDS WITH REAL THUMBNAILS
   Widget _buildRelatedCard(Map<String, dynamic> v) {
     final id = v['id']?.toString() ?? '';
     final title = (v['filename'] ?? v['originalUrl'] ?? 'Video').toString();
     final uploader = (v['uploader'] ?? '@mayajaal').toString();
     final views = (v['views'] ?? 0) as int;
+    final thumb = (v['thumbnail'] ?? v['poster'] ?? '').toString();
 
     return Padding(
       padding: const EdgeInsets.only(right: 10),
@@ -7511,20 +7498,38 @@ class _NativeVideoPlayerScreenState extends State<NativeVideoPlayerScreen> {
             children: [
               Container(
                 height: 90,
-                decoration: BoxDecoration(
-                  borderRadius: const BorderRadius.vertical(top: Radius.circular(11)),
-                  gradient: LinearGradient(
-                    colors: [kGreen.withOpacity(0.15), kNeonCyan.withOpacity(0.1), Colors.black],
-                    begin: Alignment.topLeft,
-                    end: Alignment.bottomRight,
-                  ),
+                decoration: const BoxDecoration(
+                  borderRadius: BorderRadius.vertical(top: Radius.circular(11)),
+                  color: Colors.black,
                 ),
-                child: Center(
-                  child: Container(
-                    width: 40,
-                    height: 40,
-                    decoration: BoxDecoration(shape: BoxShape.circle, color: Colors.black.withOpacity(0.6), border: Border.all(color: kGreen, width: 1.5)),
-                    child: const Icon(Icons.play_arrow, color: kGreen, size: 22),
+                child: ClipRRect(
+                  borderRadius: const BorderRadius.vertical(top: Radius.circular(11)),
+                  child: Stack(
+                    fit: StackFit.expand,
+                    children: [
+                      if (thumb.isNotEmpty)
+                        Image.network(
+                          thumb,
+                          fit: BoxFit.cover,
+                          errorBuilder: (c, e, s) => Container(
+                            color: Colors.black,
+                            child: const Center(child: Icon(Icons.movie_filter, color: kGreen, size: 26)),
+                          ),
+                        )
+                      else
+                        Container(
+                          color: Colors.black,
+                          child: const Center(child: Icon(Icons.movie_filter, color: kGreen, size: 26)),
+                        ),
+                      Center(
+                        child: Container(
+                          width: 36,
+                          height: 36,
+                          decoration: BoxDecoration(shape: BoxShape.circle, color: Colors.black.withOpacity(0.6), border: Border.all(color: kGreen, width: 1.5)),
+                          child: const Icon(Icons.play_arrow, color: kGreen, size: 20),
+                        ),
+                      ),
+                    ],
                   ),
                 ),
               ),
@@ -7555,7 +7560,7 @@ class _NativeVideoPlayerScreenState extends State<NativeVideoPlayerScreen> {
 }
 
 // ═══════════════════════════════════════════════════════
-// WITHDRAW SCREEN (Secured)
+// WITHDRAW SCREEN (SECURED)
 // ═══════════════════════════════════════════════════════
 class WithdrawScreen extends StatefulWidget {
   const WithdrawScreen({super.key});
@@ -7590,7 +7595,6 @@ class _WithdrawScreenState extends State<WithdrawScreen> {
 
   Future<void> _loadInfo() async {
     try {
-      // 🔐 SECURITY: validate session
       final ok = await SecurityGuard.validateSession();
       if (!ok) {
         if (mounted) {
@@ -7627,7 +7631,6 @@ class _WithdrawScreenState extends State<WithdrawScreen> {
 
   Future<void> _saveInfo() async {
     Haptic.medium();
-    // 🔐 SECURITY: validate session before write
     final ok = await SecurityGuard.validateSession();
     if (!ok) {
       if (!mounted) return;
@@ -7668,7 +7671,6 @@ class _WithdrawScreenState extends State<WithdrawScreen> {
       return;
     }
 
-    // 🔐 SECURITY: validate session before withdrawal
     final ok = await SecurityGuard.validateSession();
     if (!ok) {
       if (!mounted) return;
@@ -7902,7 +7904,7 @@ class UserSearchDelegate extends SearchDelegate {
 }
 
 // ═══════════════════════════════════════════════════════
-// USER PROFILE SCREEN (Secured subscribe)
+// USER PROFILE SCREEN (SECURED SUBSCRIBE)
 // ═══════════════════════════════════════════════════════
 class UserProfileScreen extends StatefulWidget {
   final Map<String, dynamic> channelProfile;
@@ -7946,7 +7948,6 @@ class _UserProfileScreenState extends State<UserProfileScreen> {
     Haptic.medium();
     final myUid = MayaJaalAccount.cachedUid;
     if (myUid == null) return;
-    // 🔐 SECURITY: validate session before write
     final ok = await SecurityGuard.validateSession();
     if (!ok) {
       if (!mounted) return;
@@ -8041,16 +8042,22 @@ class _UserProfileScreenState extends State<UserProfileScreen> {
                             final id = vid['id']?.toString() ?? '';
                             final name = vid['filename'] ?? 'Video';
                             final views = vid['views'] ?? 0;
+                            final thumb = (vid['thumbnail'] ?? vid['poster'] ?? '').toString();
 
                             return Container(
                               margin: const EdgeInsets.only(bottom: 8),
                               decoration: BoxDecoration(color: kCardBg, borderRadius: BorderRadius.circular(12), border: Border.all(color: kGreen.withOpacity(0.3))),
                               child: ListTile(
                                 leading: Container(
-                                  width: 40,
-                                  height: 40,
+                                  width: 44,
+                                  height: 44,
                                   decoration: BoxDecoration(color: Colors.black, borderRadius: BorderRadius.circular(8), border: Border.all(color: kGreen.withOpacity(0.5))),
-                                  child: const Icon(Icons.play_circle_fill, color: kGreen, size: 22),
+                                  child: ClipRRect(
+                                    borderRadius: BorderRadius.circular(7),
+                                    child: thumb.isNotEmpty
+                                        ? Image.network(thumb, fit: BoxFit.cover, errorBuilder: (c, e, s) => const Icon(Icons.play_circle_fill, color: kGreen, size: 22))
+                                        : const Icon(Icons.play_circle_fill, color: kGreen, size: 22),
+                                  ),
                                 ),
                                 title: Text(name, style: const TextStyle(color: Colors.white, fontSize: 12.5, fontWeight: FontWeight.bold), maxLines: 1, overflow: TextOverflow.ellipsis),
                                 subtitle: Row(
@@ -8076,7 +8083,7 @@ class _UserProfileScreenState extends State<UserProfileScreen> {
 }
 
 // ═══════════════════════════════════════════════════════
-// EARNINGS SCREEN (Secured)
+// EARNINGS SCREEN (SECURED)
 // ═══════════════════════════════════════════════════════
 class EarningsScreen extends StatefulWidget {
   const EarningsScreen({super.key});
@@ -8122,7 +8129,6 @@ class _EarningsScreenState extends State<EarningsScreen>
         return;
       }
 
-      // 🔐 SECURITY: validate session
       final ok = await SecurityGuard.validateSession();
       if (!ok) {
         if (mounted) {
@@ -8352,6 +8358,7 @@ class _EarningsScreenState extends State<EarningsScreen>
                       final views = (link['views'] ?? 0) as int;
                       final earnings = MayaJaalAccount.calcEarnings(views);
                       final name = (link['filename'] ?? link['originalUrl'] ?? 'link').toString();
+                      final thumb = (link['thumbnail'] ?? link['poster'] ?? '').toString();
 
                       return Container(
                         margin: const EdgeInsets.only(bottom: 10),
@@ -8360,10 +8367,15 @@ class _EarningsScreenState extends State<EarningsScreen>
                         child: Row(
                           children: [
                             Container(
-                              width: 38,
-                              height: 38,
-                              decoration: BoxDecoration(color: Colors.black, borderRadius: BorderRadius.circular(10), border: Border.all(color: kGreen.withOpacity(0.5))),
-                              child: const Icon(Icons.play_circle_outline, color: kGreen, size: 20),
+                              width: 44,
+                              height: 44,
+                              decoration: BoxDecoration(color: Colors.black, borderRadius: BorderRadius.circular(8), border: Border.all(color: kGreen.withOpacity(0.5))),
+                              child: ClipRRect(
+                                borderRadius: BorderRadius.circular(7),
+                                child: thumb.isNotEmpty
+                                    ? Image.network(thumb, fit: BoxFit.cover, errorBuilder: (c, e, s) => const Icon(Icons.play_circle_outline, color: kGreen, size: 22))
+                                    : const Icon(Icons.play_circle_outline, color: kGreen, size: 22),
+                              ),
                             ),
                             const SizedBox(width: 10),
                             Expanded(
