@@ -120,6 +120,30 @@ Widget buildAutoThumbnail(String title, {bool isSmall = false}) {
   );
 }
 
+// 🔥 NEW HELPER: Handles both Network URL and Base64 captured image
+Widget buildMediaThumbnail(String? thumb, String title, {bool isSmall = false}) {
+  if (thumb != null && thumb.isNotEmpty) {
+    if (thumb.startsWith('http')) {
+      return Image.network(
+        thumb,
+        fit: BoxFit.cover,
+        errorBuilder: (c, e, s) => buildAutoThumbnail(title, isSmall: isSmall),
+      );
+    } else {
+      try {
+        return Image.memory(
+          base64Decode(thumb),
+          fit: BoxFit.cover,
+          errorBuilder: (c, e, s) => buildAutoThumbnail(title, isSmall: isSmall),
+        );
+      } catch (_) {
+        return buildAutoThumbnail(title, isSmall: isSmall);
+      }
+    }
+  }
+  return buildAutoThumbnail(title, isSmall: isSmall);
+}
+
 // ═══════════════════════════════════════════════════════
 // TRANSLATIONS
 // ═══════════════════════════════════════════════════════
@@ -1959,7 +1983,7 @@ class _SecurityBlockScreen extends StatelessWidget {
 }
 
 // ═══════════════════════════════════════════════════════
-// LOGIN SCREEN (Premium Design)
+// LOGIN SCREEN (Clean Banner Removed)
 // ═══════════════════════════════════════════════════════
 class LoginScreen extends StatefulWidget {
   final VoidCallback? onLoginSuccess;
@@ -2205,40 +2229,6 @@ class _LoginScreenState extends State<LoginScreen>
                     ),
                   ),
                   const Spacer(),
-                  // 🔐 Premium Gmail-only notice (Original Text)
-                  Container(
-                    padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
-                    margin: const EdgeInsets.only(bottom: 16),
-                    decoration: BoxDecoration(
-                      gradient: LinearGradient(
-                        colors: [kGreen.withOpacity(0.15), kNeonCyan.withOpacity(0.1)],
-                        begin: Alignment.topLeft,
-                        end: Alignment.bottomRight,
-                      ),
-                      border: Border.all(color: kGreen.withOpacity(0.6), width: 1.5),
-                      borderRadius: BorderRadius.circular(12),
-                      boxShadow: [
-                        BoxShadow(color: kGreen.withOpacity(0.2), blurRadius: 15, spreadRadius: 2),
-                      ],
-                    ),
-                    child: Row(
-                      mainAxisAlignment: MainAxisAlignment.center,
-                      children: [
-                        const Icon(Icons.workspace_premium, color: kGreen, size: 22),
-                        const SizedBox(width: 10),
-                        const Text(
-                          'Only verified @gmail.com accounts allowed.',
-                          style: TextStyle(
-                            color: kGreen,
-                            fontSize: 13,
-                            fontWeight: FontWeight.w900,
-                            letterSpacing: 1.2,
-                            shadows: [Shadow(color: kGreen, blurRadius: 8)],
-                          ),
-                        ),
-                      ],
-                    ),
-                  ),
                   SizedBox(
                     width: double.infinity,
                     height: 62,
@@ -3620,7 +3610,263 @@ class _HomeScreenState extends State<HomeScreen>
 // ⏭️ END OF PART 1 — PART 2 CONTINUES
 // ═══════════════════════════════════════════════════════
 // ═══════════════════════════════════════════════════════
-// MORE DRAWER (SECURED)
+// NEW: IN-APP LEGAL & POLICY DIALOG
+// ═══════════════════════════════════════════════════════
+class LegalPolicyDialog {
+  static const Color kGreen = Color(0xFF00FF66);
+  static const Color kDimGreen = Color(0xFF4FBF8B);
+  static const Color kCardBg = Color(0xFF031408);
+  static const Color kNeonCyan = Color(0xFF00F0FF);
+
+  static void showPolicy(BuildContext context, String type) {
+    String title = '';
+    String subtitle = '';
+    Color accentColor = kGreen;
+    List<Widget> sections = [];
+
+    switch (type) {
+      case 'privacy':
+        title = 'PRIVACY POLICY';
+        subtitle = 'Operating Governance & Data Encryption (2026)';
+        accentColor = kGreen;
+        sections = [
+          _buildSection('1. Personal Identifiers', 
+            'Jab aap Google Sign-In karte hain, hum aapka verified Gmail address (@gmail.com / @googlemail.com), display name aur profile picture fetch karte hain taaki aapka unique MayaJaal Creator Node ban sake.'),
+          _buildSection('2. Hardware & Anti-Tamper Binding', 
+            'Multi-account aur bot signups rokne ke liye hum hardware-level device hash store karte hain. Ek physical device par keval ek MayaJaal verified account allow hota hai.'),
+          _buildSection('3. Payout & Financial Data', 
+            'Aapka Bank Account number, IFSC code aur UPI ID encrypted format mein Realtime Database par store hote hain. Inka istemal keval aapki earnings (\$5+ hone par) transfer karne ke liye hota hai.'),
+          _buildSection('4. Traffic & Conversion Logs', 
+            'Har stream link par hone wale views, playback seconds (minimum 10s rule) aur real users ka conversion track kiya jata hai taaki fraud CPM traffic eliminate ho sake.'),
+          _buildSection('5. Data Rights & Support Desk', 
+            'Aap kisi bhi waqt apna withdrawal data update kar sakte hain ya account removal ke liye support team ko mail kar sakte hain:\nmayajaalsupport@gmail.com'),
+        ];
+        break;
+
+      case 'terms':
+        title = 'TERMS & CONDITIONS';
+        subtitle = 'Platform Governance & Creator Code of Conduct';
+        accentColor = kGreen;
+        sections = [
+          _buildSection('1. Eligibility (18+ Platform)', 
+            'MayaJaal platform par video sharing, conversion bot use karne aur earnings withdraw karne ke liye user ki umar kam se kam 18 saal honi chahiye.'),
+          _buildSection('2. Zero Tolerance Content Policy', 
+            'Platform par CSAM, non-consensual media, extreme violence, terror-linked media ya malicious scripts share karna strictly prohibited hai. Violation par account bina notice terminate kar diya jayega aur unpaid balance freeze ho jayega.'),
+          _buildSection('3. Monetization Integrity & Bot Ban', 
+            'Emulators, auto-clickers, proxy/VPN networks, ya traffic bots se view count badhana strictly prohibited hai. MayaJaal AI automated verification system aisi suspicious activity pakadte hi permanent IP ban lagata hai.'),
+          _buildSection('4. Account Security & API Keys', 
+            'Telegram bot ke liye provide ki gayi 24-character Secret API Key confidential hai. Ise kisi ke sath share na karein.'),
+        ];
+        break;
+
+      case 'dmca':
+        title = 'DMCA & COPYRIGHT POLICY';
+        subtitle = '17 U.S.C. § 512 Safe Harbor Framework';
+        accentColor = const Color(0xFFFB7185);
+        sections = [
+          _buildSection('1. Online Service Provider (OSP) Notice', 
+            'MayaJaal ek neutral video delivery aur storage pipeline hai. Yahan par uploaded files independent creators aur bots ke zariye host hoti hain.'),
+          _buildSection('2. Safe Harbor Compliance', 
+            'Hum copyright owners ke rights ka samman karte hain aur Digital Millennium Copyright Act (DMCA) ke tahat valid takedown notices par turant action lete hain.'),
+          _buildSection('3. Notice Kaise Bhejein', 
+            'Agar aapko lagta hai ki aapke copyrighted content ka ulleghan hua hai, toh official notice bhejein jisme link ID, proof of ownership aur digital signature shamil ho.'),
+          _buildSection('4. Designated Copyright Agent Desk', 
+            'Subject: "DMCA TAKEDOWN REQUEST"\nEmail: mayajaalsupport@gmail.com\nProcessing Time: 24 se 48 hours ke andar content offline kar diya jata hai.'),
+        ];
+        break;
+
+      case 'partner':
+        title = 'PARTNER AGREEMENT';
+        subtitle = 'Live CPM Monetization & Payout Rules';
+        accentColor = kNeonCyan;
+        sections = [
+          _buildSection('1. Dynamic CPM Model', 
+            '• Tier 1: 1,000 views = \$1.50\n• Tier 2: 2,000 views = \$4.00\n• Tier 3: 4,000 views = \$8.00\n• Tier 4: 6,000 views = \$12.00\n• Tier 5: 8,000 views = \$16.00\n• Tier 6: 10,000 views = \$20.00\n• 10,000 views ke baad: Har 1K views par flat \$2.00 rate milta hai.'),
+          _buildSection('2. 10-Second Verification Rule', 
+            'Keval wahi video view monetized maana jayega jisme real user ne kam se kam 10 seconds tak stream watch kiya ho.'),
+          _buildSection('3. Withdrawal Schedule & Limits', 
+            '• Minimum Payout: \$5.00 USD (≈ ₹400 INR)\n• Payout Methods: Direct Bank Transfer (NEFT/IMPS) aur UPI ID\n• Processing Window: 24 se 48 ghante ke andar clearance.'),
+          _buildSection('4. Referral Commission Network', 
+            'Jab aapke share link se koi naya user join karega aur apna verified account login karega, tabhi wo referral aapke dashboard par active count hoga.'),
+        ];
+        break;
+
+      case 'support':
+        title = 'HELP & SUPPORT';
+        subtitle = '24/7 Operations Desk & Automation Support';
+        accentColor = Colors.amberAccent;
+        sections = [
+          _buildSection('Official Support Email', 
+            'mayajaalsupport@gmail.com\n(Payout issues, API issues, aur general queries ke liye 24 ghante ke andar response milta hai)'),
+          _buildSection('Telegram Creator Bots', 
+            '• File Upload Bot: @Mayajaalfilebot\n• Bulk Converter Bot: @MayaJaalBulkConverterbot'),
+          _buildSection('Official Community Channel', 
+            'Updates aur live announcements ke liye hamara official Telegram channel join karein: @MayaJaalOfficial'),
+        ];
+        break;
+    }
+
+    showModalBottomSheet(
+      context: context,
+      backgroundColor: const Color(0xFF030804),
+      isScrollControlled: true,
+      shape: RoundedRectangleBorder(
+        borderRadius: const BorderRadius.vertical(top: Radius.circular(22)),
+        side: BorderSide(color: accentColor.withOpacity(0.5), width: 1.5),
+      ),
+      builder: (c) => DraggableScrollableSheet(
+        initialChildSize: 0.80,
+        maxChildSize: 0.95,
+        minChildSize: 0.55,
+        expand: false,
+        builder: (_, scrollController) => Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 16),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Center(
+                child: Container(
+                  width: 44,
+                  height: 4,
+                  decoration: BoxDecoration(
+                    color: Colors.white24,
+                    borderRadius: BorderRadius.circular(2),
+                  ),
+                ),
+              ),
+              const SizedBox(height: 16),
+              Row(
+                children: [
+                  Container(
+                    padding: const EdgeInsets.all(8),
+                    decoration: BoxDecoration(
+                      color: accentColor.withOpacity(0.12),
+                      shape: BoxShape.circle,
+                      border: Border.all(color: accentColor.withOpacity(0.5)),
+                    ),
+                    child: Icon(Icons.verified_user_rounded, color: accentColor, size: 20),
+                  ),
+                  const SizedBox(width: 12),
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          title,
+                          style: TextStyle(
+                            color: accentColor,
+                            fontSize: 15,
+                            fontWeight: FontWeight.w900,
+                            letterSpacing: 1.2,
+                            fontFamily: 'monospace',
+                          ),
+                        ),
+                        Text(
+                          subtitle,
+                          style: TextStyle(
+                            color: Colors.white.withOpacity(0.5),
+                            fontSize: 10,
+                            fontFamily: 'monospace',
+                          ),
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                        ),
+                      ],
+                    ),
+                  ),
+                ],
+              ),
+              const SizedBox(height: 12),
+              Divider(color: accentColor.withOpacity(0.2), height: 1),
+              const SizedBox(height: 12),
+              Expanded(
+                child: ListView(
+                  controller: scrollController,
+                  children: [
+                    ...sections,
+                    const SizedBox(height: 16),
+                    Container(
+                      padding: const EdgeInsets.all(12),
+                      decoration: BoxDecoration(
+                        color: Colors.black,
+                        borderRadius: BorderRadius.circular(10),
+                        border: Border.all(color: Colors.white12),
+                      ),
+                      child: const Center(
+                        child: Text(
+                          '© 2026 MayaJaal Network. All Rights Reserved.',
+                          style: TextStyle(color: Colors.white38, fontSize: 10, fontFamily: 'monospace'),
+                        ),
+                      ),
+                    ),
+                    const SizedBox(height: 20),
+                  ],
+                ),
+              ),
+              SizedBox(
+                width: double.infinity,
+                height: 46,
+                child: ElevatedButton(
+                  onPressed: () => Navigator.pop(c),
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: accentColor,
+                    foregroundColor: Colors.black,
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(12),
+                    ),
+                  ),
+                  child: const Text(
+                    'CLOSE',
+                    style: TextStyle(fontWeight: FontWeight.bold, letterSpacing: 1.2),
+                  ),
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
+  static Widget _buildSection(String heading, String body) {
+    return Container(
+      margin: const EdgeInsets.only(bottom: 12),
+      padding: const EdgeInsets.all(12),
+      decoration: BoxDecoration(
+        color: const Color(0xFF07120A),
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(color: kGreen.withOpacity(0.25)),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(
+            heading,
+            style: const TextStyle(
+              color: Colors.white,
+              fontWeight: FontWeight.bold,
+              fontSize: 12.5,
+              fontFamily: 'monospace',
+            ),
+          ),
+          const SizedBox(height: 6),
+          Text(
+            body,
+            style: TextStyle(
+              color: Colors.white.withOpacity(0.75),
+              fontSize: 11.5,
+              height: 1.5,
+              fontFamily: 'monospace',
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+// ═══════════════════════════════════════════════════════
+// MORE DRAWER (UPDATED WITH NEW POLICIES)
 // ═══════════════════════════════════════════════════════
 class MoreDrawer extends StatefulWidget {
   const MoreDrawer({super.key});
@@ -3666,7 +3912,6 @@ class _MoreDrawerState extends State<MoreDrawer>
     }
   }
 
-  // 🔗 LINK LAUNCHER (External browser fixed)
   Future<void> _launchURL(String url, {bool inApp = false}) async {
     Haptic.light();
     try {
@@ -3686,7 +3931,6 @@ class _MoreDrawerState extends State<MoreDrawer>
     }
   }
 
-  // 🔗 UPDATED SHARE LINK
   void _shareApp() {
     Haptic.light();
     Share.share(
@@ -4521,10 +4765,10 @@ class _MoreDrawerState extends State<MoreDrawer>
                       icon: Icons.privacy_tip_outlined,
                       color: kDimGreen,
                       title: 'Privacy Policy',
-                      subtitle: 'Read our privacy policy',
+                      subtitle: 'Data protection & identifiers',
                       onTap: () {
                         Navigator.pop(context);
-                        _launchURL('https://www.mayajaal.online/privacy.html', inApp: false);
+                        LegalPolicyDialog.showPolicy(context, 'privacy');
                       },
                     ),
                   ),
@@ -4535,10 +4779,10 @@ class _MoreDrawerState extends State<MoreDrawer>
                       icon: Icons.description_outlined,
                       color: kDimGreen,
                       title: 'Terms & Conditions',
-                      subtitle: 'Read our terms of service',
+                      subtitle: 'Operating rules & user agreement',
                       onTap: () {
                         Navigator.pop(context);
-                        _launchURL('https://www.mayajaal.online/terms.html', inApp: false);
+                        LegalPolicyDialog.showPolicy(context, 'terms');
                       },
                     ),
                   ),
@@ -4546,170 +4790,95 @@ class _MoreDrawerState extends State<MoreDrawer>
                     index: 18,
                     child: _snakeItem(
                       context,
-                      icon: Icons.copyright,
-                      color: kDimGreen,
+                      icon: Icons.copyright_outlined,
+                      color: const Color(0xFFFB7185),
                       title: 'DMCA Policy',
-                      subtitle: 'Copyright infringement policy',
+                      subtitle: '17 U.S.C. § 512 Notice',
                       onTap: () {
                         Navigator.pop(context);
-                        _launchURL('https://www.mayajaal.online/dmca.html', inApp: false);
+                        LegalPolicyDialog.showPolicy(context, 'dmca');
                       },
                     ),
                   ),
                   _staggered(
-  index: 14,
-  child: Padding(
-    padding: const EdgeInsets.only(left: 16, top: 18, bottom: 8),
-    child: Row(
-      children: [
-        Container(width: 14, height: 1.5, color: kNeonCyan),
-        const SizedBox(width: 6),
-        const Text(
-          'INFORMATION & LEGAL',
-          style: TextStyle(
-            color: kNeonCyan,
-            fontSize: 11,
-            fontWeight: FontWeight.bold,
-            letterSpacing: 2,
-          ),
+                    index: 19,
+                    child: _snakeItem(
+                      context,
+                      icon: Icons.handshake_outlined,
+                      color: kNeonCyan,
+                      title: 'Partner Agreement',
+                      subtitle: 'Monetization & dynamic CPM',
+                      onTap: () {
+                        Navigator.pop(context);
+                        LegalPolicyDialog.showPolicy(context, 'partner');
+                      },
+                    ),
+                  ),
+                  _staggered(
+                    index: 20,
+                    child: _snakeItem(
+                      context,
+                      icon: Icons.support_agent_outlined,
+                      color: Colors.amberAccent,
+                      title: 'Help & Support',
+                      subtitle: '24/7 Creator Operations Desk',
+                      onTap: () {
+                        Navigator.pop(context);
+                        LegalPolicyDialog.showPolicy(context, 'support');
+                      },
+                    ),
+                  ),
+                  _staggered(
+                    index: 21,
+                    child: _snakeItem(
+                      context,
+                      icon: Icons.info_outline,
+                      color: kNeonCyan,
+                      title: 'About MayaJaal',
+                      subtitle: 'Version & info',
+                      onTap: () {
+                        Haptic.medium();
+                        Navigator.pop(context);
+                        _showAboutDialog(context);
+                      },
+                    ),
+                  ),
+                  _staggered(
+                    index: 22,
+                    child: Padding(
+                      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 16),
+                      child: Container(
+                        decoration: BoxDecoration(
+                          color: Colors.red.withOpacity(0.08),
+                          borderRadius: BorderRadius.circular(12),
+                          border: Border.all(color: Colors.redAccent.withOpacity(0.4)),
+                        ),
+                        child: ListTile(
+                          leading: const Icon(Icons.logout, color: Colors.redAccent),
+                          title: const Text(
+                            'Logout Session',
+                            style: TextStyle(
+                              color: Colors.redAccent,
+                              fontWeight: FontWeight.bold,
+                              fontSize: 13,
+                            ),
+                          ),
+                          onTap: () {
+                            Navigator.pop(context);
+                            _logout(context);
+                          },
+                        ),
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ],
         ),
-        const SizedBox(width: 6),
-        Expanded(
-          child: Container(height: 1, color: kNeonCyan.withOpacity(0.3)),
-        ),
-      ],
-    ),
-  ),
-),
-_staggered(
-  index: 15,
-  child: _snakeItem(
-    context,
-    icon: Icons.dashboard,
-    color: kNeonCyan,
-    title: 'Web Dashboard',
-    subtitle: 'Open www.mayajaal.online/dashboard',
-    onTap: () {
-      Navigator.pop(context);
-      // Dashboard bahar browser me khulega
-      _launchURL('https://www.mayajaal.online/dashboard', inApp: false);
-    },
-  ),
-),
-// 🚀 NEW UPDATED POLICIES
-_staggered(
-  index: 16,
-  child: _snakeItem(
-    context,
-    icon: Icons.privacy_tip_outlined,
-    color: kDimGreen,
-    title: 'Privacy Policy',
-    subtitle: 'Data protection & identifiers',
-    onTap: () {
-      Navigator.pop(context);
-      LegalPolicyDialog.showPolicy(context, 'privacy');
-    },
-  ),
-),
-_staggered(
-  index: 17,
-  child: _snakeItem(
-    context,
-    icon: Icons.description_outlined,
-    color: kDimGreen,
-    title: 'Terms & Conditions',
-    subtitle: 'Operating rules & user agreement',
-    onTap: () {
-      Navigator.pop(context);
-      LegalPolicyDialog.showPolicy(context, 'terms');
-    },
-  ),
-),
-_staggered(
-  index: 18,
-  child: _snakeItem(
-    context,
-    icon: Icons.copyright_outlined,
-    color: const Color(0xFFFB7185), // Neon Red/Pink
-    title: 'DMCA Policy',
-    subtitle: '17 U.S.C. § 512 Notice',
-    onTap: () {
-      Navigator.pop(context);
-      LegalPolicyDialog.showPolicy(context, 'dmca');
-    },
-  ),
-),
-_staggered(
-  index: 19,
-  child: _snakeItem(
-    context,
-    icon: Icons.handshake_outlined,
-    color: kNeonCyan,
-    title: 'Partner Agreement',
-    subtitle: 'Monetization & dynamic CPM',
-    onTap: () {
-      Navigator.pop(context);
-      LegalPolicyDialog.showPolicy(context, 'partner');
-    },
-  ),
-),
-_staggered(
-  index: 20,
-  child: _snakeItem(
-    context,
-    icon: Icons.support_agent_outlined,
-    color: Colors.amberAccent,
-    title: 'Help & Support',
-    subtitle: '24/7 Creator Operations Desk',
-    onTap: () {
-      Navigator.pop(context);
-      LegalPolicyDialog.showPolicy(context, 'support');
-    },
-  ),
-),
-_staggered(
-  index: 21,
-  child: _snakeItem(
-    context,
-    icon: Icons.info_outline,
-    color: kNeonCyan,
-    title: 'About MayaJaal',
-    subtitle: 'Version & info',
-    onTap: () {
-      Haptic.medium();
-      Navigator.pop(context);
-      _showAboutDialog(context);
-    },
-  ),
-),
-_staggered(
-  index: 22,
-  child: Padding(
-    padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 16),
-    child: Container(
-      decoration: BoxDecoration(
-        color: Colors.red.withOpacity(0.08),
-        borderRadius: BorderRadius.circular(12),
-        border: Border.all(color: Colors.redAccent.withOpacity(0.4)),
       ),
-      child: ListTile(
-        leading: const Icon(Icons.logout, color: Colors.redAccent),
-        title: const Text(
-          'Logout Session',
-          style: TextStyle(
-            color: Colors.redAccent,
-            fontWeight: FontWeight.bold,
-            fontSize: 13,
-          ),
-        ),
-        onTap: () {
-          Navigator.pop(context);
-          _logout(context);
-        },
-      ),
-    ),
-  ),
-),
+    );
+  }
 
   Widget _snakeItem(
     BuildContext context, {
@@ -5539,13 +5708,7 @@ class _SavedVideosScreenState extends State<SavedVideosScreen> {
                       ),
                       child: ClipRRect(
                         borderRadius: BorderRadius.circular(7),
-                        child: thumb.isNotEmpty
-                            ? Image.network(
-                                thumb,
-                                fit: BoxFit.cover,
-                                errorBuilder: (c, e, s) => buildAutoThumbnail(title, isSmall: true),
-                              )
-                            : buildAutoThumbnail(title, isSmall: true),
+                        child: buildMediaThumbnail(thumb, title, isSmall: true),
                       ),
                     ),
                     title: Text(
@@ -5703,13 +5866,7 @@ class _HistoryScreenState extends State<HistoryScreen> {
                       ),
                       child: ClipRRect(
                         borderRadius: BorderRadius.circular(7),
-                        child: thumb.isNotEmpty
-                            ? Image.network(
-                                thumb,
-                                fit: BoxFit.cover,
-                                errorBuilder: (c, e, s) => buildAutoThumbnail(title, isSmall: true),
-                              )
-                            : buildAutoThumbnail(title, isSmall: true),
+                        child: buildMediaThumbnail(thumb, title, isSmall: true),
                       ),
                     ),
                     title: Text(
@@ -6313,22 +6470,9 @@ class _StreamPreviewScreenState extends State<StreamPreviewScreen>
                           fit: StackFit.expand,
                           alignment: Alignment.center,
                           children: [
-                            if (_thumbnailUrl.isNotEmpty)
-                              Container(
-                                color: Colors.black,
-                                child: Image.network(
-                                  _thumbnailUrl,
-                                  fit: BoxFit.contain,
-                                  errorBuilder: (c, e, s) => buildAutoThumbnail(_videoTitle),
-                                ),
-                              )
-                            else
-                              buildAutoThumbnail(_videoTitle),
-
+                            buildMediaThumbnail(_thumbnailUrl, _videoTitle),
                             Container(color: Colors.black.withOpacity(0.3)),
-
                             if (!_isReadyToPlay) _buildCountdownCircle(),
-
                             Positioned(
                               top: 8,
                               left: 8,
@@ -6345,7 +6489,7 @@ class _StreamPreviewScreenState extends State<StreamPreviewScreen>
                   ),
                   const SizedBox(height: 16),
                   
-                  // 🏠 HOME BUTTON AT TOP (As Requested)
+                  // 🏠 HOME BUTTON AT TOP
                   SizedBox(
                     width: double.infinity,
                     height: 50,
@@ -6549,7 +6693,7 @@ class _NativeVideoPlayerScreenState extends State<NativeVideoPlayerScreen> {
   Future<void> _captureThumbnail() async {
     if (widget.thumbnailUrl.isNotEmpty) return; // Already has thumbnail
     try {
-      await Future.delayed(const Duration(seconds: 1)); // Wait for first frame
+      await Future.delayed(const Duration(seconds: 2)); // Wait for first frame to render
       if (!mounted || !_isInitialized) return;
       
       RenderRepaintBoundary boundary = _videoKey.currentContext!.findRenderObject() as RenderRepaintBoundary;
@@ -6557,6 +6701,8 @@ class _NativeVideoPlayerScreenState extends State<NativeVideoPlayerScreen> {
       ByteData? byteData = await image.toByteData(format: ui.ImageByteFormat.png);
       if (byteData != null) {
         final Uint8List bytes = byteData.buffer.asUint8List();
+        final base64String = base64Encode(bytes);
+        
         final prefs = await SharedPreferences.getInstance();
         
         // Update history with the actual thumbnail image
@@ -6564,11 +6710,23 @@ class _NativeVideoPlayerScreenState extends State<NativeVideoPlayerScreen> {
         if (localJson != null) {
           List<Map<String, dynamic>> history = (jsonDecode(localJson) as List).cast<Map<String, dynamic>>();
           for (var h in history) {
-            if (h['id'] == widget.videoId) {
-              h['thumbnail'] = base64Encode(bytes);
+            if (h['id'] == widget.videoId && (h['thumbnail'] == null || h['thumbnail'] == '')) {
+              h['thumbnail'] = base64String;
             }
           }
           await prefs.setString('watch_history_v2', jsonEncode(history));
+        }
+
+        // Update saved videos
+        final savedStr = prefs.getString('saved_videos_v1');
+        if (savedStr != null) {
+          List<Map<String, dynamic>> savedList = (jsonDecode(savedStr) as List).cast<Map<String, dynamic>>();
+          for (var s in savedList) {
+            if (s['id'] == widget.videoId && (s['thumbnail'] == null || s['thumbnail'] == '')) {
+              s['thumbnail'] = base64String;
+            }
+          }
+          await prefs.setString('saved_videos_v1', jsonEncode(savedList));
         }
       }
     } catch (e) {
@@ -7703,25 +7861,11 @@ class _NativeVideoPlayerScreenState extends State<NativeVideoPlayerScreen> {
                 height: 90,
                 decoration: BoxDecoration(
                   borderRadius: const BorderRadius.vertical(top: Radius.circular(11)),
-                  gradient: LinearGradient(
-                    colors: [kGreen.withOpacity(0.15), kNeonCyan.withOpacity(0.1), Colors.black],
-                    begin: Alignment.topLeft,
-                    end: Alignment.bottomRight,
-                  ),
                 ),
-                child: thumb.isNotEmpty
-                    ? ClipRRect(
-                        borderRadius: const BorderRadius.vertical(top: Radius.circular(11)),
-                        child: Image.network(
-                          thumb,
-                          fit: BoxFit.cover,
-                          errorBuilder: (c, e, s) => buildAutoThumbnail(title, isSmall: true),
-                        ),
-                      )
-                    : ClipRRect(
-                        borderRadius: const BorderRadius.vertical(top: Radius.circular(11)),
-                        child: buildAutoThumbnail(title, isSmall: true),
-                      ),
+                child: ClipRRect(
+                  borderRadius: const BorderRadius.vertical(top: Radius.circular(11)),
+                  child: buildMediaThumbnail(thumb, title, isSmall: true),
+                ),
               ),
               Padding(
                 padding: const EdgeInsets.all(8),
@@ -8244,9 +8388,7 @@ class _UserProfileScreenState extends State<UserProfileScreen> {
                                   decoration: BoxDecoration(color: Colors.black, borderRadius: BorderRadius.circular(8), border: Border.all(color: kGreen.withOpacity(0.5))),
                                   child: ClipRRect(
                                     borderRadius: BorderRadius.circular(7),
-                                    child: thumb.isNotEmpty
-                                        ? Image.network(thumb, fit: BoxFit.cover, errorBuilder: (c, e, s) => buildAutoThumbnail(name, isSmall: true))
-                                        : buildAutoThumbnail(name, isSmall: true),
+                                    child: buildMediaThumbnail(thumb, name, isSmall: true),
                                   ),
                                 ),
                                 title: Text(name, style: const TextStyle(color: Colors.white, fontSize: 12.5, fontWeight: FontWeight.bold), maxLines: 1, overflow: TextOverflow.ellipsis),
