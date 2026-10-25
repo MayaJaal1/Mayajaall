@@ -120,7 +120,6 @@ Widget buildAutoThumbnail(String title, {bool isSmall = false}) {
   );
 }
 
-// 🔥 NEW HELPER: Handles both Network URL and Base64 captured image
 Widget buildMediaThumbnail(String? thumb, String title, {bool isSmall = false}) {
   if (thumb != null && thumb.isNotEmpty) {
     if (thumb.startsWith('http')) {
@@ -142,6 +141,310 @@ Widget buildMediaThumbnail(String? thumb, String title, {bool isSmall = false}) 
     }
   }
   return buildAutoThumbnail(title, isSmall: isSmall);
+}
+
+// ═══════════════════════════════════════════════════════
+// IN-APP LEGAL & POLICY DIALOG (Exact Text from User)
+// ═══════════════════════════════════════════════════════
+class LegalPolicyDialog {
+  static const Color kGreen = Color(0xFF00FF66);
+  static const Color kDimGreen = Color(0xFF4FBF8B);
+  static const Color kCardBg = Color(0xFF031408);
+  static const Color kNeonCyan = Color(0xFF00F0FF);
+
+  static void showPolicy(BuildContext context, String type) {
+    String title = '';
+    String subtitle = '';
+    Color accentColor = kGreen;
+    List<Widget> sections = [];
+
+    switch (type) {
+      case 'privacy':
+        title = 'PRIVACY POLICY';
+        subtitle = 'Effective Date: October 2026 | Cloud Edge & Streaming Network';
+        accentColor = kGreen;
+        sections = [
+          _buildSection('Introduction', 
+            'Thank you for choosing MayaJaal ("Platform", "App", "we", "us"). This Privacy Policy is engineered to help you understand how we collect, process, utilize, disclose, and safeguard your personal data and technical telemetry when accessing our web dashboard, Android streaming application, Cloudflare R2 media caches, and official Telegram automation bots (@Mayajaalfilebot, @MayaJaalBulkConverterbot, @MayaJaalExpiryBot). By creating an account or using the platform, you agree to the terms outlined herein.'),
+          _buildSection('1. Information We Collect', 
+            '1.1 User & Creator Provided Information: When registering an account or initiating monetization, we collect your verified email address, cryptographically hashed passwords, and payout identifiers (including UPI IDs and Bank account records) strictly for processing withdrawals.\n\n1.2 Media & Video Assets: Utilizing our streaming pipelines involves ingesting, transcoding, and storing video files, stream manifests, and technical duration metadata across Cloudflare edge storage.\n\n1.3 In-App Interactions: The MayaJaal mobile app collects and stores your Recent Watch History, Liked/Disliked video records, and Saved Video Library to ensure a personalized streaming experience.'),
+          _buildSection('2. Automatically Collected Telemetry & Cookies', 
+            '2.1 Device & Network Telemetry: We automatically log unique device identifiers, IP addresses, operating system types, browser fingerprints, and playback resolution metrics to detect proxy loops and optimize streaming throughput.\n\n2.2 Cookies & Local Tokens: The platform utilizes encrypted session cookies, authentication tokens, and local cache entries to maintain creator logins and remember player settings.'),
+          _buildSection('3. How We Use Your Information', 
+            '3.1 Service Delivery & Streaming: To provide low-latency, hardware-accelerated 4K playback and maintain instant video conversion via Telegram bots.\n\n3.2 28-Day Lifecycle Automated Notifications: To track the 28-day validity of active links and dispatch automated renewal reminders via @MayaJaalExpiryBot 24 hours prior to link expiration.\n\n3.3 Payout Verification: To validate authentic human views, evaluate referral commissions, and disburse earnings through verified payment channels.'),
+          _buildSection('4. Information Sharing & Non-Disclosure', 
+            '4.1 Commercial Non-Disclosure: We do not sell, rent, broker, or trade personal creator data, media viewing logs, or platform engagement records to external advertising syndicates.\n\n4.2 Legal Compliance: We may disclose records solely in response to verified statutory demands, judicial subpoenas, or valid law enforcement inquiries concerning cyber attacks or unlawful material.'),
+          _buildSection('5. Video Viewing & Interactive Functionality', 
+            '5.1 Creator Responsibility: Users are solely accountable for the media files uploaded and converted through the service, ensuring compliance with intellectual property standards.\n\n5.2 Sharing & Distribution: Creators exercise direct discretion over the distribution of their converted stream links across social networks or websites.'),
+          _buildSection('6. Advertisements & Monetization Delivery', 
+            'MayaJaal may display programmatic advertising banners or native video interstitials. Third-party ad networks may capture non-personally identifiable telemetry to serve relevant ads. We do not transmit confidential creator account credentials to external advertising networks.'),
+          _buildSection('7. Data Security Measures', 
+            '7.1 Cryptographic Controls: We deploy end-to-end TLS 1.3 encryption, Cloudflare security firewalls, and restricted database permissions to protect your account against unauthorized access, alteration, or disclosure.\n\n7.2 Transmission Disclaimer: While we enforce enterprise-grade security protocols, no method of transmission over the internet or cloud storage can be guaranteed 100% impenetrable.'),
+          _buildSection('8. User Rights & Account Choices', 
+            '8.1 Account Management: Creators may review, modify, or update their payout parameters and account settings directly through the web dashboard.\n\n8.2 Data Purge: You may request the permanent deletion of your account and associated media links by submitting a verified request to our compliance desk.'),
+          _buildSection('9. Strict 18+ Age Restriction & Children\'s Privacy', 
+            'The MayaJaal platform and its automation suite are strictly intended for individuals aged eighteen (18) years or older. We do not knowingly collect or maintain data from minors. Any discovered minor records or Child Sexual Abuse Material (CSAM) will be permanently purged immediately, with related IP telemetry escalated to Cyber Crime authorities.'),
+          _buildSection('10. Policy Modifications & Contact', 
+            'We reserve the right to revise this Privacy Policy periodically. Continued use of the platform following published amendments constitutes acceptance of the modified terms.\n\nOfficial Compliance Desk: mayajaalsupport@gmail.com'),
+        ];
+        break;
+
+      case 'terms':
+        title = 'TERMS & CONDITIONS';
+        subtitle = 'Effective Date: October 2026 | Operating Governance & Creator Agreement';
+        accentColor = kGreen;
+        sections = [
+          _buildSection('Introduction', 
+            'By creating an account, accessing the MayaJaal web dashboard, utilizing our Telegram automation suite (@Mayajaalfilebot, @MayaJaalBulkConverterbot, @MayaJaalExpiryBot), or downloading the official MayaJaal Android Streaming APK, you acknowledge that you have read, understood, and agreed to be legally bound by these Terms and Conditions.'),
+          _buildSection('1. Use of Services & Platform Architecture', 
+            'MayaJaal provides a hardware-accelerated video streaming network, link conversion engine, and media delivery platform. Users and creators are solely responsible for all content uploaded, converted, or streamed through the service.\n\nUsers shall not upload, transcode, or share any media that infringes intellectual property rights, privacy rights, or statutory laws. Any attempt to disrupt network performance, exploit APIs, or inject malicious payloads is strictly prohibited.'),
+          _buildSection('2. User Accounts & Strict 18+ Eligibility', 
+            'The platform is strictly authorized for verified individuals aged eighteen (18) years or older. Minor onboarding is completely prohibited.\n\nCreators are responsible for maintaining the confidentiality of their credentials and all activities occurring under their accounts. MayaJaal reserves the absolute right to suspend or terminate accounts that breach platform standards or engage in deceptive conduct.'),
+          _buildSection('3. Privacy & Telemetry Isolation', 
+            'Your privacy is protected in strict accordance with the MayaJaal Privacy Policy. Creator analytics, financial settlement records, and viewing histories are never brokered or sold to external data syndicates.'),
+          _buildSection('4. Advertisements, Promotions & Third-Party Services', 
+            'The platform and mobile streaming application may display third-party advertisements. Users acknowledge that MayaJaal does not control, endorse, or assume legal liability for third-party ad creatives, external landing pages, or advertiser representations.\n\nAny business dealings, transactions, or interactions with third-party advertisers appearing on the platform are strictly between the user and such third parties.'),
+          _buildSection('5. Media Validity, 28-Day Expiration & Renewal Protocol', 
+            '5.1 28-Day Default Lifecycle: All converted streamable media links are provisioned with an automated twenty-eight (28) day active routing lifecycle on our edge storage clusters.\n\n5.2 Automated Warning Alerts: Automated renewal notifications are dispatched via @MayaJaalExpiryBot 24 hours prior to link expiration.\n\n5.3 Multi-Channel Renewal: Creators may renew active links within the 24-hour expiration window directly via the Web Dashboard 28-Day Renewal Manager or within the MayaJaal mobile app to maintain uninterrupted streaming delivery.\n\n5.4 Dormant Media Purge: Links that are not renewed within the designated alert window, or media assets exceeding cloud storage allocations without active viewing traffic, are automatically decommissioned and permanently purged under our Fair Use Storage Policy.'),
+          _buildSection('6. App Features & User Interactive Functionality', 
+            'The MayaJaal streaming APK offers integrated playback history, personal library video saving, like/dislike interactions, and social sharing to ensure optimal viewer experience.\n\nAny manipulation of player telemetry, simulated engagement metrics, or automated script queries directed at these interactive features constitutes a material breach.'),
+          _buildSection('7. Intellectual Property', 
+            'The MayaJaal platform, trademarks, logos, custom streaming software, and proprietary dashboard architectures are the intellectual property of MayaJaal and are protected by applicable copyright and international property laws.'),
+          _buildSection('8. Copyright Complaints & DMCA Procedure', 
+            'If you believe that any material made available via MayaJaal infringes upon a copyright you own or represent, you may file a formal notification with our Designated Agent in full compliance with the statutory provisions of our DMCA Policy.'),
+          _buildSection('9. Child Abuse & CSAM Zero-Tolerance Protocol', 
+            'MayaJaal maintains an absolute Zero-Tolerance policy against Child Sexual Abuse Material (CSAM), non-consensual sexual exploitation, and underage explicit media. Upon receipt of notice or automated telemetry detection, our compliance desk acts immediately to remove the content and permanently terminate the offending user\'s account.\n\nWe actively cooperate with law enforcement authorities, including Indian child protection units and Cyber Crime Police departments, providing forensic IP logs to assist in criminal prosecution.\n\nUrgent CSAM Reports: mayajaalsupport@gmail.com'),
+          _buildSection('10. Traffic Integrity, Anti-Fraud & Balance Forfeiture', 
+            'Monetization accounts generating views via automated headless bots, click farms, proxy networks, emulators, or deceptive traffic exchanges will be immediately demonetized, with pending balances permanently forfeited.'),
+          _buildSection('11. Limitation of Liability', 
+            'In no event shall MayaJaal, its operators, or affiliates be held liable for any indirect, incidental, consequential, special, or punitive damages, including loss of profits, data, or platform availability resulting from service interruptions or third-party infrastructure failures.'),
+          _buildSection('12. Governing Law, Modifications & Contact', 
+            'These Terms and Conditions shall be governed by and construed in accordance with the laws of India. MayaJaal reserves the operational right to update or modify these Terms at any time.\n\nOfficial Compliance Inquiries: mayajaalsupport@gmail.com'),
+        ];
+        break;
+
+      case 'dmca':
+        title = 'DMCA & COPYRIGHT POLICY';
+        subtitle = 'Online Service Provider Notification & Takedown Framework | Title II 17 U.S.C. § 512';
+        accentColor = const Color(0xFFFB7185);
+        sections = [
+          _buildSection('Introduction', 
+            'MayaJaal ("Platform", "we", "us") functions as an intermediary and online content routing provider under Title II of the Digital Millennium Copyright Act, 17 U.S.C. Section 512 ("DMCA"). This document formalizes the statutory notice-and-takedown procedures established by MayaJaal to enforce the intellectual property rights of copyright holders, as well as counter-notification protocols for restoring mistakenly disabled streams.\n\nWe strictly comply with prevailing standards under international intellectual property frameworks. MayaJaal accommodates and does not interfere with standard technical protection measures deployed by rights holders, and maintains an active procedure for disabling access to or permanently removing media assets confirmed to infringe third-party copyrights.'),
+          _buildSection('1. Absence of Search Index & Directory', 
+            'MayaJaal operates as a high-throughput edge delivery network, hardware-accelerated video streaming engine, and Telegram automation converter pipeline (@Mayajaalfilebot, @MayaJaalBulkConverterbot). The platform is technically incapable of maintaining a public search directory or index of private content uploaded or streamed through automated bot endpoints.'),
+          _buildSection('2. Privacy of Streamed Payloads', 
+            'Unless an authenticated creator elects to share or distribute converted media streams across public channels or websites, all ingested file objects and manifests are treated as confidential, private transmissions.'),
+          _buildSection('3. Absence of Pre-Upload Adjudication Authority', 
+            'In the absence of a verified notification submitted by an authenticated copyright holder or their lawful representative, MayaJaal possesses neither the statutory authority nor the technical capacity to determine whether an individual creator owns, holds a valid distribution proxy for, or is legally entitled to share specific media under the doctrines of fair use or the public domain. In accordance with applicable intermediary liability laws, all transmitted content is presumed compliant with our Terms of Service unless and until a formal written infringement claim is received.'),
+          _buildSection('4. Requirements for Submitting a Legitimate DMCA Takedown Notice', 
+            'To submit an actionable, legally binding takedown notification under 17 U.S.C. § 512(c)(3), the copyright owner or their designated legal agent must transmit a written communication containing all of the following criteria:\n\nLegal Authority & Signature: Identification of yourself as the verified owner of an exclusive right that is allegedly infringed, or as an authorized agent operating on behalf of such owner, accompanied by a valid physical or electronic signature.\n\nIdentification of Protected Asset: Specific identification and clear description of the copyrighted work claimed to have been infringed.\n\nExact Infringing URLs: Identification of the material that is claimed to be infringing, providing the direct, exact web URLs (e.g., https://mayajaal.online/... or associated streaming manifest endpoints) hosted on our routing infrastructure. Generalized domain references or unverified filenames are insufficient.\n\nContact Details & Affiliation: Comprehensive contact details for the notifying party, including full legal name, physical address, direct telephone number, and verifiable email address. If acting as an external vendor or legal counsel, indicate the corporate relationship to the rights holder.\n\nGood Faith Representation: An unambiguous statement that: "I have a good faith belief that use of the aforementioned material in the manner complained of is not authorized by the copyright owner, its agent, or the law."\n\nPenalty of Perjury Certification: An express declaration that: "I swear, under penalty of perjury, that the information in this notification is accurate and that I am the copyright owner, or authorized to act on behalf of the owner of an exclusive right that is allegedly infringed."\n\nDesignated DMCA Compliance Desk\nTo exercise statutory DMCA rights, all notices conforming to the requirements above must be transmitted directly to our designated copyright enforcement desk:\nEmail: mayajaalsupport@gmail.com'),
+          _buildSection('5. Notice & Takedown Protocol (Rapid Purge)', 
+            'Upon receipt of a valid, fully executed DMCA notification meeting the statutory standards above, MayaJaal will act expeditiously to remove or permanently disable access to the designated infringing materials from our Cloudflare edge routing layers. Formal confirmation of removal is dispatched once the link has been disconnected from the routing tables.'),
+          _buildSection('6. Plain Text Requirement & Attachment Protocol', 
+            'In accordance with cyber security safeguards, all takedown communications, statements, and URL indices must be delivered directly within the body of the message as plain text. Enclosed executable files, encrypted archives, ZIP folders, or unsolicited external download links will not be opened or examined due to malicious payload prevention protocols. Documentary attachments will be processed solely upon direct request by the compliance desk.'),
+          _buildSection('7. Repeat Infringer Policy & Banishment', 
+            'MayaJaal maintains an active termination policy for accounts that repeatedly infringe intellectual property rights. Creators who accumulate verified copyright complaints will face immediate revocation of streaming link privileges, forfeiture of account access, and permanent blacklisting of associated Telegram bot endpoints.'),
+        ];
+        break;
+
+      case 'partner':
+        title = 'PARTNER AGREEMENT';
+        subtitle = 'Effective Date: October 2026 | Creator Revenue Share & Anti-Fraud Governance';
+        accentColor = kNeonCyan;
+        sections = [
+          _buildSection('Introduction', 
+            'This Agreement governs creator monetization, traffic integrity, referral commissions, and wallet settlements across the MayaJaal network. Compliance with these security and anti-abuse protocols is strictly mandatory.'),
+          _buildSection('1. Qualified Views & Streaming Monetization', 
+            '1.1 Human Initiation: A Qualified View is recorded solely when a genuine, authenticated human end-user initiates real-time playback through the hardware-accelerated MayaJaal player.\n\n1.2 Server-Side Verification: Views are validated server-side. Embedded automated loops, auto-refresh iframes, or headless browser scripts will not be counted toward creator earnings.'),
+          _buildSection('2. Strict Account Ban Triggers & Multi-Account Fraud', 
+            '2.1 1 Device = 1 Account Policy (Hardware Device Lock): Only one authenticated MayaJaal account is permitted per physical hardware device. Creating or rotating multiple accounts on a single mobile device will trigger an automated hardware lock and permanent account termination.\n\n2.2 Self-Referral & App Share Fraud: Creating multiple fake Gmail accounts on the same phone to exploit app share links or referral rewards is strictly detected by our device telemetry. Any account engaging in fake self-referral cloning will face instant permanent ban and complete forfeiture of all balances.\n\n2.3 Prohibited Environments (Emulators & Rooted Phones): Operating the MayaJaal App via virtual emulators (e.g., BlueStacks, LDPlayer, Nox), rooted Android builds, or jailbroken devices is strictly blocked. Ingestion from virtualized environments results in immediate security suspension.'),
+          _buildSection('3. Authentication & Sign-Up Protocols', 
+            '3.1 Verified Gmail OAuth Only: Account creation is restricted exclusively to verified @gmail.com addresses authenticated via official Google OAuth. Disposable, temporary, or unauthorized domains are automatically rejected.\n\n3.2 Brute-Force Rate Limiting: Repetitive authentication attacks or credential stuffing will trigger an automated 10-minute firewall lockout against the offending IP and device signature.'),
+          _buildSection('4. Cryptographic Security & Private Telemetry', 
+            '4.1 Military-Grade HMAC & TLS 1.3: Communications between mobile APKs, server endpoints, and cloud object caches are secured via HTTPS and military-grade HMAC tokenization, preventing Man-in-the-Middle (MITM) attacks.\n\n4.2 Private API Keys: Creator API tokens allocated for Telegram automation bots (@Mayajaalfilebot, @MayaJaalBulkConverterbot) are cryptographically isolated and visible solely to the account holder.'),
+          _buildSection('5. 28-Day Link Renewal Lifecycle', 
+            'Monetization is directly linked to active media assets. Converted video links maintain a 28-day lifecycle. Automated renewal alerts are transmitted via @MayaJaalExpiryBot 24 hours prior to expiration; non-renewed links cease to accumulate views upon deactivation.'),
+          _buildSection('6. Payout Rules & Thresholds', 
+            '6.1 Threshold & Verification: Withdrawal requests may be submitted once the verified Available Balance reaches $5.00 USD (or INR equivalent).\n\n6.2 Verified Rails: Disbursements are cleared via direct UPI and verified Bank Transfer within 24 to 72 business hours following anti-fraud telemetry screening.\n\n6.3 Reversals: Disputed, bot-manipulated, or fraudulent traffic balances will be permanently voided.'),
+          _buildSection('7. Independent Relationship', 
+            'Creators operate as independent contractors. Participation establishes no employment, franchise, or agency relationship with MayaJaal.'),
+        ];
+        break;
+
+      case 'support':
+        title = 'HELP & SUPPORT';
+        subtitle = 'For platform troubleshooting, Telegram bot configurations, link renewal assistance, or withdrawal verification, reach out through our official channels:';
+        accentColor = Colors.amberAccent;
+        sections = [
+          _buildSection('Official Compliance Email', 
+            'mayajaalsupport@gmail.com\n\nDirect Email'),
+          _buildSection('Telegram Official Helpdesk', 
+            '@MayaJaalSupport'),
+          _buildSection('Official Instagram Desk', 
+            '@maya_jaal_official'),
+          _buildSection('Response Times', 
+            'Automated bots operate 24/7. Support inquiries are reviewed and resolved within 12–24 business hours.'),
+        ];
+        break;
+    }
+
+    showModalBottomSheet(
+      context: context,
+      backgroundColor: const Color(0xFF030804),
+      isScrollControlled: true,
+      shape: RoundedRectangleBorder(
+        borderRadius: const BorderRadius.vertical(top: Radius.circular(22)),
+        side: BorderSide(color: accentColor.withOpacity(0.5), width: 1.5),
+      ),
+      builder: (c) => DraggableScrollableSheet(
+        initialChildSize: 0.85,
+        maxChildSize: 0.95,
+        minChildSize: 0.55,
+        expand: false,
+        builder: (_, scrollController) => Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 16),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Center(
+                child: Container(
+                  width: 44,
+                  height: 4,
+                  decoration: BoxDecoration(
+                    color: Colors.white24,
+                    borderRadius: BorderRadius.circular(2),
+                  ),
+                ),
+              ),
+              const SizedBox(height: 16),
+              Row(
+                children: [
+                  Container(
+                    padding: const EdgeInsets.all(8),
+                    decoration: BoxDecoration(
+                      color: accentColor.withOpacity(0.12),
+                      shape: BoxShape.circle,
+                      border: Border.all(color: accentColor.withOpacity(0.5)),
+                    ),
+                    child: Icon(Icons.verified_user_rounded, color: accentColor, size: 20),
+                  ),
+                  const SizedBox(width: 12),
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          title,
+                          style: TextStyle(
+                            color: accentColor,
+                            fontSize: 15,
+                            fontWeight: FontWeight.w900,
+                            letterSpacing: 1.2,
+                            fontFamily: 'monospace',
+                          ),
+                        ),
+                        Text(
+                          subtitle,
+                          style: TextStyle(
+                            color: Colors.white.withOpacity(0.5),
+                            fontSize: 10,
+                            fontFamily: 'monospace',
+                          ),
+                          maxLines: 2,
+                          overflow: TextOverflow.ellipsis,
+                        ),
+                      ],
+                    ),
+                  ),
+                ],
+              ),
+              const SizedBox(height: 12),
+              Divider(color: accentColor.withOpacity(0.2), height: 1),
+              const SizedBox(height: 12),
+              Expanded(
+                child: ListView(
+                  controller: scrollController,
+                  children: [
+                    ...sections,
+                    const SizedBox(height: 16),
+                    Container(
+                      padding: const EdgeInsets.all(12),
+                      decoration: BoxDecoration(
+                        color: Colors.black,
+                        borderRadius: BorderRadius.circular(10),
+                        border: Border.all(color: Colors.white12),
+                      ),
+                      child: const Center(
+                        child: Text(
+                          '© 2026 MayaJaal Network. All Rights Reserved.',
+                          style: TextStyle(color: Colors.white38, fontSize: 10, fontFamily: 'monospace'),
+                        ),
+                      ),
+                    ),
+                    const SizedBox(height: 20),
+                  ],
+                ),
+              ),
+              SizedBox(
+                width: double.infinity,
+                height: 46,
+                child: ElevatedButton(
+                  onPressed: () => Navigator.pop(c),
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: accentColor,
+                    foregroundColor: Colors.black,
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(12),
+                    ),
+                  ),
+                  child: const Text(
+                    'CLOSE',
+                    style: TextStyle(fontWeight: FontWeight.bold, letterSpacing: 1.2),
+                  ),
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
+  static Widget _buildSection(String heading, String body) {
+    return Container(
+      margin: const EdgeInsets.only(bottom: 12),
+      padding: const EdgeInsets.all(12),
+      decoration: BoxDecoration(
+        color: const Color(0xFF07120A),
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(color: kGreen.withOpacity(0.25)),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(
+            heading,
+            style: const TextStyle(
+              color: Colors.white,
+              fontWeight: FontWeight.bold,
+              fontSize: 12.5,
+              fontFamily: 'monospace',
+            ),
+          ),
+          const SizedBox(height: 6),
+          Text(
+            body,
+            style: TextStyle(
+              color: Colors.white.withOpacity(0.75),
+              fontSize: 11.5,
+              height: 1.5,
+              fontFamily: 'monospace',
+            ),
+          ),
+        ],
+      ),
+    );
+  }
 }
 
 // ═══════════════════════════════════════════════════════
@@ -1983,7 +2286,7 @@ class _SecurityBlockScreen extends StatelessWidget {
 }
 
 // ═══════════════════════════════════════════════════════
-// LOGIN SCREEN (Clean Banner Removed)
+// LOGIN SCREEN
 // ═══════════════════════════════════════════════════════
 class LoginScreen extends StatefulWidget {
   final VoidCallback? onLoginSuccess;
@@ -2772,6 +3075,9 @@ class FirstTimeAdsPopup {
   }
 }
 
+// ═══════════════════════════════════════════════════════
+// ⏭️ END OF PART 1 — PART 2 CONTINUES (HomeScreen, Player, etc.)
+// ═══════════════════════════════════════════════════════
 // ═══════════════════════════════════════════════════════
 // HOME SCREEN
 // ═══════════════════════════════════════════════════════
@@ -3607,266 +3913,7 @@ class _HomeScreenState extends State<HomeScreen>
 }
 
 // ═══════════════════════════════════════════════════════
-// ⏭️ END OF PART 1 — PART 2 CONTINUES
-// ═══════════════════════════════════════════════════════
-// ═══════════════════════════════════════════════════════
-// NEW: IN-APP LEGAL & POLICY DIALOG
-// ═══════════════════════════════════════════════════════
-class LegalPolicyDialog {
-  static const Color kGreen = Color(0xFF00FF66);
-  static const Color kDimGreen = Color(0xFF4FBF8B);
-  static const Color kCardBg = Color(0xFF031408);
-  static const Color kNeonCyan = Color(0xFF00F0FF);
-
-  static void showPolicy(BuildContext context, String type) {
-    String title = '';
-    String subtitle = '';
-    Color accentColor = kGreen;
-    List<Widget> sections = [];
-
-    switch (type) {
-      case 'privacy':
-        title = 'PRIVACY POLICY';
-        subtitle = 'Operating Governance & Data Encryption (2026)';
-        accentColor = kGreen;
-        sections = [
-          _buildSection('1. Personal Identifiers', 
-            'Jab aap Google Sign-In karte hain, hum aapka verified Gmail address (@gmail.com / @googlemail.com), display name aur profile picture fetch karte hain taaki aapka unique MayaJaal Creator Node ban sake.'),
-          _buildSection('2. Hardware & Anti-Tamper Binding', 
-            'Multi-account aur bot signups rokne ke liye hum hardware-level device hash store karte hain. Ek physical device par keval ek MayaJaal verified account allow hota hai.'),
-          _buildSection('3. Payout & Financial Data', 
-            'Aapka Bank Account number, IFSC code aur UPI ID encrypted format mein Realtime Database par store hote hain. Inka istemal keval aapki earnings (\$5+ hone par) transfer karne ke liye hota hai.'),
-          _buildSection('4. Traffic & Conversion Logs', 
-            'Har stream link par hone wale views, playback seconds (minimum 10s rule) aur real users ka conversion track kiya jata hai taaki fraud CPM traffic eliminate ho sake.'),
-          _buildSection('5. Data Rights & Support Desk', 
-            'Aap kisi bhi waqt apna withdrawal data update kar sakte hain ya account removal ke liye support team ko mail kar sakte hain:\nmayajaalsupport@gmail.com'),
-        ];
-        break;
-
-      case 'terms':
-        title = 'TERMS & CONDITIONS';
-        subtitle = 'Platform Governance & Creator Code of Conduct';
-        accentColor = kGreen;
-        sections = [
-          _buildSection('1. Eligibility (18+ Platform)', 
-            'MayaJaal platform par video sharing, conversion bot use karne aur earnings withdraw karne ke liye user ki umar kam se kam 18 saal honi chahiye.'),
-          _buildSection('2. Zero Tolerance Content Policy', 
-            'Platform par CSAM, non-consensual media, extreme violence, terror-linked media ya malicious scripts share karna strictly prohibited hai. Violation par account bina notice terminate kar diya jayega aur unpaid balance freeze ho jayega.'),
-          _buildSection('3. Monetization Integrity & Bot Ban', 
-            'Emulators, auto-clickers, proxy/VPN networks, ya traffic bots se view count badhana strictly prohibited hai. MayaJaal AI automated verification system aisi suspicious activity pakadte hi permanent IP ban lagata hai.'),
-          _buildSection('4. Account Security & API Keys', 
-            'Telegram bot ke liye provide ki gayi 24-character Secret API Key confidential hai. Ise kisi ke sath share na karein.'),
-        ];
-        break;
-
-      case 'dmca':
-        title = 'DMCA & COPYRIGHT POLICY';
-        subtitle = '17 U.S.C. § 512 Safe Harbor Framework';
-        accentColor = const Color(0xFFFB7185);
-        sections = [
-          _buildSection('1. Online Service Provider (OSP) Notice', 
-            'MayaJaal ek neutral video delivery aur storage pipeline hai. Yahan par uploaded files independent creators aur bots ke zariye host hoti hain.'),
-          _buildSection('2. Safe Harbor Compliance', 
-            'Hum copyright owners ke rights ka samman karte hain aur Digital Millennium Copyright Act (DMCA) ke tahat valid takedown notices par turant action lete hain.'),
-          _buildSection('3. Notice Kaise Bhejein', 
-            'Agar aapko lagta hai ki aapke copyrighted content ka ulleghan hua hai, toh official notice bhejein jisme link ID, proof of ownership aur digital signature shamil ho.'),
-          _buildSection('4. Designated Copyright Agent Desk', 
-            'Subject: "DMCA TAKEDOWN REQUEST"\nEmail: mayajaalsupport@gmail.com\nProcessing Time: 24 se 48 hours ke andar content offline kar diya jata hai.'),
-        ];
-        break;
-
-      case 'partner':
-        title = 'PARTNER AGREEMENT';
-        subtitle = 'Live CPM Monetization & Payout Rules';
-        accentColor = kNeonCyan;
-        sections = [
-          _buildSection('1. Dynamic CPM Model', 
-            '• Tier 1: 1,000 views = \$1.50\n• Tier 2: 2,000 views = \$4.00\n• Tier 3: 4,000 views = \$8.00\n• Tier 4: 6,000 views = \$12.00\n• Tier 5: 8,000 views = \$16.00\n• Tier 6: 10,000 views = \$20.00\n• 10,000 views ke baad: Har 1K views par flat \$2.00 rate milta hai.'),
-          _buildSection('2. 10-Second Verification Rule', 
-            'Keval wahi video view monetized maana jayega jisme real user ne kam se kam 10 seconds tak stream watch kiya ho.'),
-          _buildSection('3. Withdrawal Schedule & Limits', 
-            '• Minimum Payout: \$5.00 USD (≈ ₹400 INR)\n• Payout Methods: Direct Bank Transfer (NEFT/IMPS) aur UPI ID\n• Processing Window: 24 se 48 ghante ke andar clearance.'),
-          _buildSection('4. Referral Commission Network', 
-            'Jab aapke share link se koi naya user join karega aur apna verified account login karega, tabhi wo referral aapke dashboard par active count hoga.'),
-        ];
-        break;
-
-      case 'support':
-        title = 'HELP & SUPPORT';
-        subtitle = '24/7 Operations Desk & Automation Support';
-        accentColor = Colors.amberAccent;
-        sections = [
-          _buildSection('Official Support Email', 
-            'mayajaalsupport@gmail.com\n(Payout issues, API issues, aur general queries ke liye 24 ghante ke andar response milta hai)'),
-          _buildSection('Telegram Creator Bots', 
-            '• File Upload Bot: @Mayajaalfilebot\n• Bulk Converter Bot: @MayaJaalBulkConverterbot'),
-          _buildSection('Official Community Channel', 
-            'Updates aur live announcements ke liye hamara official Telegram channel join karein: @MayaJaalOfficial'),
-        ];
-        break;
-    }
-
-    showModalBottomSheet(
-      context: context,
-      backgroundColor: const Color(0xFF030804),
-      isScrollControlled: true,
-      shape: RoundedRectangleBorder(
-        borderRadius: const BorderRadius.vertical(top: Radius.circular(22)),
-        side: BorderSide(color: accentColor.withOpacity(0.5), width: 1.5),
-      ),
-      builder: (c) => DraggableScrollableSheet(
-        initialChildSize: 0.80,
-        maxChildSize: 0.95,
-        minChildSize: 0.55,
-        expand: false,
-        builder: (_, scrollController) => Padding(
-          padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 16),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Center(
-                child: Container(
-                  width: 44,
-                  height: 4,
-                  decoration: BoxDecoration(
-                    color: Colors.white24,
-                    borderRadius: BorderRadius.circular(2),
-                  ),
-                ),
-              ),
-              const SizedBox(height: 16),
-              Row(
-                children: [
-                  Container(
-                    padding: const EdgeInsets.all(8),
-                    decoration: BoxDecoration(
-                      color: accentColor.withOpacity(0.12),
-                      shape: BoxShape.circle,
-                      border: Border.all(color: accentColor.withOpacity(0.5)),
-                    ),
-                    child: Icon(Icons.verified_user_rounded, color: accentColor, size: 20),
-                  ),
-                  const SizedBox(width: 12),
-                  Expanded(
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Text(
-                          title,
-                          style: TextStyle(
-                            color: accentColor,
-                            fontSize: 15,
-                            fontWeight: FontWeight.w900,
-                            letterSpacing: 1.2,
-                            fontFamily: 'monospace',
-                          ),
-                        ),
-                        Text(
-                          subtitle,
-                          style: TextStyle(
-                            color: Colors.white.withOpacity(0.5),
-                            fontSize: 10,
-                            fontFamily: 'monospace',
-                          ),
-                          maxLines: 1,
-                          overflow: TextOverflow.ellipsis,
-                        ),
-                      ],
-                    ),
-                  ),
-                ],
-              ),
-              const SizedBox(height: 12),
-              Divider(color: accentColor.withOpacity(0.2), height: 1),
-              const SizedBox(height: 12),
-              Expanded(
-                child: ListView(
-                  controller: scrollController,
-                  children: [
-                    ...sections,
-                    const SizedBox(height: 16),
-                    Container(
-                      padding: const EdgeInsets.all(12),
-                      decoration: BoxDecoration(
-                        color: Colors.black,
-                        borderRadius: BorderRadius.circular(10),
-                        border: Border.all(color: Colors.white12),
-                      ),
-                      child: const Center(
-                        child: Text(
-                          '© 2026 MayaJaal Network. All Rights Reserved.',
-                          style: TextStyle(color: Colors.white38, fontSize: 10, fontFamily: 'monospace'),
-                        ),
-                      ),
-                    ),
-                    const SizedBox(height: 20),
-                  ],
-                ),
-              ),
-              SizedBox(
-                width: double.infinity,
-                height: 46,
-                child: ElevatedButton(
-                  onPressed: () => Navigator.pop(c),
-                  style: ElevatedButton.styleFrom(
-                    backgroundColor: accentColor,
-                    foregroundColor: Colors.black,
-                    shape: RoundedRectangleBorder(
-                      borderRadius: BorderRadius.circular(12),
-                    ),
-                  ),
-                  child: const Text(
-                    'CLOSE',
-                    style: TextStyle(fontWeight: FontWeight.bold, letterSpacing: 1.2),
-                  ),
-                ),
-              ),
-            ],
-          ),
-        ),
-      ),
-    );
-  }
-
-  static Widget _buildSection(String heading, String body) {
-    return Container(
-      margin: const EdgeInsets.only(bottom: 12),
-      padding: const EdgeInsets.all(12),
-      decoration: BoxDecoration(
-        color: const Color(0xFF07120A),
-        borderRadius: BorderRadius.circular(12),
-        border: Border.all(color: kGreen.withOpacity(0.25)),
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Text(
-            heading,
-            style: const TextStyle(
-              color: Colors.white,
-              fontWeight: FontWeight.bold,
-              fontSize: 12.5,
-              fontFamily: 'monospace',
-            ),
-          ),
-          const SizedBox(height: 6),
-          Text(
-            body,
-            style: TextStyle(
-              color: Colors.white.withOpacity(0.75),
-              fontSize: 11.5,
-              height: 1.5,
-              fontFamily: 'monospace',
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-}
-
-// ═══════════════════════════════════════════════════════
-// MORE DRAWER (UPDATED WITH NEW POLICIES)
+// MORE DRAWER (SECURED)
 // ═══════════════════════════════════════════════════════
 class MoreDrawer extends StatefulWidget {
   const MoreDrawer({super.key});
