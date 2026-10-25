@@ -5777,7 +5777,11 @@ class _StreamPreviewScreenState extends State<StreamPreviewScreen>
 
     history.removeWhere((h) => h['url'] == widget.targetUrl);
     history.insert(0, item);
-    if (history.length > 50) history.removeLast();
+    
+    // 🔥 FIX: Keep only last 10 videos (purani delete, nayi add)
+    if (history.length > 10) {
+      history = history.sublist(0, 10);
+    }
 
     await prefs.setString('watch_history_v2', jsonEncode(history));
   }
@@ -7086,7 +7090,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
 }
 
 // ═══════════════════════════════════════════════════════
-// NATIVE VIDEO PLAYER — 🔥 thumbnail preservation
+// NATIVE VIDEO PLAYER — 🔥 HEADER & ZOOM UPDATED
 // ═══════════════════════════════════════════════════════
 class NativeVideoPlayerScreen extends StatefulWidget {
   final String videoUrl;
@@ -7118,6 +7122,8 @@ class _NativeVideoPlayerScreenState extends State<NativeVideoPlayerScreen> {
   bool _hasError = false;
 
   bool _isFullscreen = false;
+  bool _isZoomed = false; // 🔥 NEW: Video fit / zoom toggle state
+  
   String _flashFeedback = '';
   Timer? _feedbackTimer;
 
@@ -7761,11 +7767,12 @@ class _NativeVideoPlayerScreenState extends State<NativeVideoPlayerScreen> {
     );
   }
 
+  // 🔥 UPDATED: Video Zoom/Fit logic (BoxFit.cover vs BoxFit.contain)
   Widget _buildScaledVideo() {
     if (_isFullscreen) {
       return SizedBox.expand(
         child: FittedBox(
-          fit: BoxFit.contain,
+          fit: _isZoomed ? BoxFit.cover : BoxFit.contain,
           child: SizedBox(
             width: _controller.value.size.width,
             height: _controller.value.size.height,
@@ -7774,12 +7781,16 @@ class _NativeVideoPlayerScreenState extends State<NativeVideoPlayerScreen> {
         ),
       );
     }
-    return Center(
-      child: AspectRatio(
-        aspectRatio: _controller.value.aspectRatio,
-        child: RepaintBoundary(
-          key: _videoKey,
-          child: VideoPlayer(_controller),
+    return SizedBox.expand(
+      child: FittedBox(
+        fit: _isZoomed ? BoxFit.cover : BoxFit.contain,
+        child: SizedBox(
+          width: _controller.value.size.width,
+          height: _controller.value.size.height,
+          child: RepaintBoundary(
+            key: _videoKey,
+            child: VideoPlayer(_controller),
+          ),
         ),
       ),
     );
@@ -8001,17 +8012,56 @@ class _NativeVideoPlayerScreenState extends State<NativeVideoPlayerScreen> {
                       child: Column(
                         mainAxisSize: MainAxisSize.min,
                         children: [
+                          // 🔥 UPDATED: MayaJaal Logo & Text exactly like Home Screen
                           Row(
                             mainAxisAlignment: MainAxisAlignment.center,
                             children: [
                               Container(
-                                width: 22,
-                                height: 22,
-                                decoration: BoxDecoration(shape: BoxShape.circle, border: Border.all(color: kGreen, width: 1.5)),
-                                child: const Center(child: Icon(Icons.change_history, color: kGreen, size: 14)),
+                                width: 36,
+                                height: 36,
+                                decoration: BoxDecoration(
+                                  color: Colors.black,
+                                  borderRadius: BorderRadius.circular(10),
+                                  border: Border.all(color: kGreen, width: 2),
+                                  boxShadow: [
+                                    BoxShadow(color: kGreen.withOpacity(0.5), blurRadius: 15),
+                                  ],
+                                ),
+                                child: ClipRRect(
+                                  borderRadius: BorderRadius.circular(8),
+                                  child: Image.asset(
+                                    'assets/icon/logo.png',
+                                    fit: BoxFit.cover,
+                                    errorBuilder: (c, e, s) => const Icon(
+                                      Icons.change_history,
+                                      color: kGreen,
+                                      size: 20,
+                                    ),
+                                  ),
+                                ),
                               ),
-                              const SizedBox(width: 8),
-                              const Text('MayaJaal', style: TextStyle(color: kGreen, fontSize: 19, fontWeight: FontWeight.w900, letterSpacing: 1, shadows: [Shadow(color: kGreen, blurRadius: 10)])),
+                              const SizedBox(width: 10),
+                              const Text(
+                                'Maya',
+                                style: TextStyle(
+                                  fontSize: 26,
+                                  fontWeight: FontWeight.w900,
+                                  color: Colors.white,
+                                  fontFamily: 'sans-serif',
+                                  letterSpacing: 0.5,
+                                ),
+                              ),
+                              const Text(
+                                'Jaal',
+                                style: TextStyle(
+                                  fontSize: 26,
+                                  fontWeight: FontWeight.w900,
+                                  color: kGreen,
+                                  fontFamily: 'sans-serif',
+                                  letterSpacing: 0.5,
+                                  shadows: [Shadow(color: kGreen, blurRadius: 12)],
+                                ),
+                              ),
                             ],
                           ),
                           Text('— STREAM BEYOND LIMITS —', style: TextStyle(color: kGreen.withOpacity(0.8), fontSize: 8.5, letterSpacing: 2, fontWeight: FontWeight.bold)),
@@ -8166,6 +8216,22 @@ class _NativeVideoPlayerScreenState extends State<NativeVideoPlayerScreen> {
                                                   const SizedBox(width: 6),
                                                   Text(_formatDuration(_controller.value.duration), style: const TextStyle(color: Colors.white, fontSize: 10, fontFamily: 'monospace')),
                                                   const SizedBox(width: 8),
+                                                  // 🔥 NEW: Video Zoom/Fit toggle button
+                                                  GestureDetector(
+                                                    onTap: () {
+                                                      Haptic.light();
+                                                      setState(() => _isZoomed = !_isZoomed);
+                                                      _resetControlTimer();
+                                                    },
+                                                    child: Padding(
+                                                      padding: const EdgeInsets.only(right: 10),
+                                                      child: Icon(
+                                                        _isZoomed ? Icons.zoom_in : Icons.zoom_out,
+                                                        color: _isZoomed ? kGreen : Colors.white,
+                                                        size: 20,
+                                                      ),
+                                                    ),
+                                                  ),
                                                   GestureDetector(
                                                     onTap: _toggleSmartFullscreen,
                                                     child: Icon(_isFullscreen ? Icons.fullscreen_exit : Icons.fullscreen, color: Colors.white, size: 20),
