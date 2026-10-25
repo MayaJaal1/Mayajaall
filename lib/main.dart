@@ -40,7 +40,7 @@ const List<String> kAllowedEmailDomains = [
   '@googlemail.com',
 ];
 
-const int kMinAccountAgeSeconds = 5; // Reduced for testing
+const int kMinAccountAgeSeconds = 60;
 const int kMaxLoginAttempts = 5;
 const int kLoginWindowMinutes = 10;
 const String _kHmacSecret = 'MJ_HMAC_v1_a7f3b92e_d4c8_11ef_9b8a_00ff_secret_2026';
@@ -123,13 +123,13 @@ Widget buildAutoThumbnail(String title, {bool isSmall = false}) {
   );
 }
 
-// 🔥 UPDATED: 5-second fast looping video thumbnail with FRAME CAPTURE support
+// 🔥 UPDATED: 5-second real-time looping video thumbnail with FRAME CAPTURE support
 class VideoLoopThumbnail extends StatefulWidget {
   final String videoUrl;
   final String title;
   final bool isSmall;
+  // 🔥 NEW: called once when a frame is captured — save to history/saved
   final void Function(String base64Thumb)? onFrameCaptured;
-  
   const VideoLoopThumbnail({
     super.key,
     required this.videoUrl,
@@ -137,13 +137,12 @@ class VideoLoopThumbnail extends StatefulWidget {
     this.isSmall = false,
     this.onFrameCaptured,
   });
-  
   @override
   State<VideoLoopThumbnail> createState() => _VideoLoopThumbnailState();
 }
 
 class _VideoLoopThumbnailState extends State<VideoLoopThumbnail> {
-  VideoPlayerController? _controller;
+  late VideoPlayerController _controller;
   bool _isInit = false;
   final GlobalKey _captureKey = GlobalKey();
   bool _captureAttempted = false;
@@ -151,60 +150,35 @@ class _VideoLoopThumbnailState extends State<VideoLoopThumbnail> {
   @override
   void initState() {
     super.initState();
-    _initController();
-  }
-
-  @override
-  void didUpdateWidget(covariant VideoLoopThumbnail oldWidget) {
-    super.didUpdateWidget(oldWidget);
-    // 🔥 FIX: If videoUrl changes (e.g., from empty to real URL), reload!
-    if (oldWidget.videoUrl != widget.videoUrl) {
-      _initController();
-    }
-  }
-
-  Future<void> _initController() async {
-    if (widget.videoUrl.isEmpty || !widget.videoUrl.startsWith('http')) {
-      if (mounted) setState(() => _isInit = false);
-      return;
-    }
-    
-    _controller?.dispose();
+    if (widget.videoUrl.isEmpty || !widget.videoUrl.startsWith('http')) return;
     _controller = VideoPlayerController.networkUrl(Uri.parse(widget.videoUrl));
-    
-    try {
-      await _controller!.initialize();
+    _controller.initialize().then((_) async {
       if (!mounted) return;
-      
       setState(() => _isInit = true);
-      _controller!.setVolume(0);
-      _controller!.setPlaybackSpeed(2.0); // Fast play
-      _controller!.play();
-      
-      _controller!.addListener(() {
-        if (_controller != null && _controller!.value.isInitialized) {
-          if (_controller!.value.position.inSeconds >= 5) {
-            _controller!.seekTo(Duration.zero);
-          }
+      _controller.setVolume(0);
+      // 🔥 REMOVED: _controller.setPlaybackSpeed(2.0) so it plays in real-time
+      _controller.play();
+      _controller.addListener(() {
+        // 🔥 UPDATED: Loop exact 5 seconds (real-time)
+        if (_controller.value.position.inMilliseconds >= 5000) {
+          _controller.seekTo(Duration.zero);
         }
       });
-      
-      // 🔥 Try capturing a frame after a short delay (fast)
+      // 🔥 Try capturing a frame after first render
       _attemptFrameCapture();
-    } catch (e) {
+    }).catchError((e) {
       debugPrint('LoopThumb error: $e');
-      if (mounted) setState(() => _isInit = false);
-    }
+    });
   }
 
-  // 🔥 Capture frame FAST for permanent storage
+  // 🔥 NEW: Capture one frame for permanent storage
   Future<void> _attemptFrameCapture() async {
     if (_captureAttempted) return;
     if (widget.onFrameCaptured == null) return;
-    if (_controller == null || !_controller!.value.isInitialized) return;
+    if (!_controller.value.isInitialized) return;
 
-    // Wait for a couple of frames to be rendered (reduced to 1s for speed)
-    await Future.delayed(const Duration(milliseconds: 1000));
+    // Wait for a couple of frames to be rendered
+    await Future.delayed(const Duration(milliseconds: 1800));
     if (!mounted || _captureAttempted) return;
     _captureAttempted = true;
 
@@ -225,24 +199,22 @@ class _VideoLoopThumbnailState extends State<VideoLoopThumbnail> {
 
   @override
   void dispose() {
-    _controller?.dispose();
+    if (_isInit) _controller.dispose();
     super.dispose();
   }
 
   @override
   Widget build(BuildContext context) {
-    if (!_isInit || _controller == null || !_controller!.value.isInitialized) {
-      return buildAutoThumbnail(widget.title, isSmall: widget.isSmall);
-    }
+    if (!_isInit) return buildAutoThumbnail(widget.title, isSmall: widget.isSmall);
     return RepaintBoundary(
       key: _captureKey,
       child: SizedBox.expand(
         child: FittedBox(
           fit: BoxFit.cover,
           child: SizedBox(
-            width: _controller!.value.size.width,
-            height: _controller!.value.size.height,
-            child: VideoPlayer(_controller!),
+            width: _controller.value.size.width,
+            height: _controller.value.size.height,
+            child: VideoPlayer(_controller),
           ),
         ),
       ),
@@ -301,7 +273,7 @@ Widget buildMediaThumbnail(
 }
 
 // ═══════════════════════════════════════════════════════
-// IN-APP LEGAL & POLICY DIALOG
+// IN-APP LEGAL & POLICY DIALOG (Exact Text from User)
 // ═══════════════════════════════════════════════════════
 class LegalPolicyDialog {
   static const Color kGreen = Color(0xFF00FF66);
@@ -321,27 +293,27 @@ class LegalPolicyDialog {
         subtitle = 'Effective Date: October 2026 | Cloud Edge & Streaming Network';
         accentColor = kGreen;
         sections = [
-          _buildSection('Introduction', 
+          _buildSection('Introduction',
             'Thank you for choosing MayaJaal ("Platform", "App", "we", "us"). This Privacy Policy is engineered to help you understand how we collect, process, utilize, disclose, and safeguard your personal data and technical telemetry when accessing our web dashboard, Android streaming application, Cloudflare R2 media caches, and official Telegram automation bots (@Mayajaalfilebot, @MayaJaalBulkConverterbot, @MayaJaalExpiryBot). By creating an account or using the platform, you agree to the terms outlined herein.'),
-          _buildSection('1. Information We Collect', 
+          _buildSection('1. Information We Collect',
             '1.1 User & Creator Provided Information: When registering an account or initiating monetization, we collect your verified email address, cryptographically hashed passwords, and payout identifiers (including UPI IDs and Bank account records) strictly for processing withdrawals.\n\n1.2 Media & Video Assets: Utilizing our streaming pipelines involves ingesting, transcoding, and storing video files, stream manifests, and technical duration metadata across Cloudflare edge storage.\n\n1.3 In-App Interactions: The MayaJaal mobile app collects and stores your Recent Watch History, Liked/Disliked video records, and Saved Video Library to ensure a personalized streaming experience.'),
-          _buildSection('2. Automatically Collected Telemetry & Cookies', 
+          _buildSection('2. Automatically Collected Telemetry & Cookies',
             '2.1 Device & Network Telemetry: We automatically log unique device identifiers, IP addresses, operating system types, browser fingerprints, and playback resolution metrics to detect proxy loops and optimize streaming throughput.\n\n2.2 Cookies & Local Tokens: The platform utilizes encrypted session cookies, authentication tokens, and local cache entries to maintain creator logins and remember player settings.'),
-          _buildSection('3. How We Use Your Information', 
+          _buildSection('3. How We Use Your Information',
             '3.1 Service Delivery & Streaming: To provide low-latency, hardware-accelerated 4K playback and maintain instant video conversion via Telegram bots.\n\n3.2 28-Day Lifecycle Automated Notifications: To track the 28-day validity of active links and dispatch automated renewal reminders via @MayaJaalExpiryBot 24 hours prior to link expiration.\n\n3.3 Payout Verification: To validate authentic human views, evaluate referral commissions, and disburse earnings through verified payment channels.'),
-          _buildSection('4. Information Sharing & Non-Disclosure', 
+          _buildSection('4. Information Sharing & Non-Disclosure',
             '4.1 Commercial Non-Disclosure: We do not sell, rent, broker, or trade personal creator data, media viewing logs, or platform engagement records to external advertising syndicates.\n\n4.2 Legal Compliance: We may disclose records solely in response to verified statutory demands, judicial subpoenas, or valid law enforcement inquiries concerning cyber attacks or unlawful material.'),
-          _buildSection('5. Video Viewing & Interactive Functionality', 
+          _buildSection('5. Video Viewing & Interactive Functionality',
             '5.1 Creator Responsibility: Users are solely accountable for the media files uploaded and converted through the service, ensuring compliance with intellectual property standards.\n\n5.2 Sharing & Distribution: Creators exercise direct discretion over the distribution of their converted stream links across social networks or websites.'),
-          _buildSection('6. Advertisements & Monetization Delivery', 
+          _buildSection('6. Advertisements & Monetization Delivery',
             'MayaJaal may display programmatic advertising banners or native video interstitials. Third-party ad networks may capture non-personally identifiable telemetry to serve relevant ads. We do not transmit confidential creator account credentials to external advertising networks.'),
-          _buildSection('7. Data Security Measures', 
+          _buildSection('7. Data Security Measures',
             '7.1 Cryptographic Controls: We deploy end-to-end TLS 1.3 encryption, Cloudflare security firewalls, and restricted database permissions to protect your account against unauthorized access, alteration, or disclosure.\n\n7.2 Transmission Disclaimer: While we enforce enterprise-grade security protocols, no method of transmission over the internet or cloud storage can be guaranteed 100% impenetrable.'),
-          _buildSection('8. User Rights & Account Choices', 
+          _buildSection('8. User Rights & Account Choices',
             '8.1 Account Management: Creators may review, modify, or update their payout parameters and account settings directly through the web dashboard.\n\n8.2 Data Purge: You may request the permanent deletion of your account and associated media links by submitting a verified request to our compliance desk.'),
-          _buildSection('9. Strict 18+ Age Restriction & Children\'s Privacy', 
+          _buildSection('9. Strict 18+ Age Restriction & Children\'s Privacy',
             'The MayaJaal platform and its automation suite are strictly intended for individuals aged eighteen (18) years or older. We do not knowingly collect or maintain data from minors. Any discovered minor records or Child Sexual Abuse Material (CSAM) will be permanently purged immediately, with related IP telemetry escalated to Cyber Crime authorities.'),
-          _buildSection('10. Policy Modifications & Contact', 
+          _buildSection('10. Policy Modifications & Contact',
             'We reserve the right to revise this Privacy Policy periodically. Continued use of the platform following published amendments constitutes acceptance of the modified terms.\n\nOfficial Compliance Desk: mayajaalsupport@gmail.com'),
         ];
         break;
@@ -351,31 +323,31 @@ class LegalPolicyDialog {
         subtitle = 'Effective Date: October 2026 | Operating Governance & Creator Agreement';
         accentColor = kGreen;
         sections = [
-          _buildSection('Introduction', 
+          _buildSection('Introduction',
             'By creating an account, accessing the MayaJaal web dashboard, utilizing our Telegram automation suite (@Mayajaalfilebot, @MayaJaalBulkConverterbot, @MayaJaalExpiryBot), or downloading the official MayaJaal Android Streaming APK, you acknowledge that you have read, understood, and agreed to be legally bound by these Terms and Conditions.'),
-          _buildSection('1. Use of Services & Platform Architecture', 
+          _buildSection('1. Use of Services & Platform Architecture',
             'MayaJaal provides a hardware-accelerated video streaming network, link conversion engine, and media delivery platform. Users and creators are solely responsible for all content uploaded, converted, or streamed through the service.\n\nUsers shall not upload, transcode, or share any media that infringes intellectual property rights, privacy rights, or statutory laws. Any attempt to disrupt network performance, exploit APIs, or inject malicious payloads is strictly prohibited.'),
-          _buildSection('2. User Accounts & Strict 18+ Eligibility', 
+          _buildSection('2. User Accounts & Strict 18+ Eligibility',
             'The platform is strictly authorized for verified individuals aged eighteen (18) years or older. Minor onboarding is completely prohibited.\n\nCreators are responsible for maintaining the confidentiality of their credentials and all activities occurring under their accounts. MayaJaal reserves the absolute right to suspend or terminate accounts that breach platform standards or engage in deceptive conduct.'),
-          _buildSection('3. Privacy & Telemetry Isolation', 
+          _buildSection('3. Privacy & Telemetry Isolation',
             'Your privacy is protected in strict accordance with the MayaJaal Privacy Policy. Creator analytics, financial settlement records, and viewing histories are never brokered or sold to external data syndicates.'),
-          _buildSection('4. Advertisements, Promotions & Third-Party Services', 
+          _buildSection('4. Advertisements, Promotions & Third-Party Services',
             'The platform and mobile streaming application may display third-party advertisements. Users acknowledge that MayaJaal does not control, endorse, or assume legal liability for third-party ad creatives, external landing pages, or advertiser representations.\n\nAny business dealings, transactions, or interactions with third-party advertisers appearing on the platform are strictly between the user and such third parties.'),
-          _buildSection('5. Media Validity, 28-Day Expiration & Renewal Protocol', 
+          _buildSection('5. Media Validity, 28-Day Expiration & Renewal Protocol',
             '5.1 28-Day Default Lifecycle: All converted streamable media links are provisioned with an automated twenty-eight (28) day active routing lifecycle on our edge storage clusters.\n\n5.2 Automated Warning Alerts: Automated renewal notifications are dispatched via @MayaJaalExpiryBot 24 hours prior to link expiration.\n\n5.3 Multi-Channel Renewal: Creators may renew active links within the 24-hour expiration window directly via the Web Dashboard 28-Day Renewal Manager or within the MayaJaal mobile app to maintain uninterrupted streaming delivery.\n\n5.4 Dormant Media Purge: Links that are not renewed within the designated alert window, or media assets exceeding cloud storage allocations without active viewing traffic, are automatically decommissioned and permanently purged under our Fair Use Storage Policy.'),
-          _buildSection('6. App Features & User Interactive Functionality', 
+          _buildSection('6. App Features & User Interactive Functionality',
             'The MayaJaal streaming APK offers integrated playback history, personal library video saving, like/dislike interactions, and social sharing to ensure optimal viewer experience.\n\nAny manipulation of player telemetry, simulated engagement metrics, or automated script queries directed at these interactive features constitutes a material breach.'),
-          _buildSection('7. Intellectual Property', 
+          _buildSection('7. Intellectual Property',
             'The MayaJaal platform, trademarks, logos, custom streaming software, and proprietary dashboard architectures are the intellectual property of MayaJaal and are protected by applicable copyright and international property laws.'),
-          _buildSection('8. Copyright Complaints & DMCA Procedure', 
+          _buildSection('8. Copyright Complaints & DMCA Procedure',
             'If you believe that any material made available via MayaJaal infringes upon a copyright you own or represent, you may file a formal notification with our Designated Agent in full compliance with the statutory provisions of our DMCA Policy.'),
-          _buildSection('9. Child Abuse & CSAM Zero-Tolerance Protocol', 
+          _buildSection('9. Child Abuse & CSAM Zero-Tolerance Protocol',
             'MayaJaal maintains an absolute Zero-Tolerance policy against Child Sexual Abuse Material (CSAM), non-consensual sexual exploitation, and underage explicit media. Upon receipt of notice or automated telemetry detection, our compliance desk acts immediately to remove the content and permanently terminate the offending user\'s account.\n\nWe actively cooperate with law enforcement authorities, including Indian child protection units and Cyber Crime Police departments, providing forensic IP logs to assist in criminal prosecution.\n\nUrgent CSAM Reports: mayajaalsupport@gmail.com'),
-          _buildSection('10. Traffic Integrity, Anti-Fraud & Balance Forfeiture', 
+          _buildSection('10. Traffic Integrity, Anti-Fraud & Balance Forfeiture',
             'Monetization accounts generating views via automated headless bots, click farms, proxy networks, emulators, or deceptive traffic exchanges will be immediately demonetized, with pending balances permanently forfeited.'),
-          _buildSection('11. Limitation of Liability', 
+          _buildSection('11. Limitation of Liability',
             'In no event shall MayaJaal, its operators, or affiliates be held liable for any indirect, incidental, consequential, special, or punitive damages, including loss of profits, data, or platform availability resulting from service interruptions or third-party infrastructure failures.'),
-          _buildSection('12. Governing Law, Modifications & Contact', 
+          _buildSection('12. Governing Law, Modifications & Contact',
             'These Terms and Conditions shall be governed by and construed in accordance with the laws of India. MayaJaal reserves the operational right to update or modify these Terms at any time.\n\nOfficial Compliance Inquiries: mayajaalsupport@gmail.com'),
         ];
         break;
@@ -385,21 +357,21 @@ class LegalPolicyDialog {
         subtitle = 'Online Service Provider Notification & Takedown Framework | Title II 17 U.S.C. § 512';
         accentColor = const Color(0xFFFB7185);
         sections = [
-          _buildSection('Introduction', 
+          _buildSection('Introduction',
             'MayaJaal ("Platform", "we", "us") functions as an intermediary and online content routing provider under Title II of the Digital Millennium Copyright Act, 17 U.S.C. Section 512 ("DMCA"). This document formalizes the statutory notice-and-takedown procedures established by MayaJaal to enforce the intellectual property rights of copyright holders, as well as counter-notification protocols for restoring mistakenly disabled streams.\n\nWe strictly comply with prevailing standards under international intellectual property frameworks. MayaJaal accommodates and does not interfere with standard technical protection measures deployed by rights holders, and maintains an active procedure for disabling access to or permanently removing media assets confirmed to infringe third-party copyrights.'),
-          _buildSection('1. Absence of Search Index & Directory', 
+          _buildSection('1. Absence of Search Index & Directory',
             'MayaJaal operates as a high-throughput edge delivery network, hardware-accelerated video streaming engine, and Telegram automation converter pipeline (@Mayajaalfilebot, @MayaJaalBulkConverterbot). The platform is technically incapable of maintaining a public search directory or index of private content uploaded or streamed through automated bot endpoints.'),
-          _buildSection('2. Privacy of Streamed Payloads', 
+          _buildSection('2. Privacy of Streamed Payloads',
             'Unless an authenticated creator elects to share or distribute converted media streams across public channels or websites, all ingested file objects and manifests are treated as confidential, private transmissions.'),
-          _buildSection('3. Absence of Pre-Upload Adjudication Authority', 
+          _buildSection('3. Absence of Pre-Upload Adjudication Authority',
             'In the absence of a verified notification submitted by an authenticated copyright holder or their lawful representative, MayaJaal possesses neither the statutory authority nor the technical capacity to determine whether an individual creator owns, holds a valid distribution proxy for, or is legally entitled to share specific media under the doctrines of fair use or the public domain. In accordance with applicable intermediary liability laws, all transmitted content is presumed compliant with our Terms of Service unless and until a formal written infringement claim is received.'),
-          _buildSection('4. Requirements for Submitting a Legitimate DMCA Takedown Notice', 
+          _buildSection('4. Requirements for Submitting a Legitimate DMCA Takedown Notice',
             'To submit an actionable, legally binding takedown notification under 17 U.S.C. § 512(c)(3), the copyright owner or their designated legal agent must transmit a written communication containing all of the following criteria:\n\nLegal Authority & Signature: Identification of yourself as the verified owner of an exclusive right that is allegedly infringed, or as an authorized agent operating on behalf of such owner, accompanied by a valid physical or electronic signature.\n\nIdentification of Protected Asset: Specific identification and clear description of the copyrighted work claimed to have been infringed.\n\nExact Infringing URLs: Identification of the material that is claimed to be infringing, providing the direct, exact web URLs (e.g., https://mayajaal.online/... or associated streaming manifest endpoints) hosted on our routing infrastructure. Generalized domain references or unverified filenames are insufficient.\n\nContact Details & Affiliation: Comprehensive contact details for the notifying party, including full legal name, physical address, direct telephone number, and verifiable email address. If acting as an external vendor or legal counsel, indicate the corporate relationship to the rights holder.\n\nGood Faith Representation: An unambiguous statement that: "I have a good faith belief that use of the aforementioned material in the manner complained of is not authorized by the copyright owner, its agent, or the law."\n\nPenalty of Perjury Certification: An express declaration that: "I swear, under penalty of perjury, that the information in this notification is accurate and that I am the copyright owner, or authorized to act on behalf of the owner of an exclusive right that is allegedly infringed."\n\nDesignated DMCA Compliance Desk\nTo exercise statutory DMCA rights, all notices conforming to the requirements above must be transmitted directly to our designated copyright enforcement desk:\nEmail: mayajaalsupport@gmail.com'),
-          _buildSection('5. Notice & Takedown Protocol (Rapid Purge)', 
+          _buildSection('5. Notice & Takedown Protocol (Rapid Purge)',
             'Upon receipt of a valid, fully executed DMCA notification meeting the statutory standards above, MayaJaal will act expeditiously to remove or permanently disable access to the designated infringing materials from our Cloudflare edge routing layers. Formal confirmation of removal is dispatched once the link has been disconnected from the routing tables.'),
-          _buildSection('6. Plain Text Requirement & Attachment Protocol', 
+          _buildSection('6. Plain Text Requirement & Attachment Protocol',
             'In accordance with cyber security safeguards, all takedown communications, statements, and URL indices must be delivered directly within the body of the message as plain text. Enclosed executable files, encrypted archives, ZIP folders, or unsolicited external download links will not be opened or examined due to malicious payload prevention protocols. Documentary attachments will be processed solely upon direct request by the compliance desk.'),
-          _buildSection('7. Repeat Infringer Policy & Banishment', 
+          _buildSection('7. Repeat Infringer Policy & Banishment',
             'MayaJaal maintains an active termination policy for accounts that repeatedly infringe intellectual property rights. Creators who accumulate verified copyright complaints will face immediate revocation of streaming link privileges, forfeiture of account access, and permanent blacklisting of associated Telegram bot endpoints.'),
         ];
         break;
@@ -409,21 +381,21 @@ class LegalPolicyDialog {
         subtitle = 'Effective Date: October 2026 | Creator Revenue Share & Anti-Fraud Governance';
         accentColor = kNeonCyan;
         sections = [
-          _buildSection('Introduction', 
+          _buildSection('Introduction',
             'This Agreement governs creator monetization, traffic integrity, referral commissions, and wallet settlements across the MayaJaal network. Compliance with these security and anti-abuse protocols is strictly mandatory.'),
-          _buildSection('1. Qualified Views & Streaming Monetization', 
+          _buildSection('1. Qualified Views & Streaming Monetization',
             '1.1 Human Initiation: A Qualified View is recorded solely when a genuine, authenticated human end-user initiates real-time playback through the hardware-accelerated MayaJaal player.\n\n1.2 Server-Side Verification: Views are validated server-side. Embedded automated loops, auto-refresh iframes, or headless browser scripts will not be counted toward creator earnings.'),
-          _buildSection('2. Strict Account Ban Triggers & Multi-Account Fraud', 
+          _buildSection('2. Strict Account Ban Triggers & Multi-Account Fraud',
             '2.1 1 Device = 1 Account Policy (Hardware Device Lock): Only one authenticated MayaJaal account is permitted per physical hardware device. Creating or rotating multiple accounts on a single mobile device will trigger an automated hardware lock and permanent account termination.\n\n2.2 Self-Referral & App Share Fraud: Creating multiple fake Gmail accounts on the same phone to exploit app share links or referral rewards is strictly detected by our device telemetry. Any account engaging in fake self-referral cloning will face instant permanent ban and complete forfeiture of all balances.\n\n2.3 Prohibited Environments (Emulators & Rooted Phones): Operating the MayaJaal App via virtual emulators (e.g., BlueStacks, LDPlayer, Nox), rooted Android builds, or jailbroken devices is strictly blocked. Ingestion from virtualized environments results in immediate security suspension.'),
-          _buildSection('3. Authentication & Sign-Up Protocols', 
+          _buildSection('3. Authentication & Sign-Up Protocols',
             '3.1 Verified Gmail OAuth Only: Account creation is restricted exclusively to verified @gmail.com addresses authenticated via official Google OAuth. Disposable, temporary, or unauthorized domains are automatically rejected.\n\n3.2 Brute-Force Rate Limiting: Repetitive authentication attacks or credential stuffing will trigger an automated 10-minute firewall lockout against the offending IP and device signature.'),
-          _buildSection('4. Cryptographic Security & Private Telemetry', 
+          _buildSection('4. Cryptographic Security & Private Telemetry',
             '4.1 Military-Grade HMAC & TLS 1.3: Communications between mobile APKs, server endpoints, and cloud object caches are secured via HTTPS and military-grade HMAC tokenization, preventing Man-in-the-Middle (MITM) attacks.\n\n4.2 Private API Keys: Creator API tokens allocated for Telegram automation bots (@Mayajaalfilebot, @MayaJaalBulkConverterbot) are cryptographically isolated and visible solely to the account holder.'),
-          _buildSection('5. 28-Day Link Renewal Lifecycle', 
+          _buildSection('5. 28-Day Link Renewal Lifecycle',
             'Monetization is directly linked to active media assets. Converted video links maintain a 28-day lifecycle. Automated renewal alerts are transmitted via @MayaJaalExpiryBot 24 hours prior to expiration; non-renewed links cease to accumulate views upon deactivation.'),
-          _buildSection('6. Payout Rules & Thresholds', 
+          _buildSection('6. Payout Rules & Thresholds',
             '6.1 Threshold & Verification: Withdrawal requests may be submitted once the verified Available Balance reaches \$5.00 USD (or INR equivalent).\n\n6.2 Verified Rails: Disbursements are cleared via direct UPI and verified Bank Transfer within 24 to 72 business hours following anti-fraud telemetry screening.\n\n6.3 Reversals: Disputed, bot-manipulated, or fraudulent traffic balances will be permanently voided.'),
-          _buildSection('7. Independent Relationship', 
+          _buildSection('7. Independent Relationship',
             'Creators operate as independent contractors. Participation establishes no employment, franchise, or agency relationship with MayaJaal.'),
         ];
         break;
@@ -433,13 +405,13 @@ class LegalPolicyDialog {
         subtitle = 'For platform troubleshooting, Telegram bot configurations, link renewal assistance, or withdrawal verification, reach out through our official channels:';
         accentColor = Colors.amberAccent;
         sections = [
-          _buildSection('Official Compliance Email', 
+          _buildSection('Official Compliance Email',
             'mayajaalsupport@gmail.com\n\nDirect Email'),
-          _buildSection('Telegram Official Helpdesk', 
+          _buildSection('Telegram Official Helpdesk',
             '@MayaJaalSupport'),
-          _buildSection('Official Instagram Desk', 
+          _buildSection('Official Instagram Desk',
             '@maya_jaal_official'),
-          _buildSection('Response Times', 
+          _buildSection('Response Times',
             'Automated bots operate 24/7. Support inquiries are reviewed and resolved within 12–24 business hours.'),
         ];
         break;
@@ -695,7 +667,9 @@ class SecurityGuard {
     if (!isEmailVerified(user)) {
       return 'Your Gmail is not verified by Google. Please verify and retry.';
     }
-    // 🔥 Commented out for testing: if (!isAccountOldEnough(user)) return 'This account is too new.';
+    if (!isAccountOldEnough(user)) {
+      return 'This account is too new. Please wait a minute and try again.';
+    }
     try {
       final token = await user.getIdToken(true);
       if (token == null || token.isEmpty) {
@@ -707,7 +681,6 @@ class SecurityGuard {
     return null;
   }
 
-  // 🔥 UPDATED: Auto-switch device binding instead of blocking
   static Future<Map<String, dynamic>> validateAndBindDevice(
     String uid,
     String email,
@@ -735,15 +708,12 @@ class SecurityGuard {
         return {'ok': true, 'firstBind': false};
       }
 
-      // 🔥 Auto-switch binding (since user explicitly logged out to switch)
-      await ref.set({
-        'uid': uid,
-        'email': email,
-        'boundAt': DateTime.now().millisecondsSinceEpoch,
-        'switchedFrom': data['email']?.toString() ?? 'unknown',
-      });
-      debugPrint('✅ Device binding switched: ${data['email']} → $email');
-      return {'ok': true, 'firstBind': false, 'switched': true};
+      return {
+        'ok': false,
+        'reason': 'This device is already linked to a different MayaJaal account.',
+        'existingEmail': data['email']?.toString() ?? 'unknown',
+        'hint': 'Use the original account or contact support.',
+      };
     } catch (e) {
       debugPrint('Device bind error: $e');
       return {'ok': true, 'warning': 'binding_skipped'};
@@ -1130,7 +1100,6 @@ class MayaJaalAccount {
     return List.generate(24, (_) => chars[r.nextInt(chars.length)]).join();
   }
 
-  // 🔥 UPDATED: Force Google account picker
   static Future<UserCredential?> signInWithGoogle() async {
     final allowed = await SecurityGuard.checkLoginRateLimit();
     if (!allowed) {
@@ -1142,14 +1111,6 @@ class MayaJaalAccount {
     await SecurityGuard.recordLoginAttempt();
 
     final googleSignIn = GoogleSignIn(serverClientId: webClientId);
-    
-    // 🔥 Force sign out to clear cached account
-    try {
-      await googleSignIn.signOut();
-    } catch (e) {
-      debugPrint('Pre-signOut error: $e');
-    }
-
     final googleUser = await googleSignIn.signIn();
     if (googleUser == null) return null;
 
@@ -1192,8 +1153,9 @@ class MayaJaalAccount {
     return result;
   }
 
-  // 🔥 UPDATED: Clear device binding on logout
+  // 🔥 UPDATED: Robust signOut — fully clears both Firebase and Google sessions
   static Future<void> signOut() async {
+    // 1) Google sign-out with matching client config
     try {
       final googleSignIn = GoogleSignIn(serverClientId: webClientId);
       try {
@@ -1210,29 +1172,24 @@ class MayaJaalAccount {
       debugPrint('Google init error in signOut: $e');
     }
 
+    // 2) Firebase signOut
     try {
       await FirebaseAuth.instance.signOut();
     } catch (e) {
       debugPrint('Firebase signOut error: $e');
     }
 
-    // 🔥 NEW: Clear device binding so next account can login
-    try {
-      final deviceId = await DeviceIdHelper.get();
-      await FirebaseDatabase.instance.ref('deviceBindings/$deviceId').remove();
-      debugPrint('✅ Device binding cleared');
-    } catch (e) {
-      debugPrint('Device unbind error: $e');
-    }
-
+    // 3) Let auth state propagate
     await Future.delayed(const Duration(milliseconds: 120));
 
+    // 4) Clear caches
     cachedUid = null;
     cachedEmail = null;
     cachedName = null;
     cachedPhoto = null;
     cachedApiKey = null;
 
+    // 5) Ensure currentUser is null; retry once if not
     if (FirebaseAuth.instance.currentUser != null) {
       try {
         await FirebaseAuth.instance.signOut();
@@ -1240,7 +1197,7 @@ class MayaJaalAccount {
       await Future.delayed(const Duration(milliseconds: 200));
     }
 
-    debugPrint('✅ MayaJaalAccount.signOut completed.');
+    debugPrint('✅ MayaJaalAccount.signOut completed. currentUser=${FirebaseAuth.instance.currentUser?.uid}');
   }
 
   static Future<Map<String, dynamic>> getDashboard() async {
@@ -1745,7 +1702,7 @@ class DeviceIdHelper {
 }
 
 // ═══════════════════════════════════════════════════════
-// WATCH HISTORY HELPER
+// WATCH HISTORY HELPER — 🔥 UPDATED: cached thumbnail lookup
 // ═══════════════════════════════════════════════════════
 class WatchHistory {
   static Future<List<String>> getRecentIds({int limit = 10}) async {
@@ -1764,6 +1721,7 @@ class WatchHistory {
     }
   }
 
+  // 🔥 NEW: get any saved thumbnail for a specific watch URL (permanent)
   static Future<String> getCachedThumbnail(String url) async {
     try {
       final prefs = await SharedPreferences.getInstance();
@@ -1780,6 +1738,7 @@ class WatchHistory {
     return '';
   }
 
+  // 🔥 NEW: save / update thumbnail for a specific URL (permanent storage)
   static Future<void> saveThumbnail(String url, String base64Thumb) async {
     if (url.isEmpty || base64Thumb.isEmpty) return;
     try {
@@ -1802,6 +1761,7 @@ class WatchHistory {
       }
     } catch (_) {}
 
+    // Also update saved videos
     try {
       final prefs = await SharedPreferences.getInstance();
       final raw = prefs.getString('saved_videos_v1');
@@ -2343,7 +2303,7 @@ class _MyAppState extends State<MyApp> {
 }
 
 // ═══════════════════════════════════════════════════════
-// AUTH GATE
+// AUTH GATE — 🔥 UPDATED: no auto-login, clean logout flow
 // ═══════════════════════════════════════════════════════
 class AuthGate extends StatefulWidget {
   const AuthGate({super.key});
@@ -2357,6 +2317,7 @@ class _AuthGateState extends State<AuthGate> {
   bool _initialHandled = false;
   String? _blockingError;
   bool _gateChecked = false;
+  // 🔥 NEW: prevents auto-entering app briefly after logout
   bool _afterLogout = false;
 
   @override
@@ -2381,6 +2342,7 @@ class _AuthGateState extends State<AuthGate> {
         _blockingError = err;
       }
     } else {
+      // No logged-in user — ensure we stay on login screen
       _afterLogout = true;
     }
 
@@ -2422,7 +2384,9 @@ class _AuthGateState extends State<AuthGate> {
 
         if (snapshot.hasData && snapshot.data != null) {
           final user = snapshot.data!;
+          // If user signed out previously but a stale user somehow appears, treat as logout
           if (_afterLogout) {
+            // Force re-check: validate session; if invalid -> signOut & show login
             Future.microtask(() async {
               final err = await SecurityGuard.validateUser(user);
               if (err != null) {
@@ -2455,6 +2419,7 @@ class _AuthGateState extends State<AuthGate> {
           return const MainNavigationHolder();
         }
 
+        // No user -> login screen (this covers the logout flow properly)
         return const LoginScreen();
       },
     );
@@ -4190,7 +4155,7 @@ class _HomeScreenState extends State<HomeScreen>
 }
 
 // ═══════════════════════════════════════════════════════
-// MORE DRAWER (SECURED)
+// MORE DRAWER (SECURED) — 🔥 UPDATED: robust logout
 // ═══════════════════════════════════════════════════════
 class MoreDrawer extends StatefulWidget {
   const MoreDrawer({super.key});
@@ -4224,19 +4189,24 @@ class _MoreDrawerState extends State<MoreDrawer>
     super.dispose();
   }
 
+  // 🔥 UPDATED: robust logout that fully clears session
   Future<void> _logout(BuildContext context) async {
     Haptic.heavy();
 
+    // Clear rate limit attempts
     try {
       final prefs = await SharedPreferences.getInstance();
       await prefs.remove('mj_login_attempts');
     } catch (_) {}
 
+    // Fully clear Firebase + Google session
     await MayaJaalAccount.signOut();
 
+    // Small delay to ensure authStateChanges propagates
     await Future.delayed(const Duration(milliseconds: 200));
 
     if (context.mounted) {
+      // Pop to AuthGate, which will now show LoginScreen
       Navigator.of(context).popUntil((route) => route.isFirst);
     }
   }
@@ -5436,9 +5406,606 @@ class SnakeBorderPainter extends CustomPainter {
 }
 
 // ═══════════════════════════════════════════════════════
+// STREAM PREVIEW SCREEN — 🔥 HEADER UPDATED
+// Instant load · No loader · Immediate countdown · Cached thumb
+// ═══════════════════════════════════════════════════════
+class StreamPreviewScreen extends StatefulWidget {
+  final String targetUrl;
+  const StreamPreviewScreen({super.key, required this.targetUrl});
+  @override
+  State<StreamPreviewScreen> createState() => _StreamPreviewScreenState();
+}
+
+class _StreamPreviewScreenState extends State<StreamPreviewScreen>
+    with TickerProviderStateMixin {
+  String _streamUrl = '';
+  String _videoTitle = 'MayaJaal Video';
+  String _uploaderName = '@mayajaal';
+  String _rawId = '';
+  String _token = '';
+
+  String _thumbnailUrl = ''; // cached or API-provided
+  String _capturedThumbB64 = ''; // captured from video loop (saved on play)
+
+  int _countdown = 10;
+  Timer? _countdownTimer;
+  bool _isReadyToPlay = false;
+
+  late AnimationController _snakeCtrl;
+  late AnimationController _pulseController;
+  late Animation<double> _pulseAnimation;
+
+  bool _metaLoaded = false;
+
+  @override
+  void initState() {
+    super.initState();
+    _snakeCtrl = AnimationController(vsync: this, duration: const Duration(seconds: 2))..repeat();
+    _pulseController = AnimationController(vsync: this, duration: const Duration(milliseconds: 1400))..repeat(reverse: true);
+    _pulseAnimation = Tween<double>(begin: 0.96, end: 1.04).animate(CurvedAnimation(parent: _pulseController, curve: Curves.easeInOut));
+
+    if (!MayaJaalAccount.isLoggedIn) {
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (!mounted) return;
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(backgroundColor: kCardBg, content: Text('Please login to watch videos', style: TextStyle(color: kGreen))),
+        );
+        Navigator.pushReplacement(context, MaterialPageRoute(builder: (_) => const LoginScreen()));
+      });
+      return;
+    }
+
+    // 🔥 Parse URL immediately
+    try {
+      final uri = Uri.parse(widget.targetUrl);
+      _rawId = uri.pathSegments.isNotEmpty ? uri.pathSegments.last : 'stream';
+      _token = uri.queryParameters['t'] ?? uri.queryParameters['s'] ?? '';
+    } catch (_) {
+      _rawId = 'stream';
+    }
+
+    // 🔥 Start countdown IMMEDIATELY (not after API)
+    _startCountdown();
+
+    // 🔥 Load cached thumbnail IMMEDIATELY (fast local)
+    _loadCachedThumbnail();
+
+    // 🔥 Fetch metadata in background
+    _secureInit();
+  }
+
+  Future<void> _loadCachedThumbnail() async {
+    final cached = await WatchHistory.getCachedThumbnail(widget.targetUrl);
+    if (cached.isNotEmpty && mounted && _thumbnailUrl.isEmpty) {
+      setState(() => _thumbnailUrl = cached);
+    }
+  }
+
+  Future<void> _secureInit() async {
+    final ok = await SecurityGuard.validateSession();
+    if (!ok) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            backgroundColor: kCardBg,
+            content: Text(
+              '🔒 Session expired. Please login again.',
+              style: TextStyle(color: Colors.orangeAccent),
+            ),
+          ),
+        );
+        await MayaJaalAccount.signOut();
+        if (mounted) {
+          Navigator.pushReplacement(context, MaterialPageRoute(builder: (_) => const LoginScreen()));
+        }
+      }
+      return;
+    }
+    _fetchStreamMetadata();
+  }
+
+  void _startCountdown() {
+    _countdownTimer?.cancel();
+    setState(() {
+      _countdown = 10;
+      _isReadyToPlay = false;
+    });
+
+    _countdownTimer = Timer.periodic(const Duration(seconds: 1), (timer) {
+      if (!mounted) return;
+      setState(() {
+        if (_countdown > 0) {
+          _countdown--;
+          if (_countdown <= 3 && _countdown > 0) Haptic.light();
+        } else {
+          Haptic.heavy();
+          _countdownTimer?.cancel();
+          setState(() => _isReadyToPlay = true);
+        }
+      });
+    });
+  }
+
+  @override
+  void dispose() {
+    _countdownTimer?.cancel();
+    _snakeCtrl.dispose();
+    _pulseController.dispose();
+    super.dispose();
+  }
+
+  Future<void> _fetchStreamMetadata() async {
+    try {
+      // Direct video URL?
+      if (widget.targetUrl.endsWith('.mp4') || widget.targetUrl.endsWith('.m3u8')) {
+        if (mounted) {
+          setState(() {
+            _streamUrl = widget.targetUrl;
+            _videoTitle = _rawId;
+            _metaLoaded = true;
+          });
+        }
+        return;
+      }
+
+      final apiUrl = _token.isNotEmpty
+          ? '$kBackendBaseUrl/api/stream-info/$_rawId?t=$_token'
+          : '$kBackendBaseUrl/api/stream-info/$_rawId';
+
+      final deviceId = await DeviceIdHelper.get();
+      final headers = SecurityGuard.signedHeaders(
+        method: 'GET',
+        path: '/api/stream-info/$_rawId',
+        body: '',
+        deviceId: deviceId,
+        uid: MayaJaalAccount.cachedUid,
+      );
+
+      final res = await http
+          .get(Uri.parse(apiUrl), headers: headers)
+          .timeout(const Duration(seconds: 8));
+
+      if (res.statusCode == 200) {
+        final data = jsonDecode(res.body);
+        if (data['success'] == true && (data['url'] != null || data['video_url'] != null)) {
+          if (mounted) {
+            setState(() {
+              _streamUrl = data['url'] ?? data['video_url'];
+              _videoTitle = data['title'] ?? data['file_name'] ?? _rawId;
+              _uploaderName = data['uploader'] ?? '@mayajaal';
+              // Only set API thumb if no cache exists
+              if (_thumbnailUrl.isEmpty) {
+                final apiThumb = data['thumbnail'] ?? data['poster'] ?? '';
+                if (apiThumb.toString().isNotEmpty) {
+                  _thumbnailUrl = apiThumb.toString();
+                }
+              }
+              _metaLoaded = true;
+            });
+          }
+          return;
+        }
+      }
+
+      if (mounted) {
+        setState(() {
+          _streamUrl = widget.targetUrl;
+          _metaLoaded = true;
+        });
+      }
+    } catch (e) {
+      if (mounted) {
+        setState(() {
+          _streamUrl = widget.targetUrl;
+          _metaLoaded = true;
+        });
+      }
+    }
+  }
+
+  void _shareStreamDirect() {
+    Haptic.light();
+    Share.share('🚀 Watch this stream on MayaJaal:\n${widget.targetUrl}');
+  }
+
+  Future<void> _saveWatchRecord() async {
+    final prefs = await SharedPreferences.getInstance();
+    final localJson = prefs.getString('watch_history_v2');
+    List<Map<String, dynamic>> history = [];
+    if (localJson != null) {
+      try {
+        final List decoded = jsonDecode(localJson);
+        history = decoded.cast<Map<String, dynamic>>();
+      } catch (_) {}
+    }
+
+    // 🔥 Prefer cached thumbnail; else use loop-captured frame
+    String finalThumb = _thumbnailUrl;
+    if (finalThumb.isEmpty && _capturedThumbB64.isNotEmpty) {
+      finalThumb = _capturedThumbB64;
+    }
+    // Fall back to any previously saved thumb for this URL
+    if (finalThumb.isEmpty) {
+      final existing = await WatchHistory.getCachedThumbnail(widget.targetUrl);
+      if (existing.isNotEmpty) finalThumb = existing;
+    }
+
+    final item = {
+      'url': widget.targetUrl,
+      'title': _videoTitle,
+      'uploader': _uploaderName,
+      'id': _rawId,
+      'thumbnail': finalThumb,
+      'time': DateTime.now().toIso8601String(),
+    };
+
+    history.removeWhere((h) => h['url'] == widget.targetUrl);
+    history.insert(0, item);
+    if (history.length > 50) history.removeLast();
+
+    await prefs.setString('watch_history_v2', jsonEncode(history));
+  }
+
+  void _launchNativePlayer() {
+    _saveWatchRecord();
+
+    Navigator.of(context).push(
+      MaterialPageRoute(
+        builder: (_) => NativeVideoPlayerScreen(
+          videoUrl: _streamUrl,
+          title: _videoTitle,
+          uploader: _uploaderName,
+          sourcePageUrl: widget.targetUrl,
+          videoId: _rawId,
+          thumbnailUrl: _thumbnailUrl.isNotEmpty ? _thumbnailUrl : _capturedThumbB64,
+        ),
+      ),
+    ).then((_) {
+      if (mounted) {
+        _startCountdown();
+      }
+    });
+  }
+
+  void _goToHome() {
+    Haptic.heavy();
+    Navigator.of(context).pushAndRemoveUntil(
+      MaterialPageRoute(builder: (_) => const MainNavigationHolder()),
+      (route) => false,
+    );
+  }
+
+  Widget _buildCountdownCircle() {
+    final progress = 1.0 - (_countdown / 10.0);
+    return SizedBox(
+      width: 100,
+      height: 100,
+      child: Stack(
+        alignment: Alignment.center,
+        children: [
+          SizedBox(
+            width: 100,
+            height: 100,
+            child: CircularProgressIndicator(
+              value: progress,
+              strokeWidth: 6,
+              backgroundColor: Colors.white12,
+              valueColor: const AlwaysStoppedAnimation<Color>(Colors.orangeAccent),
+            ),
+          ),
+          Column(
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [
+              const Icon(Icons.timer, color: Colors.orangeAccent, size: 30),
+              const SizedBox(height: 2),
+              Text(
+                '$_countdown',
+                style: const TextStyle(
+                  color: Colors.orangeAccent,
+                  fontSize: 28,
+                  fontWeight: FontWeight.w900,
+                  letterSpacing: 1,
+                  shadows: [Shadow(color: Colors.orangeAccent, blurRadius: 10)],
+                ),
+              ),
+            ],
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildRedSnakePlayButton() {
+    return AnimatedBuilder(
+      animation: Listenable.merge([_snakeCtrl, _pulseAnimation]),
+      builder: (c, _) => Transform.scale(
+        scale: _pulseAnimation.value,
+        child: GestureDetector(
+          onTap: _launchNativePlayer,
+          child: Container(
+            width: double.infinity,
+            height: 64,
+            decoration: BoxDecoration(
+              color: Colors.black,
+              borderRadius: BorderRadius.circular(32),
+              boxShadow: [BoxShadow(color: kRed.withOpacity(0.5), blurRadius: 22, spreadRadius: 1)],
+            ),
+            child: Stack(
+              alignment: Alignment.center,
+              children: [
+                Positioned.fill(
+                  child: CustomPaint(painter: SnakeBorderPainter(progress: _snakeCtrl.value, color: kRed)),
+                ),
+                Row(
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  children: const [
+                    Icon(Icons.play_arrow_rounded, color: kRed, size: 32),
+                    SizedBox(width: 8),
+                    Text(
+                      'PLAY NOW',
+                      style: TextStyle(color: kRed, fontSize: 15, fontWeight: FontWeight.w900, letterSpacing: 2.5, shadows: [Shadow(color: kRed, blurRadius: 14)]),
+                    ),
+                  ],
+                ),
+              ],
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    // 🔥 NO LOADER SCREEN — instant UI, thumbnail upgrades as data arrives
+    return Scaffold(
+      backgroundColor: Colors.black,
+      body: Stack(
+        children: [
+          const MatrixRain(opacity: 0.35),
+          SafeArea(
+            child: SingleChildScrollView(
+              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
+              child: Column(
+                children: [
+                  // 🏠 HOME BUTTON AT TOP
+                  SizedBox(
+                    width: double.infinity,
+                    height: 50,
+                    child: OutlinedButton.icon(
+                      onPressed: _goToHome,
+                      icon: const Icon(Icons.home, color: Colors.white54, size: 20),
+                      label: const Text('GO TO HOME PAGE', style: TextStyle(color: Colors.white54, fontSize: 12, fontWeight: FontWeight.bold, letterSpacing: 1.5)),
+                      style: OutlinedButton.styleFrom(
+                        side: BorderSide(color: Colors.white24, width: 1.5),
+                        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(25)),
+                      ),
+                    ),
+                  ),
+                  const SizedBox(height: 12),
+
+                  // 🔥 NEW: Header exactly like HomeScreen (MayaJaal logo + text)
+                  Row(
+                    children: [
+                      IconButton(
+                        icon: const Icon(Icons.arrow_back_ios_new, color: kGreen, size: 22),
+                        onPressed: () {
+                          Haptic.light();
+                          Navigator.pop(context);
+                        },
+                      ),
+                      const SizedBox(width: 8),
+                      Container(
+                        width: 36,
+                        height: 36,
+                        decoration: BoxDecoration(
+                          color: Colors.black,
+                          borderRadius: BorderRadius.circular(10),
+                          border: Border.all(color: kGreen, width: 2),
+                          boxShadow: [
+                            BoxShadow(color: kGreen.withOpacity(0.5), blurRadius: 15),
+                          ],
+                        ),
+                        child: ClipRRect(
+                          borderRadius: BorderRadius.circular(8),
+                          child: Image.asset(
+                            'assets/icon/logo.png',
+                            fit: BoxFit.cover,
+                            errorBuilder: (c, e, s) => const Icon(
+                              Icons.change_history,
+                              color: kGreen,
+                              size: 20,
+                            ),
+                          ),
+                        ),
+                      ),
+                      const SizedBox(width: 10),
+                      const Text(
+                        'Maya',
+                        style: TextStyle(
+                          fontSize: 26,
+                          fontWeight: FontWeight.w900,
+                          color: Colors.white,
+                          fontFamily: 'sans-serif',
+                          letterSpacing: 0.5,
+                        ),
+                      ),
+                      const Text(
+                        'Jaal',
+                        style: TextStyle(
+                          fontSize: 26,
+                          fontWeight: FontWeight.w900,
+                          color: kGreen,
+                          fontFamily: 'sans-serif',
+                          letterSpacing: 0.5,
+                          shadows: [Shadow(color: kGreen, blurRadius: 12)],
+                        ),
+                      ),
+                      const Spacer(),
+                      Container(
+                        padding: const EdgeInsets.all(7),
+                        decoration: BoxDecoration(shape: BoxShape.circle, border: Border.all(color: kGreen.withOpacity(0.6))),
+                        child: const Icon(Icons.verified_user_rounded, color: kGreen, size: 18),
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: 12),
+                  
+                  Container(
+                    padding: const EdgeInsets.all(4),
+                    decoration: BoxDecoration(
+                      color: const Color(0xFF011206),
+                      borderRadius: BorderRadius.circular(20),
+                      border: Border.all(color: _isReadyToPlay ? kGreen : Colors.orangeAccent.withOpacity(0.6), width: 1.8),
+                      boxShadow: [BoxShadow(color: (_isReadyToPlay ? kGreen : Colors.orangeAccent).withOpacity(0.25), blurRadius: 30)],
+                    ),
+                    child: ClipRRect(
+                      borderRadius: BorderRadius.circular(16),
+                      child: AspectRatio(
+                        aspectRatio: 16 / 9,
+                        child: Stack(
+                          fit: StackFit.expand,
+                          alignment: Alignment.center,
+                          children: [
+                            // 🔥 Video loop starts as soon as streamUrl is known,
+                            //    cached thumbnail shows instantly otherwise
+                            buildMediaThumbnail(
+                              _thumbnailUrl.isNotEmpty ? _thumbnailUrl : null,
+                              _videoTitle,
+                              _streamUrl, // empty → auto thumbnail placeholder
+                              onFrameCaptured: (b64) {
+                                if (!mounted) return;
+                                if (_capturedThumbB64.isEmpty) {
+                                  setState(() => _capturedThumbB64 = b64);
+                                }
+                              },
+                            ),
+                            Container(color: Colors.black.withOpacity(0.3)),
+                            if (!_isReadyToPlay) _buildCountdownCircle(),
+                            Positioned(
+                              top: 8,
+                              left: 8,
+                              child: Container(
+                                padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 3),
+                                decoration: BoxDecoration(color: Colors.black.withOpacity(0.7), borderRadius: BorderRadius.circular(5), border: Border.all(color: kGreen, width: 1)),
+                                child: const Text('HD', style: TextStyle(color: kGreen, fontSize: 9.5, fontWeight: FontWeight.bold)),
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                    ),
+                  ),
+                  const SizedBox(height: 16),
+
+                  // 🐍 RED SNAKE PLAY BUTTON (Below Home)
+                  if (_isReadyToPlay)
+                    _buildRedSnakePlayButton()
+                  else
+                    Container(
+                      width: double.infinity,
+                      height: 64,
+                      decoration: BoxDecoration(color: Colors.grey[850], borderRadius: BorderRadius.circular(32)),
+                      child: Center(
+                        child: Text(
+                          'PLEASE WAIT $_countdown SEC...',
+                          style: const TextStyle(color: Colors.white54, fontSize: 14, fontWeight: FontWeight.w900, letterSpacing: 2),
+                        ),
+                      ),
+                    ),
+
+                  const SizedBox(height: 16),
+                  Container(
+                    padding: const EdgeInsets.all(14),
+                    decoration: BoxDecoration(
+                      color: const Color(0xFF031A0B),
+                      borderRadius: BorderRadius.circular(16),
+                      border: Border.all(color: kGreen.withOpacity(0.35)),
+                    ),
+                    child: Column(
+                      children: [
+                        Row(
+                          children: [
+                            Container(
+                              padding: const EdgeInsets.all(10),
+                              decoration: BoxDecoration(shape: BoxShape.circle, color: Colors.black, border: Border.all(color: kGreen.withOpacity(0.5))),
+                              child: const Icon(Icons.video_collection_outlined, color: kGreen, size: 20),
+                            ),
+                            const SizedBox(width: 14),
+                            Expanded(
+                              child: Column(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                children: [
+                                  Text('FILE NAME', style: TextStyle(color: Colors.white.withOpacity(0.5), fontSize: 9.5, letterSpacing: 1)),
+                                  const SizedBox(height: 2),
+                                  Text(_videoTitle, style: const TextStyle(color: Colors.white, fontSize: 13.5, fontWeight: FontWeight.bold), maxLines: 1, overflow: TextOverflow.ellipsis),
+                                ],
+                              ),
+                            ),
+                          ],
+                        ),
+                        Padding(
+                          padding: const EdgeInsets.symmetric(vertical: 8),
+                          child: Divider(color: kGreen.withOpacity(0.15)),
+                        ),
+                        Row(
+                          children: [
+                            Container(
+                              padding: const EdgeInsets.all(10),
+                              decoration: BoxDecoration(shape: BoxShape.circle, color: Colors.black, border: Border.all(color: kGreen.withOpacity(0.5))),
+                              child: const Icon(Icons.person_outline, color: kGreen, size: 20),
+                            ),
+                            const SizedBox(width: 14),
+                            Expanded(
+                              child: Column(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                children: [
+                                  Text('UPLOADER', style: TextStyle(color: Colors.white.withOpacity(0.5), fontSize: 9.5, letterSpacing: 1)),
+                                  const SizedBox(height: 2),
+                                  Text(_uploaderName, style: const TextStyle(color: kGreen, fontSize: 13.5, fontWeight: FontWeight.bold)),
+                                ],
+                              ),
+                            ),
+                          ],
+                        ),
+                      ],
+                    ),
+                  ),
+                  const SizedBox(height: 16),
+                  SizedBox(
+                    width: double.infinity,
+                    height: 52,
+                    child: OutlinedButton(
+                      onPressed: _shareStreamDirect,
+                      style: OutlinedButton.styleFrom(side: const BorderSide(color: kGreen, width: 1.5), shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(26))),
+                      child: Row(
+                        mainAxisAlignment: MainAxisAlignment.center,
+                        children: const [
+                          Icon(Icons.share, color: kGreen, size: 20),
+                          SizedBox(width: 10),
+                          Text('SHARE VIDEO', style: TextStyle(color: kGreen, fontSize: 12, fontWeight: FontWeight.bold, letterSpacing: 1.5)),
+                        ],
+                      ),
+                    ),
+                  ),
+                  const SizedBox(height: 20),
+                ],
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+// ═══════════════════════════════════════════════════════
 // ⏭️ END OF PART 1 — PART 2 CONTINUES
 // ═══════════════════════════════════════════════════════
 
+// ═══════════════════════════════════════════════════════
+// MAYAJAAL APP — PART 2 (UPDATED)
+// ═══════════════════════════════════════════════════════
 
 // ═══════════════════════════════════════════════════════
 // CHANNEL SCREEN
@@ -5886,7 +6453,7 @@ class _GalleryScreenState extends State<GalleryScreen> {
 }
 
 // ═══════════════════════════════════════════════════════
-// SAVED VIDEOS SCREEN — 🔥 UPDATED: Direct Video URL for Loop
+// SAVED VIDEOS SCREEN — 🔥 UPDATED: frame capture wired
 // ═══════════════════════════════════════════════════════
 class SavedVideosScreen extends StatefulWidget {
   const SavedVideosScreen({super.key});
@@ -5945,8 +6512,6 @@ class _SavedVideosScreenState extends State<SavedVideosScreen> {
                 final thumb = item['thumbnail']?.toString() ?? '';
                 final title = item['title']?.toString() ?? 'Video';
                 final url = item['url']?.toString() ?? '';
-                // 🔥 FIX: Use direct video URL for the loop thumbnail
-                final videoUrl = item['videoUrl']?.toString() ?? url; 
                 
                 return Container(
                   margin: const EdgeInsets.only(bottom: 12),
@@ -5966,10 +6531,11 @@ class _SavedVideosScreenState extends State<SavedVideosScreen> {
                       ),
                       child: ClipRRect(
                         borderRadius: BorderRadius.circular(7),
+                        // 🔥 FIX: pass onFrameCaptured so thumbnail is auto-generated & saved
                         child: buildMediaThumbnail(
                           thumb,
                           title,
-                          videoUrl, // 🔥 Use videoUrl here
+                          url,
                           isSmall: true,
                           onFrameCaptured: (b64) async {
                             await WatchHistory.saveThumbnail(url, b64);
@@ -6010,7 +6576,7 @@ class _SavedVideosScreenState extends State<SavedVideosScreen> {
 }
 
 // ═══════════════════════════════════════════════════════
-// HISTORY SCREEN — 🔥 UPDATED: Direct Video URL for Loop
+// HISTORY SCREEN — 🔥 UPDATED: frame capture wired
 // ═══════════════════════════════════════════════════════
 class HistoryScreen extends StatefulWidget {
   const HistoryScreen({super.key});
@@ -6115,8 +6681,6 @@ class _HistoryScreenState extends State<HistoryScreen> {
                 final thumb = item['thumbnail']?.toString() ?? '';
                 final title = item['title']?.toString() ?? 'Media Node';
                 final url = item['url']?.toString() ?? '';
-                // 🔥 FIX: Use direct video URL for the loop thumbnail
-                final videoUrl = item['videoUrl']?.toString() ?? url;
                 
                 return Container(
                   margin: const EdgeInsets.only(bottom: 12),
@@ -6136,10 +6700,11 @@ class _HistoryScreenState extends State<HistoryScreen> {
                       ),
                       child: ClipRRect(
                         borderRadius: BorderRadius.circular(7),
+                        // 🔥 FIX: pass onFrameCaptured so missing thumbnails are auto-generated
                         child: buildMediaThumbnail(
                           thumb,
                           title,
-                          videoUrl, // 🔥 Use videoUrl here
+                          url,
                           isSmall: true,
                           onFrameCaptured: (b64) async {
                             await WatchHistory.saveThumbnail(url, b64);
@@ -6378,573 +6943,6 @@ class _SettingsScreenState extends State<SettingsScreen> {
             );
           }).toList(),
         ),
-      ),
-    );
-  }
-}
-
-// ═══════════════════════════════════════════════════════
-// STREAM PREVIEW SCREEN — 🔥 MAJOR FIX: Instant Save & Loop
-// ═══════════════════════════════════════════════════════
-class StreamPreviewScreen extends StatefulWidget {
-  final String targetUrl;
-  const StreamPreviewScreen({super.key, required this.targetUrl});
-  @override
-  State<StreamPreviewScreen> createState() => _StreamPreviewScreenState();
-}
-
-class _StreamPreviewScreenState extends State<StreamPreviewScreen>
-    with TickerProviderStateMixin {
-  String _streamUrl = '';
-  String _videoTitle = 'MayaJaal Video';
-  String _uploaderName = '@mayajaal';
-  String _rawId = '';
-  String _token = '';
-
-  String _thumbnailUrl = ''; // cached or API-provided
-  String _capturedThumbB64 = ''; // captured from video loop (saved instantly)
-
-  int _countdown = 10;
-  Timer? _countdownTimer;
-  bool _isReadyToPlay = false;
-
-  late AnimationController _snakeCtrl;
-  late AnimationController _pulseController;
-  late Animation<double> _pulseAnimation;
-
-  bool _metaLoaded = false;
-
-  @override
-  void initState() {
-    super.initState();
-    _snakeCtrl = AnimationController(vsync: this, duration: const Duration(seconds: 2))..repeat();
-    _pulseController = AnimationController(vsync: this, duration: const Duration(milliseconds: 1400))..repeat(reverse: true);
-    _pulseAnimation = Tween<double>(begin: 0.96, end: 1.04).animate(CurvedAnimation(parent: _pulseController, curve: Curves.easeInOut));
-
-    if (!MayaJaalAccount.isLoggedIn) {
-      WidgetsBinding.instance.addPostFrameCallback((_) {
-        if (!mounted) return;
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(backgroundColor: kCardBg, content: Text('Please login to watch videos', style: TextStyle(color: kGreen))),
-        );
-        Navigator.pushReplacement(context, MaterialPageRoute(builder: (_) => const LoginScreen()));
-      });
-      return;
-    }
-
-    // 🔥 Parse URL immediately
-    try {
-      final uri = Uri.parse(widget.targetUrl);
-      _rawId = uri.pathSegments.isNotEmpty ? uri.pathSegments.last : 'stream';
-      _token = uri.queryParameters['t'] ?? uri.queryParameters['s'] ?? '';
-    } catch (_) {
-      _rawId = 'stream';
-    }
-
-    // 🔥 Start countdown IMMEDIATELY (not after API)
-    _startCountdown();
-
-    // 🔥 Load cached thumbnail IMMEDIATELY (fast local)
-    _loadCachedThumbnail();
-
-    // 🔥 Add to history IMMEDIATELY so it appears even if user leaves
-    _saveWatchRecord(); 
-
-    // 🔥 Fetch metadata in background
-    _secureInit();
-  }
-
-  Future<void> _loadCachedThumbnail() async {
-    final cached = await WatchHistory.getCachedThumbnail(widget.targetUrl);
-    if (cached.isNotEmpty && mounted && _thumbnailUrl.isEmpty) {
-      setState(() => _thumbnailUrl = cached);
-    }
-  }
-
-  Future<void> _secureInit() async {
-    final ok = await SecurityGuard.validateSession();
-    if (!ok) {
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
-            backgroundColor: kCardBg,
-            content: Text(
-              '🔒 Session expired. Please login again.',
-              style: TextStyle(color: Colors.orangeAccent),
-            ),
-          ),
-        );
-        await MayaJaalAccount.signOut();
-        if (mounted) {
-          Navigator.pushReplacement(context, MaterialPageRoute(builder: (_) => const LoginScreen()));
-        }
-      }
-      return;
-    }
-    _fetchStreamMetadata();
-  }
-
-  void _startCountdown() {
-    _countdownTimer?.cancel();
-    setState(() {
-      _countdown = 10;
-      _isReadyToPlay = false;
-    });
-
-    _countdownTimer = Timer.periodic(const Duration(seconds: 1), (timer) {
-      if (!mounted) return;
-      setState(() {
-        if (_countdown > 0) {
-          _countdown--;
-          if (_countdown <= 3 && _countdown > 0) Haptic.light();
-        } else {
-          Haptic.heavy();
-          _countdownTimer?.cancel();
-          setState(() => _isReadyToPlay = true);
-        }
-      });
-    });
-  }
-
-  @override
-  void dispose() {
-    _countdownTimer?.cancel();
-    _snakeCtrl.dispose();
-    _pulseController.dispose();
-    super.dispose();
-  }
-
-  Future<void> _fetchStreamMetadata() async {
-    try {
-      // Direct video URL?
-      if (widget.targetUrl.endsWith('.mp4') || widget.targetUrl.endsWith('.m3u8')) {
-        if (mounted) {
-          setState(() {
-            _streamUrl = widget.targetUrl;
-            _videoTitle = _rawId;
-            _metaLoaded = true;
-          });
-          _saveWatchRecord(); // Save again with stream URL
-        }
-        return;
-      }
-
-      final apiUrl = _token.isNotEmpty
-          ? '$kBackendBaseUrl/api/stream-info/$_rawId?t=$_token'
-          : '$kBackendBaseUrl/api/stream-info/$_rawId';
-
-      final deviceId = await DeviceIdHelper.get();
-      final headers = SecurityGuard.signedHeaders(
-        method: 'GET',
-        path: '/api/stream-info/$_rawId',
-        body: '',
-        deviceId: deviceId,
-        uid: MayaJaalAccount.cachedUid,
-      );
-
-      final res = await http
-          .get(Uri.parse(apiUrl), headers: headers)
-          .timeout(const Duration(seconds: 8));
-
-      if (res.statusCode == 200) {
-        final data = jsonDecode(res.body);
-        if (data['success'] == true && (data['url'] != null || data['video_url'] != null)) {
-          if (mounted) {
-            setState(() {
-              _streamUrl = data['url'] ?? data['video_url'];
-              _videoTitle = data['title'] ?? data['file_name'] ?? _rawId;
-              _uploaderName = data['uploader'] ?? '@mayajaal';
-              // Only set API thumb if no cache exists
-              if (_thumbnailUrl.isEmpty) {
-                final apiThumb = data['thumbnail'] ?? data['poster'] ?? '';
-                if (apiThumb.toString().isNotEmpty) {
-                  _thumbnailUrl = apiThumb.toString();
-                }
-              }
-              _metaLoaded = true;
-            });
-            _saveWatchRecord(); // 🔥 Save again with direct stream URL
-          }
-          return;
-        }
-      }
-
-      if (mounted) {
-        setState(() {
-          _streamUrl = widget.targetUrl;
-          _metaLoaded = true;
-        });
-        _saveWatchRecord();
-      }
-    } catch (e) {
-      if (mounted) {
-        setState(() {
-          _streamUrl = widget.targetUrl;
-          _metaLoaded = true;
-        });
-        _saveWatchRecord();
-      }
-    }
-  }
-
-  void _shareStreamDirect() {
-    Haptic.light();
-    Share.share('🚀 Watch this stream on MayaJaal:\n${widget.targetUrl}');
-  }
-
-  Future<void> _saveWatchRecord() async {
-    final prefs = await SharedPreferences.getInstance();
-    final localJson = prefs.getString('watch_history_v2');
-    List<Map<String, dynamic>> history = [];
-    if (localJson != null) {
-      try {
-        final List decoded = jsonDecode(localJson);
-        history = decoded.cast<Map<String, dynamic>>();
-      } catch (_) {}
-    }
-
-    // 🔥 Prefer cached thumbnail; else use loop-captured frame
-    String finalThumb = _thumbnailUrl;
-    if (finalThumb.isEmpty && _capturedThumbB64.isNotEmpty) {
-      finalThumb = _capturedThumbB64;
-    }
-    // Fall back to any previously saved thumb for this URL
-    if (finalThumb.isEmpty) {
-      final existing = await WatchHistory.getCachedThumbnail(widget.targetUrl);
-      if (existing.isNotEmpty) finalThumb = existing;
-    }
-
-    final item = {
-      'url': widget.targetUrl,
-      'title': _videoTitle,
-      'uploader': _uploaderName,
-      'id': _rawId,
-      'thumbnail': finalThumb,
-      'videoUrl': _streamUrl, // 🔥 SAVE DIRECT VIDEO URL FOR LOOP THUMBNAILS
-      'time': DateTime.now().toIso8601String(),
-    };
-
-    history.removeWhere((h) => h['url'] == widget.targetUrl);
-    history.insert(0, item);
-    if (history.length > 50) history.removeLast();
-
-    await prefs.setString('watch_history_v2', jsonEncode(history));
-  }
-
-  void _launchNativePlayer() {
-    _saveWatchRecord();
-
-    Navigator.of(context).push(
-      MaterialPageRoute(
-        builder: (_) => NativeVideoPlayerScreen(
-          videoUrl: _streamUrl,
-          title: _videoTitle,
-          uploader: _uploaderName,
-          sourcePageUrl: widget.targetUrl,
-          videoId: _rawId,
-          thumbnailUrl: _thumbnailUrl.isNotEmpty ? _thumbnailUrl : _capturedThumbB64,
-        ),
-      ),
-    ).then((_) {
-      if (mounted) {
-        _startCountdown();
-      }
-    });
-  }
-
-  void _goToHome() {
-    Haptic.heavy();
-    Navigator.of(context).pushAndRemoveUntil(
-      MaterialPageRoute(builder: (_) => const MainNavigationHolder()),
-      (route) => false,
-    );
-  }
-
-  Widget _buildCountdownCircle() {
-    final progress = 1.0 - (_countdown / 10.0);
-    return SizedBox(
-      width: 100,
-      height: 100,
-      child: Stack(
-        alignment: Alignment.center,
-        children: [
-          SizedBox(
-            width: 100,
-            height: 100,
-            child: CircularProgressIndicator(
-              value: progress,
-              strokeWidth: 6,
-              backgroundColor: Colors.white12,
-              valueColor: const AlwaysStoppedAnimation<Color>(Colors.orangeAccent),
-            ),
-          ),
-          Column(
-            mainAxisAlignment: MainAxisAlignment.center,
-            children: [
-              const Icon(Icons.timer, color: Colors.orangeAccent, size: 30),
-              const SizedBox(height: 2),
-              Text(
-                '$_countdown',
-                style: const TextStyle(
-                  color: Colors.orangeAccent,
-                  fontSize: 28,
-                  fontWeight: FontWeight.w900,
-                  letterSpacing: 1,
-                  shadows: [Shadow(color: Colors.orangeAccent, blurRadius: 10)],
-                ),
-              ),
-            ],
-          ),
-        ],
-      ),
-    );
-  }
-
-  Widget _buildRedSnakePlayButton() {
-    return AnimatedBuilder(
-      animation: Listenable.merge([_snakeCtrl, _pulseAnimation]),
-      builder: (c, _) => Transform.scale(
-        scale: _pulseAnimation.value,
-        child: GestureDetector(
-          onTap: _launchNativePlayer,
-          child: Container(
-            width: double.infinity,
-            height: 64,
-            decoration: BoxDecoration(
-              color: Colors.black,
-              borderRadius: BorderRadius.circular(32),
-              boxShadow: [BoxShadow(color: kRed.withOpacity(0.5), blurRadius: 22, spreadRadius: 1)],
-            ),
-            child: Stack(
-              alignment: Alignment.center,
-              children: [
-                Positioned.fill(
-                  child: CustomPaint(painter: SnakeBorderPainter(progress: _snakeCtrl.value, color: kRed)),
-                ),
-                Row(
-                  mainAxisAlignment: MainAxisAlignment.center,
-                  children: const [
-                    Icon(Icons.play_arrow_rounded, color: kRed, size: 32),
-                    SizedBox(width: 8),
-                    Text(
-                      'PLAY NOW',
-                      style: TextStyle(color: kRed, fontSize: 15, fontWeight: FontWeight.w900, letterSpacing: 2.5, shadows: [Shadow(color: kRed, blurRadius: 14)]),
-                    ),
-                  ],
-                ),
-              ],
-            ),
-          ),
-        ),
-      ),
-    );
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    return Scaffold(
-      backgroundColor: Colors.black,
-      body: Stack(
-        children: [
-          const MatrixRain(opacity: 0.35),
-          SafeArea(
-            child: SingleChildScrollView(
-              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
-              child: Column(
-                children: [
-                  // 🏠 HOME BUTTON AT TOP
-                  SizedBox(
-                    width: double.infinity,
-                    height: 50,
-                    child: OutlinedButton.icon(
-                      onPressed: _goToHome,
-                      icon: const Icon(Icons.home, color: Colors.white54, size: 20),
-                      label: const Text('GO TO HOME PAGE', style: TextStyle(color: Colors.white54, fontSize: 12, fontWeight: FontWeight.bold, letterSpacing: 1.5)),
-                      style: OutlinedButton.styleFrom(
-                        side: BorderSide(color: Colors.white24, width: 1.5),
-                        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(25)),
-                      ),
-                    ),
-                  ),
-                  const SizedBox(height: 12),
-
-                  Row(
-                    children: [
-                      IconButton(
-                        icon: const Icon(Icons.arrow_back_ios_new, color: kGreen, size: 22),
-                        onPressed: () {
-                          Haptic.light();
-                          Navigator.pop(context);
-                        },
-                      ),
-                      Expanded(
-                        child: Column(
-                          mainAxisSize: MainAxisSize.min,
-                          children: [
-                            const Text(
-                              'STREAM READY',
-                              style: TextStyle(color: kGreen, fontSize: 19, fontWeight: FontWeight.w900, letterSpacing: 2, shadows: [Shadow(color: kGreen, blurRadius: 12)]),
-                            ),
-                            Text(
-                              'MATRIX NEURAL STREAM',
-                              style: TextStyle(color: kGreen.withOpacity(0.7), fontSize: 9, letterSpacing: 2.5, fontWeight: FontWeight.w600),
-                            ),
-                          ],
-                        ),
-                      ),
-                      Container(
-                        padding: const EdgeInsets.all(7),
-                        decoration: BoxDecoration(shape: BoxShape.circle, border: Border.all(color: kGreen.withOpacity(0.6))),
-                        child: const Icon(Icons.verified_user_rounded, color: kGreen, size: 18),
-                      ),
-                    ],
-                  ),
-                  const SizedBox(height: 12),
-                  
-                  Container(
-                    padding: const EdgeInsets.all(4),
-                    decoration: BoxDecoration(
-                      color: const Color(0xFF011206),
-                      borderRadius: BorderRadius.circular(20),
-                      border: Border.all(color: _isReadyToPlay ? kGreen : Colors.orangeAccent.withOpacity(0.6), width: 1.8),
-                      boxShadow: [BoxShadow(color: (_isReadyToPlay ? kGreen : Colors.orangeAccent).withOpacity(0.25), blurRadius: 30)],
-                    ),
-                    child: ClipRRect(
-                      borderRadius: BorderRadius.circular(16),
-                      child: AspectRatio(
-                        aspectRatio: 16 / 9,
-                        child: Stack(
-                          fit: StackFit.expand,
-                          alignment: Alignment.center,
-                          children: [
-                            buildMediaThumbnail(
-                              _thumbnailUrl.isNotEmpty ? _thumbnailUrl : null,
-                              _videoTitle,
-                              _streamUrl, // empty → auto thumbnail placeholder
-                              onFrameCaptured: (b64) async {
-                                if (!mounted) return;
-                                if (_capturedThumbB64.isEmpty) {
-                                  setState(() => _capturedThumbB64 = b64);
-                                  // 🔥 Save to history immediately so it's permanent
-                                  await WatchHistory.saveThumbnail(widget.targetUrl, b64);
-                                  await _saveWatchRecord(); 
-                                }
-                              },
-                            ),
-                            Container(color: Colors.black.withOpacity(0.3)),
-                            if (!_isReadyToPlay) _buildCountdownCircle(),
-                            Positioned(
-                              top: 8,
-                              left: 8,
-                              child: Container(
-                                padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 3),
-                                decoration: BoxDecoration(color: Colors.black.withOpacity(0.7), borderRadius: BorderRadius.circular(5), border: Border.all(color: kGreen, width: 1)),
-                                child: const Text('HD', style: TextStyle(color: kGreen, fontSize: 9.5, fontWeight: FontWeight.bold)),
-                              ),
-                            ),
-                          ],
-                        ),
-                      ),
-                    ),
-                  ),
-                  const SizedBox(height: 16),
-
-                  // 🐍 RED SNAKE PLAY BUTTON
-                  if (_isReadyToPlay)
-                    _buildRedSnakePlayButton()
-                  else
-                    Container(
-                      width: double.infinity,
-                      height: 64,
-                      decoration: BoxDecoration(color: Colors.grey[850], borderRadius: BorderRadius.circular(32)),
-                      child: Center(
-                        child: Text(
-                          'PLEASE WAIT $_countdown SEC...',
-                          style: const TextStyle(color: Colors.white54, fontSize: 14, fontWeight: FontWeight.w900, letterSpacing: 2),
-                        ),
-                      ),
-                    ),
-
-                  const SizedBox(height: 16),
-                  Container(
-                    padding: const EdgeInsets.all(14),
-                    decoration: BoxDecoration(
-                      color: const Color(0xFF031A0B),
-                      borderRadius: BorderRadius.circular(16),
-                      border: Border.all(color: kGreen.withOpacity(0.35)),
-                    ),
-                    child: Column(
-                      children: [
-                        Row(
-                          children: [
-                            Container(
-                              padding: const EdgeInsets.all(10),
-                              decoration: BoxDecoration(shape: BoxShape.circle, color: Colors.black, border: Border.all(color: kGreen.withOpacity(0.5))),
-                              child: const Icon(Icons.video_collection_outlined, color: kGreen, size: 20),
-                            ),
-                            const SizedBox(width: 14),
-                            Expanded(
-                              child: Column(
-                                crossAxisAlignment: CrossAxisAlignment.start,
-                                children: [
-                                  Text('FILE NAME', style: TextStyle(color: Colors.white.withOpacity(0.5), fontSize: 9.5, letterSpacing: 1)),
-                                  const SizedBox(height: 2),
-                                  Text(_videoTitle, style: const TextStyle(color: Colors.white, fontSize: 13.5, fontWeight: FontWeight.bold), maxLines: 1, overflow: TextOverflow.ellipsis),
-                                ],
-                              ),
-                            ),
-                          ],
-                        ),
-                        Padding(
-                          padding: const EdgeInsets.symmetric(vertical: 8),
-                          child: Divider(color: kGreen.withOpacity(0.15)),
-                        ),
-                        Row(
-                          children: [
-                            Container(
-                              padding: const EdgeInsets.all(10),
-                              decoration: BoxDecoration(shape: BoxShape.circle, color: Colors.black, border: Border.all(color: kGreen.withOpacity(0.5))),
-                              child: const Icon(Icons.person_outline, color: kGreen, size: 20),
-                            ),
-                            const SizedBox(width: 14),
-                            Expanded(
-                              child: Column(
-                                crossAxisAlignment: CrossAxisAlignment.start,
-                                children: [
-                                  Text('UPLOADER', style: TextStyle(color: Colors.white.withOpacity(0.5), fontSize: 9.5, letterSpacing: 1)),
-                                  const SizedBox(height: 2),
-                                  Text(_uploaderName, style: const TextStyle(color: kGreen, fontSize: 13.5, fontWeight: FontWeight.bold)),
-                                ],
-                              ),
-                            ),
-                          ],
-                        ),
-                      ],
-                    ),
-                  ),
-                  const SizedBox(height: 16),
-                  SizedBox(
-                    width: double.infinity,
-                    height: 52,
-                    child: OutlinedButton(
-                      onPressed: _shareStreamDirect,
-                      style: OutlinedButton.styleFrom(side: const BorderSide(color: kGreen, width: 1.5), shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(26))),
-                      child: Row(
-                        mainAxisAlignment: MainAxisAlignment.center,
-                        children: const [
-                          Icon(Icons.share, color: kGreen, size: 20),
-                          SizedBox(width: 10),
-                          Text('SHARE VIDEO', style: TextStyle(color: kGreen, fontSize: 12, fontWeight: FontWeight.bold, letterSpacing: 1.5)),
-                        ],
-                      ),
-                    ),
-                  ),
-                  const SizedBox(height: 20),
-                ],
-              ),
-            ),
-          ),
-        ],
       ),
     );
   }
@@ -7547,7 +7545,6 @@ class _NativeVideoPlayerScreenState extends State<NativeVideoPlayerScreen> {
         'uploader': widget.uploader,
         'id': widget.videoId,
         'thumbnail': existingThumb,
-        'videoUrl': widget.videoUrl, // 🔥 SAVE DIRECT VIDEO URL
       });
       await prefs.setString('saved_videos_v1', jsonEncode(savedList));
       prefs.setBool('saved_${widget.videoId}', true);
