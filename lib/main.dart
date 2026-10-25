@@ -4587,7 +4587,7 @@ class _MoreDrawerState extends State<MoreDrawer>
                       icon: Icons.account_balance,
                       color: kGreen,
                       title: 'Withdraw Earnings',
-                      subtitle: 'Minimum \$5 · Bank / UPI',
+                      subtitle: 'Minimum $5 · Bank / UPI',
                       onTap: () {
                         Haptic.medium();
                         Navigator.pop(context);
