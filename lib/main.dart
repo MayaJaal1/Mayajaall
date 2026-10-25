@@ -1,3 +1,6 @@
+// ═══════════════════════════════════════════════════════
+// PART 1 OF 5: IMPORTS, CONFIG, SECURITY, CYBER RANK, AD TRACKER, REFERRAL & ACCOUNT
+// ═══════════════════════════════════════════════════════
 import 'dart:async';
 import 'dart:convert';
 import 'dart:io';
@@ -30,14 +33,20 @@ const String oneSignalAppId = '06b99c2b-b3b4-413b-b6cc-480a624f4e25';
 const String kBackendBaseUrl = 'https://www.mayajaal.online';
 const int kAppCurrentVersionCode = 2;
 
+// 🔐 Security: Gmail-only allow-list
 const List<String> kAllowedEmailDomains = [
   '@gmail.com',
   '@googlemail.com',
 ];
 
+// 🔐 Security: minimum age of Firebase account before login allowed (seconds)
 const int kMinAccountAgeSeconds = 60;
+
+// 🔐 Security: max login attempts per 10 minutes per device
 const int kMaxLoginAttempts = 5;
 const int kLoginWindowMinutes = 10;
+
+// 🔐 Security: HMAC secret for request signing (server must share same)
 const String _kHmacSecret = 'MJ_HMAC_v1_a7f3b92e_d4c8_11ef_9b8a_00ff_secret_2026';
 
 const Color kGreen = Color(0xFF00FF66);
@@ -113,29 +122,44 @@ class Haptic {
 }
 
 // ═══════════════════════════════════════════════════════
-// 🛡️ SECURITY GUARD
+// 🛡️ SECURITY GUARD — Real Gmail + Anti-Hack Protection
 // ═══════════════════════════════════════════════════════
 class SecurityGuard {
+  // ─────────────────────────────────────────────
+  // 1. GMAIL DOMAIN VALIDATION
+  // ─────────────────────────────────────────────
   static bool isGmailOnly(String? email) {
     if (email == null || email.isEmpty) return false;
     final lower = email.trim().toLowerCase();
     return kAllowedEmailDomains.any((d) => lower.endsWith(d));
   }
 
+  // ─────────────────────────────────────────────
+  // 2. AUTH PROVIDER LOCK (must be Google)
+  // ─────────────────────────────────────────────
   static bool isGoogleProvider(User user) {
     return user.providerData.any((p) => p.providerId == 'google.com');
   }
 
+  // ─────────────────────────────────────────────
+  // 3. EMAIL VERIFIED CHECK
+  // ─────────────────────────────────────────────
   static bool isEmailVerified(User user) {
     return user.emailVerified == true;
   }
 
+  // ─────────────────────────────────────────────
+  // 4. ACCOUNT AGE GATE (bot signup prevention)
+  // ─────────────────────────────────────────────
   static bool isAccountOldEnough(User user, {int seconds = kMinAccountAgeSeconds}) {
     final created = user.metadata.creationTime;
     if (created == null) return false;
     return DateTime.now().difference(created).inSeconds >= seconds;
   }
 
+  // ─────────────────────────────────────────────
+  // 5. FULL USER VALIDATION — call after Google sign-in
+  // ─────────────────────────────────────────────
   static Future<String?> validateUser(User user) async {
     if (!isGoogleProvider(user)) {
       return 'Only Google sign-in is allowed.';
@@ -160,6 +184,9 @@ class SecurityGuard {
     return null;
   }
 
+  // ─────────────────────────────────────────────
+  // 6. DEVICE BINDING (RTDB) — 1 device = 1 account
+  // ─────────────────────────────────────────────
   static Future<Map<String, dynamic>> validateAndBindDevice(
     String uid,
     String email,
@@ -199,6 +226,9 @@ class SecurityGuard {
     }
   }
 
+  // ─────────────────────────────────────────────
+  // 7. ROOT / EMULATOR DETECTION
+  // ─────────────────────────────────────────────
   static Future<Map<String, dynamic>> detectRootOrEmulator() async {
     try {
       final info = DeviceInfoPlugin();
@@ -259,10 +289,16 @@ class SecurityGuard {
     return {'emulator': false, 'rooted': false, 'isPhysical': true};
   }
 
+  // ─────────────────────────────────────────────
+  // 8. PACKAGE / SIGNATURE INTEGRITY
+  // ─────────────────────────────────────────────
   static Future<bool> isPackageIntact() async {
     return true;
   }
 
+  // ─────────────────────────────────────────────
+  // 9. RATE LIMIT (login attempts)
+  // ─────────────────────────────────────────────
   static Future<bool> checkLoginRateLimit() async {
     try {
       final prefs = await SharedPreferences.getInstance();
@@ -304,6 +340,9 @@ class SecurityGuard {
     } catch (_) {}
   }
 
+  // ─────────────────────────────────────────────
+  // 10. HMAC REQUEST SIGNING
+  // ─────────────────────────────────────────────
   static String signRequest(String method, String path, String body) {
     final payload = '$method\n$path\n$body';
     final hmac = crypto.Hmac(crypto.sha256, utf8.encode(_kHmacSecret));
@@ -329,6 +368,9 @@ class SecurityGuard {
     };
   }
 
+  // ─────────────────────────────────────────────
+  // 11. SESSION INTEGRITY
+  // ─────────────────────────────────────────────
   static Future<bool> validateSession() async {
     final user = FirebaseAuth.instance.currentUser;
     if (user == null) return false;
@@ -347,6 +389,9 @@ class SecurityGuard {
     }
   }
 
+  // ─────────────────────────────────────────────
+  // 12. FULL SECURITY GATE
+  // ─────────────────────────────────────────────
   static Future<String?> fullGate(User user) async {
     final userErr = await validateUser(user);
     if (userErr != null) return userErr;
@@ -375,7 +420,99 @@ class SecurityGuard {
 }
 
 // ═══════════════════════════════════════════════════════
-// 👥 REFERRAL ENGINE (Real Login Required Verification)
+// CYBER RANK SYSTEM
+// ═══════════════════════════════════════════════════════
+class CyberRank {
+  static const List<Map<String, dynamic>> ranks = [
+    {'name': 'Neon Rookie', 'emoji': '🥉', 'color': kSilver, 'min': 0},
+    {'name': 'Cyber Trader', 'emoji': '🥈', 'color': kNeonCyan, 'min': 1000},
+    {'name': 'Matrix Master', 'emoji': '🥇', 'color': kGreen, 'min': 10000},
+    {'name': 'Quantum Elite', 'emoji': '💎', 'color': kNeonPurple, 'min': 100000},
+    {'name': 'MayaJaal Legend', 'emoji': '👑', 'color': kGold, 'min': 1000000},
+  ];
+
+  static Map<String, dynamic> get(int views) {
+    Map<String, dynamic> current = ranks[0];
+    for (final r in ranks) {
+      if (views >= (r['min'] as int)) current = r;
+    }
+    return current;
+  }
+
+  static Map<String, dynamic>? next(int views) {
+    for (final r in ranks) {
+      if (views < (r['min'] as int)) return r;
+    }
+    return null;
+  }
+
+  static int getIndex(int views) {
+    int idx = 0;
+    for (int i = 0; i < ranks.length; i++) {
+      if (views >= (ranks[i]['min'] as int)) idx = i;
+    }
+    return idx;
+  }
+}
+
+// ═══════════════════════════════════════════════════════
+// AD TRACKER
+// ═══════════════════════════════════════════════════════
+class AdTracker {
+  static const String _kCountKey = 'ads_watched_count';
+  static const String _kLastTimeKey = 'ads_last_reset_time';
+
+  static Future<int> getWatchedCount() async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      return prefs.getInt(_kCountKey) ?? 0;
+    } catch (_) {
+      return 0;
+    }
+  }
+
+  static Future<void> increment() async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      final current = prefs.getInt(_kCountKey) ?? 0;
+      final newCount = current + 1;
+      if (newCount >= 7) {
+        await prefs.setInt(_kCountKey, 0);
+        await prefs.setInt(_kLastTimeKey, DateTime.now().millisecondsSinceEpoch);
+      } else {
+        await prefs.setInt(_kCountKey, newCount);
+      }
+    } catch (_) {}
+  }
+
+  static Future<bool> isAdFreeWindow() async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      final lastTime = prefs.getInt(_kLastTimeKey) ?? 0;
+      if (lastTime == 0) return false;
+      final diff = DateTime.now().millisecondsSinceEpoch - lastTime;
+      return diff < 24 * 60 * 60 * 1000;
+    } catch (_) {
+      return false;
+    }
+  }
+
+  static Future<int> hoursRemaining() async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      final lastTime = prefs.getInt(_kLastTimeKey) ?? 0;
+      if (lastTime == 0) return 0;
+      final diff = DateTime.now().millisecondsSinceEpoch - lastTime;
+      final remaining = 24 * 60 * 60 * 1000 - diff;
+      return remaining > 0 ? (remaining / (60 * 60 * 1000)).ceil() : 0;
+    } catch (_) {
+      return 0;
+    }
+  }
+}
+
+// ═══════════════════════════════════════════════════════
+// 👥 REFERRAL ENGINE (Counts ONLY After Google Sign-In)
 // ═══════════════════════════════════════════════════════
 class ReferralService {
   static DatabaseReference get _rtdb => FirebaseDatabase.instance.ref();
@@ -426,7 +563,7 @@ class ReferralService {
 }
 
 // ═══════════════════════════════════════════════════════
-// MAYAJAAL FIREBASE ACCOUNT SERVICE
+// MAYAJAAL FIREBASE ACCOUNT SERVICE (SECURED)
 // ═══════════════════════════════════════════════════════
 class MayaJaalAccount {
   static String? cachedUid;
@@ -460,7 +597,10 @@ class MayaJaalAccount {
 
   static Future<void> syncUserToRTDB(User user) async {
     try {
-      if (!SecurityGuard.isGmailOnly(user.email)) return;
+      if (!SecurityGuard.isGmailOnly(user.email)) {
+        debugPrint('🚫 RTDB sync blocked: non-gmail');
+        return;
+      }
       final ref = _rtdb.child('users/${user.uid}');
       final snap = await ref.once();
       final data = snap.snapshot.value as Map?;
@@ -499,6 +639,7 @@ class MayaJaalAccount {
       }
 
       await ref.update(updates);
+      debugPrint('✅ User synced to RTDB: ${user.uid}');
     } catch (e) {
       debugPrint('RTDB sync error: $e');
     }
@@ -679,9 +820,7 @@ class MayaJaalAccount {
 
   static double _r2(num n) => (n * 100).round() / 100;
 }
-// ═══════════════════════════════════════════════════════
-// PART 2 OF 5: FIREBASE SERVICE, HELPERS, MAIN & CORE ANIMATIONS
-// ═══════════════════════════════════════════════════════
+
 
 // ═══════════════════════════════════════════════════════
 // FIREBASE SERVICE
