@@ -19,7 +19,6 @@ import 'package:device_info_plus/device_info_plus.dart';
 import 'package:permission_handler/permission_handler.dart';
 import 'package:photo_manager/photo_manager.dart';
 import 'package:photo_manager_image_provider/photo_manager_image_provider.dart';
-// 🔐 NEW: crypto for HMAC signing + hash checks
 import 'dart:convert' show base64, utf8;
 import 'package:crypto/crypto.dart' as crypto;
 
@@ -31,21 +30,14 @@ const String oneSignalAppId = '06b99c2b-b3b4-413b-b6cc-480a624f4e25';
 const String kBackendBaseUrl = 'https://www.mayajaal.online';
 const int kAppCurrentVersionCode = 2;
 
-// 🔐 Security: Gmail-only allow-list
 const List<String> kAllowedEmailDomains = [
   '@gmail.com',
   '@googlemail.com',
 ];
 
-// 🔐 Security: minimum age of Firebase account before login allowed (seconds)
 const int kMinAccountAgeSeconds = 60;
-
-// 🔐 Security: max login attempts per 10 minutes per device
 const int kMaxLoginAttempts = 5;
 const int kLoginWindowMinutes = 10;
-
-// 🔐 Security: HMAC secret for request signing (server must share same)
-// NOTE: ise production me secure storage (keystore/obfuscation) me rakho
 const String _kHmacSecret = 'MJ_HMAC_v1_a7f3b92e_d4c8_11ef_9b8a_00ff_secret_2026';
 
 const Color kGreen = Color(0xFF00FF66);
@@ -62,6 +54,69 @@ const Color kRed = Color(0xFFFF3B3B);
 final ValueNotifier<ThemeMode> themeNotifier = ValueNotifier(ThemeMode.dark);
 final ValueNotifier<String> languageNotifier = ValueNotifier('English');
 final GlobalKey<NavigatorState> navigatorKey = GlobalKey<NavigatorState>();
+
+// ═══════════════════════════════════════════════════════
+// HELPER: AUTO THUMBNAIL GENERATOR
+// ═══════════════════════════════════════════════════════
+Widget buildAutoThumbnail(String title, {bool isSmall = false}) {
+  return Container(
+    decoration: BoxDecoration(
+      gradient: LinearGradient(
+        colors: [Colors.black, kGreen.withOpacity(0.3), Colors.black],
+        begin: Alignment.topLeft,
+        end: Alignment.bottomRight,
+      ),
+      border: Border.all(color: kGreen.withOpacity(0.3)),
+    ),
+    child: Stack(
+      alignment: Alignment.center,
+      children: [
+        Positioned(
+          top: 4,
+          left: 4,
+          right: 4,
+          child: Text(
+            'MAYAJAAL',
+            textAlign: TextAlign.center,
+            style: TextStyle(
+              color: Colors.white.withOpacity(0.3),
+              fontSize: isSmall ? 6 : 10,
+              fontWeight: FontWeight.w900,
+              letterSpacing: 1.5,
+            ),
+          ),
+        ),
+        Container(
+          width: isSmall ? 24 : 48,
+          height: isSmall ? 24 : 48,
+          decoration: BoxDecoration(
+            shape: BoxShape.circle,
+            color: Colors.black.withOpacity(0.7),
+            border: Border.all(color: kGreen, width: 1.5),
+            boxShadow: [BoxShadow(color: kGreen.withOpacity(0.4), blurRadius: 10)],
+          ),
+          child: Icon(Icons.play_arrow_rounded, color: kGreen, size: isSmall ? 16 : 28),
+        ),
+        Positioned(
+          left: 6,
+          bottom: 6,
+          right: 6,
+          child: Text(
+            title,
+            maxLines: 1,
+            overflow: TextOverflow.ellipsis,
+            style: TextStyle(
+              color: Colors.white.withOpacity(0.9),
+              fontSize: isSmall ? 8 : 11,
+              fontWeight: FontWeight.bold,
+              shadows: [Shadow(color: Colors.black, blurRadius: 4)],
+            ),
+          ),
+        ),
+      ],
+    ),
+  );
+}
 
 // ═══════════════════════════════════════════════════════
 // TRANSLATIONS
@@ -121,34 +176,29 @@ class Haptic {
 }
 
 // ═══════════════════════════════════════════════════════
-// 🛡️ SECURITY GUARD — Real Gmail + Anti-Hack Protection
+// SECURITY GUARD
 // ═══════════════════════════════════════════════════════
 class SecurityGuard {
-  // 1. GMAIL DOMAIN VALIDATION
   static bool isGmailOnly(String? email) {
     if (email == null || email.isEmpty) return false;
     final lower = email.trim().toLowerCase();
     return kAllowedEmailDomains.any((d) => lower.endsWith(d));
   }
 
-  // 2. AUTH PROVIDER LOCK (must be Google)
   static bool isGoogleProvider(User user) {
     return user.providerData.any((p) => p.providerId == 'google.com');
   }
 
-  // 3. EMAIL VERIFIED CHECK
   static bool isEmailVerified(User user) {
     return user.emailVerified == true;
   }
 
-  // 4. ACCOUNT AGE GATE (bot signup prevention)
   static bool isAccountOldEnough(User user, {int seconds = kMinAccountAgeSeconds}) {
     final created = user.metadata.creationTime;
     if (created == null) return false;
     return DateTime.now().difference(created).inSeconds >= seconds;
   }
 
-  // 5. FULL USER VALIDATION — call after Google sign-in
   static Future<String?> validateUser(User user) async {
     if (!isGoogleProvider(user)) {
       return 'Only Google sign-in is allowed.';
@@ -173,7 +223,6 @@ class SecurityGuard {
     return null;
   }
 
-  // 6. DEVICE BINDING (RTDB) — 1 device = 1 account
   static Future<Map<String, dynamic>> validateAndBindDevice(
     String uid,
     String email,
@@ -213,7 +262,6 @@ class SecurityGuard {
     }
   }
 
-  // 7. ROOT / EMULATOR DETECTION
   static Future<Map<String, dynamic>> detectRootOrEmulator() async {
     try {
       final info = DeviceInfoPlugin();
@@ -274,7 +322,6 @@ class SecurityGuard {
     return {'emulator': false, 'rooted': false, 'isPhysical': true};
   }
 
-  // 8. PACKAGE / SIGNATURE INTEGRITY
   static Future<bool> isPackageIntact() async {
     try {
       if (Platform.isAndroid) {
@@ -286,7 +333,6 @@ class SecurityGuard {
     }
   }
 
-  // 9. RATE LIMIT (login attempts)
   static Future<bool> checkLoginRateLimit() async {
     try {
       final prefs = await SharedPreferences.getInstance();
@@ -328,7 +374,6 @@ class SecurityGuard {
     } catch (_) {}
   }
 
-  // 10. HMAC REQUEST SIGNING (for backend verification)
   static String signRequest(String method, String path, String body) {
     final payload = '$method\n$path\n$body';
     final hmac = crypto.Hmac(crypto.sha256, utf8.encode(_kHmacSecret));
@@ -354,7 +399,6 @@ class SecurityGuard {
     };
   }
 
-  // 11. SESSION INTEGRITY
   static Future<bool> validateSession() async {
     final user = FirebaseAuth.instance.currentUser;
     if (user == null) return false;
@@ -373,7 +417,6 @@ class SecurityGuard {
     }
   }
 
-  // 12. FULL SECURITY GATE
   static Future<String?> fullGate(User user) async {
     final userErr = await validateUser(user);
     if (userErr != null) return userErr;
@@ -391,8 +434,7 @@ class SecurityGuard {
 
     final bind = await validateAndBindDevice(user.uid, user.email ?? '');
     if (bind['ok'] != true) {
-      return bind['reason']?.toString() ??
-          'Device binding failed. Contact support.';
+      return bind['reason']?.toString() ?? 'Device binding failed. Contact support.';
     }
 
     final sessOk = await validateSession();
@@ -1119,7 +1161,7 @@ class FirebaseService {
 }
 
 // ═══════════════════════════════════════════════════════
-// DEVICE ID HELPER (with hash for anti-tamper)
+// DEVICE ID HELPER
 // ═══════════════════════════════════════════════════════
 class DeviceIdHelper {
   static String? _cached;
@@ -1211,7 +1253,6 @@ Future<void> main() async {
       ),
     );
     debugPrint("✅ Firebase Initialized");
-
     await MayaJaalAccount.init();
   } catch (e) {
     debugPrint("Firebase Init Error: $e");
@@ -2162,7 +2203,7 @@ class _LoginScreenState extends State<LoginScreen>
                     ),
                   ),
                   const Spacer(),
-                  // 🔐 Premium Gmail-only notice
+                  // 🔐 Premium Gmail-only notice (Original Text)
                   Container(
                     padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
                     margin: const EdgeInsets.only(bottom: 16),
@@ -2184,7 +2225,7 @@ class _LoginScreenState extends State<LoginScreen>
                         const Icon(Icons.workspace_premium, color: kGreen, size: 22),
                         const SizedBox(width: 10),
                         const Text(
-                          'PREMIUM VERIFIED @GMAIL ONLY',
+                          'Only verified @gmail.com accounts allowed.',
                           style: TextStyle(
                             color: kGreen,
                             fontSize: 13,
@@ -3574,10 +3615,10 @@ class _HomeScreenState extends State<HomeScreen>
 }
 
 // ═══════════════════════════════════════════════════════
-// ⏭️ END OF PART 1 — BAAKI SAB PART 2 MEIN HAI
+// ⏭️ END OF PART 1 — PART 2 CONTINUES
 // ═══════════════════════════════════════════════════════
 // ═══════════════════════════════════════════════════════
-// MORE DRAWER (SECURED - With Policies & Referral)
+// MORE DRAWER (SECURED)
 // ═══════════════════════════════════════════════════════
 class MoreDrawer extends StatefulWidget {
   const MoreDrawer({super.key});
@@ -3623,7 +3664,7 @@ class _MoreDrawerState extends State<MoreDrawer>
     }
   }
 
-  // 🔐 IN-APP BROWSER LOGIC
+  // 🔗 LINK LAUNCHER (External browser fixed)
   Future<void> _launchURL(String url, {bool inApp = false}) async {
     Haptic.light();
     try {
@@ -3897,7 +3938,6 @@ class _MoreDrawerState extends State<MoreDrawer>
     );
   }
 
-  // 📊 REFERRAL PROGRAM DIALOG
   void _showReferralDialog(BuildContext context) {
     final myUid = MayaJaalAccount.cachedUid ?? '';
     final refLink = 'https://www.mayajaal.online?ref=$myUid';
@@ -4458,7 +4498,6 @@ class _MoreDrawerState extends State<MoreDrawer>
                       ),
                     ),
                   ),
-                  // 🌐 NEW POLICIES START
                   _staggered(
                     index: 15,
                     child: _snakeItem(
@@ -4469,7 +4508,7 @@ class _MoreDrawerState extends State<MoreDrawer>
                       subtitle: 'Open www.mayajaal.online/dashboard',
                       onTap: () {
                         Navigator.pop(context);
-                        _launchURL('https://www.mayajaal.online/dashboard', inApp: true);
+                        _launchURL('https://www.mayajaal.online/dashboard', inApp: false);
                       },
                     ),
                   ),
@@ -4483,7 +4522,7 @@ class _MoreDrawerState extends State<MoreDrawer>
                       subtitle: 'Read our privacy policy',
                       onTap: () {
                         Navigator.pop(context);
-                        _launchURL('https://www.mayajaal.online/privacy.html', inApp: true);
+                        _launchURL('https://www.mayajaal.online/privacy.html', inApp: false);
                       },
                     ),
                   ),
@@ -4497,7 +4536,7 @@ class _MoreDrawerState extends State<MoreDrawer>
                       subtitle: 'Read our terms of service',
                       onTap: () {
                         Navigator.pop(context);
-                        _launchURL('https://www.mayajaal.online/terms.html', inApp: true);
+                        _launchURL('https://www.mayajaal.online/terms.html', inApp: false);
                       },
                     ),
                   ),
@@ -4511,7 +4550,7 @@ class _MoreDrawerState extends State<MoreDrawer>
                       subtitle: 'Copyright infringement policy',
                       onTap: () {
                         Navigator.pop(context);
-                        _launchURL('https://www.mayajaal.online/dmca.html', inApp: true);
+                        _launchURL('https://www.mayajaal.online/dmca.html', inApp: false);
                       },
                     ),
                   ),
@@ -4525,7 +4564,7 @@ class _MoreDrawerState extends State<MoreDrawer>
                       subtitle: 'Creator partnership terms',
                       onTap: () {
                         Navigator.pop(context);
-                        _launchURL('https://www.mayajaal.online/partner.html', inApp: true);
+                        _launchURL('https://www.mayajaal.online/partner.html', inApp: false);
                       },
                     ),
                   ),
@@ -4539,7 +4578,7 @@ class _MoreDrawerState extends State<MoreDrawer>
                       subtitle: 'mayajaalsupport@gmail.com',
                       onTap: () {
                         Navigator.pop(context);
-                        _launchURL('https://www.mayajaal.online/support.html', inApp: true);
+                        _launchURL('https://www.mayajaal.online/support.html', inApp: false);
                       },
                     ),
                   ),
@@ -5346,7 +5385,7 @@ class _GalleryScreenState extends State<GalleryScreen> {
 }
 
 // ═══════════════════════════════════════════════════════
-// SAVED VIDEOS SCREEN (With Thumbnails)
+// SAVED VIDEOS SCREEN (With Auto-Thumbnail)
 // ═══════════════════════════════════════════════════════
 class SavedVideosScreen extends StatefulWidget {
   const SavedVideosScreen({super.key});
@@ -5403,6 +5442,7 @@ class _SavedVideosScreenState extends State<SavedVideosScreen> {
               itemBuilder: (c, i) {
                 final item = _saved[i];
                 final thumb = item['thumbnail']?.toString() ?? '';
+                final title = item['title']?.toString() ?? 'Video';
                 
                 return Container(
                   margin: const EdgeInsets.only(bottom: 12),
@@ -5412,7 +5452,6 @@ class _SavedVideosScreenState extends State<SavedVideosScreen> {
                     border: Border.all(color: kGreen.withOpacity(0.3)),
                   ),
                   child: ListTile(
-                    // 🖼️ THUMBNAIL ADDED HERE
                     leading: Container(
                       width: 60,
                       height: 60,
@@ -5427,13 +5466,13 @@ class _SavedVideosScreenState extends State<SavedVideosScreen> {
                             ? Image.network(
                                 thumb,
                                 fit: BoxFit.cover,
-                                errorBuilder: (c, e, s) => const Icon(Icons.play_circle_fill, color: kGreen, size: 30),
+                                errorBuilder: (c, e, s) => buildAutoThumbnail(title, isSmall: true),
                               )
-                            : const Icon(Icons.play_circle_fill, color: kGreen, size: 30),
+                            : buildAutoThumbnail(title, isSmall: true),
                       ),
                     ),
                     title: Text(
-                      item['title'] ?? 'Video',
+                      title,
                       style: const TextStyle(fontSize: 13, color: kGreen, fontWeight: FontWeight.bold),
                       maxLines: 1,
                       overflow: TextOverflow.ellipsis,
@@ -5464,7 +5503,7 @@ class _SavedVideosScreenState extends State<SavedVideosScreen> {
 }
 
 // ═══════════════════════════════════════════════════════
-// HISTORY SCREEN (With Thumbnails)
+// HISTORY SCREEN (With Auto-Thumbnail)
 // ═══════════════════════════════════════════════════════
 class HistoryScreen extends StatefulWidget {
   const HistoryScreen({super.key});
@@ -5567,6 +5606,7 @@ class _HistoryScreenState extends State<HistoryScreen> {
               itemBuilder: (c, i) {
                 final item = _history[i];
                 final thumb = item['thumbnail']?.toString() ?? '';
+                final title = item['title']?.toString() ?? 'Media Node';
                 
                 return Container(
                   margin: const EdgeInsets.only(bottom: 12),
@@ -5576,7 +5616,6 @@ class _HistoryScreenState extends State<HistoryScreen> {
                     border: Border.all(color: kGreen.withOpacity(0.3)),
                   ),
                   child: ListTile(
-                    // 🖼️ THUMBNAIL ADDED HERE
                     leading: Container(
                       width: 60,
                       height: 60,
@@ -5591,13 +5630,13 @@ class _HistoryScreenState extends State<HistoryScreen> {
                             ? Image.network(
                                 thumb,
                                 fit: BoxFit.cover,
-                                errorBuilder: (c, e, s) => const Icon(Icons.play_circle_outline, color: kGreen, size: 28),
+                                errorBuilder: (c, e, s) => buildAutoThumbnail(title, isSmall: true),
                               )
-                            : const Icon(Icons.play_circle_outline, color: kGreen, size: 28),
+                            : buildAutoThumbnail(title, isSmall: true),
                       ),
                     ),
                     title: Text(
-                      item['title'] ?? 'Media Node',
+                      title,
                       style: const TextStyle(fontSize: 13, color: kGreen, fontWeight: FontWeight.bold),
                       maxLines: 1,
                       overflow: TextOverflow.ellipsis,
@@ -5832,7 +5871,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
 }
 
 // ═══════════════════════════════════════════════════════
-// STREAM PREVIEW SCREEN (Strict 10-Sec + Home Button + Thumbnail)
+// STREAM PREVIEW SCREEN (Home Button at Top)
 // ═══════════════════════════════════════════════════════
 class StreamPreviewScreen extends StatefulWidget {
   final String targetUrl;
@@ -6037,7 +6076,7 @@ class _StreamPreviewScreenState extends State<StreamPreviewScreen>
           uploader: _uploaderName,
           sourcePageUrl: widget.targetUrl,
           videoId: _rawId,
-          thumbnailUrl: _thumbnailUrl, // ✅ PASSING THUMBNAIL
+          thumbnailUrl: _thumbnailUrl,
         ),
       ),
     ).then((_) {
@@ -6047,7 +6086,6 @@ class _StreamPreviewScreenState extends State<StreamPreviewScreen>
     });
   }
 
-  // 🏠 HOME BUTTON FIXED
   void _goToHome() {
     Haptic.heavy();
     Navigator.of(context).pushAndRemoveUntil(
@@ -6204,13 +6242,13 @@ class _StreamPreviewScreenState extends State<StreamPreviewScreen>
                                 child: Image.network(
                                   _thumbnailUrl,
                                   fit: BoxFit.contain,
-                                  errorBuilder: (c, e, s) => _buildPlaceholder(),
+                                  errorBuilder: (c, e, s) => buildAutoThumbnail(_videoTitle),
                                 ),
                               )
                             else
-                              _buildPlaceholder(),
+                              buildAutoThumbnail(_videoTitle),
 
-                            Container(color: Colors.black.withOpacity(0.4)),
+                            Container(color: Colors.black.withOpacity(0.3)),
 
                             if (!_isReadyToPlay) _buildCountdownCircle(),
 
@@ -6229,6 +6267,24 @@ class _StreamPreviewScreenState extends State<StreamPreviewScreen>
                     ),
                   ),
                   const SizedBox(height: 16),
+                  
+                  // 🏠 HOME BUTTON AT TOP (As Requested)
+                  SizedBox(
+                    width: double.infinity,
+                    height: 50,
+                    child: OutlinedButton.icon(
+                      onPressed: _goToHome,
+                      icon: const Icon(Icons.home, color: Colors.white54, size: 20),
+                      label: const Text('GO TO HOME PAGE', style: TextStyle(color: Colors.white54, fontSize: 12, fontWeight: FontWeight.bold, letterSpacing: 1.5)),
+                      style: OutlinedButton.styleFrom(
+                        side: BorderSide(color: Colors.white24, width: 1.5),
+                        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(25)),
+                      ),
+                    ),
+                  ),
+                  const SizedBox(height: 12),
+
+                  // 🐍 RED SNAKE PLAY BUTTON (Below Home)
                   if (_isReadyToPlay)
                     _buildRedSnakePlayButton()
                   else
@@ -6243,21 +6299,7 @@ class _StreamPreviewScreenState extends State<StreamPreviewScreen>
                         ),
                       ),
                     ),
-                  const SizedBox(height: 12),
-                  // 🏠 HOME BUTTON UPDATE
-                  SizedBox(
-                    width: double.infinity,
-                    height: 50,
-                    child: OutlinedButton.icon(
-                      onPressed: _goToHome,
-                      icon: const Icon(Icons.home, color: Colors.white54, size: 20),
-                      label: const Text('GO TO HOME PAGE', style: TextStyle(color: Colors.white54, fontSize: 12, fontWeight: FontWeight.bold, letterSpacing: 1.5)),
-                      style: OutlinedButton.styleFrom(
-                        side: BorderSide(color: Colors.white24, width: 1.5),
-                        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(25)),
-                      ),
-                    ),
-                  ),
+
                   const SizedBox(height: 16),
                   Container(
                     padding: const EdgeInsets.all(14),
@@ -6341,25 +6383,10 @@ class _StreamPreviewScreenState extends State<StreamPreviewScreen>
       ),
     );
   }
-
-  Widget _buildPlaceholder() {
-    return Container(
-      color: Colors.black,
-      child: Center(
-        child: Image.asset(
-          'assets/icon/logo.png',
-          width: 75,
-          height: 75,
-          fit: BoxFit.contain,
-          errorBuilder: (c, e, s) => const Icon(Icons.movie_filter, color: kGreen, size: 55),
-        ),
-      ),
-    );
-  }
 }
 
 // ═══════════════════════════════════════════════════════
-// NATIVE VIDEO PLAYER
+// NATIVE VIDEO PLAYER (With Frame Capture for Auto Thumbnail)
 // ═══════════════════════════════════════════════════════
 class NativeVideoPlayerScreen extends StatefulWidget {
   final String videoUrl;
@@ -6367,7 +6394,7 @@ class NativeVideoPlayerScreen extends StatefulWidget {
   final String uploader;
   final String sourcePageUrl;
   final String videoId;
-  final String thumbnailUrl; // ✅ ADDED
+  final String thumbnailUrl; 
 
   const NativeVideoPlayerScreen({
     super.key,
@@ -6376,7 +6403,7 @@ class NativeVideoPlayerScreen extends StatefulWidget {
     required this.uploader,
     required this.sourcePageUrl,
     required this.videoId,
-    this.thumbnailUrl = '', // ✅ ADDED
+    this.thumbnailUrl = '', 
   });
 
   @override
@@ -6385,6 +6412,7 @@ class NativeVideoPlayerScreen extends StatefulWidget {
 
 class _NativeVideoPlayerScreenState extends State<NativeVideoPlayerScreen> {
   late VideoPlayerController _controller;
+  final GlobalKey _videoKey = GlobalKey(); // 🔐 For Capturing Frame
 
   bool _isInitialized = false;
   bool _hasError = false;
@@ -6438,6 +6466,37 @@ class _NativeVideoPlayerScreenState extends State<NativeVideoPlayerScreen> {
     _initVideo();
     _startStatsListeners();
     _fetchOwner().then((_) => _loadRelatedVideos());
+  }
+
+  // 🖼️ CAPTURE FRAME FOR THUMBNAIL
+  Future<void> _captureThumbnail() async {
+    if (widget.thumbnailUrl.isNotEmpty) return; // Already has thumbnail
+    try {
+      await Future.delayed(const Duration(seconds: 1)); // Wait for first frame
+      if (!mounted || !_isInitialized) return;
+      
+      RenderRepaintBoundary boundary = _videoKey.currentContext!.findRenderObject() as RenderRepaintBoundary;
+      ui.Image image = await boundary.toImage(pixelRatio: 0.5); // Low res for storage
+      ByteData? byteData = await image.toByteData(format: ui.ImageByteFormat.png);
+      if (byteData != null) {
+        final Uint8List bytes = byteData.buffer.asUint8List();
+        final prefs = await SharedPreferences.getInstance();
+        
+        // Update history with the actual thumbnail image
+        final localJson = prefs.getString('watch_history_v2');
+        if (localJson != null) {
+          List<Map<String, dynamic>> history = (jsonDecode(localJson) as List).cast<Map<String, dynamic>>();
+          for (var h in history) {
+            if (h['id'] == widget.videoId) {
+              h['thumbnail'] = base64Encode(bytes);
+            }
+          }
+          await prefs.setString('watch_history_v2', jsonEncode(history));
+        }
+      }
+    } catch (e) {
+      debugPrint('Thumbnail capture error: $e');
+    }
   }
 
   Future<void> _reportViewToBackend() async {
@@ -6606,6 +6665,9 @@ class _NativeVideoPlayerScreenState extends State<NativeVideoPlayerScreen> {
       setState(() => _isInitialized = true);
       _resetControlTimer();
       _startWatchTracking();
+      
+      // Auto Capture Thumbnail
+      _captureThumbnail();
     } catch (e) {
       setState(() => _hasError = true);
     }
@@ -6883,7 +6945,7 @@ class _NativeVideoPlayerScreenState extends State<NativeVideoPlayerScreen> {
         'title': widget.title,
         'uploader': widget.uploader,
         'id': widget.videoId,
-        'thumbnail': widget.thumbnailUrl, // ✅ ADDED THUMBNAIL
+        'thumbnail': widget.thumbnailUrl,
       });
       await prefs.setString('saved_videos_v1', jsonEncode(savedList));
       prefs.setBool('saved_${widget.videoId}', true);
@@ -6978,7 +7040,10 @@ class _NativeVideoPlayerScreenState extends State<NativeVideoPlayerScreen> {
     return Center(
       child: AspectRatio(
         aspectRatio: _controller.value.aspectRatio,
-        child: VideoPlayer(_controller),
+        child: RepaintBoundary(
+          key: _videoKey, // 🔐 Added for capture
+          child: VideoPlayer(_controller),
+        ),
       ),
     );
   }
@@ -7567,25 +7632,18 @@ class _NativeVideoPlayerScreenState extends State<NativeVideoPlayerScreen> {
                     end: Alignment.bottomRight,
                   ),
                 ),
-                // 🖼️ THUMBNAIL ADDED HERE
                 child: thumb.isNotEmpty
                     ? ClipRRect(
                         borderRadius: const BorderRadius.vertical(top: Radius.circular(11)),
                         child: Image.network(
                           thumb,
                           fit: BoxFit.cover,
-                          errorBuilder: (c, e, s) => const Center(
-                            child: Icon(Icons.play_arrow, color: kGreen, size: 22),
-                          ),
+                          errorBuilder: (c, e, s) => buildAutoThumbnail(title, isSmall: true),
                         ),
                       )
-                    : Center(
-                        child: Container(
-                          width: 40,
-                          height: 40,
-                          decoration: BoxDecoration(shape: BoxShape.circle, color: Colors.black.withOpacity(0.6), border: Border.all(color: kGreen, width: 1.5)),
-                          child: const Icon(Icons.play_arrow, color: kGreen, size: 22),
-                        ),
+                    : ClipRRect(
+                        borderRadius: const BorderRadius.vertical(top: Radius.circular(11)),
+                        child: buildAutoThumbnail(title, isSmall: true),
                       ),
               ),
               Padding(
@@ -8110,8 +8168,8 @@ class _UserProfileScreenState extends State<UserProfileScreen> {
                                   child: ClipRRect(
                                     borderRadius: BorderRadius.circular(7),
                                     child: thumb.isNotEmpty
-                                        ? Image.network(thumb, fit: BoxFit.cover, errorBuilder: (c, e, s) => const Icon(Icons.play_circle_fill, color: kGreen, size: 22))
-                                        : const Icon(Icons.play_circle_fill, color: kGreen, size: 22),
+                                        ? Image.network(thumb, fit: BoxFit.cover, errorBuilder: (c, e, s) => buildAutoThumbnail(name, isSmall: true))
+                                        : buildAutoThumbnail(name, isSmall: true),
                                   ),
                                 ),
                                 title: Text(name, style: const TextStyle(color: Colors.white, fontSize: 12.5, fontWeight: FontWeight.bold), maxLines: 1, overflow: TextOverflow.ellipsis),
