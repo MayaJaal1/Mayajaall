@@ -58,7 +58,7 @@ final ValueNotifier<String> languageNotifier = ValueNotifier('English');
 final GlobalKey<NavigatorState> navigatorKey = GlobalKey<NavigatorState>();
 
 // ═══════════════════════════════════════════════════════
-// HELPER: AUTO THUMBNAIL GENERATOR
+// HELPER: AUTO THUMBNAIL GENERATOR & 5-SEC LOOP VIDEO
 // ═══════════════════════════════════════════════════════
 Widget buildAutoThumbnail(String title, {bool isSmall = false}) {
   return Container(
@@ -120,88 +120,101 @@ Widget buildAutoThumbnail(String title, {bool isSmall = false}) {
   );
 }
 
-// 🔥 NEW: 5-second fast looping video thumbnail (as requested)
-class VideoLoopThumbnail extends StatefulWidget {
-  final String videoUrl;
-  final String title;
-  final bool isSmall;
-  const VideoLoopThumbnail({super.key, required this.videoUrl, required this.title, this.isSmall = false});
-  @override
-  State<VideoLoopThumbnail> createState() => _VideoLoopThumbnailState();
-}
-
-class _VideoLoopThumbnailState extends State<VideoLoopThumbnail> {
-  late VideoPlayerController _controller;
-  bool _isInit = false;
-
-  @override
-  void initState() {
-    super.initState();
-    if (widget.videoUrl.isEmpty || !widget.videoUrl.startsWith('http')) return;
-    _controller = VideoPlayerController.networkUrl(Uri.parse(widget.videoUrl));
-    _controller.initialize().then((_) {
-      if (!mounted) return;
-      setState(() => _isInit = true);
-      _controller.setVolume(0);
-      _controller.setPlaybackSpeed(2.0); // Fast play
-      _controller.play();
-      _controller.addListener(() {
-        if (_controller.value.position.inSeconds >= 5) {
-          _controller.seekTo(Duration.zero);
-        }
-      });
-    }).catchError((e) {
-      debugPrint('LoopThumb error: $e');
-    });
-  }
-
-  @override
-  void dispose() {
-    if (_isInit) _controller.dispose();
-    super.dispose();
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    if (!_isInit) return buildAutoThumbnail(widget.title, isSmall: widget.isSmall);
-    return SizedBox.expand(
-      child: FittedBox(
-        fit: BoxFit.cover,
-        child: SizedBox(
-          width: _controller.value.size.width,
-          height: _controller.value.size.height,
-          child: VideoPlayer(_controller),
-        ),
-      ),
-    );
-  }
-}
-
+// Widget to show Base64/Network Image OR 5-Sec Fast Loop Video
 Widget buildMediaThumbnail(String? thumb, String title, String videoUrl, {bool isSmall = false}) {
-  if (thumb != null && thumb.isNotEmpty) {
+  if (thumb != null && thumb.isNotEmpty && thumb != 'null') {
     if (thumb.startsWith('http')) {
       return Image.network(
         thumb,
         fit: BoxFit.cover,
-        errorBuilder: (c, e, s) => VideoLoopThumbnail(videoUrl: videoUrl, title: title, isSmall: isSmall),
+        errorBuilder: (c, e, s) => _buildVideoLoopOrFallback(videoUrl, title, isSmall: isSmall),
       );
     } else {
       try {
         return Image.memory(
           base64Decode(thumb),
           fit: BoxFit.cover,
-          errorBuilder: (c, e, s) => VideoLoopThumbnail(videoUrl: videoUrl, title: title, isSmall: isSmall),
+          gaplessPlayback: true,
+          errorBuilder: (c, e, s) => _buildVideoLoopOrFallback(videoUrl, title, isSmall: isSmall),
         );
       } catch (_) {
-        return VideoLoopThumbnail(videoUrl: videoUrl, title: title, isSmall: isSmall);
+        return _buildVideoLoopOrFallback(videoUrl, title, isSmall: isSmall);
       }
     }
   }
-  return VideoLoopThumbnail(videoUrl: videoUrl, title: title, isSmall: isSmall);
+  return _buildVideoLoopOrFallback(videoUrl, title, isSmall: isSmall);
+}
+
+Widget _buildVideoLoopOrFallback(String videoUrl, String title, {bool isSmall = false}) {
+  if (videoUrl.isNotEmpty && videoUrl != 'null' && videoUrl.startsWith('http')) {
+    return VideoLoopThumbnail(videoUrl: videoUrl, title: title, isSmall: isSmall);
+  }
+  return buildAutoThumbnail(title, isSmall: isSmall);
 }
 
 // ═══════════════════════════════════════════════════════
-// IN-APP LEGAL & POLICY DIALOG (Exact Text from User)
+// 5-SEC FAST LOOP VIDEO WIDGET
+// ═══════════════════════════════════════════════════════
+class VideoLoopThumbnail extends StatefulWidget {
+  final String videoUrl;
+  final String title;
+  final bool isSmall;
+  const VideoLoopThumbnail({super.key, required this.videoUrl, required this.title, this.isSmall = false});
+
+  @override
+  State<VideoLoopThumbnail> createState() => _VideoLoopThumbnailState();
+}
+
+class _VideoLoopThumbnailState extends State<VideoLoopThumbnail> {
+  late VideoPlayerController _controller;
+  bool _isReady = false;
+
+  @override
+  void initState() {
+    super.initState();
+    _controller = VideoPlayerController.networkUrl(Uri.parse(widget.videoUrl));
+    _controller.initialize().then((_) {
+      if (mounted) {
+        _controller.setLooping(true);
+        _controller.setVolume(0);
+        _controller.setPlaybackSpeed(3.0); // Fast play
+        _controller.play();
+        setState(() => _isReady = true);
+      }
+    }).catchError((_) {
+      if (mounted) setState(() => _isReady = false);
+    });
+  }
+
+  @override
+  void dispose() {
+    _controller.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    if (!_isReady) {
+      return buildAutoThumbnail(widget.title, isSmall: widget.isSmall);
+    }
+    return ClipRRect(
+      borderRadius: widget.isSmall ? BorderRadius.circular(7) : BorderRadius.circular(0),
+      child: SizedBox.expand(
+        child: FittedBox(
+          fit: BoxFit.cover,
+          child: SizedBox(
+            width: _controller.value.size.width,
+            height: _controller.value.size.height,
+            child: VideoPlayer(_controller),
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+// ═══════════════════════════════════════════════════════
+// IN-APP LEGAL & POLICY DIALOG
 // ═══════════════════════════════════════════════════════
 class LegalPolicyDialog {
   static const Color kGreen = Color(0xFF00FF66);
@@ -3133,844 +3146,10 @@ class FirstTimeAdsPopup {
 }
 
 // ═══════════════════════════════════════════════════════
-// ⏭️ END OF PART 1 — PART 2 CONTINUES
+// ⏭️ END OF PART 1 — PART 2 CONTINUES (MoreDrawer, Player, etc.)
 // ═══════════════════════════════════════════════════════
 // ═══════════════════════════════════════════════════════
-// HOME SCREEN
-// ═══════════════════════════════════════════════════════
-class HomeScreen extends StatefulWidget {
-  final VoidCallback? onMenuTap;
-  const HomeScreen({super.key, this.onMenuTap});
-  @override
-  State<HomeScreen> createState() => _HomeScreenState();
-}
-
-class _HomeScreenState extends State<HomeScreen>
-    with SingleTickerProviderStateMixin {
-  final TextEditingController _linkController = TextEditingController();
-  final FocusNode _linkFocus = FocusNode();
-  late AnimationController _pulseController;
-  late Animation<double> _pulseAnimation;
-
-  @override
-  void initState() {
-    super.initState();
-    _pulseController = AnimationController(
-      vsync: this,
-      duration: const Duration(milliseconds: 1600),
-    )..repeat(reverse: true);
-    _pulseAnimation = Tween<double>(begin: 0.95, end: 1.05)
-        .animate(CurvedAnimation(parent: _pulseController, curve: Curves.easeInOut));
-  }
-
-  @override
-  void dispose() {
-    _pulseController.dispose();
-    _linkController.dispose();
-    _linkFocus.dispose();
-    super.dispose();
-  }
-
-  Future<void> _pasteFromClipboard() async {
-    Haptic.medium();
-    try {
-      final data = await Clipboard.getData(Clipboard.kTextPlain);
-      final text = data?.text?.trim() ?? '';
-      if (text.isEmpty) {
-        if (!mounted) return;
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
-            backgroundColor: kCardBg,
-            content: Text(
-              '❌ Clipboard khaali hai',
-              style: TextStyle(color: Colors.orangeAccent),
-            ),
-            duration: Duration(seconds: 2),
-          ),
-        );
-        return;
-      }
-      _linkController.text = text;
-      _linkController.selection = TextSelection.fromPosition(
-        TextPosition(offset: text.length),
-      );
-      if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          backgroundColor: kCardBg,
-          content: Text(
-            '✅ Link pasted',
-            style: TextStyle(color: kGreen),
-          ),
-          duration: Duration(seconds: 1),
-        ),
-      );
-    } catch (e) {
-      debugPrint('Paste error: $e');
-    }
-  }
-
-  void _showNotificationsSheet(BuildContext context) {
-    final uid = MayaJaalAccount.cachedUid;
-    if (uid == null) return;
-
-    showModalBottomSheet(
-      context: context,
-      backgroundColor: const Color(0xFF111714),
-      isScrollControlled: true,
-      shape: const RoundedRectangleBorder(
-        borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
-      ),
-      builder: (ctx) {
-        return DraggableScrollableSheet(
-          initialChildSize: 0.6,
-          maxChildSize: 0.9,
-          minChildSize: 0.3,
-          expand: false,
-          builder: (ctx, scrollController) {
-            return Column(
-              children: [
-                Padding(
-                  padding: const EdgeInsets.all(16),
-                  child: Row(
-                    children: [
-                      const Icon(Icons.notifications_active, color: kGreen),
-                      const SizedBox(width: 8),
-                      const Text(
-                        'Notifications',
-                        style: TextStyle(
-                          color: kGreen,
-                          fontSize: 18,
-                          fontWeight: FontWeight.bold,
-                        ),
-                      ),
-                      const Spacer(),
-                      TextButton(
-                        onPressed: () => FirebaseService.markAllRead(uid),
-                        child: const Text(
-                          'Mark all read',
-                          style: TextStyle(color: kGreen, fontSize: 12),
-                        ),
-                      ),
-                    ],
-                  ),
-                ),
-                const Divider(color: Colors.white24, height: 1),
-                Expanded(
-                  child: StreamBuilder<List<Map<String, dynamic>>>(
-                    stream: FirebaseService.getNotifications(uid),
-                    builder: (context, snapshot) {
-                      if (snapshot.connectionState == ConnectionState.waiting) {
-                        return const Center(
-                          child: CircularProgressIndicator(color: kGreen),
-                        );
-                      }
-                      final list = snapshot.data ?? [];
-                      if (list.isEmpty) {
-                        return Center(
-                          child: Column(
-                            mainAxisAlignment: MainAxisAlignment.center,
-                            children: [
-                              Icon(
-                                Icons.notifications_off_outlined,
-                                size: 60,
-                                color: kGreen.withOpacity(0.4),
-                              ),
-                              const SizedBox(height: 12),
-                              Text(
-                                'Koi notification nahi hai',
-                                style: TextStyle(
-                                  color: kGreen.withOpacity(0.6),
-                                  fontSize: 14,
-                                ),
-                              ),
-                            ],
-                          ),
-                        );
-                      }
-                      return ListView.builder(
-                        controller: scrollController,
-                        padding: const EdgeInsets.all(8),
-                        itemCount: list.length,
-                        itemBuilder: (c, i) {
-                          final n = list[i];
-                          final isRead = n['read'] == true;
-                          final time = n['time'] as int? ?? 0;
-                          final dt = DateTime.fromMillisecondsSinceEpoch(time);
-                          final ago = _timeAgo(dt);
-
-                          return GestureDetector(
-                            onTap: () {
-                              if (!isRead) {
-                                FirebaseService.markNotificationRead(
-                                  uid,
-                                  n['id'] as String,
-                                );
-                              }
-                            },
-                            child: Container(
-                              margin: const EdgeInsets.symmetric(vertical: 4),
-                              padding: const EdgeInsets.all(12),
-                              decoration: BoxDecoration(
-                                color: isRead
-                                    ? Colors.black.withOpacity(0.3)
-                                    : const Color(0xFF03220E),
-                                borderRadius: BorderRadius.circular(10),
-                                border: Border.all(
-                                  color: isRead
-                                      ? kGreen.withOpacity(0.2)
-                                      : kGreen.withOpacity(0.5),
-                                ),
-                              ),
-                              child: Row(
-                                crossAxisAlignment: CrossAxisAlignment.start,
-                                children: [
-                                  Container(
-                                    padding: const EdgeInsets.all(8),
-                                    decoration: BoxDecoration(
-                                      color: Colors.black,
-                                      shape: BoxShape.circle,
-                                      border: Border.all(
-                                        color: kGreen.withOpacity(0.5),
-                                      ),
-                                    ),
-                                    child: Icon(
-                                      _notifIcon(
-                                        n['type']?.toString() ?? 'general',
-                                      ),
-                                      color: kGreen,
-                                      size: 18,
-                                    ),
-                                  ),
-                                  const SizedBox(width: 12),
-                                  Expanded(
-                                    child: Column(
-                                      crossAxisAlignment:
-                                          CrossAxisAlignment.start,
-                                      children: [
-                                        Text(
-                                          n['title'] ?? '',
-                                          style: TextStyle(
-                                            color: kGreen,
-                                            fontSize: 13.5,
-                                            fontWeight: isRead
-                                                ? FontWeight.w500
-                                                : FontWeight.bold,
-                                          ),
-                                        ),
-                                        const SizedBox(height: 4),
-                                        Text(
-                                          n['message'] ?? '',
-                                          style: const TextStyle(
-                                            color: Colors.white70,
-                                            fontSize: 12,
-                                          ),
-                                        ),
-                                        const SizedBox(height: 4),
-                                        Text(
-                                          ago,
-                                          style: TextStyle(
-                                            color: kGreen.withOpacity(0.5),
-                                            fontSize: 10,
-                                          ),
-                                        ),
-                                      ],
-                                    ),
-                                  ),
-                                  if (!isRead)
-                                    Container(
-                                      width: 8,
-                                      height: 8,
-                                      decoration: const BoxDecoration(
-                                        color: Colors.redAccent,
-                                        shape: BoxShape.circle,
-                                      ),
-                                    ),
-                                ],
-                              ),
-                            ),
-                          );
-                        },
-                      );
-                    },
-                  ),
-                ),
-              ],
-            );
-          },
-        );
-      },
-    );
-  }
-
-  IconData _notifIcon(String type) {
-    switch (type) {
-      case 'like':
-        return Icons.favorite;
-      case 'subscribe':
-        return Icons.person_add;
-      case 'share':
-        return Icons.share;
-      case 'upload':
-        return Icons.upload;
-      case 'expiry':
-        return Icons.timer;
-      default:
-        return Icons.notifications;
-    }
-  }
-
-  String _timeAgo(DateTime dt) {
-    final diff = DateTime.now().difference(dt);
-    if (diff.inSeconds < 60) return 'just now';
-    if (diff.inMinutes < 60) return '${diff.inMinutes}m ago';
-    if (diff.inHours < 24) return '${diff.inHours}h ago';
-    if (diff.inDays < 7) return '${diff.inDays}d ago';
-    return '${dt.day}/${dt.month}/${dt.year}';
-  }
-
-  void _searchAndPlay() {
-    final input = _linkController.text.trim();
-    if (input.isEmpty) {
-      Haptic.heavy();
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text('Please paste a stream URL first!'),
-          backgroundColor: kCardBg,
-        ),
-      );
-      return;
-    }
-    Haptic.medium();
-    _linkController.clear();
-    _linkFocus.unfocus();
-    Navigator.push(
-      context,
-      MaterialPageRoute(
-        builder: (_) => StreamPreviewScreen(targetUrl: input),
-      ),
-    );
-  }
-
-  Widget _catCard(IconData icon, String title, String subtitle) {
-    return GestureDetector(
-      onTap: () => Haptic.light(),
-      child: Container(
-        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 12),
-        decoration: BoxDecoration(
-          color: kCardBg,
-          borderRadius: BorderRadius.circular(14),
-          border: Border.all(color: kGreen.withOpacity(0.4), width: 1.2),
-          boxShadow: [
-            BoxShadow(color: kGreen.withOpacity(0.08), blurRadius: 10),
-          ],
-        ),
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            Icon(icon, color: kGreen, size: 26),
-            const SizedBox(height: 6),
-            Text(
-              title,
-              style: const TextStyle(
-                color: Colors.white,
-                fontSize: 12,
-                fontWeight: FontWeight.bold,
-              ),
-            ),
-            const SizedBox(height: 2),
-            Text(
-              subtitle,
-              style: TextStyle(
-                color: Colors.white.withOpacity(0.55),
-                fontSize: 9,
-              ),
-              textAlign: TextAlign.center,
-              maxLines: 1,
-              overflow: TextOverflow.ellipsis,
-            ),
-          ],
-        ),
-      ),
-    );
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    return Scaffold(
-      backgroundColor: Colors.black,
-      body: SafeArea(
-        child: SingleChildScrollView(
-          child: Column(
-            children: [
-              Padding(
-                padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
-                child: Row(
-                  children: [
-                    IconButton(
-                      icon: const Icon(Icons.menu, color: kGreen, size: 26),
-                      onPressed: () {
-                        Haptic.light();
-                        widget.onMenuTap?.call();
-                      },
-                    ),
-                    Container(
-                      width: 36,
-                      height: 36,
-                      decoration: BoxDecoration(
-                        color: Colors.black,
-                        borderRadius: BorderRadius.circular(10),
-                        border: Border.all(color: kGreen, width: 2),
-                        boxShadow: [
-                          BoxShadow(color: kGreen.withOpacity(0.5), blurRadius: 15),
-                        ],
-                      ),
-                      child: ClipRRect(
-                        borderRadius: BorderRadius.circular(8),
-                        child: Image.asset(
-                          'assets/icon/logo.png',
-                          fit: BoxFit.cover,
-                          errorBuilder: (c, e, s) => const Icon(
-                            Icons.change_history,
-                            color: kGreen,
-                            size: 20,
-                          ),
-                        ),
-                      ),
-                    ),
-                    const SizedBox(width: 10),
-                    const Text(
-                      'Maya',
-                      style: TextStyle(
-                        fontSize: 26,
-                        fontWeight: FontWeight.w900,
-                        color: Colors.white,
-                        fontFamily: 'sans-serif',
-                        letterSpacing: 0.5,
-                      ),
-                    ),
-                    const Text(
-                      'Jaal',
-                      style: TextStyle(
-                        fontSize: 26,
-                        fontWeight: FontWeight.w900,
-                        color: kGreen,
-                        fontFamily: 'sans-serif',
-                        letterSpacing: 0.5,
-                        shadows: [Shadow(color: kGreen, blurRadius: 12)],
-                      ),
-                    ),
-                    const Spacer(),
-                    IconButton(
-                      icon: const Icon(Icons.search, color: kGreen, size: 24),
-                      onPressed: () {
-                        Haptic.light();
-                        showSearch(context: context, delegate: UserSearchDelegate());
-                      },
-                    ),
-                    StreamBuilder<int>(
-                      stream: MayaJaalAccount.cachedUid != null
-                          ? FirebaseService.getUnreadCount(MayaJaalAccount.cachedUid!)
-                          : Stream.value(0),
-                      builder: (context, snapshot) {
-                        final unread = snapshot.data ?? 0;
-                        return Stack(children: [
-                          IconButton(
-                            icon: Icon(
-                              Icons.notifications_none,
-                              color: unread > 0 ? Colors.redAccent : kGreen,
-                              size: 24,
-                            ),
-                            onPressed: () {
-                              Haptic.light();
-                              _showNotificationsSheet(context);
-                            },
-                          ),
-                          if (unread > 0)
-                            Positioned(
-                              right: 8,
-                              top: 8,
-                              child: Container(
-                                padding: const EdgeInsets.symmetric(
-                                  horizontal: 5,
-                                  vertical: 2,
-                                ),
-                                decoration: BoxDecoration(
-                                  color: Colors.redAccent,
-                                  borderRadius: BorderRadius.circular(10),
-                                  border: Border.all(
-                                    color: Colors.black,
-                                    width: 1.5,
-                                  ),
-                                ),
-                                constraints: const BoxConstraints(minWidth: 18),
-                                child: Text(
-                                  unread > 99 ? '99+' : '$unread',
-                                  textAlign: TextAlign.center,
-                                  style: const TextStyle(
-                                    color: Colors.white,
-                                    fontSize: 9,
-                                    fontWeight: FontWeight.bold,
-                                  ),
-                                ),
-                              ),
-                            ),
-                        ]);
-                      },
-                    ),
-                  ],
-                ),
-              ),
-              Padding(
-                padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 6),
-                child: AdBanner(slot: 'home-top'),
-              ),
-              Container(
-                width: double.infinity,
-                padding: const EdgeInsets.symmetric(vertical: 20),
-                child: Stack(
-                  alignment: Alignment.center,
-                  children: [
-                    Positioned(
-                      left: 18,
-                      child: Text(
-                        'MOVIES\nWEB SERIES\nLIVE TV\n& MORE',
-                        style: TextStyle(
-                          color: Colors.white.withOpacity(0.7),
-                          fontSize: 11,
-                          fontWeight: FontWeight.w700,
-                          letterSpacing: 1.5,
-                          height: 1.5,
-                        ),
-                      ),
-                    ),
-                    Positioned(
-                      right: 18,
-                      child: Text(
-                        'Your\nStreaming\nUniverse',
-                        style: TextStyle(
-                          color: const Color(0xFF66FF99).withOpacity(0.85),
-                          fontSize: 16,
-                          fontWeight: FontWeight.w700,
-                          fontStyle: FontStyle.italic,
-                          height: 1.2,
-                        ),
-                      ),
-                    ),
-                    AnimatedBuilder(
-                      animation: _pulseAnimation,
-                      builder: (c, _) => Transform.scale(
-                        scale: _pulseAnimation.value,
-                        child: Container(
-                          width: 140,
-                          height: 140,
-                          decoration: BoxDecoration(
-                            shape: BoxShape.circle,
-                            boxShadow: [
-                              BoxShadow(
-                                color: kGreen.withOpacity(0.25),
-                                blurRadius: 40,
-                                spreadRadius: 10,
-                              ),
-                            ],
-                          ),
-                          child: Stack(
-                            alignment: Alignment.center,
-                            children: [
-                              Container(
-                                width: 130,
-                                height: 130,
-                                decoration: BoxDecoration(
-                                  shape: BoxShape.circle,
-                                  border: Border.all(
-                                    color: kGreen.withOpacity(0.6),
-                                    width: 1.5,
-                                  ),
-                                ),
-                              ),
-                              Container(
-                                width: 95,
-                                height: 95,
-                                decoration: BoxDecoration(
-                                  borderRadius: BorderRadius.circular(22),
-                                  border: Border.all(color: kGreen, width: 2),
-                                  boxShadow: [
-                                    BoxShadow(
-                                      color: kGreen.withOpacity(0.5),
-                                      blurRadius: 20,
-                                    ),
-                                  ],
-                                ),
-                                child: ClipRRect(
-                                  borderRadius: BorderRadius.circular(20),
-                                  child: Image.asset(
-                                    'assets/icon/logo.png',
-                                    fit: BoxFit.cover,
-                                    errorBuilder: (c, e, s) => Container(
-                                      color: Colors.black,
-                                      child: const Icon(
-                                        Icons.movie_filter,
-                                        size: 50,
-                                        color: kGreen,
-                                      ),
-                                    ),
-                                  ),
-                                ),
-                              ),
-                            ],
-                          ),
-                        ),
-                      ),
-                    ),
-                  ],
-                ),
-              ),
-              Padding(
-                padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
-                child: Container(
-                  decoration: BoxDecoration(
-                    color: const Color(0xFF011206),
-                    borderRadius: BorderRadius.circular(22),
-                    border: Border.all(color: kGreen.withOpacity(0.6), width: 1.5),
-                    boxShadow: [
-                      BoxShadow(color: kGreen.withOpacity(0.2), blurRadius: 25),
-                    ],
-                  ),
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Padding(
-                        padding: const EdgeInsets.only(left: 14, top: 12),
-                        child: Container(
-                          padding: const EdgeInsets.symmetric(
-                            horizontal: 12,
-                            vertical: 5,
-                          ),
-                          decoration: BoxDecoration(
-                            color: const Color(0xFF03220E),
-                            borderRadius: BorderRadius.circular(20),
-                            border: Border.all(color: kGreen.withOpacity(0.7)),
-                          ),
-                          child: const Row(
-                            mainAxisSize: MainAxisSize.min,
-                            children: [
-                              Icon(Icons.link, color: kGreen, size: 14),
-                              SizedBox(width: 6),
-                              Text(
-                                'MATRIX NEURAL STREAM NODE',
-                                style: TextStyle(
-                                  color: kGreen,
-                                  fontSize: 10,
-                                  fontWeight: FontWeight.bold,
-                                  letterSpacing: 1.5,
-                                ),
-                              ),
-                            ],
-                          ),
-                        ),
-                      ),
-                      const SizedBox(height: 10),
-                      Padding(
-                        padding: const EdgeInsets.all(12),
-                        child: Container(
-                          padding: const EdgeInsets.symmetric(
-                            horizontal: 12,
-                            vertical: 6,
-                          ),
-                          decoration: BoxDecoration(
-                            color: const Color(0xFF031A0B),
-                            borderRadius: BorderRadius.circular(16),
-                            border: Border.all(color: kGreen.withOpacity(0.4)),
-                          ),
-                          child: Row(
-                            children: [
-                              const Icon(
-                                Icons.link_rounded,
-                                color: kGreen,
-                                size: 24,
-                              ),
-                              const SizedBox(width: 8),
-                              Expanded(
-                                child: Column(
-                                  crossAxisAlignment: CrossAxisAlignment.start,
-                                  children: [
-                                    TextField(
-                                      controller: _linkController,
-                                      focusNode: _linkFocus,
-                                      style: const TextStyle(
-                                        color: Colors.white,
-                                        fontSize: 13,
-                                        fontWeight: FontWeight.bold,
-                                      ),
-                                      decoration: const InputDecoration(
-                                        isDense: true,
-                                        contentPadding: EdgeInsets.zero,
-                                        hintText: 'Paste Stream URL',
-                                        hintStyle: TextStyle(
-                                          color: Colors.white,
-                                          fontSize: 13,
-                                          fontWeight: FontWeight.bold,
-                                        ),
-                                        border: InputBorder.none,
-                                      ),
-                                    ),
-                                    const SizedBox(height: 2),
-                                    Text(
-                                      'Tap paste or enter link',
-                                      style: TextStyle(
-                                        color: Colors.white.withOpacity(0.5),
-                                        fontSize: 9.5,
-                                      ),
-                                    ),
-                                  ],
-                                ),
-                              ),
-                              GestureDetector(
-                                onTap: _pasteFromClipboard,
-                                child: Container(
-                                  width: 40,
-                                  height: 40,
-                                  margin: const EdgeInsets.only(right: 4),
-                                  decoration: BoxDecoration(
-                                    color: Colors.black,
-                                    shape: BoxShape.circle,
-                                    border: Border.all(
-                                      color: kGreen.withOpacity(0.6),
-                                      width: 1.2,
-                                    ),
-                                  ),
-                                  child: const Icon(
-                                    Icons.content_paste_rounded,
-                                    color: kGreen,
-                                    size: 20,
-                                  ),
-                                ),
-                              ),
-                              GestureDetector(
-                                onTap: _searchAndPlay,
-                                child: Container(
-                                  width: 46,
-                                  height: 46,
-                                  decoration: BoxDecoration(
-                                    color: kGreen,
-                                    shape: BoxShape.circle,
-                                    boxShadow: [
-                                      BoxShadow(
-                                        color: kGreen.withOpacity(0.6),
-                                        blurRadius: 16,
-                                      ),
-                                    ],
-                                  ),
-                                  child: const Icon(
-                                    Icons.play_arrow_rounded,
-                                    color: Colors.black,
-                                    size: 28,
-                                  ),
-                                ),
-                              ),
-                            ],
-                          ),
-                        ),
-                      ),
-                    ],
-                  ),
-                ),
-              ),
-              Padding(
-                padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
-                child: Row(
-                  children: [
-                    Expanded(
-                      child: _catCard(
-                        Icons.movie_creation_outlined,
-                        'Movies',
-                        'Latest',
-                      ),
-                    ),
-                    const SizedBox(width: 10),
-                    Expanded(
-                      child: _catCard(
-                        Icons.live_tv_rounded,
-                        'Web Series',
-                        'Binge',
-                      ),
-                    ),
-                    const SizedBox(width: 10),
-                    Expanded(
-                      child: _catCard(Icons.tv_rounded, 'Live TV', 'Sports'),
-                    ),
-                    const SizedBox(width: 10),
-                    Expanded(
-                      child: _catCard(Icons.star_rounded, 'Favorites', 'Saved'),
-                    ),
-                  ],
-                ),
-              ),
-              Padding(
-                padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 6),
-                child: AdBanner(slot: 'home-middle'),
-              ),
-              Padding(
-                padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 6),
-                child: Container(
-                  padding: const EdgeInsets.symmetric(
-                    horizontal: 14,
-                    vertical: 12,
-                  ),
-                  decoration: BoxDecoration(
-                    color: const Color(0xFF031A0B),
-                    borderRadius: BorderRadius.circular(14),
-                    border: Border.all(color: kGreen.withOpacity(0.55)),
-                  ),
-                  child: const Row(
-                    children: [
-                      Icon(
-                        Icons.verified_user_rounded,
-                        color: kGreen,
-                        size: 20,
-                      ),
-                      SizedBox(width: 10),
-                      Expanded(
-                        child: Text(
-                          'Secure Quantum Stream Pipeline Active',
-                          style: TextStyle(
-                            color: Colors.white,
-                            fontSize: 12,
-                            fontWeight: FontWeight.bold,
-                          ),
-                        ),
-                      ),
-                      Icon(Icons.arrow_forward_ios, color: kGreen, size: 14),
-                    ],
-                  ),
-                ),
-              ),
-              Padding(
-                padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
-                child: AdBanner(slot: 'home-bottom'),
-              ),
-              const Padding(
-                padding: EdgeInsets.symmetric(vertical: 18),
-                child: Text(
-                  '>   CONNECT   •   STREAM   •   ENJOY   <',
-                  style: TextStyle(
-                    color: Color(0xBF00FF66),
-                    fontSize: 10.5,
-                    letterSpacing: 2,
-                    fontWeight: FontWeight.w700,
-                  ),
-                ),
-              ),
-            ],
-          ),
-        ),
-      ),
-    );
-  }
-}
-
-// ═══════════════════════════════════════════════════════
-// MORE DRAWER (SECURED)
+// MORE DRAWER (SECURED - Referral merged in Share)
 // ═══════════════════════════════════════════════════════
 class MoreDrawer extends StatefulWidget {
   const MoreDrawer({super.key});
@@ -4035,12 +3214,13 @@ class _MoreDrawerState extends State<MoreDrawer>
     }
   }
 
+  // 🔗 UPDATED SHARE LINK (Referral merged)
   void _shareApp() {
     Haptic.light();
     final myUid = MayaJaalAccount.cachedUid ?? '';
     final refLink = 'https://www.mayajaal.online?ref=$myUid';
     Share.share(
-      '🚀 Experience Matrix-speed streaming on MayaJaal App!\nDownload: $refLink',
+      '🚀 Experience Matrix-speed streaming on MayaJaal App!\nJoin and start earning: $refLink',
     );
   }
 
@@ -4646,7 +3826,7 @@ class _MoreDrawerState extends State<MoreDrawer>
                       icon: Icons.share,
                       color: kNeonCyan,
                       title: 'Share MayaJaal App',
-                      subtitle: 'Invite your friends & earn referral',
+                      subtitle: 'Invite friends & earn rewards',
                       onTap: () {
                         Navigator.pop(context);
                         _shareApp();
@@ -5656,7 +4836,7 @@ class _GalleryScreenState extends State<GalleryScreen> {
 }
 
 // ═══════════════════════════════════════════════════════
-// SAVED VIDEOS SCREEN (With Auto-Thumbnail)
+// SAVED VIDEOS SCREEN (Auto-Thumbnail/5sec Loop)
 // ═══════════════════════════════════════════════════════
 class SavedVideosScreen extends StatefulWidget {
   const SavedVideosScreen({super.key});
@@ -5769,7 +4949,7 @@ class _SavedVideosScreenState extends State<SavedVideosScreen> {
 }
 
 // ═══════════════════════════════════════════════════════
-// HISTORY SCREEN (With Auto-Thumbnail)
+// HISTORY SCREEN (Auto-Thumbnail/5sec Loop)
 // ═══════════════════════════════════════════════════════
 class HistoryScreen extends StatefulWidget {
   const HistoryScreen({super.key});
@@ -6449,22 +5629,24 @@ class _StreamPreviewScreenState extends State<StreamPreviewScreen>
               padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
               child: Column(
                 children: [
-                  // 🏠 HOME BUTTON AT TOP (As Requested)
-                  SizedBox(
-                    width: double.infinity,
-                    height: 50,
-                    child: OutlinedButton.icon(
-                      onPressed: _goToHome,
-                      icon: const Icon(Icons.home, color: Colors.white54, size: 20),
-                      label: const Text('GO TO HOME PAGE', style: TextStyle(color: Colors.white54, fontSize: 12, fontWeight: FontWeight.bold, letterSpacing: 1.5)),
-                      style: OutlinedButton.styleFrom(
-                        side: BorderSide(color: Colors.white24, width: 1.5),
-                        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(25)),
+                  // 🏠 HOME BUTTON AT ABSOLUTE TOP (Above Top Bar)
+                  Padding(
+                    padding: const EdgeInsets.only(bottom: 16),
+                    child: SizedBox(
+                      width: double.infinity,
+                      height: 50,
+                      child: OutlinedButton.icon(
+                        onPressed: _goToHome,
+                        icon: const Icon(Icons.home, color: Colors.white54, size: 20),
+                        label: const Text('GO TO HOME PAGE', style: TextStyle(color: Colors.white54, fontSize: 12, fontWeight: FontWeight.bold, letterSpacing: 1.5)),
+                        style: OutlinedButton.styleFrom(
+                          side: BorderSide(color: Colors.white24, width: 1.5),
+                          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(25)),
+                        ),
                       ),
                     ),
                   ),
-                  const SizedBox(height: 12),
-
+                  
                   Row(
                     children: [
                       IconButton(
@@ -6497,7 +5679,6 @@ class _StreamPreviewScreenState extends State<StreamPreviewScreen>
                     ],
                   ),
                   const SizedBox(height: 12),
-                  
                   Container(
                     padding: const EdgeInsets.all(4),
                     decoration: BoxDecoration(
@@ -6532,8 +5713,8 @@ class _StreamPreviewScreenState extends State<StreamPreviewScreen>
                     ),
                   ),
                   const SizedBox(height: 16),
-
-                  // 🐍 RED SNAKE PLAY BUTTON (Below Home)
+                  
+                  // 🐍 RED SNAKE PLAY BUTTON (Below Video)
                   if (_isReadyToPlay)
                     _buildRedSnakePlayButton()
                   else
@@ -6635,7 +5816,7 @@ class _StreamPreviewScreenState extends State<StreamPreviewScreen>
 }
 
 // ═══════════════════════════════════════════════════════
-// NATIVE VIDEO PLAYER (With Frame Capture for Auto Thumbnail)
+// NATIVE VIDEO PLAYER (Zoom Fixed & Auto Thumbnail)
 // ═══════════════════════════════════════════════════════
 class NativeVideoPlayerScreen extends StatefulWidget {
   final String videoUrl;
@@ -7291,7 +6472,7 @@ class _NativeVideoPlayerScreenState extends State<NativeVideoPlayerScreen> {
     if (_isFullscreen) {
       return SizedBox.expand(
         child: FittedBox(
-          // 🔥 FIX: Changed from BoxFit.cover to BoxFit.contain to fix over-zoom
+          // 🔥 FIX: Changed from BoxFit.cover to BoxFit.contain (No Zoom/Cut)
           fit: BoxFit.contain,
           child: SizedBox(
             width: _controller.value.size.width,
@@ -7865,7 +7046,6 @@ class _NativeVideoPlayerScreenState extends State<NativeVideoPlayerScreen> {
     final uploader = (v['uploader'] ?? '@mayajaal').toString();
     final views = (v['views'] ?? 0) as int;
     final thumb = v['thumbnail']?.toString() ?? '';
-    final streamUrl = (v['originalUrl'] ?? v['url'] ?? '').toString();
 
     return Padding(
       padding: const EdgeInsets.only(right: 10),
@@ -7894,7 +7074,7 @@ class _NativeVideoPlayerScreenState extends State<NativeVideoPlayerScreen> {
                 ),
                 child: ClipRRect(
                   borderRadius: const BorderRadius.vertical(top: Radius.circular(11)),
-                  child: buildMediaThumbnail(thumb, title, streamUrl, isSmall: true),
+                  child: buildMediaThumbnail(thumb, title, '$kBackendBaseUrl/v/$id', isSmall: true),
                 ),
               ),
               Padding(
@@ -8407,7 +7587,6 @@ class _UserProfileScreenState extends State<UserProfileScreen> {
                             final name = vid['filename'] ?? 'Video';
                             final views = vid['views'] ?? 0;
                             final thumb = vid['thumbnail']?.toString() ?? '';
-                            final streamUrl = (vid['originalUrl'] ?? vid['url'] ?? '').toString();
 
                             return Container(
                               margin: const EdgeInsets.only(bottom: 8),
@@ -8419,7 +7598,7 @@ class _UserProfileScreenState extends State<UserProfileScreen> {
                                   decoration: BoxDecoration(color: Colors.black, borderRadius: BorderRadius.circular(8), border: Border.all(color: kGreen.withOpacity(0.5))),
                                   child: ClipRRect(
                                     borderRadius: BorderRadius.circular(7),
-                                    child: buildMediaThumbnail(thumb, name, streamUrl, isSmall: true),
+                                    child: buildMediaThumbnail(thumb, name, '$kBackendBaseUrl/v/$id', isSmall: true),
                                   ),
                                 ),
                                 title: Text(name, style: const TextStyle(color: Colors.white, fontSize: 12.5, fontWeight: FontWeight.bold), maxLines: 1, overflow: TextOverflow.ellipsis),
