@@ -128,6 +128,7 @@ class VideoLoopThumbnail extends StatefulWidget {
   final String videoUrl;
   final String title;
   final bool isSmall;
+  final String? fallbackThumb; // 🔥 NEW: cached thumb dikhega while loading
   // 🔥 NEW: called once when a frame is captured — save to history/saved
   final void Function(String base64Thumb)? onFrameCaptured;
   const VideoLoopThumbnail({
@@ -135,6 +136,7 @@ class VideoLoopThumbnail extends StatefulWidget {
     required this.videoUrl,
     required this.title,
     this.isSmall = false,
+    this.fallbackThumb,
     this.onFrameCaptured,
   });
   @override
@@ -142,44 +144,88 @@ class VideoLoopThumbnail extends StatefulWidget {
 }
 
 class _VideoLoopThumbnailState extends State<VideoLoopThumbnail> {
-  late VideoPlayerController _controller;
+  VideoPlayerController? _controller;
   bool _isInit = false;
+  bool _firstFrameReady = false; // 🔥 NEW
+  bool _hasError = false; // 🔥 NEW
   final GlobalKey _captureKey = GlobalKey();
   bool _captureAttempted = false;
 
   @override
   void initState() {
     super.initState();
+    _init();
+  }
+
+  // 🔥 NEW: URL change hone par reinitialize (cached → fresh URL swap)
+  @override
+  void didUpdateWidget(covariant VideoLoopThumbnail oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (oldWidget.videoUrl != widget.videoUrl && widget.videoUrl.isNotEmpty) {
+      _controller?.dispose();
+      _controller = null;
+      _isInit = false;
+      _firstFrameReady = false;
+      _captureAttempted = false;
+      _hasError = false;
+      _init();
+    }
+  }
+
+  Future<void> _init() async {
     if (widget.videoUrl.isEmpty || !widget.videoUrl.startsWith('http')) return;
-    _controller = VideoPlayerController.networkUrl(Uri.parse(widget.videoUrl));
-    _controller.initialize().then((_) async {
+
+    try {
+      _controller = VideoPlayerController.networkUrl(
+        Uri.parse(widget.videoUrl),
+        // 🔥 Fast start
+        videoPlayerOptions: VideoPlayerOptions(mixWithOthers: true),
+        httpHeaders: {
+          'User-Agent': 'Mozilla/5.0 (Linux; Android 10) AppleWebKit/537.36',
+          'Accept': '*/*',
+          'Accept-Encoding': 'identity',
+        },
+      );
+
+      await _controller!.initialize();
       if (!mounted) return;
-      setState(() => _isInit = true);
-      _controller.setVolume(0);
-      // 🔥 REMOVED: _controller.setPlaybackSpeed(2.0) so it plays in real-time
-      _controller.play();
-      _controller.addListener(() {
-        // 🔥 UPDATED: Loop exact 5 seconds (real-time)
-        if (_controller.value.position.inMilliseconds >= 5000) {
-          _controller.seekTo(Duration.zero);
-        }
-      });
-      // 🔥 Try capturing a frame after first render
+
+      _controller!.setVolume(0);
+      _controller!.play();
+      _controller!.addListener(_onVideoUpdate);
+
+      if (mounted) setState(() => _isInit = true);
+
+      // Capture frame for history/saved
       _attemptFrameCapture();
-    }).catchError((e) {
-      debugPrint('LoopThumb error: $e');
-    });
+    } catch (e) {
+      debugPrint('LoopThumb init error: $e');
+      if (mounted) setState(() => _hasError = true);
+    }
+  }
+
+  void _onVideoUpdate() {
+    if (!mounted || _controller == null) return;
+    final val = _controller!.value;
+    if (!val.isInitialized) return;
+
+    // 🔥 First frame ready → transition from fallback to video
+    if (!_firstFrameReady && val.position > Duration.zero) {
+      setState(() => _firstFrameReady = true);
+    }
+
+    // 🔥 Real-time 5-second loop
+    if (val.position.inMilliseconds >= 5000) {
+      _controller!.seekTo(Duration.zero);
+    }
   }
 
   // 🔥 NEW: Capture one frame for permanent storage
   Future<void> _attemptFrameCapture() async {
-    if (_captureAttempted) return;
-    if (widget.onFrameCaptured == null) return;
-    if (!_controller.value.isInitialized) return;
-
-    // Wait for a couple of frames to be rendered
-    await Future.delayed(const Duration(milliseconds: 1800));
-    if (!mounted || _captureAttempted) return;
+    if (_captureAttempted || widget.onFrameCaptured == null) return;
+    // 🔥 800ms (pehle 1800ms tha — bahut slow)
+    await Future.delayed(const Duration(milliseconds: 800));
+    if (!mounted || _captureAttempted || !_firstFrameReady) return;
     _captureAttempted = true;
 
     try {
@@ -197,27 +243,63 @@ class _VideoLoopThumbnailState extends State<VideoLoopThumbnail> {
     }
   }
 
+  Widget _buildFallback() {
+    if (widget.fallbackThumb != null && widget.fallbackThumb!.isNotEmpty) {
+      if (widget.fallbackThumb!.startsWith('http')) {
+        return Image.network(
+          widget.fallbackThumb!,
+          fit: BoxFit.cover,
+          errorBuilder: (c, e, s) =>
+              buildAutoThumbnail(widget.title, isSmall: widget.isSmall),
+        );
+      }
+      try {
+        return Image.memory(
+          base64Decode(widget.fallbackThumb!),
+          fit: BoxFit.cover,
+          errorBuilder: (c, e, s) =>
+              buildAutoThumbnail(widget.title, isSmall: widget.isSmall),
+        );
+      } catch (_) {}
+    }
+    return buildAutoThumbnail(widget.title, isSmall: widget.isSmall);
+  }
+
   @override
   void dispose() {
-    if (_isInit) _controller.dispose();
+    _controller?.removeListener(_onVideoUpdate);
+    _controller?.dispose();
     super.dispose();
   }
 
   @override
   Widget build(BuildContext context) {
-    if (!_isInit) return buildAutoThumbnail(widget.title, isSmall: widget.isSmall);
-    return RepaintBoundary(
-      key: _captureKey,
-      child: SizedBox.expand(
-        child: FittedBox(
-          fit: BoxFit.cover,
-          child: SizedBox(
-            width: _controller.value.size.width,
-            height: _controller.value.size.height,
-            child: VideoPlayer(_controller),
+    // 🔥 Video loop not available → static fallback
+    if (_hasError || (!_isInit && _controller == null)) {
+      return _buildFallback();
+    }
+
+    return Stack(
+      fit: StackFit.expand,
+      children: [
+        // 🔥 Video always mounted (for frame capture + smooth transition)
+        if (_isInit && _controller != null)
+          RepaintBoundary(
+            key: _captureKey,
+            child: SizedBox.expand(
+              child: FittedBox(
+                fit: BoxFit.cover,
+                child: SizedBox(
+                  width: _controller!.value.size.width,
+                  height: _controller!.value.size.height,
+                  child: VideoPlayer(_controller!),
+                ),
+              ),
+            ),
           ),
-        ),
-      ),
+        // 🔥 Fallback overlay until first frame arrives (NO black screen!)
+        if (!_firstFrameReady) _buildFallback(),
+      ],
     );
   }
 }
@@ -230,46 +312,39 @@ Widget buildMediaThumbnail(
   bool isSmall = false,
   void Function(String base64Thumb)? onFrameCaptured,
 }) {
+  // 🔥 FIX: Agar video URL hai, toh ALWAYS video loop priority do
+  // (pehle cached thumb hone par video loop hi nahi banti thi — yeh bug tha!)
+  if (videoUrl.isNotEmpty && videoUrl.startsWith('http')) {
+    return VideoLoopThumbnail(
+      videoUrl: videoUrl,
+      title: title,
+      isSmall: isSmall,
+      fallbackThumb: thumb, // 🔥 cached thumb fallback ke roop mein
+      onFrameCaptured: onFrameCaptured,
+    );
+  }
+
+  // No video URL — show static thumb
   if (thumb != null && thumb.isNotEmpty) {
     if (thumb.startsWith('http')) {
       return Image.network(
         thumb,
         fit: BoxFit.cover,
-        errorBuilder: (c, e, s) => VideoLoopThumbnail(
-          videoUrl: videoUrl,
-          title: title,
-          isSmall: isSmall,
-          onFrameCaptured: onFrameCaptured,
-        ),
+        errorBuilder: (c, e, s) =>
+            buildAutoThumbnail(title, isSmall: isSmall),
       );
-    } else {
-      try {
-        return Image.memory(
-          base64Decode(thumb),
-          fit: BoxFit.cover,
-          errorBuilder: (c, e, s) => VideoLoopThumbnail(
-            videoUrl: videoUrl,
-            title: title,
-            isSmall: isSmall,
-            onFrameCaptured: onFrameCaptured,
-          ),
-        );
-      } catch (_) {
-        return VideoLoopThumbnail(
-          videoUrl: videoUrl,
-          title: title,
-          isSmall: isSmall,
-          onFrameCaptured: onFrameCaptured,
-        );
-      }
     }
+    try {
+      return Image.memory(
+        base64Decode(thumb),
+        fit: BoxFit.cover,
+        errorBuilder: (c, e, s) =>
+            buildAutoThumbnail(title, isSmall: isSmall),
+      );
+    } catch (_) {}
   }
-  return VideoLoopThumbnail(
-    videoUrl: videoUrl,
-    title: title,
-    isSmall: isSmall,
-    onFrameCaptured: onFrameCaptured,
-  );
+
+  return buildAutoThumbnail(title, isSmall: isSmall);
 }
 
 // ═══════════════════════════════════════════════════════
@@ -1732,6 +1807,23 @@ class WatchHistory {
         if (item is Map && item['url'] == url) {
           final t = (item['thumbnail'] ?? '').toString();
           if (t.isNotEmpty) return t;
+        }
+      }
+    } catch (_) {}
+    return '';
+  }
+
+  // 🔥 NEW: Cached stream URL — 2nd time se instant video start
+  static Future<String> getCachedStreamUrl(String url) async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      final raw = prefs.getString('watch_history_v2');
+      if (raw == null) return '';
+      final List decoded = jsonDecode(raw);
+      for (final item in decoded) {
+        if (item is Map && item['url'] == url) {
+          final s = (item['streamUrl'] ?? '').toString();
+          if (s.isNotEmpty) return s;
         }
       }
     } catch (_) {}
@@ -5460,6 +5552,7 @@ class _StreamPreviewScreenState extends State<StreamPreviewScreen>
       final uri = Uri.parse(widget.targetUrl);
       _rawId = uri.pathSegments.isNotEmpty ? uri.pathSegments.last : 'stream';
       _token = uri.queryParameters['t'] ?? uri.queryParameters['s'] ?? '';
+      _videoTitle = _rawId;
     } catch (_) {
       _rawId = 'stream';
     }
@@ -5467,21 +5560,26 @@ class _StreamPreviewScreenState extends State<StreamPreviewScreen>
     // 🔥 Start countdown IMMEDIATELY (not after API)
     _startCountdown();
 
-    // 🔥 Load cached thumbnail IMMEDIATELY (fast local)
-    _loadCachedThumbnail();
-
-    // 🔥 Fetch metadata in background
+    // 🔥 NEW: _secureInit loads cache first then API
     _secureInit();
   }
 
-  Future<void> _loadCachedThumbnail() async {
-    final cached = await WatchHistory.getCachedThumbnail(widget.targetUrl);
-    if (cached.isNotEmpty && mounted && _thumbnailUrl.isEmpty) {
-      setState(() => _thumbnailUrl = cached);
-    }
-  }
-
   Future<void> _secureInit() async {
+    // 🔥 STEP 1: Load cached thumbnail + stream URL INSTANTLY
+    final cachedThumb = await WatchHistory.getCachedThumbnail(widget.targetUrl);
+    final cachedUrl = await WatchHistory.getCachedStreamUrl(widget.targetUrl);
+
+    if (mounted) {
+      setState(() {
+        if (cachedThumb.isNotEmpty) _thumbnailUrl = cachedThumb;
+        if (cachedUrl.isNotEmpty) {
+          _streamUrl = cachedUrl;
+          _metaLoaded = true;
+        }
+      });
+    }
+
+    // 🔥 STEP 2: Validate session (fast, local)
     final ok = await SecurityGuard.validateSession();
     if (!ok) {
       if (mounted) {
@@ -5501,6 +5599,8 @@ class _StreamPreviewScreenState extends State<StreamPreviewScreen>
       }
       return;
     }
+
+    // 🔥 STEP 3: Fetch fresh metadata in background
     _fetchStreamMetadata();
   }
 
@@ -5561,18 +5661,23 @@ class _StreamPreviewScreenState extends State<StreamPreviewScreen>
         uid: MayaJaalAccount.cachedUid,
       );
 
+      // 🔥 Timeout 8s → 3s (fast fail, cached URL already working)
       final res = await http
           .get(Uri.parse(apiUrl), headers: headers)
-          .timeout(const Duration(seconds: 8));
+          .timeout(const Duration(seconds: 3));
 
       if (res.statusCode == 200) {
         final data = jsonDecode(res.body);
         if (data['success'] == true && (data['url'] != null || data['video_url'] != null)) {
+          final newUrl = (data['url'] ?? data['video_url']).toString();
           if (mounted) {
             setState(() {
-              _streamUrl = data['url'] ?? data['video_url'];
-              _videoTitle = data['title'] ?? data['file_name'] ?? _rawId;
-              _uploaderName = data['uploader'] ?? '@mayajaal';
+              // 🔥 Only replace if no cached URL (avoid video restart)
+              if (_streamUrl.isEmpty) {
+                _streamUrl = newUrl;
+              }
+              _videoTitle = data['title'] ?? data['file_name'] ?? _videoTitle;
+              _uploaderName = data['uploader'] ?? _uploaderName;
               // Only set API thumb if no cache exists
               if (_thumbnailUrl.isEmpty) {
                 final apiThumb = data['thumbnail'] ?? data['poster'] ?? '';
@@ -5583,24 +5688,48 @@ class _StreamPreviewScreenState extends State<StreamPreviewScreen>
               _metaLoaded = true;
             });
           }
+
+          // Save fresh URL for next time
+          await _saveStreamUrlToCache(newUrl);
           return;
         }
       }
 
-      if (mounted) {
+      if (mounted && _streamUrl.isEmpty) {
         setState(() {
           _streamUrl = widget.targetUrl;
           _metaLoaded = true;
         });
       }
     } catch (e) {
-      if (mounted) {
+      if (mounted && _streamUrl.isEmpty) {
         setState(() {
           _streamUrl = widget.targetUrl;
           _metaLoaded = true;
         });
       }
     }
+  }
+
+  // 🔥 Save fresh stream URL into watch history cache
+  Future<void> _saveStreamUrlToCache(String streamUrl) async {
+    if (streamUrl.isEmpty) return;
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      final raw = prefs.getString('watch_history_v2');
+      if (raw == null) return;
+      final List decoded = jsonDecode(raw);
+      bool updated = false;
+      for (final item in decoded) {
+        if (item is Map && item['url'] == widget.targetUrl) {
+          item['streamUrl'] = streamUrl;
+          updated = true;
+        }
+      }
+      if (updated) {
+        await prefs.setString('watch_history_v2', jsonEncode(decoded));
+      }
+    } catch (_) {}
   }
 
   void _shareStreamDirect() {
@@ -5630,12 +5759,19 @@ class _StreamPreviewScreenState extends State<StreamPreviewScreen>
       if (existing.isNotEmpty) finalThumb = existing;
     }
 
+    // 🔥 Preserve stream URL (instant load next time)
+    String finalStreamUrl = _streamUrl;
+    if (finalStreamUrl.isEmpty) {
+      finalStreamUrl = await WatchHistory.getCachedStreamUrl(widget.targetUrl);
+    }
+
     final item = {
       'url': widget.targetUrl,
       'title': _videoTitle,
       'uploader': _uploaderName,
       'id': _rawId,
       'thumbnail': finalThumb,
+      'streamUrl': finalStreamUrl, // 🔥 NEW
       'time': DateTime.now().toIso8601String(),
     };
 
@@ -6002,7 +6138,6 @@ class _StreamPreviewScreenState extends State<StreamPreviewScreen>
 // ═══════════════════════════════════════════════════════
 // ⏭️ END OF PART 1 — PART 2 CONTINUES
 // ═══════════════════════════════════════════════════════
-
 // ═══════════════════════════════════════════════════════
 // MAYAJAAL APP — PART 2 (UPDATED)
 // ═══════════════════════════════════════════════════════
@@ -6512,6 +6647,7 @@ class _SavedVideosScreenState extends State<SavedVideosScreen> {
                 final thumb = item['thumbnail']?.toString() ?? '';
                 final title = item['title']?.toString() ?? 'Video';
                 final url = item['url']?.toString() ?? '';
+                final streamUrl = item['streamUrl']?.toString() ?? '';
                 
                 return Container(
                   margin: const EdgeInsets.only(bottom: 12),
@@ -6535,7 +6671,7 @@ class _SavedVideosScreenState extends State<SavedVideosScreen> {
                         child: buildMediaThumbnail(
                           thumb,
                           title,
-                          url,
+                          streamUrl.isNotEmpty ? streamUrl : url,
                           isSmall: true,
                           onFrameCaptured: (b64) async {
                             await WatchHistory.saveThumbnail(url, b64);
@@ -6681,6 +6817,7 @@ class _HistoryScreenState extends State<HistoryScreen> {
                 final thumb = item['thumbnail']?.toString() ?? '';
                 final title = item['title']?.toString() ?? 'Media Node';
                 final url = item['url']?.toString() ?? '';
+                final streamUrl = item['streamUrl']?.toString() ?? '';
                 
                 return Container(
                   margin: const EdgeInsets.only(bottom: 12),
@@ -6704,7 +6841,7 @@ class _HistoryScreenState extends State<HistoryScreen> {
                         child: buildMediaThumbnail(
                           thumb,
                           title,
-                          url,
+                          streamUrl.isNotEmpty ? streamUrl : url,
                           isSmall: true,
                           onFrameCaptured: (b64) async {
                             await WatchHistory.saveThumbnail(url, b64);
@@ -7545,6 +7682,7 @@ class _NativeVideoPlayerScreenState extends State<NativeVideoPlayerScreen> {
         'uploader': widget.uploader,
         'id': widget.videoId,
         'thumbnail': existingThumb,
+        'streamUrl': widget.videoUrl, // 🔥 NEW: Save direct URL
       });
       await prefs.setString('saved_videos_v1', jsonEncode(savedList));
       prefs.setBool('saved_${widget.videoId}', true);
