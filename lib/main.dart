@@ -4557,84 +4557,159 @@ class _MoreDrawerState extends State<MoreDrawer>
                     ),
                   ),
                   _staggered(
-                    index: 19,
-                    child: _snakeItem(
-                      context,
-                      icon: Icons.handshake_outlined,
-                      color: kDimGreen,
-                      title: 'Partner Agreement',
-                      subtitle: 'Creator partnership terms',
-                      onTap: () {
-                        Navigator.pop(context);
-                        _launchURL('https://www.mayajaal.online/partner.html', inApp: false);
-                      },
-                    ),
-                  ),
-                  _staggered(
-                    index: 20,
-                    child: _snakeItem(
-                      context,
-                      icon: Icons.support_agent,
-                      color: kNeonCyan,
-                      title: 'Help & Support',
-                      subtitle: 'mayajaalsupport@gmail.com',
-                      onTap: () {
-                        Navigator.pop(context);
-                        _launchURL('https://www.mayajaal.online/support.html', inApp: false);
-                      },
-                    ),
-                  ),
-                  _staggered(
-                    index: 21,
-                    child: _snakeItem(
-                      context,
-                      icon: Icons.info_outline,
-                      color: kNeonCyan,
-                      title: 'About MayaJaal',
-                      subtitle: 'Version & info',
-                      onTap: () {
-                        Haptic.medium();
-                        Navigator.pop(context);
-                        _showAboutDialog(context);
-                      },
-                    ),
-                  ),
-                  _staggered(
-                    index: 22,
-                    child: Padding(
-                      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 16),
-                      child: Container(
-                        decoration: BoxDecoration(
-                          color: Colors.red.withOpacity(0.08),
-                          borderRadius: BorderRadius.circular(12),
-                          border: Border.all(color: Colors.redAccent.withOpacity(0.4)),
-                        ),
-                        child: ListTile(
-                          leading: const Icon(Icons.logout, color: Colors.redAccent),
-                          title: const Text(
-                            'Logout Session',
-                            style: TextStyle(
-                              color: Colors.redAccent,
-                              fontWeight: FontWeight.bold,
-                              fontSize: 13,
-                            ),
-                          ),
-                          onTap: () {
-                            Navigator.pop(context);
-                            _logout(context);
-                          },
-                        ),
-                      ),
-                    ),
-                  ),
-                ],
-              ),
-            ),
-          ],
+  index: 14,
+  child: Padding(
+    padding: const EdgeInsets.only(left: 16, top: 18, bottom: 8),
+    child: Row(
+      children: [
+        Container(width: 14, height: 1.5, color: kNeonCyan),
+        const SizedBox(width: 6),
+        const Text(
+          'INFORMATION & LEGAL',
+          style: TextStyle(
+            color: kNeonCyan,
+            fontSize: 11,
+            fontWeight: FontWeight.bold,
+            letterSpacing: 2,
+          ),
         ),
+        const SizedBox(width: 6),
+        Expanded(
+          child: Container(height: 1, color: kNeonCyan.withOpacity(0.3)),
+        ),
+      ],
+    ),
+  ),
+),
+_staggered(
+  index: 15,
+  child: _snakeItem(
+    context,
+    icon: Icons.dashboard,
+    color: kNeonCyan,
+    title: 'Web Dashboard',
+    subtitle: 'Open www.mayajaal.online/dashboard',
+    onTap: () {
+      Navigator.pop(context);
+      // Dashboard bahar browser me khulega
+      _launchURL('https://www.mayajaal.online/dashboard', inApp: false);
+    },
+  ),
+),
+// 🚀 NEW UPDATED POLICIES
+_staggered(
+  index: 16,
+  child: _snakeItem(
+    context,
+    icon: Icons.privacy_tip_outlined,
+    color: kDimGreen,
+    title: 'Privacy Policy',
+    subtitle: 'Data protection & identifiers',
+    onTap: () {
+      Navigator.pop(context);
+      LegalPolicyDialog.showPolicy(context, 'privacy');
+    },
+  ),
+),
+_staggered(
+  index: 17,
+  child: _snakeItem(
+    context,
+    icon: Icons.description_outlined,
+    color: kDimGreen,
+    title: 'Terms & Conditions',
+    subtitle: 'Operating rules & user agreement',
+    onTap: () {
+      Navigator.pop(context);
+      LegalPolicyDialog.showPolicy(context, 'terms');
+    },
+  ),
+),
+_staggered(
+  index: 18,
+  child: _snakeItem(
+    context,
+    icon: Icons.copyright_outlined,
+    color: const Color(0xFFFB7185), // Neon Red/Pink
+    title: 'DMCA Policy',
+    subtitle: '17 U.S.C. § 512 Notice',
+    onTap: () {
+      Navigator.pop(context);
+      LegalPolicyDialog.showPolicy(context, 'dmca');
+    },
+  ),
+),
+_staggered(
+  index: 19,
+  child: _snakeItem(
+    context,
+    icon: Icons.handshake_outlined,
+    color: kNeonCyan,
+    title: 'Partner Agreement',
+    subtitle: 'Monetization & dynamic CPM',
+    onTap: () {
+      Navigator.pop(context);
+      LegalPolicyDialog.showPolicy(context, 'partner');
+    },
+  ),
+),
+_staggered(
+  index: 20,
+  child: _snakeItem(
+    context,
+    icon: Icons.support_agent_outlined,
+    color: Colors.amberAccent,
+    title: 'Help & Support',
+    subtitle: '24/7 Creator Operations Desk',
+    onTap: () {
+      Navigator.pop(context);
+      LegalPolicyDialog.showPolicy(context, 'support');
+    },
+  ),
+),
+_staggered(
+  index: 21,
+  child: _snakeItem(
+    context,
+    icon: Icons.info_outline,
+    color: kNeonCyan,
+    title: 'About MayaJaal',
+    subtitle: 'Version & info',
+    onTap: () {
+      Haptic.medium();
+      Navigator.pop(context);
+      _showAboutDialog(context);
+    },
+  ),
+),
+_staggered(
+  index: 22,
+  child: Padding(
+    padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 16),
+    child: Container(
+      decoration: BoxDecoration(
+        color: Colors.red.withOpacity(0.08),
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(color: Colors.redAccent.withOpacity(0.4)),
       ),
-    );
-  }
+      child: ListTile(
+        leading: const Icon(Icons.logout, color: Colors.redAccent),
+        title: const Text(
+          'Logout Session',
+          style: TextStyle(
+            color: Colors.redAccent,
+            fontWeight: FontWeight.bold,
+            fontSize: 13,
+          ),
+        ),
+        onTap: () {
+          Navigator.pop(context);
+          _logout(context);
+        },
+      ),
+    ),
+  ),
+),
 
   Widget _snakeItem(
     BuildContext context, {
