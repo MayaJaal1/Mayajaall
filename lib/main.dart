@@ -265,7 +265,7 @@ class LegalPolicyDialog {
           _buildSection('5. 28-Day Link Renewal Lifecycle', 
             'Monetization is directly linked to active media assets. Converted video links maintain a 28-day lifecycle. Automated renewal alerts are transmitted via @MayaJaalExpiryBot 24 hours prior to expiration; non-renewed links cease to accumulate views upon deactivation.'),
           _buildSection('6. Payout Rules & Thresholds', 
-            '6.1 Threshold & Verification: Withdrawal requests may be submitted once the verified Available Balance reaches $5.00 USD (or INR equivalent).\n\n6.2 Verified Rails: Disbursements are cleared via direct UPI and verified Bank Transfer within 24 to 72 business hours following anti-fraud telemetry screening.\n\n6.3 Reversals: Disputed, bot-manipulated, or fraudulent traffic balances will be permanently voided.'),
+            '6.1 Threshold & Verification: Withdrawal requests may be submitted once the verified Available Balance reaches \$5.00 USD (or INR equivalent).\n\n6.2 Verified Rails: Disbursements are cleared via direct UPI and verified Bank Transfer within 24 to 72 business hours following anti-fraud telemetry screening.\n\n6.3 Reversals: Disputed, bot-manipulated, or fraudulent traffic balances will be permanently voided.'),
           _buildSection('7. Independent Relationship', 
             'Creators operate as independent contractors. Participation establishes no employment, franchise, or agency relationship with MayaJaal.'),
         ];
@@ -4587,7 +4587,7 @@ class _MoreDrawerState extends State<MoreDrawer>
                       icon: Icons.account_balance,
                       color: kGreen,
                       title: 'Withdraw Earnings',
-                      subtitle: 'Minimum $5 · Bank / UPI',
+                      subtitle: 'Minimum \$5 · Bank / UPI',
                       onTap: () {
                         Haptic.medium();
                         Navigator.pop(context);
