@@ -120,27 +120,84 @@ Widget buildAutoThumbnail(String title, {bool isSmall = false}) {
   );
 }
 
-Widget buildMediaThumbnail(String? thumb, String title, {bool isSmall = false}) {
+// 🔥 NEW: 5-second fast looping video thumbnail (as requested)
+class VideoLoopThumbnail extends StatefulWidget {
+  final String videoUrl;
+  final String title;
+  final bool isSmall;
+  const VideoLoopThumbnail({super.key, required this.videoUrl, required this.title, this.isSmall = false});
+  @override
+  State<VideoLoopThumbnail> createState() => _VideoLoopThumbnailState();
+}
+
+class _VideoLoopThumbnailState extends State<VideoLoopThumbnail> {
+  late VideoPlayerController _controller;
+  bool _isInit = false;
+
+  @override
+  void initState() {
+    super.initState();
+    if (widget.videoUrl.isEmpty || !widget.videoUrl.startsWith('http')) return;
+    _controller = VideoPlayerController.networkUrl(Uri.parse(widget.videoUrl));
+    _controller.initialize().then((_) {
+      if (!mounted) return;
+      setState(() => _isInit = true);
+      _controller.setVolume(0);
+      _controller.setPlaybackSpeed(2.0); // Fast play
+      _controller.play();
+      _controller.addListener(() {
+        if (_controller.value.position.inSeconds >= 5) {
+          _controller.seekTo(Duration.zero);
+        }
+      });
+    }).catchError((e) {
+      debugPrint('LoopThumb error: $e');
+    });
+  }
+
+  @override
+  void dispose() {
+    if (_isInit) _controller.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    if (!_isInit) return buildAutoThumbnail(widget.title, isSmall: widget.isSmall);
+    return SizedBox.expand(
+      child: FittedBox(
+        fit: BoxFit.cover,
+        child: SizedBox(
+          width: _controller.value.size.width,
+          height: _controller.value.size.height,
+          child: VideoPlayer(_controller),
+        ),
+      ),
+    );
+  }
+}
+
+Widget buildMediaThumbnail(String? thumb, String title, String videoUrl, {bool isSmall = false}) {
   if (thumb != null && thumb.isNotEmpty) {
     if (thumb.startsWith('http')) {
       return Image.network(
         thumb,
         fit: BoxFit.cover,
-        errorBuilder: (c, e, s) => buildAutoThumbnail(title, isSmall: isSmall),
+        errorBuilder: (c, e, s) => VideoLoopThumbnail(videoUrl: videoUrl, title: title, isSmall: isSmall),
       );
     } else {
       try {
         return Image.memory(
           base64Decode(thumb),
           fit: BoxFit.cover,
-          errorBuilder: (c, e, s) => buildAutoThumbnail(title, isSmall: isSmall),
+          errorBuilder: (c, e, s) => VideoLoopThumbnail(videoUrl: videoUrl, title: title, isSmall: isSmall),
         );
       } catch (_) {
-        return buildAutoThumbnail(title, isSmall: isSmall);
+        return VideoLoopThumbnail(videoUrl: videoUrl, title: title, isSmall: isSmall);
       }
     }
   }
-  return buildAutoThumbnail(title, isSmall: isSmall);
+  return VideoLoopThumbnail(videoUrl: videoUrl, title: title, isSmall: isSmall);
 }
 
 // ═══════════════════════════════════════════════════════
@@ -3076,7 +3133,7 @@ class FirstTimeAdsPopup {
 }
 
 // ═══════════════════════════════════════════════════════
-// ⏭️ END OF PART 1 — PART 2 CONTINUES (HomeScreen, Player, etc.)
+// ⏭️ END OF PART 1 — PART 2 CONTINUES
 // ═══════════════════════════════════════════════════════
 // ═══════════════════════════════════════════════════════
 // HOME SCREEN
@@ -3980,8 +4037,10 @@ class _MoreDrawerState extends State<MoreDrawer>
 
   void _shareApp() {
     Haptic.light();
+    final myUid = MayaJaalAccount.cachedUid ?? '';
+    final refLink = 'https://www.mayajaal.online?ref=$myUid';
     Share.share(
-      '🚀 Experience Matrix-speed streaming on MayaJaal App!\nDownload: https://www.mayajaal.online',
+      '🚀 Experience Matrix-speed streaming on MayaJaal App!\nDownload: $refLink',
     );
   }
 
@@ -4227,72 +4286,6 @@ class _MoreDrawerState extends State<MoreDrawer>
             const SizedBox(height: 20),
           ],
         ),
-      ),
-    );
-  }
-
-  void _showReferralDialog(BuildContext context) {
-    final myUid = MayaJaalAccount.cachedUid ?? '';
-    final refLink = 'https://www.mayajaal.online?ref=$myUid';
-    
-    showDialog(
-      context: context,
-      builder: (c) => AlertDialog(
-        backgroundColor: kCardBg,
-        shape: RoundedRectangleBorder(
-          borderRadius: BorderRadius.circular(16),
-          side: const BorderSide(color: kGold, width: 1.5),
-        ),
-        title: const Row(
-          children: [
-            Icon(Icons.card_giftcard, color: kGold, size: 24),
-            SizedBox(width: 8),
-            Text('REFER & EARN', style: TextStyle(color: kGold, fontSize: 16, fontWeight: FontWeight.bold, letterSpacing: 1.2)),
-          ],
-        ),
-        content: Column(
-          mainAxisSize: MainAxisSize.min,
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            const Text(
-              'Invite your friends to MayaJaal and earn exciting rewards on every successful signup!',
-              style: TextStyle(color: Colors.white70, fontSize: 12, height: 1.5),
-            ),
-            const SizedBox(height: 16),
-            Container(
-              padding: const EdgeInsets.all(12),
-              decoration: BoxDecoration(
-                color: Colors.black,
-                borderRadius: BorderRadius.circular(8),
-                border: Border.all(color: kGold.withOpacity(0.5)),
-              ),
-              child: SelectableText(
-                refLink,
-                style: const TextStyle(color: kGold, fontFamily: 'monospace', fontSize: 12),
-              ),
-            ),
-          ],
-        ),
-        actions: [
-          TextButton(
-            onPressed: () async {
-              Haptic.medium();
-              await Clipboard.setData(ClipboardData(text: refLink));
-              if (context.mounted) {
-                ScaffoldMessenger.of(context).showSnackBar(
-                  const SnackBar(backgroundColor: kCardBg, content: Text('✅ Referral link copied!', style: TextStyle(color: kGold))),
-                );
-              }
-            },
-            child: const Text('COPY LINK', style: TextStyle(color: kGold)),
-          ),
-          TextButton(
-            onPressed: () {
-              Share.share('Join MayaJaal and start earning! Use my link: $refLink');
-            },
-            child: const Text('SHARE', style: TextStyle(color: kGreen)),
-          ),
-        ],
       ),
     );
   }
@@ -4602,21 +4595,6 @@ class _MoreDrawerState extends State<MoreDrawer>
                     index: 4,
                     child: _snakeItem(
                       context,
-                      icon: Icons.card_giftcard,
-                      color: kGold,
-                      title: 'Refer & Earn',
-                      subtitle: 'Invite friends and earn rewards',
-                      onTap: () {
-                        Haptic.medium();
-                        Navigator.pop(context);
-                        _showReferralDialog(context);
-                      },
-                    ),
-                  ),
-                  _staggered(
-                    index: 5,
-                    child: _snakeItem(
-                      context,
                       icon: Icons.bookmark,
                       color: kNeonCyan,
                       title: 'Saved Videos',
@@ -4632,7 +4610,7 @@ class _MoreDrawerState extends State<MoreDrawer>
                     ),
                   ),
                   _staggered(
-                    index: 6,
+                    index: 5,
                     child: _snakeItem(
                       context,
                       icon: Icons.vpn_key,
@@ -4647,7 +4625,7 @@ class _MoreDrawerState extends State<MoreDrawer>
                     ),
                   ),
                   _staggered(
-                    index: 7,
+                    index: 6,
                     child: _snakeItem(
                       context,
                       icon: Icons.smart_toy,
@@ -4662,13 +4640,13 @@ class _MoreDrawerState extends State<MoreDrawer>
                     ),
                   ),
                   _staggered(
-                    index: 8,
+                    index: 7,
                     child: _snakeItem(
                       context,
                       icon: Icons.share,
                       color: kNeonCyan,
                       title: 'Share MayaJaal App',
-                      subtitle: 'Invite your friends',
+                      subtitle: 'Invite your friends & earn referral',
                       onTap: () {
                         Navigator.pop(context);
                         _shareApp();
@@ -4676,7 +4654,7 @@ class _MoreDrawerState extends State<MoreDrawer>
                     ),
                   ),
                   _staggered(
-                    index: 9,
+                    index: 8,
                     child: _snakeItem(
                       context,
                       icon: Icons.settings,
@@ -4694,7 +4672,7 @@ class _MoreDrawerState extends State<MoreDrawer>
                     ),
                   ),
                   _staggered(
-                    index: 10,
+                    index: 9,
                     child: Padding(
                       padding: const EdgeInsets.only(left: 16, top: 18, bottom: 8),
                       child: Row(
@@ -4719,7 +4697,7 @@ class _MoreDrawerState extends State<MoreDrawer>
                     ),
                   ),
                   _staggered(
-                    index: 11,
+                    index: 10,
                     child: _socialItem(
                       context,
                       imageUrl:
@@ -4735,7 +4713,7 @@ class _MoreDrawerState extends State<MoreDrawer>
                     ),
                   ),
                   _staggered(
-                    index: 12,
+                    index: 11,
                     child: _socialItem(
                       context,
                       imageUrl:
@@ -4751,7 +4729,7 @@ class _MoreDrawerState extends State<MoreDrawer>
                     ),
                   ),
                   _staggered(
-                    index: 13,
+                    index: 12,
                     child: _socialItem(
                       context,
                       imageUrl:
@@ -4767,7 +4745,7 @@ class _MoreDrawerState extends State<MoreDrawer>
                     ),
                   ),
                   _staggered(
-                    index: 14,
+                    index: 13,
                     child: Padding(
                       padding: const EdgeInsets.only(left: 16, top: 18, bottom: 8),
                       child: Row(
@@ -4792,7 +4770,7 @@ class _MoreDrawerState extends State<MoreDrawer>
                     ),
                   ),
                   _staggered(
-                    index: 15,
+                    index: 14,
                     child: _snakeItem(
                       context,
                       icon: Icons.dashboard,
@@ -4806,7 +4784,7 @@ class _MoreDrawerState extends State<MoreDrawer>
                     ),
                   ),
                   _staggered(
-                    index: 16,
+                    index: 15,
                     child: _snakeItem(
                       context,
                       icon: Icons.privacy_tip_outlined,
@@ -4820,7 +4798,7 @@ class _MoreDrawerState extends State<MoreDrawer>
                     ),
                   ),
                   _staggered(
-                    index: 17,
+                    index: 16,
                     child: _snakeItem(
                       context,
                       icon: Icons.description_outlined,
@@ -4834,7 +4812,7 @@ class _MoreDrawerState extends State<MoreDrawer>
                     ),
                   ),
                   _staggered(
-                    index: 18,
+                    index: 17,
                     child: _snakeItem(
                       context,
                       icon: Icons.copyright_outlined,
@@ -4848,7 +4826,7 @@ class _MoreDrawerState extends State<MoreDrawer>
                     ),
                   ),
                   _staggered(
-                    index: 19,
+                    index: 18,
                     child: _snakeItem(
                       context,
                       icon: Icons.handshake_outlined,
@@ -4862,7 +4840,7 @@ class _MoreDrawerState extends State<MoreDrawer>
                     ),
                   ),
                   _staggered(
-                    index: 20,
+                    index: 19,
                     child: _snakeItem(
                       context,
                       icon: Icons.support_agent_outlined,
@@ -4876,7 +4854,7 @@ class _MoreDrawerState extends State<MoreDrawer>
                     ),
                   ),
                   _staggered(
-                    index: 21,
+                    index: 20,
                     child: _snakeItem(
                       context,
                       icon: Icons.info_outline,
@@ -4891,7 +4869,7 @@ class _MoreDrawerState extends State<MoreDrawer>
                     ),
                   ),
                   _staggered(
-                    index: 22,
+                    index: 21,
                     child: Padding(
                       padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 16),
                       child: Container(
@@ -5736,6 +5714,7 @@ class _SavedVideosScreenState extends State<SavedVideosScreen> {
                 final item = _saved[i];
                 final thumb = item['thumbnail']?.toString() ?? '';
                 final title = item['title']?.toString() ?? 'Video';
+                final url = item['url']?.toString() ?? '';
                 
                 return Container(
                   margin: const EdgeInsets.only(bottom: 12),
@@ -5755,7 +5734,7 @@ class _SavedVideosScreenState extends State<SavedVideosScreen> {
                       ),
                       child: ClipRRect(
                         borderRadius: BorderRadius.circular(7),
-                        child: buildMediaThumbnail(thumb, title, isSmall: true),
+                        child: buildMediaThumbnail(thumb, title, url, isSmall: true),
                       ),
                     ),
                     title: Text(
@@ -5777,7 +5756,7 @@ class _SavedVideosScreenState extends State<SavedVideosScreen> {
                       Navigator.push(
                         context,
                         MaterialPageRoute(
-                          builder: (_) => StreamPreviewScreen(targetUrl: item['url']),
+                          builder: (_) => StreamPreviewScreen(targetUrl: url),
                         ),
                       ).then((_) => _loadSaved());
                     },
@@ -5894,6 +5873,7 @@ class _HistoryScreenState extends State<HistoryScreen> {
                 final item = _history[i];
                 final thumb = item['thumbnail']?.toString() ?? '';
                 final title = item['title']?.toString() ?? 'Media Node';
+                final url = item['url']?.toString() ?? '';
                 
                 return Container(
                   margin: const EdgeInsets.only(bottom: 12),
@@ -5913,7 +5893,7 @@ class _HistoryScreenState extends State<HistoryScreen> {
                       ),
                       child: ClipRRect(
                         borderRadius: BorderRadius.circular(7),
-                        child: buildMediaThumbnail(thumb, title, isSmall: true),
+                        child: buildMediaThumbnail(thumb, title, url, isSmall: true),
                       ),
                     ),
                     title: Text(
@@ -5944,7 +5924,7 @@ class _HistoryScreenState extends State<HistoryScreen> {
                       Navigator.push(
                         context,
                         MaterialPageRoute(
-                          builder: (_) => StreamPreviewScreen(targetUrl: item['url']),
+                          builder: (_) => StreamPreviewScreen(targetUrl: url),
                         ),
                       ).then((_) => _loadHistory());
                     },
@@ -6469,6 +6449,22 @@ class _StreamPreviewScreenState extends State<StreamPreviewScreen>
               padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
               child: Column(
                 children: [
+                  // 🏠 HOME BUTTON AT TOP (As Requested)
+                  SizedBox(
+                    width: double.infinity,
+                    height: 50,
+                    child: OutlinedButton.icon(
+                      onPressed: _goToHome,
+                      icon: const Icon(Icons.home, color: Colors.white54, size: 20),
+                      label: const Text('GO TO HOME PAGE', style: TextStyle(color: Colors.white54, fontSize: 12, fontWeight: FontWeight.bold, letterSpacing: 1.5)),
+                      style: OutlinedButton.styleFrom(
+                        side: BorderSide(color: Colors.white24, width: 1.5),
+                        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(25)),
+                      ),
+                    ),
+                  ),
+                  const SizedBox(height: 12),
+
                   Row(
                     children: [
                       IconButton(
@@ -6501,6 +6497,7 @@ class _StreamPreviewScreenState extends State<StreamPreviewScreen>
                     ],
                   ),
                   const SizedBox(height: 12),
+                  
                   Container(
                     padding: const EdgeInsets.all(4),
                     decoration: BoxDecoration(
@@ -6517,7 +6514,7 @@ class _StreamPreviewScreenState extends State<StreamPreviewScreen>
                           fit: StackFit.expand,
                           alignment: Alignment.center,
                           children: [
-                            buildMediaThumbnail(_thumbnailUrl, _videoTitle),
+                            buildMediaThumbnail(_thumbnailUrl, _videoTitle, _streamUrl),
                             Container(color: Colors.black.withOpacity(0.3)),
                             if (!_isReadyToPlay) _buildCountdownCircle(),
                             Positioned(
@@ -6535,22 +6532,6 @@ class _StreamPreviewScreenState extends State<StreamPreviewScreen>
                     ),
                   ),
                   const SizedBox(height: 16),
-                  
-                  // 🏠 HOME BUTTON AT TOP
-                  SizedBox(
-                    width: double.infinity,
-                    height: 50,
-                    child: OutlinedButton.icon(
-                      onPressed: _goToHome,
-                      icon: const Icon(Icons.home, color: Colors.white54, size: 20),
-                      label: const Text('GO TO HOME PAGE', style: TextStyle(color: Colors.white54, fontSize: 12, fontWeight: FontWeight.bold, letterSpacing: 1.5)),
-                      style: OutlinedButton.styleFrom(
-                        side: BorderSide(color: Colors.white24, width: 1.5),
-                        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(25)),
-                      ),
-                    ),
-                  ),
-                  const SizedBox(height: 12),
 
                   // 🐍 RED SNAKE PLAY BUTTON (Below Home)
                   if (_isReadyToPlay)
@@ -7310,7 +7291,8 @@ class _NativeVideoPlayerScreenState extends State<NativeVideoPlayerScreen> {
     if (_isFullscreen) {
       return SizedBox.expand(
         child: FittedBox(
-          fit: BoxFit.cover,
+          // 🔥 FIX: Changed from BoxFit.cover to BoxFit.contain to fix over-zoom
+          fit: BoxFit.contain,
           child: SizedBox(
             width: _controller.value.size.width,
             height: _controller.value.size.height,
@@ -7883,6 +7865,7 @@ class _NativeVideoPlayerScreenState extends State<NativeVideoPlayerScreen> {
     final uploader = (v['uploader'] ?? '@mayajaal').toString();
     final views = (v['views'] ?? 0) as int;
     final thumb = v['thumbnail']?.toString() ?? '';
+    final streamUrl = (v['originalUrl'] ?? v['url'] ?? '').toString();
 
     return Padding(
       padding: const EdgeInsets.only(right: 10),
@@ -7911,7 +7894,7 @@ class _NativeVideoPlayerScreenState extends State<NativeVideoPlayerScreen> {
                 ),
                 child: ClipRRect(
                   borderRadius: const BorderRadius.vertical(top: Radius.circular(11)),
-                  child: buildMediaThumbnail(thumb, title, isSmall: true),
+                  child: buildMediaThumbnail(thumb, title, streamUrl, isSmall: true),
                 ),
               ),
               Padding(
@@ -8424,6 +8407,7 @@ class _UserProfileScreenState extends State<UserProfileScreen> {
                             final name = vid['filename'] ?? 'Video';
                             final views = vid['views'] ?? 0;
                             final thumb = vid['thumbnail']?.toString() ?? '';
+                            final streamUrl = (vid['originalUrl'] ?? vid['url'] ?? '').toString();
 
                             return Container(
                               margin: const EdgeInsets.only(bottom: 8),
@@ -8435,7 +8419,7 @@ class _UserProfileScreenState extends State<UserProfileScreen> {
                                   decoration: BoxDecoration(color: Colors.black, borderRadius: BorderRadius.circular(8), border: Border.all(color: kGreen.withOpacity(0.5))),
                                   child: ClipRRect(
                                     borderRadius: BorderRadius.circular(7),
-                                    child: buildMediaThumbnail(thumb, name, isSmall: true),
+                                    child: buildMediaThumbnail(thumb, name, streamUrl, isSmall: true),
                                   ),
                                 ),
                                 title: Text(name, style: const TextStyle(color: Colors.white, fontSize: 12.5, fontWeight: FontWeight.bold), maxLines: 1, overflow: TextOverflow.ellipsis),
