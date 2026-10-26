@@ -287,7 +287,7 @@ jobs:
           </manifest>
           EOF
 
-      - name: Create app build.gradle (Declarative Plugins Block)
+      - name: Create app build.gradle
         shell: bash
         run: |
           cat > android/app/build.gradle <<'EOF'
@@ -298,9 +298,9 @@ jobs:
           }
 
           android {
-    namespace 'com.mayajaal.online'
-    compileSdkVersion 36
-    ndkVersion "27.0.12077973" 
+              namespace 'com.mayajaal.online'
+              compileSdkVersion 36
+              ndkVersion "27.0.12077973"   // 👈 NDK VERSION ADD KIYA HAI
 
               compileOptions {
                   sourceCompatibility JavaVersion.VERSION_17
@@ -344,7 +344,7 @@ jobs:
           }
           EOF
 
-      - name: Create settings.gradle (Declarative)
+      - name: Create settings.gradle
         shell: bash
         run: |
           cat > android/settings.gradle <<'EOF'
@@ -376,7 +376,7 @@ jobs:
           include ':app'
           EOF
 
-      - name: Create root build.gradle (No buildscript block)
+      - name: Create root build.gradle
         shell: bash
         run: |
           cat > android/build.gradle <<'EOF'
