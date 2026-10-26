@@ -37,46 +37,18 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-
-          test -f android/app/google-services.json || {
-            echo "::error::android/app/google-services.json not found"
-            exit 1
-          }
-
-          test -f assets/icon/logo.png || {
-            echo "::error::assets/icon/logo.png not found"
-            exit 1
-          }
+          test -f android/app/google-services.json || { echo "::error::android/app/google-services.json not found"; exit 1; }
+          test -f assets/icon/logo.png || { echo "::error::assets/icon/logo.png not found"; exit 1; }
 
       - name: Verify existing keystore
         shell: bash
         run: |
           set -euo pipefail
-
           if [ ! -f "mayajaal-release.jks" ]; then
             echo "::error::mayajaal-release.jks repo mein nahi mila."
-            echo "::error::Pehle 'Setup Keystore (One Time)' workflow chalao aur usse commit hone do."
             exit 1
           fi
-
           echo "✅ Existing keystore mil gaya - isse hi sign hoga"
-
-      - name: Print SHA1 and SHA256 (YEH COPY KARO)
-        shell: bash
-        run: |
-          set -euo pipefail
-
-          echo "=========================================================="
-          echo "        SHA1 + SHA256  →  YAHAN SE COPY KARO"
-          echo "=========================================================="
-          keytool -list -v -keystore mayajaal-release.jks \
-            -alias newkey2024 \
-            -storepass MayajaalRelease2024 \
-            -keypass MayajaalRelease2024 | grep -iE "SHA1:|SHA256:"
-          echo "=========================================================="
-          echo "NOTE: Ye SHA assetlinks.json ke sha256_cert_fingerprints"
-          echo "      se match karni chahiye (colon ke saath, uppercase)."
-          echo "=========================================================="
 
       - name: Write pubspec.yaml
         shell: bash
@@ -113,6 +85,7 @@ jobs:
             photo_manager: ^3.6.4
             photo_manager_image_provider: ^2.1.1
             crypto: ^3.0.3
+            interactive_media_ads: ^0.2.6  # 🔥 FIX: Ads package add kiya
 
           dev_dependencies:
             flutter_test:
@@ -137,19 +110,15 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-
           mkdir -p android/app/src/main/kotlin/com/mayajaal/online
           mkdir -p android/app/src/main/res/values
           mkdir -p android/app/src/main/res/values-night
           mkdir -p android/app/src/main/res/xml
-
           cp mayajaal-release.jks android/app/mayajaal-release.jks
 
           cat > android/app/src/main/kotlin/com/mayajaal/online/MainActivity.kt <<'EOF'
           package com.mayajaal.online
-
           import io.flutter.embedding.android.FlutterActivity
-
           class MainActivity : FlutterActivity()
           EOF
 
@@ -239,6 +208,11 @@ jobs:
                   android:usesCleartextTraffic="false"
                   tools:targetApi="34">
 
+                  <!-- 🔥 AdMob App ID for Ads -->
+                  <meta-data
+                      android:name="com.google.android.gms.ads.APPLICATION_ID"
+                      android:value="ca-app-pub-2838903415772756~9180315931" />
+
                   <activity
                       android:name=".MainActivity"
                       android:exported="true"
@@ -263,19 +237,16 @@ jobs:
                           <action android:name="android.intent.action.VIEW"/>
                           <category android:name="android.intent.category.DEFAULT"/>
                           <category android:name="android.intent.category.BROWSABLE"/>
-
                           <data android:scheme="https" android:host="mayajaal.online" android:pathPrefix="/v/"/>
                           <data android:scheme="https" android:host="mayajaal.online" android:pathPrefix="/stream/"/>
                           <data android:scheme="https" android:host="mayajaal.online" android:pathPrefix="/api/v/"/>
                           <data android:scheme="https" android:host="mayajaal.online" android:pathPrefix="/tb/"/>
                           <data android:scheme="https" android:host="mayajaal.online" android:pathPrefix="/s/"/>
-
                           <data android:scheme="https" android:host="www.mayajaal.online" android:pathPrefix="/v/"/>
                           <data android:scheme="https" android:host="www.mayajaal.online" android:pathPrefix="/stream/"/>
                           <data android:scheme="https" android:host="www.mayajaal.online" android:pathPrefix="/api/v/"/>
                           <data android:scheme="https" android:host="www.mayajaal.online" android:pathPrefix="/tb/"/>
                           <data android:scheme="https" android:host="www.mayajaal.online" android:pathPrefix="/s/"/>
-
                           <data android:scheme="https" android:host="m.mayajaal.online"/>
                       </intent-filter>
 
@@ -285,13 +256,11 @@ jobs:
                           <category android:name="android.intent.category.BROWSABLE"/>
                           <data android:scheme="mayajaall"/>
                       </intent-filter>
-
                   </activity>
 
                   <meta-data
                       android:name="flutterEmbedding"
                       android:value="2"/>
-
               </application>
 
               <queries>
@@ -350,6 +319,7 @@ jobs:
               compileOptions {
                   sourceCompatibility JavaVersion.VERSION_17
                   targetCompatibility JavaVersion.VERSION_17
+                  coreLibraryDesugaringEnabled true  // 🔥 FIX: Desugaring ON kiya Ads ke liye
               }
 
               kotlinOptions {
@@ -390,6 +360,11 @@ jobs:
           flutter {
               source '../..'
           }
+
+          // 🔥 FIX: Desugaring library dependency
+          dependencies {
+              coreLibraryDesugaring 'com.android.tools:desugar_jdk_libs:2.1.5'
+          }
           EOF
 
       - name: Create root build.gradle
@@ -398,12 +373,10 @@ jobs:
           cat > android/build.gradle <<'EOF'
           buildscript {
               ext.kotlin_version = '1.9.24'
-
               repositories {
                   google()
                   mavenCentral()
               }
-
               dependencies {
                   classpath 'com.android.tools.build:gradle:8.1.4'
                   classpath "org.jetbrains.kotlin:kotlin-gradle-plugin:$kotlin_version"
@@ -419,11 +392,9 @@ jobs:
           }
 
           rootProject.buildDir = '../build'
-
           subprojects {
               project.buildDir = "${rootProject.buildDir}/${project.name}"
           }
-
           subprojects {
               project.evaluationDependsOn(':app')
           }
@@ -448,18 +419,14 @@ jobs:
         run: |
           cat > android/settings.gradle <<'EOF'
           include ':app'
-
           def localPropertiesFile = new File(rootProject.projectDir, "local.properties")
           def properties = new Properties()
-
           assert localPropertiesFile.exists()
           localPropertiesFile.withReader("UTF-8") { reader ->
               properties.load(reader)
           }
-
           def flutterSdkPath = properties.getProperty("flutter.sdk")
           assert flutterSdkPath != null, "flutter.sdk not set in local.properties"
-
           apply from: "$flutterSdkPath/packages/flutter_tools/gradle/app_plugin_loader.gradle"
           EOF
 
@@ -476,29 +443,14 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-
           APK="build/app/outputs/flutter-apk/app-release.apk"
-
           if [ ! -f "$APK" ]; then
             echo "::error::APK build output was not found"
             exit 1
           fi
-
           mkdir -p release-apk
           cp "$APK" release-apk/MayaJaal.apk
           ls -lh release-apk/MayaJaal.apk
-
-      - name: Print final APK SHA256 (sanity check)
-        shell: bash
-        run: |
-          echo "=========================================================="
-          echo "  Actual built APK ka signing SHA256 (verify karo):"
-          echo "=========================================================="
-          keytool -printcert -jarfile release-apk/MayaJaal.apk \
-            | grep -iE "SHA1:|SHA256:"
-          echo "=========================================================="
-          echo "  Ye SHA256 assetlinks.json se match honi chahiye."
-          echo "=========================================================="
 
       - name: Upload APK artifact
         uses: actions/upload-artifact@v4
@@ -522,6 +474,3 @@ jobs:
             Security: Gmail-Only, HMAC, HTTPS-Only, Anti-Hack
           draft: false
           prerelease: false
-          make_latest: true
-          files: release-apk/MayaJaal.apk
-          fail_on_unmatched_files: true
