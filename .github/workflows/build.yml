@@ -29,7 +29,7 @@ jobs:
       - name: Set up Flutter
         uses: subosito/flutter-action@v2
         with:
-          flutter-version: "3.29.0" # 🔥 FIX: Flutter update kiya
+          flutter-version: "3.29.0"
           channel: stable
           cache: true
 
@@ -208,7 +208,6 @@ jobs:
                   android:usesCleartextTraffic="false"
                   tools:targetApi="34">
 
-                  <!-- 🔥 AdMob App ID for Ads -->
                   <meta-data
                       android:name="com.google.android.gms.ads.APPLICATION_ID"
                       android:value="ca-app-pub-2838903415772756~9180315931" />
@@ -288,28 +287,15 @@ jobs:
           </manifest>
           EOF
 
-      - name: Create app build.gradle
+      - name: Create app build.gradle (Declarative Plugins Block)
         shell: bash
         run: |
           cat > android/app/build.gradle <<'EOF'
-          def localProperties = new Properties()
-          def localPropertiesFile = rootProject.file('local.properties')
-
-          if (localPropertiesFile.exists()) {
-              localPropertiesFile.withReader('UTF-8') { reader ->
-                  localProperties.load(reader)
-              }
+          plugins {
+              id "com.android.application"
+              id "kotlin-android"
+              id "dev.flutter.flutter-gradle-plugin"
           }
-
-          def flutterRoot = localProperties.getProperty('flutter.sdk')
-          if (flutterRoot == null) {
-              throw new GradleException("Flutter SDK not found.")
-          }
-
-          apply plugin: 'com.android.application'
-          apply plugin: 'kotlin-android'
-          apply plugin: 'com.google.gms.google-services'
-          apply from: "$flutterRoot/packages/flutter_tools/gradle/flutter.gradle"
 
           android {
               namespace 'com.mayajaal.online'
@@ -324,10 +310,6 @@ jobs:
 
               kotlinOptions {
                   jvmTarget = '17'
-              }
-
-              sourceSets {
-                  main.java.srcDirs += 'src/main/kotlin'
               }
 
               defaultConfig {
@@ -357,32 +339,47 @@ jobs:
               }
           }
 
-          flutter {
-              source '../..'
-          }
-
           dependencies {
               coreLibraryDesugaring 'com.android.tools:desugar_jdk_libs:2.1.5'
           }
           EOF
 
-      - name: Create root build.gradle
+      - name: Create settings.gradle (Declarative)
         shell: bash
         run: |
-          cat > android/build.gradle <<'EOF'
-          buildscript {
-              ext.kotlin_version = '1.9.24'
+          cat > android/settings.gradle <<'EOF'
+          pluginManagement {
+              def flutterSdkPath = {
+                  def properties = new Properties()
+                  file("local.properties").withInputStream { properties.load(it) }
+                  def flutterSdkPath = properties.getProperty("flutter.sdk")
+                  assert flutterSdkPath != null, "flutter.sdk not set in local.properties"
+                  return flutterSdkPath
+              }()
+
+              includeBuild("$flutterSdkPath/packages/flutter_tools/gradle")
+
               repositories {
                   google()
                   mavenCentral()
-              }
-              dependencies {
-                  classpath 'com.android.tools.build:gradle:8.7.0' # 🔥 AGP update kiya
-                  classpath "org.jetbrains.kotlin:kotlin-gradle-plugin:$kotlin_version"
-                  classpath 'com.google.gms:google-services:4.4.0'
+                  gradlePluginPortal()
               }
           }
 
+          plugins {
+              id "dev.flutter.flutter-plugin-loader" version "1.0.0"
+              id "com.android.application" version "8.7.0" apply false
+              id "org.jetbrains.kotlin.android" version "1.9.24" apply false
+              id "com.google.gms.google-services" version "4.4.0" apply false
+          }
+
+          include ':app'
+          EOF
+
+      - name: Create root build.gradle (No buildscript block)
+        shell: bash
+        run: |
+          cat > android/build.gradle <<'EOF'
           allprojects {
               repositories {
                   google()
@@ -411,22 +408,6 @@ jobs:
           android.useAndroidX=true
           android.enableJetifier=true
           android.enableR8.fullMode=false
-          EOF
-
-      - name: Create settings.gradle
-        shell: bash
-        run: |
-          cat > android/settings.gradle <<'EOF'
-          include ':app'
-          def localPropertiesFile = new File(rootProject.projectDir, "local.properties")
-          def properties = new Properties()
-          assert localPropertiesFile.exists()
-          localPropertiesFile.withReader("UTF-8") { reader ->
-              properties.load(reader)
-          }
-          def flutterSdkPath = properties.getProperty("flutter.sdk")
-          assert flutterSdkPath != null, "flutter.sdk not set in local.properties"
-          apply from: "$flutterSdkPath/packages/flutter_tools/gradle/app_plugin_loader.gradle"
           EOF
 
       - name: Get Flutter dependencies
