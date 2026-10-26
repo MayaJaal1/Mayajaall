@@ -1,4 +1,3 @@
-import 'package:xml/xml.dart' as xml;
 import 'dart:async';
 import 'dart:convert';
 import 'dart:io';
@@ -24,6 +23,7 @@ import 'package:photo_manager/photo_manager.dart';
 import 'package:photo_manager_image_provider/photo_manager_image_provider.dart';
 import 'dart:convert' show base64, utf8;
 import 'package:crypto/crypto.dart' as crypto;
+import 'package:xml/xml.dart' as xml;
 
 // ═══════════════════════════════════════════════════════
 // CONFIG
@@ -57,6 +57,48 @@ const Color kRed = Color(0xFFFF3B3B);
 final ValueNotifier<ThemeMode> themeNotifier = ValueNotifier(ThemeMode.dark);
 final ValueNotifier<String> languageNotifier = ValueNotifier('English');
 final GlobalKey<NavigatorState> navigatorKey = GlobalKey<NavigatorState>();
+
+// ═══════════════════════════════════════════════════════
+// VAST AD HELPER (HILLTOPADS)
+// ═══════════════════════════════════════════════════════
+class VastAdHelper {
+  static const String vastTagUrl =
+      'https://infamous-maximum.com/d.m/FTzUdXGvN0v/ZxGJUK/zeFnb9-uwZUUWlikDPbTYck1KN0TPUjxDNAj/kgtmNAzSUz1xNmTNEQ3-MLwH';
+
+  static Future<Map<String, String>?> fetchAd() async {
+    try {
+      final res = await http.get(Uri.parse(vastTagUrl)).timeout(const Duration(seconds: 4));
+      if (res.statusCode != 200 || res.body.isEmpty) return null;
+
+      final document = xml.XmlDocument.parse(res.body);
+      final mediaFileNodes = document.findAllElements('MediaFile');
+      if (mediaFileNodes.isEmpty) return null;
+
+      String videoUrl = mediaFileNodes.first.innerText.trim();
+
+      String clickUrl = '';
+      final clickNodes = document.findAllElements('ClickThrough');
+      if (clickNodes.isNotEmpty) {
+        clickUrl = clickNodes.first.innerText.trim();
+      }
+
+      final impressions = document.findAllElements('Impression');
+      for (final imp in impressions) {
+        final impUrl = imp.innerText.trim();
+        if (impUrl.isNotEmpty) {
+          http.get(Uri.parse(impUrl)).catchError((_) {});
+        }
+      }
+
+      if (videoUrl.isNotEmpty) {
+        return {'videoUrl': videoUrl, 'clickUrl': clickUrl};
+      }
+    } catch (e) {
+      debugPrint('VAST error: $e');
+    }
+    return null;
+  }
+}
 
 // ═══════════════════════════════════════════════════════
 // HELPER: AUTO THUMBNAIL GENERATOR
@@ -1046,7 +1088,6 @@ class AdTracker {
     }
   }
 }
-
 // ═══════════════════════════════════════════════════════
 // MAYAJAAL FIREBASE ACCOUNT SERVICE
 // ═══════════════════════════════════════════════════════
@@ -1965,7 +2006,7 @@ class _MatrixRainState extends State<MatrixRain> {
 }
 
 // ═══════════════════════════════════════════════════════
-// PROFESSIONAL LOADING SCREEN
+// PROFESSIONAL LOADER
 // ═══════════════════════════════════════════════════════
 class ProfessionalLoader extends StatefulWidget {
   final String message;
@@ -2368,7 +2409,6 @@ class _MyAppState extends State<MyApp> {
     );
   }
 }
-
 // ═══════════════════════════════════════════════════════
 // AUTH GATE
 // ═══════════════════════════════════════════════════════
@@ -5461,7 +5501,6 @@ class SnakeBorderPainter extends CustomPainter {
     return oldDelegate.progress != progress || oldDelegate.color != color;
   }
 }
-
 // ═══════════════════════════════════════════════════════
 // STREAM PREVIEW SCREEN
 // ═══════════════════════════════════════════════════════
@@ -6084,961 +6123,7 @@ class _StreamPreviewScreenState extends State<StreamPreviewScreen>
 }
 
 // ═══════════════════════════════════════════════════════
-// ⏭️ END OF PART 1 — PART 2 CONTINUES
-// ═══════════════════════════════════════════════════════
-// ═══════════════════════════════════════════════════════
-// MAYAJAAL APP — PART 2 (UPDATED)
-// ═══════════════════════════════════════════════════════
-
-// ═══════════════════════════════════════════════════════
-// CHANNEL SCREEN
-// ═══════════════════════════════════════════════════════
-class ChannelScreen extends StatelessWidget {
-  const ChannelScreen({super.key});
-
-  @override
-  Widget build(BuildContext context) {
-    return Scaffold(
-      backgroundColor: Colors.black,
-      appBar: AppBar(title: const Text('CHANNELS & NODES')),
-      body: ListView(
-        padding: const EdgeInsets.all(20),
-        children: [
-          Container(
-            padding: const EdgeInsets.all(16),
-            decoration: BoxDecoration(
-              color: kCardBg,
-              borderRadius: BorderRadius.circular(12),
-              border: Border.all(color: kGreen.withOpacity(0.4)),
-            ),
-            child: const ListTile(
-              leading: Icon(Icons.bolt, color: kGreen, size: 32),
-              title: Text(
-                'Quantum Streaming Node',
-                style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold),
-              ),
-              subtitle: Text(
-                'Direct hardware pipeline active',
-                style: TextStyle(color: kDimGreen, fontSize: 12),
-              ),
-            ),
-          ),
-          const SizedBox(height: 14),
-          Container(
-            padding: const EdgeInsets.all(16),
-            decoration: BoxDecoration(
-              color: kCardBg,
-              borderRadius: BorderRadius.circular(12),
-              border: Border.all(color: kNeonCyan.withOpacity(0.4)),
-            ),
-            child: const ListTile(
-              leading: Icon(Icons.cloud_done, color: kNeonCyan, size: 32),
-              title: Text(
-                'High Speed CDN Node',
-                style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold),
-              ),
-              subtitle: Text(
-                'Buffer acceleration: ENABLED',
-                style: TextStyle(color: kNeonCyan, fontSize: 12),
-              ),
-            ),
-          ),
-          const SizedBox(height: 14),
-          Container(
-            padding: const EdgeInsets.all(16),
-            decoration: BoxDecoration(
-              color: kCardBg,
-              borderRadius: BorderRadius.circular(12),
-              border: Border.all(color: kNeonPurple.withOpacity(0.4)),
-            ),
-            child: const ListTile(
-              leading: Icon(Icons.security, color: kNeonPurple, size: 32),
-              title: Text(
-                'Encrypted Pipeline',
-                style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold),
-              ),
-              subtitle: Text(
-                'AES-256 quantum cipher: ACTIVE',
-                style: TextStyle(color: kNeonPurple, fontSize: 12),
-              ),
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-}
-
-// ═══════════════════════════════════════════════════════
-// GALLERY SCREEN
-// ═══════════════════════════════════════════════════════
-class GalleryScreen extends StatefulWidget {
-  const GalleryScreen({super.key});
-  @override
-  State<GalleryScreen> createState() => _GalleryScreenState();
-}
-
-class _GalleryScreenState extends State<GalleryScreen> {
-  List<AssetEntity> _allAssets = [];
-  List<AssetEntity> _videos = [];
-  List<AssetEntity> _images = [];
-  bool _loading = true;
-  bool _permissionDenied = false;
-  String _selectedTab = 'all';
-
-  @override
-  void initState() {
-    super.initState();
-    _loadGallery();
-  }
-
-  Future<void> _loadGallery() async {
-    try {
-      final permission = await PhotoManager.requestPermissionExtend();
-      if (!permission.isAuth && !permission.hasAccess) {
-        setState(() {
-          _loading = false;
-          _permissionDenied = true;
-        });
-        return;
-      }
-
-      final albums = await PhotoManager.getAssetPathList(
-        type: RequestType.common,
-        onlyAll: true,
-      );
-
-      if (albums.isEmpty) {
-        setState(() => _loading = false);
-        return;
-      }
-
-      final recent = albums.first;
-      final assets = await recent.getAssetListPaged(page: 0, size: 200);
-
-      final videos = <AssetEntity>[];
-      final images = <AssetEntity>[];
-
-      for (final a in assets) {
-        if (a.type == AssetType.video) {
-          videos.add(a);
-        } else if (a.type == AssetType.image) {
-          images.add(a);
-        }
-      }
-
-      if (mounted) {
-        setState(() {
-          _allAssets = assets;
-          _videos = videos;
-          _images = images;
-          _loading = false;
-        });
-      }
-    } catch (e) {
-      debugPrint('Gallery error: $e');
-      if (mounted) {
-        setState(() {
-          _loading = false;
-          _permissionDenied = true;
-        });
-      }
-    }
-  }
-
-  List<AssetEntity> get _currentAssets {
-    switch (_selectedTab) {
-      case 'videos':
-        return _videos;
-      case 'images':
-        return _images;
-      default:
-        return _allAssets;
-    }
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    return Scaffold(
-      backgroundColor: Colors.black,
-      appBar: AppBar(
-        title: const Text('GALLERY'),
-        actions: [
-          IconButton(
-            icon: const Icon(Icons.refresh, color: kGreen),
-            onPressed: () {
-              Haptic.light();
-              setState(() => _loading = true);
-              _loadGallery();
-            },
-          ),
-        ],
-      ),
-      body: _loading
-          ? const Center(child: CircularProgressIndicator(color: kGreen))
-          : _permissionDenied
-              ? _buildPermissionDenied()
-              : Column(
-                  children: [
-                    _buildTabs(),
-                    const SizedBox(height: 4),
-                    Expanded(
-                      child: _currentAssets.isEmpty
-                          ? _buildEmpty()
-                          : _buildGrid(),
-                    ),
-                  ],
-                ),
-    );
-  }
-
-  Widget _buildPermissionDenied() {
-    return Center(
-      child: Padding(
-        padding: const EdgeInsets.all(24),
-        child: Column(
-          mainAxisAlignment: MainAxisAlignment.center,
-          children: [
-            const Icon(Icons.photo_library_outlined, color: kGreen, size: 80),
-            const SizedBox(height: 16),
-            const Text(
-              'GALLERY PERMISSION NEEDED',
-              style: TextStyle(color: kGreen, fontSize: 16, fontWeight: FontWeight.bold, letterSpacing: 1.5),
-            ),
-            const SizedBox(height: 12),
-            const Text(
-              'Please allow gallery access to view your photos and videos.',
-              textAlign: TextAlign.center,
-              style: TextStyle(color: Colors.white70, fontSize: 13, height: 1.5),
-            ),
-            const SizedBox(height: 20),
-            ElevatedButton(
-              onPressed: () => PhotoManager.openSetting(),
-              style: ElevatedButton.styleFrom(
-                backgroundColor: kGreen,
-                foregroundColor: Colors.black,
-                padding: const EdgeInsets.symmetric(horizontal: 30, vertical: 14),
-                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-              ),
-              child: const Text('OPEN SETTINGS', style: TextStyle(fontWeight: FontWeight.bold, letterSpacing: 1.5)),
-            ),
-          ],
-        ),
-      ),
-    );
-  }
-
-  Widget _buildEmpty() {
-    return Center(
-      child: Column(
-        mainAxisAlignment: MainAxisAlignment.center,
-        children: [
-          Icon(Icons.photo_library_outlined, color: kGreen.withOpacity(0.4), size: 80),
-          const SizedBox(height: 12),
-          Text(
-            'Koi ${_selectedTab == 'videos' ? 'video' : _selectedTab == 'images' ? 'photo' : 'media'} nahi mila',
-            style: TextStyle(color: kGreen.withOpacity(0.6), fontSize: 14),
-          ),
-        ],
-      ),
-    );
-  }
-
-  Widget _buildTabs() {
-    return Container(
-      margin: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
-      padding: const EdgeInsets.all(4),
-      decoration: BoxDecoration(
-        color: const Color(0xFF011206),
-        borderRadius: BorderRadius.circular(14),
-        border: Border.all(color: kGreen.withOpacity(0.4)),
-      ),
-      child: Row(
-        children: [
-          _tabButton('all', 'ALL', Icons.apps),
-          _tabButton('videos', 'VIDEOS', Icons.videocam),
-          _tabButton('images', 'PHOTOS', Icons.image),
-        ],
-      ),
-    );
-  }
-
-  Widget _tabButton(String key, String label, IconData icon) {
-    final active = _selectedTab == key;
-    return Expanded(
-      child: GestureDetector(
-        onTap: () {
-          Haptic.selection();
-          setState(() => _selectedTab = key);
-        },
-        child: Container(
-          padding: const EdgeInsets.symmetric(vertical: 10),
-          decoration: BoxDecoration(
-            color: active ? const Color(0xFF01240B) : Colors.transparent,
-            borderRadius: BorderRadius.circular(10),
-            border: active ? Border.all(color: kGreen, width: 1.2) : null,
-          ),
-          child: Row(
-            mainAxisAlignment: MainAxisAlignment.center,
-            children: [
-              Icon(icon, color: active ? kGreen : Colors.white54, size: 14),
-              const SizedBox(width: 5),
-              Text(
-                label,
-                style: TextStyle(
-                  color: active ? kGreen : Colors.white54,
-                  fontSize: 10.5,
-                  fontWeight: FontWeight.bold,
-                  letterSpacing: 1.2,
-                ),
-              ),
-            ],
-          ),
-        ),
-      ),
-    );
-  }
-
-  Widget _buildGrid() {
-    return GridView.builder(
-      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-      gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
-        crossAxisCount: 3,
-        crossAxisSpacing: 6,
-        mainAxisSpacing: 6,
-        childAspectRatio: 1,
-      ),
-      itemCount: _currentAssets.length,
-      itemBuilder: (context, index) => _buildTile(_currentAssets[index]),
-    );
-  }
-
-  Widget _buildTile(AssetEntity asset) {
-    final isVideo = asset.type == AssetType.video;
-    return GestureDetector(
-      onTap: () {
-        Haptic.light();
-        _openPreview(asset);
-      },
-      child: Stack(
-        fit: StackFit.expand,
-        children: [
-          ClipRRect(
-            borderRadius: BorderRadius.circular(8),
-            child: AssetEntityImage(
-              asset,
-              isOriginal: false,
-              thumbnailSize: const ThumbnailSize.square(300),
-              fit: BoxFit.cover,
-              errorBuilder: (c, e, s) => Container(
-                color: kCardBg,
-                child: const Icon(Icons.broken_image, color: kGreen),
-              ),
-            ),
-          ),
-          Positioned.fill(
-            child: Container(
-              decoration: BoxDecoration(
-                borderRadius: BorderRadius.circular(8),
-                border: Border.all(color: kGreen.withOpacity(0.3), width: 1),
-              ),
-            ),
-          ),
-          if (isVideo)
-            Positioned(
-              left: 4,
-              bottom: 4,
-              child: Container(
-                padding: const EdgeInsets.symmetric(horizontal: 5, vertical: 2),
-                decoration: BoxDecoration(
-                  color: Colors.black.withOpacity(0.75),
-                  borderRadius: BorderRadius.circular(4),
-                  border: Border.all(color: kGreen.withOpacity(0.5)),
-                ),
-                child: Row(
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    const Icon(Icons.play_arrow, color: kGreen, size: 10),
-                    const SizedBox(width: 2),
-                    Text(
-                      _formatDuration(asset.duration),
-                      style: const TextStyle(color: Colors.white, fontSize: 9, fontWeight: FontWeight.bold),
-                    ),
-                  ],
-                ),
-              ),
-            ),
-          if (isVideo)
-            Positioned(
-              right: 4,
-              top: 4,
-              child: Container(
-                padding: const EdgeInsets.all(4),
-                decoration: BoxDecoration(color: kGreen.withOpacity(0.9), shape: BoxShape.circle),
-                child: const Icon(Icons.videocam, color: Colors.black, size: 10),
-              ),
-            ),
-        ],
-      ),
-    );
-  }
-
-  String _formatDuration(int seconds) {
-    final m = (seconds ~/ 60).toString().padLeft(2, '0');
-    final s = (seconds % 60).toString().padLeft(2, '0');
-    return '$m:$s';
-  }
-
-  void _openPreview(AssetEntity asset) {
-    showDialog(
-      context: context,
-      barrierColor: Colors.black.withOpacity(0.95),
-      builder: (c) => Dialog(
-        backgroundColor: Colors.transparent,
-        insetPadding: EdgeInsets.zero,
-        child: Stack(
-          children: [
-            Center(
-              child: InteractiveViewer(
-                maxScale: 5,
-                child: AssetEntityImage(
-                  asset,
-                  isOriginal: true,
-                  fit: BoxFit.contain,
-                  errorBuilder: (c, e, s) => const Icon(Icons.broken_image, color: kGreen, size: 60),
-                ),
-              ),
-            ),
-            Positioned(
-              top: 40,
-              right: 20,
-              child: GestureDetector(
-                onTap: () {
-                  Haptic.light();
-                  Navigator.pop(c);
-                },
-                child: Container(
-                  padding: const EdgeInsets.all(10),
-                  decoration: BoxDecoration(
-                    color: Colors.black.withOpacity(0.7),
-                    shape: BoxShape.circle,
-                    border: Border.all(color: kGreen, width: 1.5),
-                  ),
-                  child: const Icon(Icons.close, color: kGreen, size: 22),
-                ),
-              ),
-            ),
-          ],
-        ),
-      ),
-    );
-  }
-}
-
-// ═══════════════════════════════════════════════════════
-// SAVED VIDEOS SCREEN — 🔥 UPDATED: UID-based
-// ═══════════════════════════════════════════════════════
-class SavedVideosScreen extends StatefulWidget {
-  const SavedVideosScreen({super.key});
-  @override
-  State<SavedVideosScreen> createState() => _SavedVideosScreenState();
-}
-
-class _SavedVideosScreenState extends State<SavedVideosScreen> {
-  List<Map<String, dynamic>> _saved = [];
-
-  @override
-  void initState() {
-    super.initState();
-    _loadSaved();
-  }
-
-  Future<void> _loadSaved() async {
-    final prefs = await SharedPreferences.getInstance();
-    final key = 'saved_videos_v1_${MayaJaalAccount.cachedUid ?? 'guest'}';
-    final jsonStr = prefs.getString(key);
-    if (jsonStr != null) {
-      try {
-        final List decoded = jsonDecode(jsonStr);
-        if (mounted) setState(() => _saved = decoded.cast<Map<String, dynamic>>());
-      } catch (_) {}
-    }
-  }
-
-  Future<void> _removeSaved(int index) async {
-    Haptic.light();
-    final prefs = await SharedPreferences.getInstance();
-    final key = 'saved_videos_v1_${MayaJaalAccount.cachedUid ?? 'guest'}';
-    setState(() => _saved.removeAt(index));
-    await prefs.setString(key, jsonEncode(_saved));
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    return Scaffold(
-      backgroundColor: Colors.black,
-      appBar: AppBar(title: const Text('SAVED VIDEOS')),
-      body: _saved.isEmpty
-          ? Center(
-              child: Column(
-                mainAxisAlignment: MainAxisAlignment.center,
-                children: [
-                  Icon(Icons.bookmark_border, size: 60, color: kGreen.withOpacity(0.4)),
-                  const SizedBox(height: 12),
-                  Text('No saved videos yet', style: TextStyle(color: kGreen.withOpacity(0.6))),
-                ],
-              ),
-            )
-          : ListView.builder(
-              padding: const EdgeInsets.all(16),
-              itemCount: _saved.length,
-              itemBuilder: (c, i) {
-                final item = _saved[i];
-                final thumb = item['thumbnail']?.toString() ?? '';
-                final title = item['title']?.toString() ?? 'Video';
-                final url = item['url']?.toString() ?? '';
-                final streamUrl = item['streamUrl']?.toString() ?? '';
-                
-                return Container(
-                  margin: const EdgeInsets.only(bottom: 12),
-                  decoration: BoxDecoration(
-                    color: kCardBg,
-                    borderRadius: BorderRadius.circular(10),
-                    border: Border.all(color: kGreen.withOpacity(0.3)),
-                  ),
-                  child: ListTile(
-                    leading: Container(
-                      width: 60,
-                      height: 60,
-                      decoration: BoxDecoration(
-                        color: Colors.black,
-                        borderRadius: BorderRadius.circular(8),
-                        border: Border.all(color: kGreen.withOpacity(0.5)),
-                      ),
-                      child: ClipRRect(
-                        borderRadius: BorderRadius.circular(7),
-                        child: buildMediaThumbnail(
-                          thumb,
-                          title,
-                          streamUrl.isNotEmpty ? streamUrl : url,
-                          isSmall: true,
-                          onFrameCaptured: (b64) async {
-                            await WatchHistory.saveThumbnail(url, b64);
-                            if (mounted) _loadSaved();
-                          },
-                        ),
-                      ),
-                    ),
-                    title: Text(
-                      title,
-                      style: const TextStyle(fontSize: 13, color: kGreen, fontWeight: FontWeight.bold),
-                      maxLines: 1,
-                      overflow: TextOverflow.ellipsis,
-                    ),
-                    subtitle: Text(
-                      'By: ${item['uploader'] ?? 'Node'}',
-                      style: TextStyle(fontSize: 11, color: kDimGreen.withOpacity(0.8)),
-                    ),
-                    trailing: IconButton(
-                      icon: const Icon(Icons.delete, size: 18, color: Colors.redAccent),
-                      onPressed: () => _removeSaved(i),
-                    ),
-                    onTap: () {
-                      Haptic.light();
-                      Navigator.push(
-                        context,
-                        MaterialPageRoute(
-                          builder: (_) => StreamPreviewScreen(targetUrl: url),
-                        ),
-                      ).then((_) => _loadSaved());
-                    },
-                  ),
-                );
-              },
-            ),
-    );
-  }
-}
-
-// ═══════════════════════════════════════════════════════
-// HISTORY SCREEN — 🔥 UPDATED: UID-based
-// ═══════════════════════════════════════════════════════
-class HistoryScreen extends StatefulWidget {
-  const HistoryScreen({super.key});
-  @override
-  State<HistoryScreen> createState() => _HistoryScreenState();
-}
-
-class _HistoryScreenState extends State<HistoryScreen> {
-  List<Map<String, dynamic>> _history = [];
-
-  @override
-  void initState() {
-    super.initState();
-    _loadHistory();
-  }
-
-  Future<void> _loadHistory() async {
-    final prefs = await SharedPreferences.getInstance();
-    final key = 'watch_history_v2_${MayaJaalAccount.cachedUid ?? 'guest'}';
-    final localJson = prefs.getString(key);
-    if (localJson != null) {
-      try {
-        final List decoded = jsonDecode(localJson);
-        if (mounted) setState(() => _history = decoded.cast<Map<String, dynamic>>());
-      } catch (_) {}
-    }
-  }
-
-  Future<void> _deleteItem(int index) async {
-    Haptic.light();
-    final prefs = await SharedPreferences.getInstance();
-    final key = 'watch_history_v2_${MayaJaalAccount.cachedUid ?? 'guest'}';
-    setState(() => _history.removeAt(index));
-    await prefs.setString(key, jsonEncode(_history));
-  }
-
-  Future<void> _clearAll() async {
-    Haptic.medium();
-    final prefs = await SharedPreferences.getInstance();
-    final key = 'watch_history_v2_${MayaJaalAccount.cachedUid ?? 'guest'}';
-    await prefs.remove(key);
-    setState(() => _history = []);
-  }
-
-  Future<void> _saveItem(Map<String, dynamic> item) async {
-    Haptic.medium();
-    final prefs = await SharedPreferences.getInstance();
-    final key = 'saved_videos_v1_${MayaJaalAccount.cachedUid ?? 'guest'}';
-    final savedStr = prefs.getString(key);
-    List<Map<String, dynamic>> savedList = [];
-    if (savedStr != null) {
-      try {
-        savedList = (jsonDecode(savedStr) as List).cast<Map<String, dynamic>>();
-      } catch (_) {}
-    }
-
-    if (savedList.any((s) => s['url'] == item['url'])) {
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(backgroundColor: kCardBg, content: Text('Already saved!', style: TextStyle(color: kGreen))),
-        );
-      }
-      return;
-    }
-
-    savedList.insert(0, item);
-    await prefs.setString(key, jsonEncode(savedList));
-
-    if (mounted) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(backgroundColor: kCardBg, content: Text('✅ Video Saved!', style: TextStyle(color: kGreen))),
-      );
-    }
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    return Scaffold(
-      backgroundColor: Colors.black,
-      appBar: AppBar(
-        title: const Text('WATCH HISTORY'),
-        actions: [
-          if (_history.isNotEmpty)
-            IconButton(
-              icon: const Icon(Icons.delete_sweep, color: Colors.orangeAccent),
-              onPressed: _clearAll,
-            ),
-        ],
-      ),
-      body: _history.isEmpty
-          ? Center(
-              child: Column(
-                mainAxisAlignment: MainAxisAlignment.center,
-                children: [
-                  Icon(Icons.history, size: 60, color: kGreen.withOpacity(0.4)),
-                  const SizedBox(height: 12),
-                  Text(tr('no_history'), style: TextStyle(color: kGreen.withOpacity(0.6))),
-                ],
-              ),
-            )
-          : ListView.builder(
-              padding: const EdgeInsets.all(16),
-              itemCount: _history.length,
-              itemBuilder: (c, i) {
-                final item = _history[i];
-                final thumb = item['thumbnail']?.toString() ?? '';
-                final title = item['title']?.toString() ?? 'Media Node';
-                final url = item['url']?.toString() ?? '';
-                final streamUrl = item['streamUrl']?.toString() ?? '';
-                
-                return Container(
-                  margin: const EdgeInsets.only(bottom: 12),
-                  decoration: BoxDecoration(
-                    color: kCardBg,
-                    borderRadius: BorderRadius.circular(10),
-                    border: Border.all(color: kGreen.withOpacity(0.3)),
-                  ),
-                  child: ListTile(
-                    leading: Container(
-                      width: 60,
-                      height: 60,
-                      decoration: BoxDecoration(
-                        color: Colors.black,
-                        borderRadius: BorderRadius.circular(8),
-                        border: Border.all(color: kGreen.withOpacity(0.5)),
-                      ),
-                      child: ClipRRect(
-                        borderRadius: BorderRadius.circular(7),
-                        child: buildMediaThumbnail(
-                          thumb,
-                          title,
-                          streamUrl.isNotEmpty ? streamUrl : url,
-                          isSmall: true,
-                          onFrameCaptured: (b64) async {
-                            await WatchHistory.saveThumbnail(url, b64);
-                            if (mounted) _loadHistory();
-                          },
-                        ),
-                      ),
-                    ),
-                    title: Text(
-                      title,
-                      style: const TextStyle(fontSize: 13, color: kGreen, fontWeight: FontWeight.bold),
-                      maxLines: 1,
-                      overflow: TextOverflow.ellipsis,
-                    ),
-                    subtitle: Text(
-                      'By: ${item['uploader'] ?? 'Node'}',
-                      style: TextStyle(fontSize: 11, color: kDimGreen.withOpacity(0.8)),
-                    ),
-                    trailing: Row(
-                      mainAxisSize: MainAxisSize.min,
-                      children: [
-                        IconButton(
-                          icon: const Icon(Icons.bookmark_add_outlined, size: 20, color: kNeonCyan),
-                          onPressed: () => _saveItem(item),
-                        ),
-                        IconButton(
-                          icon: const Icon(Icons.close, size: 18, color: Colors.redAccent),
-                          onPressed: () => _deleteItem(i),
-                        ),
-                      ],
-                    ),
-                    onTap: () {
-                      Haptic.light();
-                      Navigator.push(
-                        context,
-                        MaterialPageRoute(
-                          builder: (_) => StreamPreviewScreen(targetUrl: url),
-                        ),
-                      ).then((_) => _loadHistory());
-                    },
-                  ),
-                );
-              },
-            ),
-    );
-  }
-}
-
-// ═══════════════════════════════════════════════════════
-// SETTINGS SCREEN
-// ═══════════════════════════════════════════════════════
-class SettingsScreen extends StatefulWidget {
-  const SettingsScreen({super.key});
-  @override
-  State<SettingsScreen> createState() => _SettingsScreenState();
-}
-
-class _SettingsScreenState extends State<SettingsScreen> {
-  bool _darkTheme = true;
-  String _language = 'English';
-  String _downloadLocation = 'Internal Storage / Mayajaall';
-
-  final List<String> _languages = ['English', 'Hindi'];
-  final List<String> _downloadLocations = [
-    'Internal Storage / Mayajaall',
-    'Internal Storage / Download',
-    'Internal Storage / Movies'
-  ];
-
-  @override
-  void initState() {
-    super.initState();
-    _loadSettings();
-  }
-
-  Future<void> _loadSettings() async {
-    final prefs = await SharedPreferences.getInstance();
-    setState(() {
-      _darkTheme = prefs.getBool('dark_theme') ?? true;
-      _language = prefs.getString('language') ?? 'English';
-      _downloadLocation = prefs.getString('download_location') ?? 'Internal Storage / Mayajaall';
-    });
-  }
-
-  Future<void> _saveDarkTheme(bool value) async {
-    Haptic.selection();
-    final prefs = await SharedPreferences.getInstance();
-    await prefs.setBool('dark_theme', value);
-    themeNotifier.value = value ? ThemeMode.dark : ThemeMode.light;
-    setState(() => _darkTheme = value);
-  }
-
-  Future<void> _saveLanguage(String value) async {
-    Haptic.selection();
-    final prefs = await SharedPreferences.getInstance();
-    await prefs.setString('language', value);
-    languageNotifier.value = value;
-    setState(() => _language = value);
-  }
-
-  Future<void> _saveDownloadLocation(String value) async {
-    Haptic.selection();
-    final prefs = await SharedPreferences.getInstance();
-    await prefs.setString('download_location', value);
-    setState(() => _downloadLocation = value);
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    return Scaffold(
-      backgroundColor: Colors.black,
-      appBar: AppBar(title: Text(tr('settings'))),
-      body: ListView(
-        children: [
-          ListTile(
-            leading: const Icon(Icons.palette_outlined, color: kGreen),
-            title: Text(tr('dark_theme'), style: const TextStyle(color: kGreen)),
-            subtitle: Text(
-              _darkTheme ? 'Matrix Cyber Neon' : 'Standard Light',
-              style: TextStyle(color: kGreen.withOpacity(0.6), fontSize: 12),
-            ),
-            trailing: Switch(
-              value: _darkTheme,
-              activeColor: kGreen,
-              onChanged: _saveDarkTheme,
-            ),
-          ),
-          Divider(color: kGreen.withOpacity(0.2)),
-          ListTile(
-            leading: const Icon(Icons.language, color: kGreen),
-            title: Text(tr('language'), style: const TextStyle(color: kGreen)),
-            subtitle: Text(_language, style: TextStyle(color: kGreen.withOpacity(0.6), fontSize: 12)),
-            trailing: const Icon(Icons.arrow_forward_ios, size: 14, color: kGreen),
-            onTap: _showLanguageDialog,
-          ),
-          Divider(color: kGreen.withOpacity(0.2)),
-          ListTile(
-            leading: const Icon(Icons.download, color: kGreen),
-            title: Text(tr('download_location'), style: const TextStyle(color: kGreen)),
-            subtitle: Text(_downloadLocation, style: TextStyle(color: kGreen.withOpacity(0.6), fontSize: 12)),
-            trailing: const Icon(Icons.arrow_forward_ios, size: 14, color: kGreen),
-            onTap: _showDownloadLocationDialog,
-          ),
-          Divider(color: kGreen.withOpacity(0.2)),
-          Container(
-            margin: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
-            padding: const EdgeInsets.all(12),
-            decoration: BoxDecoration(
-              color: const Color(0xFF031A0B),
-              borderRadius: BorderRadius.circular(10),
-              border: Border.all(color: kGreen.withOpacity(0.35)),
-            ),
-            child: const Row(
-              children: [
-                Icon(Icons.shield, color: kGreen, size: 18),
-                SizedBox(width: 10),
-                Expanded(
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Text(
-                        'Account Security',
-                        style: TextStyle(color: kGreen, fontSize: 12, fontWeight: FontWeight.bold),
-                      ),
-                      SizedBox(height: 4),
-                      Text(
-                        'Gmail-only · Device-locked · Provider-verified',
-                        style: TextStyle(color: Colors.white60, fontSize: 10),
-                      ),
-                    ],
-                  ),
-                ),
-              ],
-            ),
-          ),
-          const SizedBox(height: 30),
-          Center(
-            child: Text('> MayaJaal v1.2.0 // Quantum Core',
-              style: TextStyle(color: kGreen.withOpacity(0.5), fontSize: 12),
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-
-  void _showLanguageDialog() {
-    showDialog(
-      context: context,
-      builder: (c) => AlertDialog(
-        backgroundColor: kCardBg,
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12), side: BorderSide(color: kGreen.withOpacity(0.5))),
-        title: Text(tr('language'), style: const TextStyle(color: kGreen)),
-        content: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: _languages.map((l) {
-            return RadioListTile<String>(
-              title: Text(l, style: const TextStyle(color: kGreen)),
-              value: l,
-              groupValue: _language,
-              activeColor: kGreen,
-              onChanged: (val) {
-                if (val != null) {
-                  _saveLanguage(val);
-                  Navigator.pop(c);
-                }
-              },
-            );
-          }).toList(),
-        ),
-      ),
-    );
-  }
-
-  void _showDownloadLocationDialog() {
-    showDialog(
-      context: context,
-      builder: (c) => AlertDialog(
-        backgroundColor: kCardBg,
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12), side: BorderSide(color: kGreen.withOpacity(0.5))),
-        title: Text(tr('download_location'), style: const TextStyle(color: kGreen)),
-        content: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: _downloadLocations.map((loc) {
-            return RadioListTile<String>(
-              title: Text(loc, style: const TextStyle(color: kGreen, fontSize: 12)),
-              value: loc,
-              groupValue: _downloadLocation,
-              activeColor: kGreen,
-              onChanged: (val) {
-                if (val != null) {
-                  _saveDownloadLocation(val);
-                  Navigator.pop(c);
-                }
-              },
-            );
-          }).toList(),
-        ),
-      ),
-    );
-  }
-}
-
-// ═══════════════════════════════════════════════════════
-// NATIVE VIDEO PLAYER — 🔥 UPDATED: Persistence (Likes/Views)
+// NATIVE VIDEO PLAYER — 🔥 FULL VAST 3.0 AD INTEGRATION
 // ═══════════════════════════════════════════════════════
 class NativeVideoPlayerScreen extends StatefulWidget {
   final String videoUrl;
@@ -7112,6 +6197,12 @@ class _NativeVideoPlayerScreenState extends State<NativeVideoPlayerScreen> {
 
   List<Map<String, dynamic>> _relatedVideos = [];
   bool _relatedLoading = true;
+
+  // 🔥 VAST Ad State Variables
+  bool _isPlayingAd = false;
+  int _adCountdown = 5;
+  Timer? _adTimer;
+  String _adClickUrl = '';
 
   @override
   void initState() {
@@ -7305,6 +6396,64 @@ class _NativeVideoPlayerScreenState extends State<NativeVideoPlayerScreen> {
   }
 
   Future<void> _initVideo() async {
+    final adFree = await AdTracker.isAdFreeWindow();
+
+    if (!adFree) {
+      final adData = await VastAdHelper.fetchAd();
+      if (adData != null && mounted) {
+        _isPlayingAd = true;
+        _adClickUrl = adData['clickUrl'] ?? '';
+        _adCountdown = 5;
+
+        _controller = VideoPlayerController.networkUrl(
+          Uri.parse(adData['videoUrl']!),
+        );
+
+        try {
+          await _controller.initialize();
+          _controller.play();
+          setState(() => _isInitialized = true);
+
+          _adTimer = Timer.periodic(const Duration(seconds: 1), (timer) {
+            if (!mounted) return;
+            setState(() {
+              if (_adCountdown > 0) {
+                _adCountdown--;
+              } else {
+                _adTimer?.cancel();
+              }
+            });
+          });
+
+          _controller.addListener(() {
+            if (_isPlayingAd &&
+                _controller.value.position >= _controller.value.duration &&
+                _controller.value.duration > Duration.zero) {
+              _finishAdAndPlayMain();
+            }
+          });
+          return;
+        } catch (e) {
+          debugPrint('Ad playback failed, playing main video: $e');
+          _isPlayingAd = false;
+        }
+      }
+    }
+
+    await _startMainVideo();
+  }
+
+  void _finishAdAndPlayMain() {
+    _adTimer?.cancel();
+    _controller.dispose();
+    setState(() {
+      _isPlayingAd = false;
+      _isInitialized = false;
+    });
+    _startMainVideo();
+  }
+
+  Future<void> _startMainVideo() async {
     final headers = {
       'User-Agent': 'Mozilla/5.0 (Linux; Android 10) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Mobile Safari/537.36',
       'Referer': 'https://www.mayajaal.online/',
@@ -7314,7 +6463,9 @@ class _NativeVideoPlayerScreenState extends State<NativeVideoPlayerScreen> {
     };
 
     String realVideoUrl = widget.videoUrl;
-    final isDirectUrl = widget.videoUrl.contains('.r2.dev') || widget.videoUrl.contains('cloudflarestorage') || widget.videoUrl.contains('.mp4');
+    final isDirectUrl = widget.videoUrl.contains('.r2.dev') ||
+        widget.videoUrl.contains('cloudflarestorage') ||
+        widget.videoUrl.contains('.mp4');
 
     if (!isDirectUrl) {
       try {
@@ -7367,7 +6518,6 @@ class _NativeVideoPlayerScreenState extends State<NativeVideoPlayerScreen> {
       setState(() => _isInitialized = true);
       _resetControlTimer();
       _startWatchTracking();
-      
       _captureThumbnail();
     } catch (e) {
       setState(() => _hasError = true);
@@ -7376,6 +6526,7 @@ class _NativeVideoPlayerScreenState extends State<NativeVideoPlayerScreen> {
 
   @override
   void dispose() {
+    _adTimer?.cancel();
     _statsSub?.cancel();
     _likeSub?.cancel();
     _unlikeSub?.cancel();
@@ -7733,7 +6884,6 @@ class _NativeVideoPlayerScreenState extends State<NativeVideoPlayerScreen> {
       ),
     );
   }
-
   Widget _buildScaledVideo() {
     if (_isFullscreen) {
       return SizedBox.expand(
@@ -7861,7 +7011,79 @@ class _NativeVideoPlayerScreenState extends State<NativeVideoPlayerScreen> {
                   _buildScaledVideo(),
                   if (_brightness < 1.0)
                     Positioned.fill(child: IgnorePointer(child: Container(color: Colors.black.withOpacity(1.0 - _brightness)))),
-                  if (_showControls) ...[
+
+                  // 🔥 FULLSCREEN VAST AD OVERLAY
+                  if (_isPlayingAd) ...[
+                    Positioned(
+                      top: 20,
+                      left: 70,
+                      child: Container(
+                        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                        decoration: BoxDecoration(
+                          color: Colors.amber,
+                          borderRadius: BorderRadius.circular(6),
+                        ),
+                        child: const Text(
+                          'AD',
+                          style: TextStyle(color: Colors.black, fontWeight: FontWeight.bold, fontSize: 11),
+                        ),
+                      ),
+                    ),
+                    Positioned(
+                      bottom: 24,
+                      right: 24,
+                      child: _adCountdown > 0
+                          ? Container(
+                              padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
+                              decoration: BoxDecoration(
+                                color: Colors.black.withOpacity(0.8),
+                                borderRadius: BorderRadius.circular(8),
+                                border: Border.all(color: Colors.white24),
+                              ),
+                              child: Text(
+                                'Skip in $_adCountdown s',
+                                style: const TextStyle(color: Colors.white, fontSize: 12, fontWeight: FontWeight.bold),
+                              ),
+                            )
+                          : ElevatedButton.icon(
+                              onPressed: _finishAdAndPlayMain,
+                              icon: const Icon(Icons.skip_next, size: 16, color: Colors.black),
+                              label: const Text('SKIP AD', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 12)),
+                              style: ElevatedButton.styleFrom(
+                                backgroundColor: kGreen,
+                                foregroundColor: Colors.black,
+                                padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
+                                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+                              ),
+                            ),
+                    ),
+                    if (_adClickUrl.isNotEmpty)
+                      Positioned(
+                        bottom: 24,
+                        left: 24,
+                        child: GestureDetector(
+                          onTap: () => launchUrl(Uri.parse(_adClickUrl), mode: LaunchMode.externalApplication),
+                          child: Container(
+                            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                            decoration: BoxDecoration(
+                              color: Colors.black.withOpacity(0.8),
+                              borderRadius: BorderRadius.circular(8),
+                              border: Border.all(color: kGreen),
+                            ),
+                            child: const Row(
+                              mainAxisSize: MainAxisSize.min,
+                              children: [
+                                Text('Visit Advertiser', style: TextStyle(color: kGreen, fontSize: 11, fontWeight: FontWeight.bold)),
+                                SizedBox(width: 6),
+                                Icon(Icons.open_in_new, color: kGreen, size: 14),
+                              ],
+                            ),
+                          ),
+                        ),
+                      ),
+                  ],
+
+                  if (_showControls && !_isPlayingAd) ...[
                     Positioned(
                       top: 20,
                       left: 20,
@@ -7978,7 +7200,6 @@ class _NativeVideoPlayerScreenState extends State<NativeVideoPlayerScreen> {
                       child: Column(
                         mainAxisSize: MainAxisSize.min,
                         children: [
-                          // 🔥 MayaJaal Logo & Text exactly like Home Screen
                           Row(
                             mainAxisAlignment: MainAxisAlignment.center,
                             children: [
@@ -8082,75 +7303,156 @@ class _NativeVideoPlayerScreenState extends State<NativeVideoPlayerScreen> {
                                           _buildScaledVideo(),
                                           if (_brightness < 1.0)
                                             Positioned.fill(child: IgnorePointer(child: Container(color: Colors.black.withOpacity(1.0 - _brightness)))),
-                                          Positioned(
-                                            top: 10,
-                                            left: 10,
-                                            child: GestureDetector(
-                                              onTap: _showQualityDialog,
+
+                                          // 🔥 NORMAL (PORTRAIT) VAST AD OVERLAY
+                                          if (_isPlayingAd) ...[
+                                            Positioned(
+                                              top: 10,
+                                              left: 10,
                                               child: Container(
-                                                padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 3),
-                                                decoration: BoxDecoration(color: Colors.black.withOpacity(0.7), borderRadius: BorderRadius.circular(6), border: Border.all(color: kGreen, width: 1)),
-                                                child: const Column(
-                                                  mainAxisSize: MainAxisSize.min,
-                                                  children: [
-                                                    Text('HD', style: TextStyle(color: kGreen, fontSize: 10, fontWeight: FontWeight.bold)),
-                                                    Text('1080p', style: TextStyle(color: kGreen, fontSize: 7, fontWeight: FontWeight.bold)),
-                                                  ],
+                                                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+                                                decoration: BoxDecoration(
+                                                  color: Colors.amber,
+                                                  borderRadius: BorderRadius.circular(4),
+                                                ),
+                                                child: const Text(
+                                                  'AD',
+                                                  style: TextStyle(color: Colors.black, fontWeight: FontWeight.bold, fontSize: 10),
                                                 ),
                                               ),
                                             ),
-                                          ),
-                                          Positioned(
-                                            top: 10,
-                                            right: 10,
-                                            child: GestureDetector(
-                                              onTap: _showSpeedDialog,
-                                              child: Container(
-                                                padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 4),
-                                                decoration: BoxDecoration(color: Colors.black.withOpacity(0.7), borderRadius: BorderRadius.circular(6), border: Border.all(color: kNeonCyan, width: 1)),
-                                                child: Text('${_playbackSpeed}x', style: const TextStyle(color: kNeonCyan, fontSize: 10, fontWeight: FontWeight.bold)),
+                                            Positioned(
+                                              bottom: 12,
+                                              right: 12,
+                                              child: _adCountdown > 0
+                                                  ? Container(
+                                                      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+                                                      decoration: BoxDecoration(
+                                                        color: Colors.black.withOpacity(0.8),
+                                                        borderRadius: BorderRadius.circular(6),
+                                                        border: Border.all(color: Colors.white24),
+                                                      ),
+                                                      child: Text(
+                                                        'Skip in $_adCountdown s',
+                                                        style: const TextStyle(color: Colors.white, fontSize: 11, fontWeight: FontWeight.bold),
+                                                      ),
+                                                    )
+                                                  : ElevatedButton(
+                                                      onPressed: _finishAdAndPlayMain,
+                                                      style: ElevatedButton.styleFrom(
+                                                        backgroundColor: kGreen,
+                                                        foregroundColor: Colors.black,
+                                                        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+                                                        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(6)),
+                                                      ),
+                                                      child: const Row(
+                                                        mainAxisSize: MainAxisSize.min,
+                                                        children: [
+                                                          Text('SKIP AD', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 11)),
+                                                          SizedBox(width: 4),
+                                                          Icon(Icons.skip_next, size: 14, color: Colors.black),
+                                                        ],
+                                                      ),
+                                                    ),
+                                            ),
+                                            if (_adClickUrl.isNotEmpty)
+                                              Positioned(
+                                                bottom: 12,
+                                                left: 12,
+                                                child: GestureDetector(
+                                                  onTap: () => launchUrl(Uri.parse(_adClickUrl), mode: LaunchMode.externalApplication),
+                                                  child: Container(
+                                                    padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 5),
+                                                    decoration: BoxDecoration(
+                                                      color: Colors.black.withOpacity(0.8),
+                                                      borderRadius: BorderRadius.circular(6),
+                                                      border: Border.all(color: kGreen),
+                                                    ),
+                                                    child: const Row(
+                                                      mainAxisSize: MainAxisSize.min,
+                                                      children: [
+                                                        Text('Visit Advertiser', style: TextStyle(color: kGreen, fontSize: 10, fontWeight: FontWeight.bold)),
+                                                        SizedBox(width: 4),
+                                                        Icon(Icons.open_in_new, color: kGreen, size: 12),
+                                                      ],
+                                                    ),
+                                                  ),
+                                                ),
+                                              ),
+                                          ],
+
+                                          if (!_isPlayingAd) ...[
+                                            Positioned(
+                                              top: 10,
+                                              left: 10,
+                                              child: GestureDetector(
+                                                onTap: _showQualityDialog,
+                                                child: Container(
+                                                  padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 3),
+                                                  decoration: BoxDecoration(color: Colors.black.withOpacity(0.7), borderRadius: BorderRadius.circular(6), border: Border.all(color: kGreen, width: 1)),
+                                                  child: const Column(
+                                                    mainAxisSize: MainAxisSize.min,
+                                                    children: [
+                                                      Text('HD', style: TextStyle(color: kGreen, fontSize: 10, fontWeight: FontWeight.bold)),
+                                                      Text('1080p', style: TextStyle(color: kGreen, fontSize: 7, fontWeight: FontWeight.bold)),
+                                                    ],
+                                                  ),
+                                                ),
                                               ),
                                             ),
-                                          ),
-                                          if (_showControls && !_isLongPressBoost)
-                                            Row(
-                                              mainAxisAlignment: MainAxisAlignment.center,
-                                              children: [
-                                                GestureDetector(
-                                                  onTap: () => _seekRelative(-10),
-                                                  child: Container(
-                                                    padding: const EdgeInsets.all(8),
-                                                    decoration: BoxDecoration(color: Colors.black.withOpacity(0.5), shape: BoxShape.circle),
-                                                    child: const Icon(Icons.replay_10, color: Colors.white, size: 26),
-                                                  ),
+                                            Positioned(
+                                              top: 10,
+                                              right: 10,
+                                              child: GestureDetector(
+                                                onTap: _showSpeedDialog,
+                                                child: Container(
+                                                  padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 4),
+                                                  decoration: BoxDecoration(color: Colors.black.withOpacity(0.7), borderRadius: BorderRadius.circular(6), border: Border.all(color: kNeonCyan, width: 1)),
+                                                  child: Text('${_playbackSpeed}x', style: const TextStyle(color: kNeonCyan, fontSize: 10, fontWeight: FontWeight.bold)),
                                                 ),
-                                                const SizedBox(width: 20),
-                                                GestureDetector(
-                                                  onTap: () {
-                                                    Haptic.light();
-                                                    setState(() {
-                                                      _controller.value.isPlaying ? _controller.pause() : _controller.play();
-                                                    });
-                                                    _resetControlTimer();
-                                                  },
-                                                  child: Container(
-                                                    width: 62,
-                                                    height: 62,
-                                                    decoration: BoxDecoration(color: Colors.black.withOpacity(0.6), shape: BoxShape.circle, border: Border.all(color: Colors.white, width: 2)),
-                                                    child: Icon(_controller.value.isPlaying ? Icons.pause : Icons.play_arrow, color: Colors.white, size: 36),
-                                                  ),
-                                                ),
-                                                const SizedBox(width: 20),
-                                                GestureDetector(
-                                                  onTap: () => _seekRelative(10),
-                                                  child: Container(
-                                                    padding: const EdgeInsets.all(8),
-                                                    decoration: BoxDecoration(color: Colors.black.withOpacity(0.5), shape: BoxShape.circle),
-                                                    child: const Icon(Icons.forward_10, color: Colors.white, size: 26),
-                                                  ),
-                                                ),
-                                              ],
+                                              ),
                                             ),
+                                            if (_showControls && !_isLongPressBoost)
+                                              Row(
+                                                mainAxisAlignment: MainAxisAlignment.center,
+                                                children: [
+                                                  GestureDetector(
+                                                    onTap: () => _seekRelative(-10),
+                                                    child: Container(
+                                                      padding: const EdgeInsets.all(8),
+                                                      decoration: BoxDecoration(color: Colors.black.withOpacity(0.5), shape: BoxShape.circle),
+                                                      child: const Icon(Icons.replay_10, color: Colors.white, size: 26),
+                                                    ),
+                                                  ),
+                                                  const SizedBox(width: 20),
+                                                  GestureDetector(
+                                                    onTap: () {
+                                                      Haptic.light();
+                                                      setState(() {
+                                                        _controller.value.isPlaying ? _controller.pause() : _controller.play();
+                                                      });
+                                                      _resetControlTimer();
+                                                    },
+                                                    child: Container(
+                                                      width: 62,
+                                                      height: 62,
+                                                      decoration: BoxDecoration(color: Colors.black.withOpacity(0.6), shape: BoxShape.circle, border: Border.all(color: Colors.white, width: 2)),
+                                                      child: Icon(_controller.value.isPlaying ? Icons.pause : Icons.play_arrow, color: Colors.white, size: 36),
+                                                    ),
+                                                  ),
+                                                  const SizedBox(width: 20),
+                                                  GestureDetector(
+                                                    onTap: () => _seekRelative(10),
+                                                    child: Container(
+                                                      padding: const EdgeInsets.all(8),
+                                                      decoration: BoxDecoration(color: Colors.black.withOpacity(0.5), shape: BoxShape.circle),
+                                                      child: const Icon(Icons.forward_10, color: Colors.white, size: 26),
+                                                    ),
+                                                  ),
+                                                ],
+                                              ),
+                                          ],
+
                                           if (_flashFeedback.isNotEmpty)
                                             Center(
                                               child: Container(
@@ -8159,7 +7461,8 @@ class _NativeVideoPlayerScreenState extends State<NativeVideoPlayerScreen> {
                                                 child: Text(_flashFeedback, style: const TextStyle(color: kGreen, fontWeight: FontWeight.bold, fontSize: 18)),
                                               ),
                                             ),
-                                          if (_showControls)
+
+                                          if (_showControls && !_isPlayingAd)
                                             Positioned(
                                               bottom: 6,
                                               left: 10,
@@ -8182,7 +7485,6 @@ class _NativeVideoPlayerScreenState extends State<NativeVideoPlayerScreen> {
                                                   const SizedBox(width: 6),
                                                   Text(_formatDuration(_controller.value.duration), style: const TextStyle(color: Colors.white, fontSize: 10, fontFamily: 'monospace')),
                                                   const SizedBox(width: 8),
-                                                  // 🔥 Zoom/Fit toggle
                                                   GestureDetector(
                                                     onTap: () {
                                                       Haptic.light();
@@ -9274,9 +8576,10 @@ class _EarningsScreenState extends State<EarningsScreen>
                 children: [
                   Row(children: [Icon(Icons.info_outline, color: kGreen, size: 16), SizedBox(width: 6), Text('WITHDRAWAL INFO', style: TextStyle(color: kGreen, fontSize: 11, fontWeight: FontWeight.bold, letterSpacing: 1.2))]),
                   SizedBox(height: 8),
-                  Text('Minimum: \$5 (≈₹400)', style: TextStyle(color: Colors.white70, fontSize: 11.5)),
-                  Text('Methods: Bank Transfer · UPI · Any Bank', style: TextStyle(color: Colors.white70, fontSize: 11.5)),
-                  Text('Processing: 24–48 hours', style: TextStyle(color: Colors.white70, fontSize: 11.5)),
+                  Text('• Minimum withdrawal: \$5 (≈₹400)', style: TextStyle(color: Colors.white70, fontSize: 11.5)),
+                  Text('• Processing time: 24–48 hours', style: TextStyle(color: Colors.white70, fontSize: 11.5)),
+                  Text('• Methods: Bank Transfer · UPI · Any Bank', style: TextStyle(color: Colors.white70, fontSize: 11.5)),
+                  Text('• TDS @ 2% applies above ₹15,000/year', style: TextStyle(color: Colors.white70, fontSize: 11.5)),
                 ],
               ),
             ),
