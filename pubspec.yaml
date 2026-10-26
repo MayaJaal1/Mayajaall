@@ -54,8 +54,8 @@ dependencies:
   photo_manager_image_provider: ^2.1.1
 
   # ── 📺 Google IMA SDK for Pre-roll Ads (VAST Tags) ──
-  # Ye package tere HilltopAds VAST tag ko play karega
-  interactive_media_ads: ^0.0.2+2
+  # 🔥 Version 0.1.2 Flutter 3.19.6 ke saath compatible hai
+  interactive_media_ads: ^0.1.2
 
 # ═══════════════════════════════════════════════════════
 # DEV DEPENDENCIES
