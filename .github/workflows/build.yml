@@ -300,7 +300,7 @@ jobs:
           android {
               namespace 'com.mayajaal.online'
               compileSdkVersion 36
-              ndkVersion "27.0.12077973"   // 👈 NDK VERSION ADD KIYA HAI
+              ndkVersion "27.0.12077973"
 
               compileOptions {
                   sourceCompatibility JavaVersion.VERSION_17
@@ -369,7 +369,8 @@ jobs:
           plugins {
               id "dev.flutter.flutter-plugin-loader" version "1.0.0"
               id "com.android.application" version "8.7.0" apply false
-              id "org.jetbrains.kotlin.android" version "1.9.24" apply false
+              // 🔥 FIX: Kotlin version 2.1.0 kar diya
+              id "org.jetbrains.kotlin.android" version "2.1.0" apply false
               id "com.google.gms.google-services" version "4.4.0" apply false
           }
 
