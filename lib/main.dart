@@ -28,7 +28,6 @@ import 'dart:convert' show base64, utf8;
 import 'package:crypto/crypto.dart' as crypto;
 // 🔥 NEW: IMA SDK Import for Ads
 import 'package:interactive_media_ads/interactive_media_ads.dart';
-import 'package:interactive_media_ads/platform_interface/ads_loader.dart';
 
 // ═══════════════════════════════════════════════════════
 // CONFIG
