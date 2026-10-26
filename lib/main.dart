@@ -6105,7 +6105,7 @@ class _StreamPreviewScreenState extends State<StreamPreviewScreen>
 // MAYAJAAL APP — PART 2 (UPDATED WITH ADS)
 // ═══════════════════════════════════════════════════════
 // ═══════════════════════════════════════════════════════
-// PRE-ROLL AD SCREEN (🔥 FIXED for v0.1.0+2 API)
+// PRE-ROLL AD SCREEN (🔥 FIXED for v0.3.0+16 API)
 // ═══════════════════════════════════════════════════════
 class PreRollAdScreen extends StatefulWidget {
   final String adTagUrl;
@@ -6121,9 +6121,10 @@ class _PreRollAdScreenState extends State<PreRollAdScreen> {
   AdsManager? _adsManager;
   
   bool _isAdFinished = false;
+  bool _hasError = false;
   bool _isLoading = true;
 
-  // Content Progress Provider (Ads request ke liye zaroori hai)
+  // Latest API ke liye ContentProgressProvider zaroori hai
   final ContentProgressProvider _contentProgressProvider = ContentProgressProvider();
 
   @override
@@ -6133,58 +6134,50 @@ class _PreRollAdScreenState extends State<PreRollAdScreen> {
     // 1. AdDisplayContainer initialize karo
     _adDisplayContainer = AdDisplayContainer(
       onContainerAdded: (AdDisplayContainer container) {
-        // Container ready hone par AdsLoader banayein
-        _adsLoader = AdsLoader(
-          container: container,
-          onAdsLoaded: (OnAdsLoadedData data) {
-            _adsManager = data.manager;
-            
-            // 2. AdsManagerDelegate set karo (Events handle karne ke liye)
-            _adsManager!.setAdsManagerDelegate(
-              AdsManagerDelegate(
-                onAdEvent: (AdEvent event) {
-                  switch (event.type) {
-                    case AdEventType.loaded:
-                      _adsManager!.start(); // Ad load hote hi play
-                      break;
-                    case AdEventType.allAdsCompleted:
-                      _finishAdScreen(); // Ad khatam
-                      break;
-                    default:
-                      break;
-                  }
-                },
-                onAdErrorEvent: (AdErrorEvent event) {
-                  debugPrint('Ad Error: ${event.error.message}');
-                  _finishAdScreen(); // Error aaye toh skip karo
-                },
-              ),
-            );
+        
+        // 2. Container ready hone par AdsLoader banayein (naye API mein 'adDisplayContainer' keyword use hota hai)
+        _adsLoader = AdsLoader(adDisplayContainer: container);
+        
+        // 3. AdsLoader ko listener attach karo
+        _adsLoader!.addAdsLoadedListener((OnAdsLoadedData data) {
+          _adsManager = data.manager;
+          
+          // 4. AdsManagerDelegate set karo (Events handle karne ke liye)
+          _adsManager!.setAdsManagerDelegate(
+            AdsManagerDelegate(
+              onAdEvent: (AdEvent event) {
+                switch (event.type) {
+                  case AdEventType.loaded:
+                    _adsManager!.start(); // Ad load hote hi play
+                    break;
+                  case AdEventType.allAdsCompleted:
+                    _finishAdScreen(); // Ad khatam
+                    break;
+                  default:
+                    break;
+                }
+              },
+              onAdErrorEvent: (AdErrorEvent event) {
+                debugPrint('Ad Error: ${event.error.message}');
+                _finishAdScreen(); // Error aaye toh skip karo
+              },
+            ),
+          );
 
-            // 3. AdsManager ko init karo
-            _adsManager!.init();
-          },
-          onAdsLoadError: (AdsLoadErrorData data) {
-            debugPrint('Ads Load Error: ${data.error.message}');
-            _finishAdScreen();
-          },
+          // 5. AdsManager ko init karo
+          _adsManager!.init();
+        });
+
+        // 6. Ad Request bhejo (Naye API mein contentProgressProvider zaroori hai)
+        final AdsRequest request = AdsRequest(
+          adTagUrl: widget.adTagUrl,
+          contentProgressProvider: _contentProgressProvider,
         );
-
-        // 4. Container ready hone ke baad Ads Request karo
-        _requestAds();
+        
+        _adsLoader!.requestAds(request);
+        if (mounted) setState(() => _isLoading = false);
       },
     );
-  }
-
-  Future<void> _requestAds() async {
-    if (_adsLoader == null) return;
-    final AdsRequest request = AdsRequest(
-      adTagUrl: widget.adTagUrl,
-      contentProgressProvider: _contentProgressProvider, // Mid-roll ads ke liye zaroori
-    );
-    
-    await _adsLoader!.requestAds(request);
-    if (mounted) setState(() => _isLoading = false);
   }
 
   void _finishAdScreen() {
@@ -6208,7 +6201,7 @@ class _PreRollAdScreenState extends State<PreRollAdScreen> {
       body: Stack(
         children: [
           // Ad Display Container (Ye pura screen cover karega)
-          if (!_isAdFinished)
+          if (!_isAdFinished && !_hasError)
             Center(
               child: SizedBox(
                 width: double.infinity,
@@ -6236,7 +6229,7 @@ class _PreRollAdScreenState extends State<PreRollAdScreen> {
           ),
 
           // Loading Indicator
-          if (_isLoading && !_isAdFinished)
+          if (_isLoading && !_isAdFinished && !_hasError)
             const Center(
               child: Text(
                 'LOADING AD...',
