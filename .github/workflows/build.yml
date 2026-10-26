@@ -29,7 +29,7 @@ jobs:
       - name: Set up Flutter
         uses: subosito/flutter-action@v2
         with:
-          flutter-version: "3.29.0" # 🔥 FIX 1: Flutter update kiya (Dart 3.7 ke liye)
+          flutter-version: "3.29.0" # 🔥 FIX: Flutter update kiya
           channel: stable
           cache: true
 
@@ -85,7 +85,7 @@ jobs:
             photo_manager: ^3.6.4
             photo_manager_image_provider: ^2.1.1
             crypto: ^3.0.3
-            interactive_media_ads: ^0.3.0+16 # 🔥 FIX 2: Latest Ads package
+            interactive_media_ads: ^0.3.0+16 # 🔥 FIX: Latest Ads package
 
           dev_dependencies:
             flutter_test:
@@ -377,7 +377,7 @@ jobs:
                   mavenCentral()
               }
               dependencies {
-                  classpath 'com.android.tools.build:gradle:8.3.0' # 🔥 AGP update kiya Flutter 3.29 ke liye
+                  classpath 'com.android.tools.build:gradle:8.7.0' # 🔥 AGP update kiya
                   classpath "org.jetbrains.kotlin:kotlin-gradle-plugin:$kotlin_version"
                   classpath 'com.google.gms:google-services:4.4.0'
               }
