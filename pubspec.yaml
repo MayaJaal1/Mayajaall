@@ -55,7 +55,7 @@ dependencies:
 
   # ── 📺 Google IMA SDK for Pre-roll Ads (VAST Tags) ──
   # 🔥 Version 0.1.2 Flutter 3.19.6 ke saath compatible hai
-  interactive_media_ads: ^0.3.0+16
+  interactive_media_ads: 0.2.6
 
 # ═══════════════════════════════════════════════════════
 # DEV DEPENDENCIES
