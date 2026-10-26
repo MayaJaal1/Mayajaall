@@ -53,6 +53,9 @@ dependencies:
   # ── 🔐 SECURITY: HMAC signing for API requests ──
   crypto: ^3.0.3
 
+  # ── 📺 VAST Ad XML Parser ──
+  xml: ^6.5.0
+
   # ── 📸 Gallery (permissions + assets) ──
   permission_handler: ^11.3.1
   photo_manager: ^3.3.0
