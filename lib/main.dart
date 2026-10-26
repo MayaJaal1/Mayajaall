@@ -6133,11 +6133,9 @@ class _PreRollAdScreenState extends State<PreRollAdScreen> {
 
   Future<void> _initAd() async {
     try {
-      // 1. Video Player initialize karo (IMA SDK ko iski zarurat hoti hai)
       _videoPlayerController = VideoPlayerController.networkUrl(Uri.parse(''));
       await _videoPlayerController.initialize();
 
-      // 2. Ad Display Container setup karo
       _adDisplayContainer = AdDisplayContainer(
         container: AdContainer(
           child: AspectRatio(
@@ -6150,13 +6148,12 @@ class _PreRollAdScreenState extends State<PreRollAdScreen> {
         },
       );
 
-      // 3. Ads Loader setup karo
       _adsLoader = AdsLoader(adDisplayContainer: _adDisplayContainer);
       
       _adsLoader.addAdsLoadedListener((event) {
         if (event.adError != null) {
           debugPrint('Ad Error: ${event.adError}');
-          _finishAdScreen(); // Error aaye toh skip karke direct video chalao
+          _finishAdScreen(); 
           return;
         }
         _playAd(event.adsManager!);
@@ -6164,7 +6161,7 @@ class _PreRollAdScreenState extends State<PreRollAdScreen> {
 
     } catch (e) {
       debugPrint('Ad Init Error: $e');
-      _finishAdScreen(); // Koi bhi error aaye toh video direct chalao
+      _finishAdScreen(); 
     }
   }
 
@@ -6177,17 +6174,13 @@ class _PreRollAdScreenState extends State<PreRollAdScreen> {
   }
 
   void _playAd(AdsManager adsManager) {
-    adsManager.addAdEvent(AdEventType.loaded, () {
-      adsManager.volume = 1.0; // Volume full
-      adsManager.start(); // Ad play karo
-    });
+    // 🔥 FIX: Ad load hote hi direct play karo
+    adsManager.volume = 1.0; 
+    adsManager.start();
 
-    // Ad skip ya complete hone par
+    // 🔥 FIX: AdEventType.skipped invalid tha, uski jagah allAdsCompleted use kiya
+    // Jab ad complete hoga ya user skip karega, dono case me ye trigger hoga.
     adsManager.addAdEvent(AdEventType.allAdsCompleted, () {
-      _finishAdScreen();
-    });
-    
-    adsManager.addAdEvent(AdEventType.skipped, () {
       _finishAdScreen();
     });
   }
@@ -6213,18 +6206,16 @@ class _PreRollAdScreenState extends State<PreRollAdScreen> {
       backgroundColor: Colors.black,
       body: Stack(
         children: [
-          // Ad Container View
           if (!_hasError)
             Center(
               child: _adDisplayContainer.build(context),
             ),
             
-          // Top-left Skip / Close button
           Positioned(
             top: 40,
             left: 20,
             child: GestureDetector(
-              onTap: _finishAdScreen, // Skip dabane par direct video chalu
+              onTap: _finishAdScreen,
               child: Container(
                 padding: const EdgeInsets.all(8),
                 decoration: BoxDecoration(
@@ -6237,7 +6228,6 @@ class _PreRollAdScreenState extends State<PreRollAdScreen> {
             ),
           ),
 
-          // Loading Indicator
           if (_isLoading && !_hasError && !_isAdFinished)
             const Center(
               child: Text(
@@ -6250,6 +6240,7 @@ class _PreRollAdScreenState extends State<PreRollAdScreen> {
     );
   }
 }
+
 
 // ═══════════════════════════════════════════════════════
 // CHANNEL SCREEN
