@@ -6106,7 +6106,7 @@ class _StreamPreviewScreenState extends State<StreamPreviewScreen>
 // ═══════════════════════════════════════════════════════
 
 // ═══════════════════════════════════════════════════════
-// PRE-ROLL AD SCREEN (🔥 NEW: Google IMA SDK Integration)
+// PRE-ROLL AD SCREEN (🔥 FIXED for v0.1.0+2 API)
 // ═══════════════════════════════════════════════════════
 class PreRollAdScreen extends StatefulWidget {
   final String adTagUrl;
@@ -6118,85 +6118,87 @@ class PreRollAdScreen extends StatefulWidget {
 
 class _PreRollAdScreenState extends State<PreRollAdScreen> {
   late final AdDisplayContainer _adDisplayContainer;
-  late final AdsLoader _adsLoader;
-  late final VideoPlayerController _videoPlayerController;
+  AdsLoader? _adsLoader;
+  AdsManager? _adsManager;
   
   bool _isAdFinished = false;
-  bool _hasError = false;
   bool _isLoading = true;
+
+  // Content Progress Provider (Ads request ke liye zaroori hai)
+  final ContentProgressProvider _contentProgressProvider = ContentProgressProvider();
 
   @override
   void initState() {
     super.initState();
-    _initAd();
-  }
+    
+    // 1. AdDisplayContainer initialize karo
+    _adDisplayContainer = AdDisplayContainer(
+      onContainerAdded: (AdDisplayContainer container) {
+        // Container ready hone par AdsLoader banayein
+        _adsLoader = AdsLoader(
+          container: container,
+          onAdsLoaded: (OnAdsLoadedData data) {
+            _adsManager = data.manager;
+            
+            // 2. AdsManagerDelegate set karo (Events handle karne ke liye)
+            _adsManager!.setAdsManagerDelegate(
+              AdsManagerDelegate(
+                onAdEvent: (AdEvent event) {
+                  switch (event.type) {
+                    case AdEventType.loaded:
+                      _adsManager!.start(); // Ad load hote hi play
+                      break;
+                    case AdEventType.allAdsCompleted:
+                      _finishAdScreen(); // Ad khatam
+                      break;
+                    default:
+                      break;
+                  }
+                },
+                onAdErrorEvent: (AdErrorEvent event) {
+                  debugPrint('Ad Error: ${event.error.message}');
+                  _finishAdScreen(); // Error aaye toh skip karo
+                },
+              ),
+            );
 
-  Future<void> _initAd() async {
-    try {
-      _videoPlayerController = VideoPlayerController.networkUrl(Uri.parse(''));
-      await _videoPlayerController.initialize();
+            // 3. AdsManager ko init karo
+            _adsManager!.init(
+              settings: AdsRenderingSettings(enablePreloading: true),
+            );
+          },
+          onAdsLoadError: (AdsLoadErrorData data) {
+            debugPrint('Ads Load Error: ${data.error.message}');
+            _finishAdScreen();
+          },
+        );
 
-      _adDisplayContainer = AdDisplayContainer(
-        container: AdContainer(
-          child: AspectRatio(
-            aspectRatio: 16 / 9,
-            child: VideoPlayer(_videoPlayerController),
-          ),
-        ),
-        onAdContainerViewCreated: (viewId) {
-          _requestAds();
-        },
-      );
-
-      _adsLoader = AdsLoader(adDisplayContainer: _adDisplayContainer);
-      
-      _adsLoader.addAdsLoadedListener((event) {
-        if (event.adError != null) {
-          debugPrint('Ad Error: ${event.adError}');
-          _finishAdScreen(); 
-          return;
-        }
-        _playAd(event.adsManager!);
-      });
-
-    } catch (e) {
-      debugPrint('Ad Init Error: $e');
-      _finishAdScreen(); 
-    }
-  }
-
-  void _requestAds() {
-    final adsRequest = AdsRequest(
-      adTagUrl: widget.adTagUrl,
+        // 4. Container ready hone ke baad Ads Request karo
+        _requestAds(container);
+      },
     );
-    _adsLoader.requestAds(adsRequest);
-    if (mounted) setState(() => _isLoading = false);
   }
 
-  void _playAd(AdsManager adsManager) {
-    // 🔥 FIX: Ad load hote hi direct play karo
-    adsManager.volume = 1.0; 
-    adsManager.start();
-
-    // 🔥 FIX: AdEventType.skipped invalid tha, uski jagah allAdsCompleted use kiya
-    // Jab ad complete hoga ya user skip karega, dono case me ye trigger hoga.
-    adsManager.addAdEvent(AdEventType.allAdsCompleted, () {
-      _finishAdScreen();
-    });
+  Future<void> _requestAds(AdDisplayContainer container) async {
+    final AdsRequest request = AdsRequest(
+      adTagUrl: widget.adTagUrl,
+      contentProgressProvider: _contentProgressProvider, // Mid-roll ads ke liye zaroori
+    );
+    
+    await _adsLoader?.requestAds(request);
+    if (mounted) setState(() => _isLoading = false);
   }
 
   void _finishAdScreen() {
     if (!_isAdFinished && mounted) {
       _isAdFinished = true;
-      Navigator.pop(context, true); // Video player ko signal bhejo ki ad khatam
+      Navigator.pop(context, true); // Player ko signal bhejo
     }
   }
 
   @override
   void dispose() {
-    _adsLoader.destroy();
-    _adDisplayContainer.destroy();
-    _videoPlayerController.dispose();
+    _adsManager?.destroy();
     super.dispose();
   }
 
@@ -6206,11 +6208,17 @@ class _PreRollAdScreenState extends State<PreRollAdScreen> {
       backgroundColor: Colors.black,
       body: Stack(
         children: [
-          if (!_hasError)
+          // Ad Display Container (Ye pura screen cover karega)
+          if (!_isAdFinished)
             Center(
-              child: _adDisplayContainer.build(context),
+              child: SizedBox(
+                width: double.infinity,
+                height: double.infinity,
+                child: _adDisplayContainer,
+              ),
             ),
-            
+
+          // Top-Left Skip Button
           Positioned(
             top: 40,
             left: 20,
@@ -6228,7 +6236,8 @@ class _PreRollAdScreenState extends State<PreRollAdScreen> {
             ),
           ),
 
-          if (_isLoading && !_hasError && !_isAdFinished)
+          // Loading Indicator
+          if (_isLoading && !_isAdFinished)
             const Center(
               child: Text(
                 'LOADING AD...',
@@ -6240,7 +6249,6 @@ class _PreRollAdScreenState extends State<PreRollAdScreen> {
     );
   }
 }
-
 
 // ═══════════════════════════════════════════════════════
 // CHANNEL SCREEN
