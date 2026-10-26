@@ -6104,7 +6104,6 @@ class _StreamPreviewScreenState extends State<StreamPreviewScreen>
 // ═══════════════════════════════════════════════════════
 // MAYAJAAL APP — PART 2 (UPDATED WITH ADS)
 // ═══════════════════════════════════════════════════════
-
 // ═══════════════════════════════════════════════════════
 // PRE-ROLL AD SCREEN (🔥 FIXED for v0.1.0+2 API)
 // ═══════════════════════════════════════════════════════
@@ -6163,9 +6162,7 @@ class _PreRollAdScreenState extends State<PreRollAdScreen> {
             );
 
             // 3. AdsManager ko init karo
-            _adsManager!.init(
-              settings: AdsRenderingSettings(enablePreloading: true),
-            );
+            _adsManager!.init();
           },
           onAdsLoadError: (AdsLoadErrorData data) {
             debugPrint('Ads Load Error: ${data.error.message}');
@@ -6174,24 +6171,26 @@ class _PreRollAdScreenState extends State<PreRollAdScreen> {
         );
 
         // 4. Container ready hone ke baad Ads Request karo
-        _requestAds(container);
+        _requestAds();
       },
     );
   }
 
-  Future<void> _requestAds(AdDisplayContainer container) async {
+  Future<void> _requestAds() async {
+    if (_adsLoader == null) return;
     final AdsRequest request = AdsRequest(
       adTagUrl: widget.adTagUrl,
       contentProgressProvider: _contentProgressProvider, // Mid-roll ads ke liye zaroori
     );
     
-    await _adsLoader?.requestAds(request);
+    await _adsLoader!.requestAds(request);
     if (mounted) setState(() => _isLoading = false);
   }
 
   void _finishAdScreen() {
     if (!_isAdFinished && mounted) {
       _isAdFinished = true;
+      _adsManager?.destroy(); // Manager ko destroy karo
       Navigator.pop(context, true); // Player ko signal bhejo
     }
   }
