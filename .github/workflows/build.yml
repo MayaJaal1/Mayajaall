@@ -29,7 +29,7 @@ jobs:
       - name: Set up Flutter
         uses: subosito/flutter-action@v2
         with:
-          flutter-version: "3.19.6"
+          flutter-version: "3.29.0" # 🔥 FIX 1: Flutter update kiya (Dart 3.7 ke liye)
           channel: stable
           cache: true
 
@@ -85,7 +85,7 @@ jobs:
             photo_manager: ^3.6.4
             photo_manager_image_provider: ^2.1.1
             crypto: ^3.0.3
-            interactive_media_ads: 0.1.0+2
+            interactive_media_ads: ^0.3.0+16 # 🔥 FIX 2: Latest Ads package
 
           dev_dependencies:
             flutter_test:
@@ -319,7 +319,7 @@ jobs:
               compileOptions {
                   sourceCompatibility JavaVersion.VERSION_17
                   targetCompatibility JavaVersion.VERSION_17
-                  coreLibraryDesugaringEnabled true  // 🔥 FIX: Desugaring ON kiya Ads ke liye
+                  coreLibraryDesugaringEnabled true
               }
 
               kotlinOptions {
@@ -361,7 +361,6 @@ jobs:
               source '../..'
           }
 
-          // 🔥 FIX: Desugaring library dependency
           dependencies {
               coreLibraryDesugaring 'com.android.tools:desugar_jdk_libs:2.1.5'
           }
@@ -378,7 +377,7 @@ jobs:
                   mavenCentral()
               }
               dependencies {
-                  classpath 'com.android.tools.build:gradle:8.1.4'
+                  classpath 'com.android.tools.build:gradle:8.3.0' # 🔥 AGP update kiya Flutter 3.29 ke liye
                   classpath "org.jetbrains.kotlin:kotlin-gradle-plugin:$kotlin_version"
                   classpath 'com.google.gms:google-services:4.4.0'
               }
