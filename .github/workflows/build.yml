@@ -85,7 +85,7 @@ jobs:
             photo_manager: ^3.6.4
             photo_manager_image_provider: ^2.1.1
             crypto: ^3.0.3
-            interactive_media_ads: ^0.2.6  # 🔥 FIX: Ads package add kiya
+            interactive_media_ads: 0.1.0+2
 
           dev_dependencies:
             flutter_test:
