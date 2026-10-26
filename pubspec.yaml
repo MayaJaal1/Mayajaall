@@ -42,24 +42,20 @@ dependencies:
   firebase_auth: ^5.0.0
   firebase_database: ^11.0.0
 
-  # ── 🔐 Firebase App Check (OPTIONAL — enable in production) ──
-  # Play Integrity / DeviceCheck — real device + real app verify
-  # Commented by default; uncomment after enabling in Firebase Console
-  # firebase_app_check: ^0.3.1
-
   # ── Device Info ──
   device_info_plus: ^10.1.2
 
   # ── 🔐 SECURITY: HMAC signing for API requests ──
   crypto: ^3.0.3
 
-  # ── 📺 VAST Ad XML Parser ──
-  xml: ^6.5.0
-
   # ── 📸 Gallery (permissions + assets) ──
   permission_handler: ^11.3.1
   photo_manager: ^3.3.0
   photo_manager_image_provider: ^2.1.1
+
+  # ── 📺 Google IMA SDK for Pre-roll Ads (VAST Tags) ──
+  # Ye package tere HilltopAds VAST tag ko play karega
+  interactive_media_ads: ^0.0.2+2
 
 # ═══════════════════════════════════════════════════════
 # DEV DEPENDENCIES
