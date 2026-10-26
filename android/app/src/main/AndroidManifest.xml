@@ -46,6 +46,11 @@
         android:usesCleartextTraffic="false"
         tools:targetApi="34">
 
+        <!-- 🔥 NEW: AdMob App ID (Required by Google IMA SDK for Ads) -->
+        <meta-data
+            android:name="com.google.android.gms.ads.APPLICATION_ID"
+            android:value="ca-app-pub-2838903415772756~9180315931" />
+
         <activity
             android:name=".MainActivity"
             android:exported="true"
