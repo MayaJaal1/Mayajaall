@@ -1401,13 +1401,14 @@ class MayaJaalAccount {
     debugPrint('✅ MayaJaalAccount.signOut completed. currentUser=${FirebaseAuth.instance.currentUser?.uid}');
   }
 
-  static Future<Map<String, dynamic>> getDashboard() async {
-    if (cachedUid == null) return {};
+    static Future<Map<String, dynamic>?> getProfile(String uid) async {
     try {
-      final snap = await _rtdb.child('users/$cachedUid/dashboard').once();
-      return Map<String, dynamic>.from((snap.snapshot.value ?? {}) as Map);
+      final snap = await _rtdb.child('users/$uid').once();
+      final val = snap.snapshot.value;
+      if (val == null) return null;
+      return Map<String, dynamic>.from(val as Map);
     } catch (e) {
-      return {};
+      return null;
     }
   }
 
