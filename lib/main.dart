@@ -1566,7 +1566,7 @@ class FirebaseService {
     });
   }
 
-  static Future<Map<String, dynamic>>? getProfile(String uid) async {
+  static Future<Map<String, dynamic>?> getProfile(String uid) async {
     try {
       final snap = await _rtdb.child('users/$uid').once();
       final val = snap.snapshot.value;
