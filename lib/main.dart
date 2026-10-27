@@ -1,5 +1,5 @@
 // ═══════════════════════════════════════════════════════
-// MAYAJAAL APP — PART 1 (UPDATED WITH PRE-ROLL ADS)
+// MAYAJAAL APP — PART 1 (UPDATED WITH NEW ADS & VIDEO FIX)
 // ═══════════════════════════════════════════════════════
 import 'dart:async';
 import 'dart:convert';
@@ -26,11 +26,13 @@ import 'package:photo_manager/photo_manager.dart';
 import 'package:photo_manager_image_provider/photo_manager_image_provider.dart';
 import 'dart:convert' show base64, utf8;
 import 'package:crypto/crypto.dart' as crypto;
-// 🔥 NEW: IMA SDK Import for Ads
+// 🔥 NEW: IMA SDK Import for Pre-roll Ads
 import 'package:interactive_media_ads/interactive_media_ads.dart';
+// 🔥 NEW: WebView for Adsterra Scripts
+import 'package:webview_flutter/webview_flutter.dart';
 
 // ═══════════════════════════════════════════════════════
-// CONFIG
+// CONFIG & AD SCRIPTS
 // ═══════════════════════════════════════════════════════
 const String webClientId = '96139047750-5ooi0pbvch98qu447somuurh6k6fmhcj.apps.googleusercontent.com';
 const String oneSignalAppId = '06b99c2b-b3b4-413b-b6cc-480a624f4e25';
@@ -58,9 +60,183 @@ const Color kSilver = Color(0xFFC0C0C0);
 const Color kBronze = Color(0xFFCD7F32);
 const Color kRed = Color(0xFFFF3B3B);
 
+// 🔥 NEW: Adsterra Ad Scripts
+const String adScript1 = """
+<script>
+(function(drktorg){
+var d = document,
+    s = d.createElement('script'),
+    l = d.currentScript || d.scripts[d.scripts.length - 1];
+s.settings = drktorg || {};
+s.src = "//dishoneststyle.com/bkXkV.s/dqGKl_0vYtWxcz/ReqmX9ZudZvU/lYkGP/Thcj1YNBTBUmyFNjzNMMtSNVzQU/1jNqT_Iy3SNtw_";
+s.async = true;
+s.referrerPolicy = 'no-referrer-when-downgrade';
+l.parentNode.insertBefore(s, l);
+})({})
+</script>
+""";
+
+const String adScript2 = """
+<script>
+(function(reavc){
+var d = document,
+    s = d.createElement('script'),
+    l = d.currentScript || d.scripts[d.scripts.length - 1];
+s.settings = reavc || {};
+s.src = "//dishoneststyle.com/bBX.VesVdNGhlX0rYuWgcp/QeNmf9-ucZqU/ldkHPITKck1/NuTmUv1FMaj-kBtBNAz_Ug1VNwTKU/zCMHwC";
+s.async = true;
+s.referrerPolicy = 'no-referrer-when-downgrade';
+l.parentNode.insertBefore(s, l);
+})({})
+</script>
+""";
+
+const String adScript3 = """
+<script>
+(function(gsd){
+var d = document,
+    s = d.createElement('script'),
+    l = d.currentScript || d.scripts[d.scripts.length - 1];
+s.settings = gsd || {};
+s.src = "//dishoneststyle.com/b/XFV.sAd/GKlv0/YEWUcH/HeamD9kuCZ/UJlgk/P-TPcC1/N/T/UC1KNYDDUFtANWzBUT1/N/TyUt0nOQQr";
+s.async = true;
+s.referrerPolicy = 'no-referrer-when-downgrade';
+l.parentNode.insertBefore(s, l);
+})({})
+</script>
+""";
+
+const String adScript4 = """
+<script>
+(function(jch){
+var d = document,
+    s = d.createElement('script'),
+    l = d.currentScript || d.scripts[d.scripts.length - 1];
+s.settings = jch || {};
+s.src = "//dishoneststyle.com/b.X/VUskdGGHlg0rYnWqcC/Feemc9vuGZ/Ufl/kJPsTccN1XN_TjU/1JNSjqEotnN/zbUU1SNmTfUl2FNHQU";
+s.async = true;
+s.referrerPolicy = 'no-referrer-when-downgrade';
+l.parentNode.insertBefore(s, l);
+})({})
+</script>
+""";
+
+const String adScript5 = """
+<script>
+(function(nxcrj){
+var d = document,
+    s = d.createElement('script'),
+    l = d.currentScript || d.scripts[d.scripts.length - 1];
+s.settings = nxcrj || {};
+s.src = "//dishoneststyle.com/b/X.VjsTd_GclR0AYuW/cU/xeXmv9YutZEUll/kGPaTncu1BNpTJUR1VNhzrcNtRNWzCUF1dNpTPUk4YMhQh";
+s.async = true;
+s.referrerPolicy = 'no-referrer-when-downgrade';
+l.parentNode.insertBefore(s, l);
+})({})
+</script>
+""";
+
+const String adScript6 = """
+<script>
+(function(khfr){
+var d = document,
+    s = d.createElement('script'),
+    l = d.currentScript || d.scripts[d.scripts.length - 1];
+s.settings = khfr || {};
+s.src = "//dishoneststyle.com/b/X/VesWd.G-lO0gYkWucZ/ze/mH9Vu/ZDUMl/k-PSTCc/1GNfTrUd1TOcDek/tBNXzNUT1vN/ToUz5UMewr";
+s.async = true;
+s.referrerPolicy = 'no-referrer-when-downgrade';
+l.parentNode.insertBefore(s, l);
+})({})
+</script>
+""";
+
+const String adScript7 = """
+<script>
+(function(mkp){
+var d = document,
+    s = d.createElement('script'),
+    l = d.currentScript || d.scripts[d.scripts.length - 1];
+s.settings = mkp || {};
+s.src = "//dishoneststyle.com/b.XIVJs/dwG/lX0MYKWKcL/oeHmz9/udZ/U-lYkOPWTQcG1ANET/Um2/MTDhUVtKNHz/Uf1-NeTiYFwPOGQC";
+s.async = true;
+s.referrerPolicy = 'no-referrer-when-downgrade';
+l.parentNode.insertBefore(s, l);
+})({})
+</script>
+""";
+
+const String adScript8 = """
+<script>
+(function(ugkyb){
+var d = document,
+    s = d.createElement('script'),
+    l = d.currentScript || d.scripts[d.scripts.length - 1];
+s.settings = ugkyb || {};
+s.src = "//dishoneststyle.com/bcX.V/sfdnGol/0-Y/W/cM/QeCmb9pu/ZjUjlZk/PjT/cf1gNaT/U/2eM/j/UTtiNNzaU/1lN/T/Y-yfOkQZ";
+s.async = true;
+s.referrerPolicy = 'no-referrer-when-downgrade';
+l.parentNode.insertBefore(s, l);
+})({})
+</script>
+""";
+
 final ValueNotifier<ThemeMode> themeNotifier = ValueNotifier(ThemeMode.dark);
 final ValueNotifier<String> languageNotifier = ValueNotifier('English');
 final GlobalKey<NavigatorState> navigatorKey = GlobalKey<NavigatorState>();
+
+// ═══════════════════════════════════════════════════════
+// NEW HELPER: WEBVIEW AD WRAPPER
+// ═══════════════════════════════════════════════════════
+class AdWebView extends StatefulWidget {
+  final String script;
+  final double height;
+  const AdWebView({super.key, required this.script, this.height = 120});
+
+  @override
+  State<AdWebView> createState() => _AdWebViewState();
+}
+
+class _AdWebViewState extends State<AdWebView> {
+  late final WebViewController _controller;
+
+  @override
+  void initState() {
+    super.initState();
+    _controller = WebViewController()
+      ..setJavaScriptMode(JavaScriptMode.unrestricted)
+      ..setBackgroundColor(Colors.transparent)
+      ..loadHtmlString("""
+        <!DOCTYPE html>
+        <html>
+        <head>
+          <meta name="viewport" content="width=device-width, initial-scale=1.0">
+          <style>
+            body { margin: 0; padding: 0; background: transparent; display: flex; justify-content: center; align-items: center; overflow: hidden; }
+          </style>
+        </head>
+        <body>
+          ${widget.script}
+        </body>
+        </html>
+      """);
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      height: widget.height,
+      width: double.infinity,
+      decoration: BoxDecoration(
+        color: Colors.black.withOpacity(0.3),
+        borderRadius: BorderRadius.circular(10),
+        border: Border.all(color: kGreen.withOpacity(0.2)),
+      ),
+      clipBehavior: Clip.antiAlias,
+      child: WebViewWidget(controller: _controller),
+    );
+  }
+}
 
 // ═══════════════════════════════════════════════════════
 // HELPER: AUTO THUMBNAIL GENERATOR
@@ -996,7 +1172,7 @@ class CyberRank {
 }
 
 // ═══════════════════════════════════════════════════════
-// AD TRACKER
+// AD TRACKER (Purane fake ads ke liye, abhi bhi rakh rahe hain taaki code break na ho)
 // ═══════════════════════════════════════════════════════
 class AdTracker {
   static const String _kCountKey = 'ads_watched_count';
@@ -3111,279 +3287,6 @@ class _MainNavigationHolderState extends State<MainNavigationHolder> with Ticker
 }
 
 // ═══════════════════════════════════════════════════════
-// AD BANNER WIDGET
-// ═══════════════════════════════════════════════════════
-class AdBanner extends StatelessWidget {
-  final String slot;
-  final VoidCallback? onTap;
-  const AdBanner({super.key, required this.slot, this.onTap});
-
-  @override
-  Widget build(BuildContext context) {
-    return GestureDetector(
-      onTap: () async {
-        Haptic.medium();
-        await AdTracker.increment();
-        if (onTap != null) onTap!();
-        if (!context.mounted) return;
-        final count = await AdTracker.getWatchedCount();
-        final remaining = 7 - count;
-        if (remaining <= 0) {
-          if (context.mounted) {
-            ScaffoldMessenger.of(context).showSnackBar(
-              const SnackBar(
-                backgroundColor: kCardBg,
-                content: Text(
-                  '🎉 Ad-free unlocked for 24 hours!',
-                  style: TextStyle(color: kGreen),
-                ),
-              ),
-            );
-          }
-        } else {
-          if (context.mounted) {
-            ScaffoldMessenger.of(context).showSnackBar(
-              SnackBar(
-                backgroundColor: kCardBg,
-                content: Text(
-                  '✅ Ad watched! $remaining more for 24h ad-free',
-                  style: const TextStyle(color: kGreen, fontSize: 12),
-                ),
-              ),
-            );
-          }
-        }
-      },
-      child: Container(
-        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 16),
-        decoration: BoxDecoration(
-          color: const Color(0xFF031408),
-          borderRadius: BorderRadius.circular(14),
-          border: Border.all(color: kGreen.withOpacity(0.4)),
-        ),
-        child: Row(
-          children: [
-            Container(
-              padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 3),
-              decoration: BoxDecoration(
-                color: kGreen,
-                borderRadius: BorderRadius.circular(4),
-              ),
-              child: const Text(
-                'AD',
-                style: TextStyle(
-                  color: Colors.black,
-                  fontSize: 9,
-                  fontWeight: FontWeight.bold,
-                ),
-              ),
-            ),
-            const SizedBox(width: 10),
-            Expanded(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  const Text(
-                    'YOUR AD HERE',
-                    style: TextStyle(
-                      color: Colors.white,
-                      fontSize: 12,
-                      fontWeight: FontWeight.bold,
-                    ),
-                  ),
-                  Text(
-                    'Ad Slot: $slot · Tap to watch',
-                    style: TextStyle(
-                      color: Colors.white.withOpacity(0.5),
-                      fontSize: 10,
-                    ),
-                  ),
-                ],
-              ),
-            ),
-            const Icon(Icons.campaign_outlined, color: kGreen, size: 26),
-          ],
-        ),
-      ),
-    );
-  }
-}
-
-// ═══════════════════════════════════════════════════════
-// FIRST TIME ADS POPUP
-// ═══════════════════════════════════════════════════════
-class FirstTimeAdsPopup {
-  static Future<void> show(BuildContext context) async {
-    final count = await AdTracker.getWatchedCount();
-    final remaining = 7 - count;
-    if (remaining <= 0) return;
-
-    if (!context.mounted) return;
-    await showDialog(
-      context: context,
-      barrierDismissible: false,
-      builder: (c) => Dialog(
-        backgroundColor: Colors.transparent,
-        insetPadding: const EdgeInsets.all(20),
-        child: Stack(
-          children: [
-            Container(
-              padding: const EdgeInsets.all(20),
-              decoration: BoxDecoration(
-                color: const Color(0xFF021206),
-                borderRadius: BorderRadius.circular(20),
-                border: Border.all(color: kGreen, width: 1.5),
-                boxShadow: [
-                  BoxShadow(
-                    color: kGreen.withOpacity(0.3),
-                    blurRadius: 25,
-                  ),
-                ],
-              ),
-              child: Column(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  Container(
-                    width: 70,
-                    height: 70,
-                    decoration: BoxDecoration(
-                      shape: BoxShape.circle,
-                      color: Colors.black,
-                      border: Border.all(color: kGold, width: 2),
-                      boxShadow: [
-                        BoxShadow(
-                          color: kGold.withOpacity(0.5),
-                          blurRadius: 20,
-                        ),
-                      ],
-                    ),
-                    child: const Center(
-                      child: Icon(
-                        Icons.workspace_premium,
-                        color: kGold,
-                        size: 38,
-                      ),
-                    ),
-                  ),
-                  const SizedBox(height: 16),
-                  const Text(
-                    'AD-FREE STREAMING',
-                    style: TextStyle(
-                      color: kGreen,
-                      fontSize: 16,
-                      fontWeight: FontWeight.bold,
-                      letterSpacing: 2,
-                      shadows: [Shadow(color: kGreen, blurRadius: 10)],
-                    ),
-                  ),
-                  const SizedBox(height: 8),
-                  Text(
-                    'Watch $remaining ads to unlock 24 hours of ad-free streaming!',
-                    textAlign: TextAlign.center,
-                    style: const TextStyle(
-                      color: Colors.white70,
-                      fontSize: 12.5,
-                      height: 1.5,
-                    ),
-                  ),
-                  const SizedBox(height: 16),
-                  Row(
-                    mainAxisAlignment: MainAxisAlignment.center,
-                    children: List.generate(7, (i) {
-                      final watched = i < count;
-                      return Container(
-                        width: 20,
-                        height: 20,
-                        margin: const EdgeInsets.symmetric(horizontal: 3),
-                        decoration: BoxDecoration(
-                          shape: BoxShape.circle,
-                          color: watched ? kGreen : Colors.black,
-                          border: Border.all(
-                            color: watched ? kGreen : kGreen.withOpacity(0.4),
-                            width: 1.5,
-                          ),
-                          boxShadow: watched
-                              ? [BoxShadow(color: kGreen.withOpacity(0.5), blurRadius: 8)]
-                              : null,
-                        ),
-                        child: watched
-                            ? const Icon(Icons.check, color: Colors.black, size: 12)
-                            : null,
-                      );
-                    }),
-                  ),
-                  const SizedBox(height: 6),
-                  Text(
-                    '$count / 7 ads watched',
-                    style: TextStyle(
-                      color: kGreen.withOpacity(0.8),
-                      fontSize: 10.5,
-                      letterSpacing: 1.2,
-                    ),
-                  ),
-                  const SizedBox(height: 20),
-                  SizedBox(
-                    width: double.infinity,
-                    height: 48,
-                    child: ElevatedButton(
-                      onPressed: () async {
-                        Haptic.medium();
-                        await AdTracker.increment();
-                        if (c.mounted) Navigator.pop(c);
-                      },
-                      style: ElevatedButton.styleFrom(
-                        backgroundColor: kGreen,
-                        foregroundColor: Colors.black,
-                        shape: RoundedRectangleBorder(
-                          borderRadius: BorderRadius.circular(12),
-                        ),
-                        elevation: 8,
-                      ),
-                      child: const Text(
-                        '▶ WATCH AD NOW',
-                        style: TextStyle(
-                          fontWeight: FontWeight.w900,
-                          letterSpacing: 1.8,
-                          fontSize: 13,
-                        ),
-                      ),
-                    ),
-                  ),
-                ],
-              ),
-            ),
-            Positioned(
-              right: 6,
-              top: 6,
-              child: GestureDetector(
-                onTap: () {
-                  Haptic.light();
-                  Navigator.pop(context);
-                },
-                child: Container(
-                  width: 34,
-                  height: 34,
-                  decoration: BoxDecoration(
-                    shape: BoxShape.circle,
-                    color: Colors.black,
-                    border: Border.all(color: Colors.white24, width: 1),
-                  ),
-                  child: const Icon(
-                    Icons.close,
-                    color: Colors.white54,
-                    size: 18,
-                  ),
-                ),
-              ),
-            ),
-          ],
-        ),
-      ),
-    );
-  }
-}
-
-// ═══════════════════════════════════════════════════════
 // HOME SCREEN
 // ═══════════════════════════════════════════════════════
 class HomeScreen extends StatefulWidget {
@@ -3871,7 +3774,7 @@ class _HomeScreenState extends State<HomeScreen>
               ),
               Padding(
                 padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 6),
-                child: AdBanner(slot: 'home-top'),
+                child: AdWebView(script: adScript1, height: 100), // 🔥 NEW AD
               ),
               Container(
                 width: double.infinity,
@@ -4156,7 +4059,7 @@ class _HomeScreenState extends State<HomeScreen>
               ),
               Padding(
                 padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 6),
-                child: AdBanner(slot: 'home-middle'),
+                child: AdWebView(script: adScript2, height: 100), // 🔥 NEW AD
               ),
               Padding(
                 padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 6),
@@ -4195,7 +4098,7 @@ class _HomeScreenState extends State<HomeScreen>
               ),
               Padding(
                 padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
-                child: AdBanner(slot: 'home-bottom'),
+                child: AdWebView(script: adScript3, height: 100), // 🔥 NEW AD
               ),
               const Padding(
                 padding: EdgeInsets.symmetric(vertical: 18),
@@ -4216,1893 +4119,10 @@ class _HomeScreenState extends State<HomeScreen>
     );
   }
 }
-
 // ═══════════════════════════════════════════════════════
-// MORE DRAWER
+// MAYAJAAL APP — PART 2 (UPDATED WITH ADS & VIDEO FIX)
 // ═══════════════════════════════════════════════════════
-class MoreDrawer extends StatefulWidget {
-  const MoreDrawer({super.key});
 
-  @override
-  State<MoreDrawer> createState() => _MoreDrawerState();
-}
-
-class _MoreDrawerState extends State<MoreDrawer>
-    with TickerProviderStateMixin {
-  late AnimationController _snakeController;
-  late AnimationController _slideController;
-
-  @override
-  void initState() {
-    super.initState();
-    _snakeController = AnimationController(
-      vsync: this,
-      duration: const Duration(seconds: 4),
-    )..repeat();
-    _slideController = AnimationController(
-      vsync: this,
-      duration: const Duration(milliseconds: 900),
-    )..forward();
-  }
-
-  @override
-  void dispose() {
-    _snakeController.dispose();
-    _slideController.dispose();
-    super.dispose();
-  }
-
-  Future<void> _logout(BuildContext context) async {
-    Haptic.heavy();
-
-    try {
-      final prefs = await SharedPreferences.getInstance();
-      await prefs.remove('mj_login_attempts');
-    } catch (_) {}
-
-    await MayaJaalAccount.signOut();
-
-    await Future.delayed(const Duration(milliseconds: 200));
-
-    if (context.mounted) {
-      Navigator.of(context).popUntil((route) => route.isFirst);
-    }
-  }
-
-  Future<void> _launchURL(String url, {bool inApp = false}) async {
-    Haptic.light();
-    try {
-      final target = Uri.parse(url);
-      if (inApp) {
-        await launchUrl(target, mode: LaunchMode.inAppBrowserView);
-      } else {
-        if (!await launchUrl(target, mode: LaunchMode.externalApplication)) {
-          await launchUrl(target, mode: LaunchMode.platformDefault);
-        }
-      }
-    } catch (e) {
-      debugPrint('Launch error: $e');
-      try {
-        await launchUrl(Uri.parse(url));
-      } catch (_) {}
-    }
-  }
-
-  void _shareApp() {
-    Haptic.light();
-    final myUid = MayaJaalAccount.cachedUid ?? '';
-    final refLink = 'https://www.mayajaal.online?ref=$myUid';
-    Share.share(
-      '🚀 Experience Matrix-speed streaming on MayaJaal App!\nDownload: $refLink',
-    );
-  }
-
-  void _showAboutDialog(BuildContext context) {
-    showDialog(
-      context: context,
-      builder: (c) => AlertDialog(
-        backgroundColor: kCardBg,
-        shape: RoundedRectangleBorder(
-          borderRadius: BorderRadius.circular(14),
-          side: const BorderSide(color: kGreen, width: 1.5),
-        ),
-        title: Row(
-          children: const [
-            Icon(Icons.info_outline, color: kGreen, size: 22),
-            SizedBox(width: 8),
-            Text(
-              'ABOUT MAYAJAAL',
-              style: TextStyle(
-                color: kGreen,
-                fontSize: 14,
-                fontWeight: FontWeight.bold,
-              ),
-            ),
-          ],
-        ),
-        content: const SingleChildScrollView(
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              Text(
-                'MAYA JAAL',
-                style: TextStyle(
-                  color: kGreen,
-                  fontSize: 18,
-                  fontWeight: FontWeight.bold,
-                  letterSpacing: 2,
-                ),
-              ),
-              SizedBox(height: 4),
-              Text(
-                '— STREAM BEYOND LIMITS —',
-                style: TextStyle(color: kDimGreen, fontSize: 10, letterSpacing: 2),
-              ),
-              SizedBox(height: 14),
-              Text(
-                'Version: v1.2.0 (Build 2)',
-                style: TextStyle(color: Colors.white70, fontSize: 12),
-              ),
-              SizedBox(height: 6),
-              Text(
-                'MayaJaal is a next-generation video streaming and monetization platform for creators. Convert, share, and earn effortlessly with Matrix-grade encryption and quantum-speed streaming.',
-                style: TextStyle(color: Colors.white70, fontSize: 12, height: 1.5),
-              ),
-              SizedBox(height: 12),
-              Text(
-                '👥 18+ Platform · User-Generated Content',
-                style: TextStyle(color: kGreen, fontSize: 11, height: 1.4),
-              ),
-              SizedBox(height: 14),
-              Divider(color: Colors.white24),
-              SizedBox(height: 8),
-              Text(
-                '© 2026 MayaJaal. All rights reserved.',
-                style: TextStyle(color: kDimGreen, fontSize: 11),
-              ),
-            ],
-          ),
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(c),
-            child: const Text('CLOSE', style: TextStyle(color: kGreen)),
-          ),
-        ],
-      ),
-    );
-  }
-
-  void _showApiKeyDialog(BuildContext context) {
-    showDialog(
-      context: context,
-      builder: (c) => AlertDialog(
-        backgroundColor: kCardBg,
-        shape: RoundedRectangleBorder(
-          borderRadius: BorderRadius.circular(14),
-          side: const BorderSide(color: kGreen, width: 1.5),
-        ),
-        title: Row(
-          children: const [
-            Icon(Icons.vpn_key, color: kGreen, size: 22),
-            SizedBox(width: 8),
-            Text(
-              'YOUR API KEY',
-              style: TextStyle(
-                color: kGreen,
-                fontSize: 14,
-                fontWeight: FontWeight.bold,
-              ),
-            ),
-          ],
-        ),
-        content: SingleChildScrollView(
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              const Text(
-                'Ye API key Telegram bot me use karein — /api YOUR_KEY',
-                style: TextStyle(color: Colors.white70, fontSize: 12, height: 1.4),
-              ),
-              const SizedBox(height: 14),
-              Container(
-                padding: const EdgeInsets.all(12),
-                decoration: BoxDecoration(
-                  color: Colors.black,
-                  borderRadius: BorderRadius.circular(8),
-                  border: Border.all(color: kGreen.withOpacity(0.5)),
-                ),
-                child: SelectableText(
-                  MayaJaalAccount.cachedApiKey ?? 'Loading...',
-                  style: const TextStyle(
-                    color: kGreen,
-                    fontFamily: 'monospace',
-                    fontSize: 13,
-                    letterSpacing: 1.5,
-                    fontWeight: FontWeight.bold,
-                  ),
-                ),
-              ),
-              const SizedBox(height: 10),
-              Text(
-                'Email: ${MayaJaalAccount.cachedEmail ?? 'N/A'}',
-                style: const TextStyle(color: Colors.white54, fontSize: 11),
-              ),
-              const SizedBox(height: 10),
-              Container(
-                padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
-                decoration: BoxDecoration(
-                  color: Colors.blue.withOpacity(0.08),
-                  borderRadius: BorderRadius.circular(6),
-                  border: Border.all(color: Colors.lightBlueAccent.withOpacity(0.4)),
-                ),
-                child: const Row(
-                  children: [
-                    Icon(Icons.lock, color: Colors.lightBlueAccent, size: 12),
-                    SizedBox(width: 6),
-                    Expanded(
-                      child: Text(
-                        'Keep this API key secret. Never share it publicly.',
-                        style: TextStyle(color: Colors.lightBlueAccent, fontSize: 10),
-                      ),
-                    ),
-                  ],
-                ),
-              ),
-            ],
-          ),
-        ),
-        actions: [
-          TextButton(
-            onPressed: () async {
-              final key = MayaJaalAccount.cachedApiKey ?? '';
-              if (key.isNotEmpty) {
-                Haptic.medium();
-                await Clipboard.setData(ClipboardData(text: key));
-                if (context.mounted) {
-                  ScaffoldMessenger.of(context).showSnackBar(
-                    const SnackBar(
-                      backgroundColor: kCardBg,
-                      content: Text(
-                        '✅ API Key copied',
-                        style: TextStyle(color: kGreen),
-                      ),
-                    ),
-                  );
-                }
-              }
-            },
-            child: const Text('COPY', style: TextStyle(color: kGreen)),
-          ),
-          TextButton(
-            onPressed: () => Navigator.pop(c),
-            child: const Text('CLOSE', style: TextStyle(color: Colors.white54)),
-          ),
-        ],
-      ),
-    );
-  }
-
-  void _showBotsDialog(BuildContext context) {
-    showModalBottomSheet(
-      context: context,
-      backgroundColor: const Color(0xFF021206),
-      shape: const RoundedRectangleBorder(
-        borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
-      ),
-      builder: (c) => Padding(
-        padding: const EdgeInsets.all(20),
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            const Row(
-              children: [
-                Icon(Icons.smart_toy, color: kGreen, size: 24),
-                SizedBox(width: 10),
-                Text(
-                  'MAYAJAAL BOTS',
-                  style: TextStyle(
-                    color: kGreen,
-                    fontSize: 16,
-                    fontWeight: FontWeight.bold,
-                    letterSpacing: 1.5,
-                  ),
-                ),
-              ],
-            ),
-            const SizedBox(height: 6),
-            Text(
-              'Choose a bot to start earning',
-              style: TextStyle(color: Colors.white.withOpacity(0.6), fontSize: 11),
-            ),
-            const SizedBox(height: 18),
-            _botCard(
-              context,
-              icon: Icons.upload_rounded,
-              color: kNeonCyan,
-              title: 'Upload Bot',
-              subtitle: 'Upload videos & get your own link',
-              url: 'https://t.me/Mayajaalfilebot',
-            ),
-            const SizedBox(height: 12),
-            _botCard(
-              context,
-              icon: Icons.link_rounded,
-              color: kNeonPurple,
-              title: 'Converter Bot',
-              subtitle: 'Convert links & earn from sharing',
-              url: 'https://t.me/MayaJaalBulkConverterbot',
-            ),
-            const SizedBox(height: 20),
-          ],
-        ),
-      ),
-    );
-  }
-
-  Widget _botCard(
-    BuildContext context, {
-    required IconData icon,
-    required Color color,
-    required String title,
-    required String subtitle,
-    required String url,
-  }) {
-    return InkWell(
-      onTap: () {
-        Haptic.medium();
-        Navigator.pop(context);
-        _launchURL(url);
-      },
-      borderRadius: BorderRadius.circular(14),
-      child: Container(
-        padding: const EdgeInsets.all(14),
-        decoration: BoxDecoration(
-          color: kCardBg,
-          borderRadius: BorderRadius.circular(14),
-          border: Border.all(color: color.withOpacity(0.5)),
-          boxShadow: [BoxShadow(color: color.withOpacity(0.1), blurRadius: 10)],
-        ),
-        child: Row(
-          children: [
-            Container(
-              width: 46,
-              height: 46,
-              decoration: BoxDecoration(
-                color: Colors.black,
-                borderRadius: BorderRadius.circular(12),
-                border: Border.all(color: color, width: 1.5),
-                boxShadow: [
-                  BoxShadow(color: color.withOpacity(0.5), blurRadius: 12),
-                ],
-              ),
-              child: Icon(icon, color: color, size: 24),
-            ),
-            const SizedBox(width: 12),
-            Expanded(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(
-                    title,
-                    style: const TextStyle(
-                      color: Colors.white,
-                      fontSize: 14,
-                      fontWeight: FontWeight.bold,
-                    ),
-                  ),
-                  const SizedBox(height: 3),
-                  Text(
-                    subtitle,
-                    style: TextStyle(
-                      color: Colors.white.withOpacity(0.6),
-                      fontSize: 10.5,
-                    ),
-                  ),
-                ],
-              ),
-            ),
-            Icon(Icons.arrow_forward_ios, color: color, size: 14),
-          ],
-        ),
-      ),
-    );
-  }
-
-  Widget _staggered({required int index, required Widget child}) {
-    final start = (index * 0.06).clamp(0.0, 0.6);
-    return AnimatedBuilder(
-      animation: _slideController,
-      builder: (c, _) {
-        final raw = (_slideController.value - start) / (1 - start);
-        final v = raw.clamp(0.0, 1.0);
-        final curve = Curves.easeOutCubic.transform(v);
-        return Opacity(
-          opacity: curve,
-          child: Transform.translate(
-            offset: Offset(-20 * (1 - curve), 0),
-            child: child,
-          ),
-        );
-      },
-    );
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    final user = FirebaseAuth.instance.currentUser;
-
-    return Drawer(
-      backgroundColor: Colors.black,
-      child: SafeArea(
-        child: Column(
-          children: [
-            Container(
-              padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 14),
-              decoration: BoxDecoration(
-                color: const Color(0xFF011206),
-                border: Border(
-                  bottom: BorderSide(
-                    color: kGreen.withOpacity(0.4),
-                    width: 1.2,
-                  ),
-                ),
-              ),
-              child: Row(
-                children: [
-                  Container(
-                    width: 42,
-                    height: 42,
-                    decoration: BoxDecoration(
-                      color: Colors.black,
-                      borderRadius: BorderRadius.circular(12),
-                      border: Border.all(color: kGreen, width: 1.5),
-                      boxShadow: [
-                        BoxShadow(
-                          color: kGreen.withOpacity(0.5),
-                          blurRadius: 12,
-                        ),
-                      ],
-                    ),
-                    child: ClipRRect(
-                      borderRadius: BorderRadius.circular(10),
-                      child: Image.asset(
-                        'assets/icon/logo.png',
-                        fit: BoxFit.cover,
-                        errorBuilder: (c, e, s) => const Icon(
-                          Icons.change_history,
-                          color: kGreen,
-                          size: 22,
-                        ),
-                      ),
-                    ),
-                  ),
-                  const SizedBox(width: 10),
-                  Expanded(
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      mainAxisSize: MainAxisSize.min,
-                      children: [
-                        Row(
-                          children: const [
-                            Text(
-                              'Maya',
-                              style: TextStyle(
-                                color: Colors.white,
-                                fontSize: 20,
-                                fontWeight: FontWeight.w900,
-                                letterSpacing: 1,
-                              ),
-                            ),
-                            Text(
-                              'Jaal',
-                              style: TextStyle(
-                                color: kGreen,
-                                fontSize: 20,
-                                fontWeight: FontWeight.w900,
-                                letterSpacing: 1,
-                                shadows: [Shadow(color: kGreen, blurRadius: 10)],
-                              ),
-                            ),
-                          ],
-                        ),
-                        Text(
-                          'MORE OPTIONS',
-                          style: TextStyle(
-                            color: kGreen.withOpacity(0.7),
-                            fontSize: 8.5,
-                            letterSpacing: 2,
-                            fontWeight: FontWeight.bold,
-                          ),
-                        ),
-                      ],
-                    ),
-                  ),
-                  IconButton(
-                    icon: const Icon(Icons.close, color: kGreen, size: 22),
-                    onPressed: () {
-                      Haptic.light();
-                      Navigator.pop(context);
-                    },
-                  ),
-                ],
-              ),
-            ),
-            Expanded(
-              child: ListView(
-                padding: const EdgeInsets.symmetric(vertical: 8),
-                children: [
-                  _staggered(index: 0, child: _LivePulseCard()),
-                  _staggered(
-                    index: 1,
-                    child: Container(
-                      margin: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
-                      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
-                      decoration: BoxDecoration(
-                        color: kCardBg,
-                        borderRadius: BorderRadius.circular(12),
-                        border: Border.all(color: kGreen.withOpacity(0.4)),
-                      ),
-                      child: Row(
-                        children: [
-                          Container(
-                            width: 38,
-                            height: 38,
-                            decoration: BoxDecoration(
-                              shape: BoxShape.circle,
-                              border: Border.all(color: kGreen, width: 1.5),
-                            ),
-                            child: user?.photoURL != null
-                                ? ClipOval(
-                                    child: Image.network(
-                                      user!.photoURL!,
-                                      fit: BoxFit.cover,
-                                      errorBuilder: (c, e, s) => const Icon(
-                                        Icons.person,
-                                        color: kGreen,
-                                        size: 22,
-                                      ),
-                                    ),
-                                  )
-                                : const Icon(Icons.person, color: kGreen, size: 22),
-                          ),
-                          const SizedBox(width: 10),
-                          Expanded(
-                            child: Column(
-                              crossAxisAlignment: CrossAxisAlignment.start,
-                              children: [
-                                Text(
-                                  user?.displayName ?? user?.email ?? 'User',
-                                  style: const TextStyle(
-                                    color: kGreen,
-                                    fontSize: 12,
-                                    fontWeight: FontWeight.bold,
-                                  ),
-                                  overflow: TextOverflow.ellipsis,
-                                ),
-                                const SizedBox(height: 2),
-                                Row(
-                                  children: [
-                                    Icon(
-                                      Icons.verified,
-                                      color: kGreen.withOpacity(0.7),
-                                      size: 10,
-                                    ),
-                                    const SizedBox(width: 3),
-                                    Text(
-                                      'MayaJaal Verified',
-                                      style: TextStyle(
-                                        color: kGreen.withOpacity(0.7),
-                                        fontSize: 9,
-                                      ),
-                                    ),
-                                  ],
-                                ),
-                              ],
-                            ),
-                          ),
-                        ],
-                      ),
-                    ),
-                  ),
-                  _staggered(
-                    index: 2,
-                    child: _snakeItem(
-                      context,
-                      icon: Icons.account_balance_wallet,
-                      color: kGold,
-                      title: 'Earnings Dashboard',
-                      subtitle: 'View your earnings and links',
-                      onTap: () {
-                        Haptic.medium();
-                        Navigator.pop(context);
-                        Navigator.push(
-                          context,
-                          MaterialPageRoute(builder: (_) => const EarningsScreen()),
-                        );
-                      },
-                    ),
-                  ),
-                  _staggered(
-                    index: 3,
-                    child: _snakeItem(
-                      context,
-                      icon: Icons.account_balance,
-                      color: kGreen,
-                      title: 'Withdraw Earnings',
-                      subtitle: 'Minimum \$5 · Bank / UPI',
-                      onTap: () {
-                        Haptic.medium();
-                        Navigator.pop(context);
-                        Navigator.push(
-                          context,
-                          MaterialPageRoute(builder: (_) => const WithdrawScreen()),
-                        );
-                      },
-                    ),
-                  ),
-                  _staggered(
-                    index: 4,
-                    child: _snakeItem(
-                      context,
-                      icon: Icons.bookmark,
-                      color: kNeonCyan,
-                      title: 'Saved Videos',
-                      subtitle: 'Your bookmarked videos',
-                      onTap: () {
-                        Haptic.medium();
-                        Navigator.pop(context);
-                        Navigator.push(
-                          context,
-                          MaterialPageRoute(builder: (_) => const SavedVideosScreen()),
-                        );
-                      },
-                    ),
-                  ),
-                  _staggered(
-                    index: 5,
-                    child: _snakeItem(
-                      context,
-                      icon: Icons.vpn_key,
-                      color: kNeonPurple,
-                      title: 'My API Key',
-                      subtitle: 'View & copy for bot',
-                      onTap: () {
-                        Haptic.medium();
-                        Navigator.pop(context);
-                        _showApiKeyDialog(context);
-                      },
-                    ),
-                  ),
-                  _staggered(
-                    index: 6,
-                    child: _snakeItem(
-                      context,
-                      icon: Icons.smart_toy,
-                      color: Colors.amberAccent,
-                      title: 'MayaJaal Bots',
-                      subtitle: 'Upload & Converter bots',
-                      onTap: () {
-                        Haptic.medium();
-                        Navigator.pop(context);
-                        _showBotsDialog(context);
-                      },
-                    ),
-                  ),
-                  _staggered(
-                    index: 7,
-                    child: _snakeItem(
-                      context,
-                      icon: Icons.share,
-                      color: kNeonCyan,
-                      title: 'Share MayaJaal App',
-                      subtitle: 'Invite your friends & earn referral',
-                      onTap: () {
-                        Navigator.pop(context);
-                        _shareApp();
-                      },
-                    ),
-                  ),
-                  _staggered(
-                    index: 8,
-                    child: _snakeItem(
-                      context,
-                      icon: Icons.settings,
-                      color: kGreen,
-                      title: 'App Settings',
-                      subtitle: 'Customize your experience',
-                      onTap: () {
-                        Haptic.medium();
-                        Navigator.pop(context);
-                        Navigator.push(
-                          context,
-                          MaterialPageRoute(builder: (_) => const SettingsScreen()),
-                        );
-                      },
-                    ),
-                  ),
-                  _staggered(
-                    index: 9,
-                    child: Padding(
-                      padding: const EdgeInsets.only(left: 16, top: 18, bottom: 8),
-                      child: Row(
-                        children: [
-                          Container(width: 14, height: 1.5, color: kGreen),
-                          const SizedBox(width: 6),
-                          const Text(
-                            'JOIN US',
-                            style: TextStyle(
-                              color: kGreen,
-                              fontSize: 11,
-                              fontWeight: FontWeight.bold,
-                              letterSpacing: 2,
-                            ),
-                          ),
-                          const SizedBox(width: 6),
-                          Expanded(
-                            child: Container(height: 1, color: kGreen.withOpacity(0.3)),
-                          ),
-                        ],
-                      ),
-                    ),
-                  ),
-                  _staggered(
-                    index: 10,
-                    child: _socialItem(
-                      context,
-                      imageUrl:
-                          'https://upload.wikimedia.org/wikipedia/commons/thumb/e/e7/Instagram_logo_2016.svg/240px-Instagram_logo_2016.svg.png',
-                      fallbackIcon: Icons.camera_alt,
-                      color: const Color(0xFFE1306C),
-                      title: 'Instagram Official',
-                      subtitle: '@maya_jaal_official',
-                      onTap: () {
-                        Navigator.pop(context);
-                        _launchURL('https://www.instagram.com/maya_jaal_official');
-                      },
-                    ),
-                  ),
-                  _staggered(
-                    index: 11,
-                    child: _socialItem(
-                      context,
-                      imageUrl:
-                          'https://upload.wikimedia.org/wikipedia/commons/thumb/0/09/YouTube_full-color_icon_%282017%29.svg/240px-YouTube_full-color_icon_%282017%29.svg.png',
-                      fallbackIcon: Icons.play_circle_fill,
-                      color: Colors.redAccent,
-                      title: 'YouTube Channel',
-                      subtitle: '@MayaJaalOfficial00',
-                      onTap: () {
-                        Navigator.pop(context);
-                        _launchURL('https://www.youtube.com/@MayaJaalOfficial00');
-                      },
-                    ),
-                  ),
-                  _staggered(
-                    index: 12,
-                    child: _socialItem(
-                      context,
-                      imageUrl:
-                          'https://upload.wikimedia.org/wikipedia/commons/thumb/8/82/Telegram_logo.svg/240px-Telegram_logo.svg.png',
-                      fallbackIcon: Icons.send_rounded,
-                      color: const Color(0xFF229ED9),
-                      title: 'Telegram Channel',
-                      subtitle: '@MayaJaalOfficial',
-                      onTap: () {
-                        Navigator.pop(context);
-                        _launchURL('https://t.me/MayaJaalOfficial');
-                      },
-                    ),
-                  ),
-                  _staggered(
-                    index: 13,
-                    child: Padding(
-                      padding: const EdgeInsets.only(left: 16, top: 18, bottom: 8),
-                      child: Row(
-                        children: [
-                          Container(width: 14, height: 1.5, color: kNeonCyan),
-                          const SizedBox(width: 6),
-                          const Text(
-                            'INFORMATION & LEGAL',
-                            style: TextStyle(
-                              color: kNeonCyan,
-                              fontSize: 11,
-                              fontWeight: FontWeight.bold,
-                              letterSpacing: 2,
-                            ),
-                          ),
-                          const SizedBox(width: 6),
-                          Expanded(
-                            child: Container(height: 1, color: kNeonCyan.withOpacity(0.3)),
-                          ),
-                        ],
-                      ),
-                    ),
-                  ),
-                  _staggered(
-                    index: 14,
-                    child: _snakeItem(
-                      context,
-                      icon: Icons.dashboard,
-                      color: kNeonCyan,
-                      title: 'Web Dashboard',
-                      subtitle: 'Open www.mayajaal.online/dashboard',
-                      onTap: () {
-                        Navigator.pop(context);
-                        _launchURL('https://www.mayajaal.online/dashboard', inApp: false);
-                      },
-                    ),
-                  ),
-                  _staggered(
-                    index: 15,
-                    child: _snakeItem(
-                      context,
-                      icon: Icons.privacy_tip_outlined,
-                      color: kDimGreen,
-                      title: 'Privacy Policy',
-                      subtitle: 'Data protection & identifiers',
-                      onTap: () {
-                        Navigator.pop(context);
-                        LegalPolicyDialog.showPolicy(context, 'privacy');
-                      },
-                    ),
-                  ),
-                  _staggered(
-                    index: 16,
-                    child: _snakeItem(
-                      context,
-                      icon: Icons.description_outlined,
-                      color: kDimGreen,
-                      title: 'Terms & Conditions',
-                      subtitle: 'Operating rules & user agreement',
-                      onTap: () {
-                        Navigator.pop(context);
-                        LegalPolicyDialog.showPolicy(context, 'terms');
-                      },
-                    ),
-                  ),
-                  _staggered(
-                    index: 17,
-                    child: _snakeItem(
-                      context,
-                      icon: Icons.copyright_outlined,
-                      color: const Color(0xFFFB7185),
-                      title: 'DMCA Policy',
-                      subtitle: '17 U.S.C. § 512 Notice',
-                      onTap: () {
-                        Navigator.pop(context);
-                        LegalPolicyDialog.showPolicy(context, 'dmca');
-                      },
-                    ),
-                  ),
-                  _staggered(
-                    index: 18,
-                    child: _snakeItem(
-                      context,
-                      icon: Icons.handshake_outlined,
-                      color: kNeonCyan,
-                      title: 'Partner Agreement',
-                      subtitle: 'Monetization & dynamic CPM',
-                      onTap: () {
-                        Navigator.pop(context);
-                        LegalPolicyDialog.showPolicy(context, 'partner');
-                      },
-                    ),
-                  ),
-                  _staggered(
-                    index: 19,
-                    child: _snakeItem(
-                      context,
-                      icon: Icons.support_agent_outlined,
-                      color: Colors.amberAccent,
-                      title: 'Help & Support',
-                      subtitle: '24/7 Creator Operations Desk',
-                      onTap: () {
-                        Navigator.pop(context);
-                        LegalPolicyDialog.showPolicy(context, 'support');
-                      },
-                    ),
-                  ),
-                  _staggered(
-                    index: 20,
-                    child: _snakeItem(
-                      context,
-                      icon: Icons.info_outline,
-                      color: kNeonCyan,
-                      title: 'About MayaJaal',
-                      subtitle: 'Version & info',
-                      onTap: () {
-                        Haptic.medium();
-                        Navigator.pop(context);
-                        _showAboutDialog(context);
-                      },
-                    ),
-                  ),
-                  _staggered(
-                    index: 21,
-                    child: Padding(
-                      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 16),
-                      child: Container(
-                        decoration: BoxDecoration(
-                          color: Colors.red.withOpacity(0.08),
-                          borderRadius: BorderRadius.circular(12),
-                          border: Border.all(color: Colors.redAccent.withOpacity(0.4)),
-                        ),
-                        child: ListTile(
-                          leading: const Icon(Icons.logout, color: Colors.redAccent),
-                          title: const Text(
-                            'Logout Session',
-                            style: TextStyle(
-                              color: Colors.redAccent,
-                              fontWeight: FontWeight.bold,
-                              fontSize: 13,
-                            ),
-                          ),
-                          onTap: () {
-                            Navigator.pop(context);
-                            _logout(context);
-                          },
-                        ),
-                      ),
-                    ),
-                  ),
-                ],
-              ),
-            ),
-          ],
-        ),
-      ),
-    );
-  }
-
-  Widget _snakeItem(
-    BuildContext context, {
-    required IconData icon,
-    required Color color,
-    required String title,
-    required String subtitle,
-    required VoidCallback onTap,
-  }) {
-    return Padding(
-      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
-      child: AnimatedBuilder(
-        animation: _snakeController,
-        builder: (c, _) {
-          return Stack(
-            children: [
-              ListTile(
-                shape: RoundedRectangleBorder(
-                  borderRadius: BorderRadius.circular(10),
-                ),
-                leading: Container(
-                  width: 38,
-                  height: 38,
-                  decoration: BoxDecoration(
-                    color: Colors.black,
-                    borderRadius: BorderRadius.circular(10),
-                    border: Border.all(color: color.withOpacity(0.5)),
-                  ),
-                  child: Icon(icon, color: color, size: 20),
-                ),
-                title: Text(
-                  title,
-                  style: const TextStyle(
-                    color: Colors.white,
-                    fontSize: 13,
-                    fontWeight: FontWeight.bold,
-                  ),
-                ),
-                subtitle: Text(
-                  subtitle,
-                  style: TextStyle(
-                    color: Colors.white.withOpacity(0.5),
-                    fontSize: 10.5,
-                  ),
-                ),
-                trailing: Icon(
-                  Icons.arrow_forward_ios,
-                  color: color,
-                  size: 14,
-                ),
-                onTap: onTap,
-              ),
-              Positioned.fill(
-                child: IgnorePointer(
-                  child: ClipRRect(
-                    borderRadius: BorderRadius.circular(10),
-                    child: CustomPaint(
-                      painter: SnakeBorderPainter(
-                        progress: _snakeController.value,
-                        color: color,
-                      ),
-                    ),
-                  ),
-                ),
-              ),
-            ],
-          );
-        },
-      ),
-    );
-  }
-
-  Widget _socialItem(
-    BuildContext context, {
-    required String imageUrl,
-    required IconData fallbackIcon,
-    required Color color,
-    required String title,
-    required String subtitle,
-    required VoidCallback onTap,
-  }) {
-    return Padding(
-      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
-      child: ListTile(
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
-        leading: Container(
-          width: 38,
-          height: 38,
-          decoration: BoxDecoration(
-            color: Colors.white,
-            borderRadius: BorderRadius.circular(10),
-            border: Border.all(color: color.withOpacity(0.7), width: 1.2),
-          ),
-          padding: const EdgeInsets.all(5),
-          child: Image.network(
-            imageUrl,
-            fit: BoxFit.contain,
-            errorBuilder: (c, e, s) => Icon(fallbackIcon, color: color, size: 22),
-          ),
-        ),
-        title: Text(
-          title,
-          style: const TextStyle(
-            color: Colors.white,
-            fontSize: 13,
-            fontWeight: FontWeight.bold,
-          ),
-        ),
-        subtitle: Text(
-          subtitle,
-          style: TextStyle(
-            color: Colors.white.withOpacity(0.5),
-            fontSize: 10.5,
-          ),
-        ),
-        trailing: Icon(Icons.arrow_forward_ios, color: color, size: 14),
-        onTap: onTap,
-      ),
-    );
-  }
-}
-
-// ═══════════════════════════════════════════════════════
-// LIVE PULSE CARD
-// ═══════════════════════════════════════════════════════
-class _LivePulseCard extends StatefulWidget {
-  @override
-  State<_LivePulseCard> createState() => _LivePulseCardState();
-}
-
-class _LivePulseCardState extends State<_LivePulseCard>
-    with SingleTickerProviderStateMixin {
-  late AnimationController _blink;
-  double _currentEarning = 0;
-  double _prevEarning = 0;
-  bool _hasData = false;
-
-  @override
-  void initState() {
-    super.initState();
-    _blink = AnimationController(
-      vsync: this,
-      duration: const Duration(milliseconds: 1000),
-    )..repeat(reverse: true);
-  }
-
-  @override
-  void dispose() {
-    _blink.dispose();
-    super.dispose();
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    if (MayaJaalAccount.cachedUid == null) return const SizedBox.shrink();
-
-    return StreamBuilder<Map<String, dynamic>>(
-      stream: MayaJaalAccount.getDashboardStream(),
-      builder: (context, snapshot) {
-        final data = snapshot.data ?? {};
-        final totalViews = (data['totalViews'] ?? 0) as int;
-        final earning = MayaJaalAccount.calcEarnings(totalViews);
-        if (earning != _currentEarning) {
-          _prevEarning = _currentEarning;
-          _currentEarning = earning;
-          _hasData = true;
-        }
-        final up = _currentEarning >= _prevEarning;
-
-        return Container(
-          margin: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
-          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
-          decoration: BoxDecoration(
-            gradient: LinearGradient(
-              colors: [kGreen.withOpacity(0.12), Colors.black],
-              begin: Alignment.topLeft,
-              end: Alignment.bottomRight,
-            ),
-            borderRadius: BorderRadius.circular(12),
-            border: Border.all(color: kGreen.withOpacity(0.5), width: 1.2),
-            boxShadow: [BoxShadow(color: kGreen.withOpacity(0.15), blurRadius: 12)],
-          ),
-          child: Row(
-            children: [
-              AnimatedBuilder(
-                animation: _blink,
-                builder: (c, _) => Container(
-                  width: 10,
-                  height: 10,
-                  decoration: BoxDecoration(
-                    shape: BoxShape.circle,
-                    color: kGreen,
-                    boxShadow: [
-                      BoxShadow(
-                        color: kGreen.withOpacity(0.7 * _blink.value),
-                        blurRadius: 12,
-                        spreadRadius: 2,
-                      ),
-                    ],
-                  ),
-                ),
-              ),
-              const SizedBox(width: 10),
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(
-                      'LIVE PULSE',
-                      style: TextStyle(
-                        color: kGreen.withOpacity(0.8),
-                        fontSize: 9,
-                        fontWeight: FontWeight.bold,
-                        letterSpacing: 2,
-                      ),
-                    ),
-                    const SizedBox(height: 2),
-                    Text(
-                      _hasData ? '\$${_currentEarning.toStringAsFixed(2)}' : '—',
-                      style: const TextStyle(
-                        color: kGreen,
-                        fontSize: 18,
-                        fontWeight: FontWeight.w900,
-                        shadows: [Shadow(color: kGreen, blurRadius: 10)],
-                      ),
-                    ),
-                  ],
-                ),
-              ),
-              if (_hasData)
-                Icon(
-                  up ? Icons.trending_up : Icons.trending_down,
-                  color: up ? kGreen : Colors.orangeAccent,
-                  size: 22,
-                ),
-            ],
-          ),
-        );
-      },
-    );
-  }
-}
-
-// ═══════════════════════════════════════════════════════
-// SNAKE BORDER PAINTER
-// ═══════════════════════════════════════════════════════
-class SnakeBorderPainter extends CustomPainter {
-  final double progress;
-  final Color color;
-
-  SnakeBorderPainter({required this.progress, required this.color});
-
-  @override
-  void paint(Canvas canvas, Size size) {
-    final rect = Rect.fromLTWH(0, 0, size.width, size.height);
-    final rrect = RRect.fromRectAndRadius(rect, const Radius.circular(10));
-
-    final path = Path()..addRRect(rrect);
-    final metrics = path.computeMetrics().first;
-    final totalLength = metrics.length;
-
-    final snakeLength = totalLength * 0.25;
-    final startPos = (progress * totalLength) % totalLength;
-    final endPos = startPos + snakeLength;
-
-    final extractPath = Path();
-    if (endPos <= totalLength) {
-      extractPath.addPath(
-        metrics.extractPath(startPos, endPos),
-        Offset.zero,
-      );
-    } else {
-      extractPath.addPath(
-        metrics.extractPath(startPos, totalLength),
-        Offset.zero,
-      );
-      extractPath.addPath(
-        metrics.extractPath(0, endPos - totalLength),
-        Offset.zero,
-      );
-    }
-
-    final paint = Paint()
-      ..color = color
-      ..style = PaintingStyle.stroke
-      ..strokeWidth = 2
-      ..strokeCap = StrokeCap.round
-      ..maskFilter = const MaskFilter.blur(BlurStyle.normal, 4);
-
-    canvas.drawPath(extractPath, paint);
-
-    final corePaint = Paint()
-      ..color = Colors.white.withOpacity(0.9)
-      ..style = PaintingStyle.stroke
-      ..strokeWidth = 1.2
-      ..strokeCap = StrokeCap.round;
-
-    canvas.drawPath(extractPath, corePaint);
-  }
-
-  @override
-  bool shouldRepaint(covariant SnakeBorderPainter oldDelegate) {
-    return oldDelegate.progress != progress || oldDelegate.color != color;
-  }
-}
-
-// ═══════════════════════════════════════════════════════
-// STREAM PREVIEW SCREEN — 🔥 UPDATED: Play Button Triggers Ad
-// ═══════════════════════════════════════════════════════
-class StreamPreviewScreen extends StatefulWidget {
-  final String targetUrl;
-  const StreamPreviewScreen({super.key, required this.targetUrl});
-  @override
-  State<StreamPreviewScreen> createState() => _StreamPreviewScreenState();
-}
-
-class _StreamPreviewScreenState extends State<StreamPreviewScreen>
-    with TickerProviderStateMixin {
-  String _streamUrl = '';
-  String _videoTitle = 'MayaJaal Video';
-  String _uploaderName = '@mayajaal';
-  String _rawId = '';
-  String _token = '';
-
-  String _thumbnailUrl = '';
-  String _capturedThumbB64 = '';
-
-  int _countdown = 10;
-  Timer? _countdownTimer;
-  bool _isReadyToPlay = false;
-
-  late AnimationController _snakeCtrl;
-  late AnimationController _pulseController;
-  late Animation<double> _pulseAnimation;
-
-  bool _metaLoaded = false;
-
-  @override
-  void initState() {
-    super.initState();
-    _snakeCtrl = AnimationController(vsync: this, duration: const Duration(seconds: 2))..repeat();
-    _pulseController = AnimationController(vsync: this, duration: const Duration(milliseconds: 1400))..repeat(reverse: true);
-    _pulseAnimation = Tween<double>(begin: 0.96, end: 1.04).animate(CurvedAnimation(parent: _pulseController, curve: Curves.easeInOut));
-
-    if (!MayaJaalAccount.isLoggedIn) {
-      WidgetsBinding.instance.addPostFrameCallback((_) {
-        if (!mounted) return;
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(backgroundColor: kCardBg, content: Text('Please login to watch videos', style: TextStyle(color: kGreen))),
-        );
-        Navigator.pushReplacement(context, MaterialPageRoute(builder: (_) => const LoginScreen()));
-      });
-      return;
-    }
-
-    try {
-      final uri = Uri.parse(widget.targetUrl);
-      _rawId = uri.pathSegments.isNotEmpty ? uri.pathSegments.last : 'stream';
-      _token = uri.queryParameters['t'] ?? uri.queryParameters['s'] ?? '';
-      _videoTitle = _rawId;
-    } catch (_) {
-      _rawId = 'stream';
-    }
-
-    _startCountdown();
-    _secureInit();
-  }
-
-  Future<void> _secureInit() async {
-    final cachedThumb = await WatchHistory.getCachedThumbnail(widget.targetUrl);
-    final cachedUrl = await WatchHistory.getCachedStreamUrl(widget.targetUrl);
-
-    if (mounted) {
-      setState(() {
-        if (cachedThumb.isNotEmpty) _thumbnailUrl = cachedThumb;
-        if (cachedUrl.isNotEmpty) {
-          _streamUrl = cachedUrl;
-          _metaLoaded = true;
-        }
-      });
-    }
-
-    final ok = await SecurityGuard.validateSession();
-    if (!ok) {
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
-            backgroundColor: kCardBg,
-            content: Text(
-              '🔒 Session expired. Please login again.',
-              style: TextStyle(color: Colors.orangeAccent),
-            ),
-          ),
-        );
-        await MayaJaalAccount.signOut();
-        if (mounted) {
-          Navigator.pushReplacement(context, MaterialPageRoute(builder: (_) => const LoginScreen()));
-        }
-      }
-      return;
-    }
-
-    _fetchStreamMetadata();
-  }
-
-  void _startCountdown() {
-    _countdownTimer?.cancel();
-    setState(() {
-      _countdown = 10;
-      _isReadyToPlay = false;
-    });
-
-    _countdownTimer = Timer.periodic(const Duration(seconds: 1), (timer) {
-      if (!mounted) return;
-      setState(() {
-        if (_countdown > 0) {
-          _countdown--;
-          if (_countdown <= 3 && _countdown > 0) Haptic.light();
-        } else {
-          Haptic.heavy();
-          _countdownTimer?.cancel();
-          setState(() => _isReadyToPlay = true);
-        }
-      });
-    });
-  }
-
-  @override
-  void dispose() {
-    _countdownTimer?.cancel();
-    _snakeCtrl.dispose();
-    _pulseController.dispose();
-    super.dispose();
-  }
-
-  Future<void> _fetchStreamMetadata() async {
-    try {
-      if (widget.targetUrl.endsWith('.mp4') || widget.targetUrl.endsWith('.m3u8')) {
-        if (mounted) {
-          setState(() {
-            _streamUrl = widget.targetUrl;
-            _videoTitle = _rawId;
-            _metaLoaded = true;
-          });
-        }
-        return;
-      }
-
-      final apiUrl = _token.isNotEmpty
-          ? '$kBackendBaseUrl/api/stream-info/$_rawId?t=$_token'
-          : '$kBackendBaseUrl/api/stream-info/$_rawId';
-
-      final deviceId = await DeviceIdHelper.get();
-      final headers = SecurityGuard.signedHeaders(
-        method: 'GET',
-        path: '/api/stream-info/$_rawId',
-        body: '',
-        deviceId: deviceId,
-        uid: MayaJaalAccount.cachedUid,
-      );
-
-      final res = await http
-          .get(Uri.parse(apiUrl), headers: headers)
-          .timeout(const Duration(seconds: 3));
-
-      if (res.statusCode == 200) {
-        final data = jsonDecode(res.body);
-        if (data['success'] == true && (data['url'] != null || data['video_url'] != null)) {
-          final newUrl = (data['url'] ?? data['video_url']).toString();
-          if (mounted) {
-            setState(() {
-              if (_streamUrl.isEmpty) {
-                _streamUrl = newUrl;
-              }
-              _videoTitle = data['title'] ?? data['file_name'] ?? _videoTitle;
-              _uploaderName = data['uploader'] ?? _uploaderName;
-              if (_thumbnailUrl.isEmpty) {
-                final apiThumb = data['thumbnail'] ?? data['poster'] ?? '';
-                if (apiThumb.toString().isNotEmpty) {
-                  _thumbnailUrl = apiThumb.toString();
-                }
-              }
-              _metaLoaded = true;
-            });
-          }
-
-          await _saveStreamUrlToCache(newUrl);
-          return;
-        }
-      }
-
-      if (mounted && _streamUrl.isEmpty) {
-        setState(() {
-          _streamUrl = widget.targetUrl;
-          _metaLoaded = true;
-        });
-      }
-    } catch (e) {
-      if (mounted && _streamUrl.isEmpty) {
-        setState(() {
-          _streamUrl = widget.targetUrl;
-          _metaLoaded = true;
-        });
-      }
-    }
-  }
-
-  Future<void> _saveStreamUrlToCache(String streamUrl) async {
-    if (streamUrl.isEmpty) return;
-    try {
-      final prefs = await SharedPreferences.getInstance();
-      final key = 'watch_history_v2_${MayaJaalAccount.cachedUid ?? 'guest'}';
-      final raw = prefs.getString(key);
-      if (raw == null) return;
-      final List decoded = jsonDecode(raw);
-      bool updated = false;
-      for (final item in decoded) {
-        if (item is Map && item['url'] == widget.targetUrl) {
-          item['streamUrl'] = streamUrl;
-          updated = true;
-        }
-      }
-      if (updated) {
-        await prefs.setString(key, jsonEncode(decoded));
-      }
-    } catch (_) {}
-  }
-
-  void _shareStreamDirect() {
-    Haptic.light();
-    Share.share('🚀 Watch this stream on MayaJaal:\n${widget.targetUrl}');
-  }
-
-  Future<void> _saveWatchRecord() async {
-    final prefs = await SharedPreferences.getInstance();
-    final key = 'watch_history_v2_${MayaJaalAccount.cachedUid ?? 'guest'}';
-    final localJson = prefs.getString(key);
-    List<Map<String, dynamic>> history = [];
-    if (localJson != null) {
-      try {
-        final List decoded = jsonDecode(localJson);
-        history = decoded.cast<Map<String, dynamic>>();
-      } catch (_) {}
-    }
-
-    String finalThumb = _thumbnailUrl;
-    if (finalThumb.isEmpty && _capturedThumbB64.isNotEmpty) {
-      finalThumb = _capturedThumbB64;
-    }
-    if (finalThumb.isEmpty) {
-      final existing = await WatchHistory.getCachedThumbnail(widget.targetUrl);
-      if (existing.isNotEmpty) finalThumb = existing;
-    }
-
-    String finalStreamUrl = _streamUrl;
-    if (finalStreamUrl.isEmpty) {
-      finalStreamUrl = await WatchHistory.getCachedStreamUrl(widget.targetUrl);
-    }
-
-    final item = {
-      'url': widget.targetUrl,
-      'title': _videoTitle,
-      'uploader': _uploaderName,
-      'id': _rawId,
-      'thumbnail': finalThumb,
-      'streamUrl': finalStreamUrl,
-      'time': DateTime.now().toIso8601String(),
-    };
-
-    history.removeWhere((h) => h['url'] == widget.targetUrl);
-    history.insert(0, item);
-    
-    if (history.length > 10) {
-      history = history.sublist(0, 10);
-    }
-
-    await prefs.setString(key, jsonEncode(history));
-  }
-
-  // 🔥 UPDATED: Play button dabate hi pehle Ad aayega
-  Future<void> _launchNativePlayer() async {
-    _saveWatchRecord();
-
-    // 1. Pehle Ad Screen open karo
-    final adWatched = await Navigator.of(context).push<bool>(
-      MaterialPageRoute(
-        builder: (_) => PreRollAdScreen(
-          // HilltopAds VAST Tag (Screenshot wala sahi link)
-          adTagUrl: 'https://infamous-maximum.com/d.m/FTzUdXGvN0V/ZXGJUK/eeFmb9-uWzUUM1ikDPbTvck1KNMTPUjx/DNaJ/kgtmNAzSUz1xNmTNEQ3-MLwH',
-        ),
-      ),
-    );
-
-    // 2. Agar ad complete hua ya skip hua, toh asli video chalao
-    if (adWatched == true && mounted) {
-      Navigator.of(context).push(
-        MaterialPageRoute(
-          builder: (_) => NativeVideoPlayerScreen(
-            videoUrl: _streamUrl,
-            title: _videoTitle,
-            uploader: _uploaderName,
-            sourcePageUrl: widget.targetUrl,
-            videoId: _rawId,
-            thumbnailUrl: _thumbnailUrl.isNotEmpty ? _thumbnailUrl : _capturedThumbB64,
-          ),
-        ),
-      ).then((_) {
-        if (mounted) {
-          _startCountdown();
-        }
-      });
-    } else {
-      // Agar user ad ke beech mein back (peeche) chala gaya, toh player mat kholo
-      if (mounted) _startCountdown();
-    }
-  }
-
-  void _goToHome() {
-    Haptic.heavy();
-    Navigator.of(context).pushAndRemoveUntil(
-      MaterialPageRoute(builder: (_) => const MainNavigationHolder()),
-      (route) => false,
-    );
-  }
-
-  Widget _buildCountdownCircle() {
-    final progress = 1.0 - (_countdown / 10.0);
-    return SizedBox(
-      width: 100,
-      height: 100,
-      child: Stack(
-        alignment: Alignment.center,
-        children: [
-          SizedBox(
-            width: 100,
-            height: 100,
-            child: CircularProgressIndicator(
-              value: progress,
-              strokeWidth: 6,
-              backgroundColor: Colors.white12,
-              valueColor: const AlwaysStoppedAnimation<Color>(Colors.orangeAccent),
-            ),
-          ),
-          Column(
-            mainAxisAlignment: MainAxisAlignment.center,
-            children: [
-              const Icon(Icons.timer, color: Colors.orangeAccent, size: 30),
-              const SizedBox(height: 2),
-              Text(
-                '$_countdown',
-                style: const TextStyle(
-                  color: Colors.orangeAccent,
-                  fontSize: 28,
-                  fontWeight: FontWeight.w900,
-                  letterSpacing: 1,
-                  shadows: [Shadow(color: Colors.orangeAccent, blurRadius: 10)],
-                ),
-              ),
-            ],
-          ),
-        ],
-      ),
-    );
-  }
-
-  Widget _buildRedSnakePlayButton() {
-    return AnimatedBuilder(
-      animation: Listenable.merge([_snakeCtrl, _pulseAnimation]),
-      builder: (c, _) => Transform.scale(
-        scale: _pulseAnimation.value,
-        child: GestureDetector(
-          onTap: _launchNativePlayer,
-          child: Container(
-            width: double.infinity,
-            height: 64,
-            decoration: BoxDecoration(
-              color: Colors.black,
-              borderRadius: BorderRadius.circular(32),
-              boxShadow: [BoxShadow(color: kRed.withOpacity(0.5), blurRadius: 22, spreadRadius: 1)],
-            ),
-            child: Stack(
-              alignment: Alignment.center,
-              children: [
-                Positioned.fill(
-                  child: CustomPaint(painter: SnakeBorderPainter(progress: _snakeCtrl.value, color: kRed)),
-                ),
-                Row(
-                  mainAxisAlignment: MainAxisAlignment.center,
-                  children: const [
-                    Icon(Icons.play_arrow_rounded, color: kRed, size: 32),
-                    SizedBox(width: 8),
-                    Text(
-                      'PLAY NOW',
-                      style: TextStyle(color: kRed, fontSize: 15, fontWeight: FontWeight.w900, letterSpacing: 2.5, shadows: [Shadow(color: kRed, blurRadius: 14)]),
-                    ),
-                  ],
-                ),
-              ],
-            ),
-          ),
-        ),
-      ),
-    );
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    return Scaffold(
-      backgroundColor: Colors.black,
-      body: Stack(
-        children: [
-          const MatrixRain(opacity: 0.35),
-          SafeArea(
-            child: SingleChildScrollView(
-              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
-              child: Column(
-                children: [
-                  SizedBox(
-                    width: double.infinity,
-                    height: 50,
-                    child: OutlinedButton.icon(
-                      onPressed: _goToHome,
-                      icon: const Icon(Icons.home, color: Colors.white54, size: 20),
-                      label: const Text('GO TO HOME PAGE', style: TextStyle(color: Colors.white54, fontSize: 12, fontWeight: FontWeight.bold, letterSpacing: 1.5)),
-                      style: OutlinedButton.styleFrom(
-                        side: BorderSide(color: Colors.white24, width: 1.5),
-                        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(25)),
-                      ),
-                    ),
-                  ),
-                  const SizedBox(height: 12),
-
-                  Row(
-                    children: [
-                      IconButton(
-                        icon: const Icon(Icons.arrow_back_ios_new, color: kGreen, size: 22),
-                        onPressed: () {
-                          Haptic.light();
-                          Navigator.pop(context);
-                        },
-                      ),
-                      const SizedBox(width: 8),
-                      Container(
-                        width: 36,
-                        height: 36,
-                        decoration: BoxDecoration(
-                          color: Colors.black,
-                          borderRadius: BorderRadius.circular(10),
-                          border: Border.all(color: kGreen, width: 2),
-                          boxShadow: [
-                            BoxShadow(color: kGreen.withOpacity(0.5), blurRadius: 15),
-                          ],
-                        ),
-                        child: ClipRRect(
-                          borderRadius: BorderRadius.circular(8),
-                          child: Image.asset(
-                            'assets/icon/logo.png',
-                            fit: BoxFit.cover,
-                            errorBuilder: (c, e, s) => const Icon(
-                              Icons.change_history,
-                              color: kGreen,
-                              size: 20,
-                            ),
-                          ),
-                        ),
-                      ),
-                      const SizedBox(width: 10),
-                      const Text(
-                        'Maya',
-                        style: TextStyle(
-                          fontSize: 26,
-                          fontWeight: FontWeight.w900,
-                          color: Colors.white,
-                          fontFamily: 'sans-serif',
-                          letterSpacing: 0.5,
-                        ),
-                      ),
-                      const Text(
-                        'Jaal',
-                        style: TextStyle(
-                          fontSize: 26,
-                          fontWeight: FontWeight.w900,
-                          color: kGreen,
-                          fontFamily: 'sans-serif',
-                          letterSpacing: 0.5,
-                          shadows: [Shadow(color: kGreen, blurRadius: 12)],
-                        ),
-                      ),
-                      const Spacer(),
-                      Container(
-                        padding: const EdgeInsets.all(7),
-                        decoration: BoxDecoration(shape: BoxShape.circle, border: Border.all(color: kGreen.withOpacity(0.6))),
-                        child: const Icon(Icons.verified_user_rounded, color: kGreen, size: 18),
-                      ),
-                    ],
-                  ),
-                  const SizedBox(height: 12),
-                  
-                  Container(
-                    padding: const EdgeInsets.all(4),
-                    decoration: BoxDecoration(
-                      color: const Color(0xFF011206),
-                      borderRadius: BorderRadius.circular(20),
-                      border: Border.all(color: _isReadyToPlay ? kGreen : Colors.orangeAccent.withOpacity(0.6), width: 1.8),
-                      boxShadow: [BoxShadow(color: (_isReadyToPlay ? kGreen : Colors.orangeAccent).withOpacity(0.25), blurRadius: 30)],
-                    ),
-                    child: ClipRRect(
-                      borderRadius: BorderRadius.circular(16),
-                      child: AspectRatio(
-                        aspectRatio: 16 / 9,
-                        child: Stack(
-                          fit: StackFit.expand,
-                          alignment: Alignment.center,
-                          children: [
-                            buildMediaThumbnail(
-                              _thumbnailUrl.isNotEmpty ? _thumbnailUrl : null,
-                              _videoTitle,
-                              _streamUrl,
-                              onFrameCaptured: (b64) {
-                                if (!mounted) return;
-                                if (_capturedThumbB64.isEmpty) {
-                                  setState(() => _capturedThumbB64 = b64);
-                                }
-                              },
-                            ),
-                            Container(color: Colors.black.withOpacity(0.3)),
-                            if (!_isReadyToPlay) _buildCountdownCircle(),
-                            Positioned(
-                              top: 8,
-                              left: 8,
-                              child: Container(
-                                padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 3),
-                                decoration: BoxDecoration(color: Colors.black.withOpacity(0.7), borderRadius: BorderRadius.circular(5), border: Border.all(color: kGreen, width: 1)),
-                                child: const Text('HD', style: TextStyle(color: kGreen, fontSize: 9.5, fontWeight: FontWeight.bold)),
-                              ),
-                            ),
-                          ],
-                        ),
-                      ),
-                    ),
-                  ),
-                  const SizedBox(height: 16),
-
-                  if (_isReadyToPlay)
-                    _buildRedSnakePlayButton()
-                  else
-                    Container(
-                      width: double.infinity,
-                      height: 64,
-                      decoration: BoxDecoration(color: Colors.grey[850], borderRadius: BorderRadius.circular(32)),
-                      child: Center(
-                        child: Text(
-                          'PLEASE WAIT $_countdown SEC...',
-                          style: const TextStyle(color: Colors.white54, fontSize: 14, fontWeight: FontWeight.w900, letterSpacing: 2),
-                        ),
-                      ),
-                    ),
-
-                  const SizedBox(height: 16),
-                  Container(
-                    padding: const EdgeInsets.all(14),
-                    decoration: BoxDecoration(
-                      color: const Color(0xFF031A0B),
-                      borderRadius: BorderRadius.circular(16),
-                      border: Border.all(color: kGreen.withOpacity(0.35)),
-                    ),
-                    child: Column(
-                      children: [
-                        Row(
-                          children: [
-                            Container(
-                              padding: const EdgeInsets.all(10),
-                              decoration: BoxDecoration(shape: BoxShape.circle, color: Colors.black, border: Border.all(color: kGreen.withOpacity(0.5))),
-                              child: const Icon(Icons.video_collection_outlined, color: kGreen, size: 20),
-                            ),
-                            const SizedBox(width: 14),
-                            Expanded(
-                              child: Column(
-                                crossAxisAlignment: CrossAxisAlignment.start,
-                                children: [
-                                  Text('FILE NAME', style: TextStyle(color: Colors.white.withOpacity(0.5), fontSize: 9.5, letterSpacing: 1)),
-                                  const SizedBox(height: 2),
-                                  Text(_videoTitle, style: const TextStyle(color: Colors.white, fontSize: 13.5, fontWeight: FontWeight.bold), maxLines: 1, overflow: TextOverflow.ellipsis),
-                                ],
-                              ),
-                            ),
-                          ],
-                        ),
-                        Padding(
-                          padding: const EdgeInsets.symmetric(vertical: 8),
-                          child: Divider(color: kGreen.withOpacity(0.15)),
-                        ),
-                        Row(
-                          children: [
-                            Container(
-                              padding: const EdgeInsets.all(10),
-                              decoration: BoxDecoration(shape: BoxShape.circle, color: Colors.black, border: Border.all(color: kGreen.withOpacity(0.5))),
-                              child: const Icon(Icons.person_outline, color: kGreen, size: 20),
-                            ),
-                            const SizedBox(width: 14),
-                            Expanded(
-                              child: Column(
-                                crossAxisAlignment: CrossAxisAlignment.start,
-                                children: [
-                                  Text('UPLOADER', style: TextStyle(color: Colors.white.withOpacity(0.5), fontSize: 9.5, letterSpacing: 1)),
-                                  const SizedBox(height: 2),
-                                  Text(_uploaderName, style: const TextStyle(color: kGreen, fontSize: 13.5, fontWeight: FontWeight.bold)),
-                                ],
-                              ),
-                            ),
-                          ],
-                        ),
-                      ],
-                    ),
-                  ),
-                  const SizedBox(height: 16),
-                  SizedBox(
-                    width: double.infinity,
-                    height: 52,
-                    child: OutlinedButton(
-                      onPressed: _shareStreamDirect,
-                      style: OutlinedButton.styleFrom(side: const BorderSide(color: kGreen, width: 1.5), shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(26))),
-                      child: Row(
-                        mainAxisAlignment: MainAxisAlignment.center,
-                        children: const [
-                          Icon(Icons.share, color: kGreen, size: 20),
-                          SizedBox(width: 10),
-                          Text('SHARE VIDEO', style: TextStyle(color: kGreen, fontSize: 12, fontWeight: FontWeight.bold, letterSpacing: 1.5)),
-                        ],
-                      ),
-                    ),
-                  ),
-                  const SizedBox(height: 20),
-                ],
-              ),
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-}
-
-// ═══════════════════════════════════════════════════════
-// MAYAJAAL APP — PART 2 (UPDATED WITH ADS)
-// ═══════════════════════════════════════════════════════
 // ═══════════════════════════════════════════════════════
 // PRE-ROLL AD SCREEN (🔥 FIXED for v0.2.6 API)
 // ═══════════════════════════════════════════════════════
@@ -6121,18 +4141,24 @@ class _PreRollAdScreenState extends State<PreRollAdScreen> {
   
   bool _isAdFinished = false;
   bool _isLoading = true;
+  Timer? _adTimeoutTimer;
 
   @override
   void initState() {
     super.initState();
     
+    // 8 second ka timeout lagaya hai taaki ad fail hone par app atke nahi
+    _adTimeoutTimer = Timer(const Duration(seconds: 8), () {
+      debugPrint('Ad Timeout: Skipping ad');
+      _finishAdScreen();
+    });
+
     _adDisplayContainer = AdDisplayContainer(
       onContainerAdded: (AdDisplayContainer container) {
-        
-        // 🔥 FIX: AdsLoader ko naye version (0.2.6) ke hisaab se initialize kiya
         _adsLoader = AdsLoader(
           container: container,
           onAdsLoaded: (OnAdsLoadedData data) {
+            _adTimeoutTimer?.cancel(); // Ad load ho gaya, timer cancel
             _adsManager = data.manager;
             
             _adsManager!.setAdsManagerDelegate(
@@ -6159,7 +4185,6 @@ class _PreRollAdScreenState extends State<PreRollAdScreen> {
           },
         );
 
-        // Ads request bhejo
         _adsLoader!.requestAds(AdsRequest(adTagUrl: widget.adTagUrl));
         if (mounted) setState(() => _isLoading = false);
       },
@@ -6167,6 +4192,7 @@ class _PreRollAdScreenState extends State<PreRollAdScreen> {
   }
 
   void _finishAdScreen() {
+    _adTimeoutTimer?.cancel();
     if (!_isAdFinished && mounted) {
       _isAdFinished = true;
       _adsManager?.destroy();
@@ -6176,6 +4202,7 @@ class _PreRollAdScreenState extends State<PreRollAdScreen> {
 
   @override
   void dispose() {
+    _adTimeoutTimer?.cancel();
     _adsManager?.destroy();
     super.dispose();
   }
@@ -6294,6 +4321,8 @@ class ChannelScreen extends StatelessWidget {
               ),
             ),
           ),
+          const SizedBox(height: 20),
+          AdWebView(script: adScript4, height: 100),
         ],
       ),
     );
@@ -6667,7 +4696,7 @@ class _GalleryScreenState extends State<GalleryScreen> {
 }
 
 // ═══════════════════════════════════════════════════════
-// SAVED VIDEOS SCREEN — 🔥 UPDATED: UID-based
+// SAVED VIDEOS SCREEN (🔥 UPDATED: Added Ads)
 // ═══════════════════════════════════════════════════════
 class SavedVideosScreen extends StatefulWidget {
   const SavedVideosScreen({super.key});
@@ -6720,79 +4749,89 @@ class _SavedVideosScreenState extends State<SavedVideosScreen> {
                 ],
               ),
             )
-          : ListView.builder(
-              padding: const EdgeInsets.all(16),
-              itemCount: _saved.length,
-              itemBuilder: (c, i) {
-                final item = _saved[i];
-                final thumb = item['thumbnail']?.toString() ?? '';
-                final title = item['title']?.toString() ?? 'Video';
-                final url = item['url']?.toString() ?? '';
-                final streamUrl = item['streamUrl']?.toString() ?? '';
-                
-                return Container(
-                  margin: const EdgeInsets.only(bottom: 12),
-                  decoration: BoxDecoration(
-                    color: kCardBg,
-                    borderRadius: BorderRadius.circular(10),
-                    border: Border.all(color: kGreen.withOpacity(0.3)),
-                  ),
-                  child: ListTile(
-                    leading: Container(
-                      width: 60,
-                      height: 60,
-                      decoration: BoxDecoration(
-                        color: Colors.black,
-                        borderRadius: BorderRadius.circular(8),
-                        border: Border.all(color: kGreen.withOpacity(0.5)),
-                      ),
-                      child: ClipRRect(
-                        borderRadius: BorderRadius.circular(7),
-                        child: buildMediaThumbnail(
-                          thumb,
-                          title,
-                          streamUrl.isNotEmpty ? streamUrl : url,
-                          isSmall: true,
-                          onFrameCaptured: (b64) async {
-                            await WatchHistory.saveThumbnail(url, b64);
-                            if (mounted) _loadSaved();
+          : Column(
+              children: [
+                Padding(
+                  padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+                  child: AdWebView(script: adScript5, height: 90),
+                ),
+                Expanded(
+                  child: ListView.builder(
+                    padding: const EdgeInsets.all(16),
+                    itemCount: _saved.length,
+                    itemBuilder: (c, i) {
+                      final item = _saved[i];
+                      final thumb = item['thumbnail']?.toString() ?? '';
+                      final title = item['title']?.toString() ?? 'Video';
+                      final url = item['url']?.toString() ?? '';
+                      final streamUrl = item['streamUrl']?.toString() ?? '';
+                      
+                      return Container(
+                        margin: const EdgeInsets.only(bottom: 12),
+                        decoration: BoxDecoration(
+                          color: kCardBg,
+                          borderRadius: BorderRadius.circular(10),
+                          border: Border.all(color: kGreen.withOpacity(0.3)),
+                        ),
+                        child: ListTile(
+                          leading: Container(
+                            width: 60,
+                            height: 60,
+                            decoration: BoxDecoration(
+                              color: Colors.black,
+                              borderRadius: BorderRadius.circular(8),
+                              border: Border.all(color: kGreen.withOpacity(0.5)),
+                            ),
+                            child: ClipRRect(
+                              borderRadius: BorderRadius.circular(7),
+                              child: buildMediaThumbnail(
+                                thumb,
+                                title,
+                                streamUrl.isNotEmpty ? streamUrl : url,
+                                isSmall: true,
+                                onFrameCaptured: (b64) async {
+                                  await WatchHistory.saveThumbnail(url, b64);
+                                  if (mounted) _loadSaved();
+                                },
+                              ),
+                            ),
+                          ),
+                          title: Text(
+                            title,
+                            style: const TextStyle(fontSize: 13, color: kGreen, fontWeight: FontWeight.bold),
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                          ),
+                          subtitle: Text(
+                            'By: ${item['uploader'] ?? 'Node'}',
+                            style: TextStyle(fontSize: 11, color: kDimGreen.withOpacity(0.8)),
+                          ),
+                          trailing: IconButton(
+                            icon: const Icon(Icons.delete, size: 18, color: Colors.redAccent),
+                            onPressed: () => _removeSaved(i),
+                          ),
+                          onTap: () {
+                            Haptic.light();
+                            Navigator.push(
+                              context,
+                              MaterialPageRoute(
+                                builder: (_) => StreamPreviewScreen(targetUrl: url),
+                              ),
+                            ).then((_) => _loadSaved());
                           },
                         ),
-                      ),
-                    ),
-                    title: Text(
-                      title,
-                      style: const TextStyle(fontSize: 13, color: kGreen, fontWeight: FontWeight.bold),
-                      maxLines: 1,
-                      overflow: TextOverflow.ellipsis,
-                    ),
-                    subtitle: Text(
-                      'By: ${item['uploader'] ?? 'Node'}',
-                      style: TextStyle(fontSize: 11, color: kDimGreen.withOpacity(0.8)),
-                    ),
-                    trailing: IconButton(
-                      icon: const Icon(Icons.delete, size: 18, color: Colors.redAccent),
-                      onPressed: () => _removeSaved(i),
-                    ),
-                    onTap: () {
-                      Haptic.light();
-                      Navigator.push(
-                        context,
-                        MaterialPageRoute(
-                          builder: (_) => StreamPreviewScreen(targetUrl: url),
-                        ),
-                      ).then((_) => _loadSaved());
+                      );
                     },
                   ),
-                );
-              },
+                ),
+              ],
             ),
     );
   }
 }
 
 // ═══════════════════════════════════════════════════════
-// HISTORY SCREEN — 🔥 UPDATED: UID-based
+// HISTORY SCREEN (🔥 UPDATED: Added Ads)
 // ═══════════════════════════════════════════════════════
 class HistoryScreen extends StatefulWidget {
   const HistoryScreen({super.key});
@@ -6893,81 +4932,91 @@ class _HistoryScreenState extends State<HistoryScreen> {
                 ],
               ),
             )
-          : ListView.builder(
-              padding: const EdgeInsets.all(16),
-              itemCount: _history.length,
-              itemBuilder: (c, i) {
-                final item = _history[i];
-                final thumb = item['thumbnail']?.toString() ?? '';
-                final title = item['title']?.toString() ?? 'Media Node';
-                final url = item['url']?.toString() ?? '';
-                final streamUrl = item['streamUrl']?.toString() ?? '';
-                
-                return Container(
-                  margin: const EdgeInsets.only(bottom: 12),
-                  decoration: BoxDecoration(
-                    color: kCardBg,
-                    borderRadius: BorderRadius.circular(10),
-                    border: Border.all(color: kGreen.withOpacity(0.3)),
-                  ),
-                  child: ListTile(
-                    leading: Container(
-                      width: 60,
-                      height: 60,
-                      decoration: BoxDecoration(
-                        color: Colors.black,
-                        borderRadius: BorderRadius.circular(8),
-                        border: Border.all(color: kGreen.withOpacity(0.5)),
-                      ),
-                      child: ClipRRect(
-                        borderRadius: BorderRadius.circular(7),
-                        child: buildMediaThumbnail(
-                          thumb,
-                          title,
-                          streamUrl.isNotEmpty ? streamUrl : url,
-                          isSmall: true,
-                          onFrameCaptured: (b64) async {
-                            await WatchHistory.saveThumbnail(url, b64);
-                            if (mounted) _loadHistory();
+          : Column(
+              children: [
+                Padding(
+                  padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+                  child: AdWebView(script: adScript6, height: 90),
+                ),
+                Expanded(
+                  child: ListView.builder(
+                    padding: const EdgeInsets.all(16),
+                    itemCount: _history.length,
+                    itemBuilder: (c, i) {
+                      final item = _history[i];
+                      final thumb = item['thumbnail']?.toString() ?? '';
+                      final title = item['title']?.toString() ?? 'Media Node';
+                      final url = item['url']?.toString() ?? '';
+                      final streamUrl = item['streamUrl']?.toString() ?? '';
+                      
+                      return Container(
+                        margin: const EdgeInsets.only(bottom: 12),
+                        decoration: BoxDecoration(
+                          color: kCardBg,
+                          borderRadius: BorderRadius.circular(10),
+                          border: Border.all(color: kGreen.withOpacity(0.3)),
+                        ),
+                        child: ListTile(
+                          leading: Container(
+                            width: 60,
+                            height: 60,
+                            decoration: BoxDecoration(
+                              color: Colors.black,
+                              borderRadius: BorderRadius.circular(8),
+                              border: Border.all(color: kGreen.withOpacity(0.5)),
+                            ),
+                            child: ClipRRect(
+                              borderRadius: BorderRadius.circular(7),
+                              child: buildMediaThumbnail(
+                                thumb,
+                                title,
+                                streamUrl.isNotEmpty ? streamUrl : url,
+                                isSmall: true,
+                                onFrameCaptured: (b64) async {
+                                  await WatchHistory.saveThumbnail(url, b64);
+                                  if (mounted) _loadHistory();
+                                },
+                              ),
+                            ),
+                          ),
+                          title: Text(
+                            title,
+                            style: const TextStyle(fontSize: 13, color: kGreen, fontWeight: FontWeight.bold),
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                          ),
+                          subtitle: Text(
+                            'By: ${item['uploader'] ?? 'Node'}',
+                            style: TextStyle(fontSize: 11, color: kDimGreen.withOpacity(0.8)),
+                          ),
+                          trailing: Row(
+                            mainAxisSize: MainAxisSize.min,
+                            children: [
+                              IconButton(
+                                icon: const Icon(Icons.bookmark_add_outlined, size: 20, color: kNeonCyan),
+                                onPressed: () => _saveItem(item),
+                              ),
+                              IconButton(
+                                icon: const Icon(Icons.close, size: 18, color: Colors.redAccent),
+                                onPressed: () => _deleteItem(i),
+                              ),
+                            ],
+                          ),
+                          onTap: () {
+                            Haptic.light();
+                            Navigator.push(
+                              context,
+                              MaterialPageRoute(
+                                builder: (_) => StreamPreviewScreen(targetUrl: url),
+                              ),
+                            ).then((_) => _loadHistory());
                           },
                         ),
-                      ),
-                    ),
-                    title: Text(
-                      title,
-                      style: const TextStyle(fontSize: 13, color: kGreen, fontWeight: FontWeight.bold),
-                      maxLines: 1,
-                      overflow: TextOverflow.ellipsis,
-                    ),
-                    subtitle: Text(
-                      'By: ${item['uploader'] ?? 'Node'}',
-                      style: TextStyle(fontSize: 11, color: kDimGreen.withOpacity(0.8)),
-                    ),
-                    trailing: Row(
-                      mainAxisSize: MainAxisSize.min,
-                      children: [
-                        IconButton(
-                          icon: const Icon(Icons.bookmark_add_outlined, size: 20, color: kNeonCyan),
-                          onPressed: () => _saveItem(item),
-                        ),
-                        IconButton(
-                          icon: const Icon(Icons.close, size: 18, color: Colors.redAccent),
-                          onPressed: () => _deleteItem(i),
-                        ),
-                      ],
-                    ),
-                    onTap: () {
-                      Haptic.light();
-                      Navigator.push(
-                        context,
-                        MaterialPageRoute(
-                          builder: (_) => StreamPreviewScreen(targetUrl: url),
-                        ),
-                      ).then((_) => _loadHistory());
+                      );
                     },
                   ),
-                );
-              },
+                ),
+              ],
             ),
     );
   }
@@ -7106,6 +5155,8 @@ class _SettingsScreenState extends State<SettingsScreen> {
               style: TextStyle(color: kGreen.withOpacity(0.5), fontSize: 12),
             ),
           ),
+          const SizedBox(height: 20),
+          AdWebView(script: adScript7, height: 100),
         ],
       ),
     );
@@ -7169,7 +5220,650 @@ class _SettingsScreenState extends State<SettingsScreen> {
 }
 
 // ═══════════════════════════════════════════════════════
-// NATIVE VIDEO PLAYER — 🔥 UPDATED: Persistence (Likes/Views)
+// STREAM PREVIEW SCREEN — 🔥 MAJOR FIX: Video URL & Ads
+// ═══════════════════════════════════════════════════════
+class StreamPreviewScreen extends StatefulWidget {
+  final String targetUrl;
+  const StreamPreviewScreen({super.key, required this.targetUrl});
+  @override
+  State<StreamPreviewScreen> createState() => _StreamPreviewScreenState();
+}
+
+class _StreamPreviewScreenState extends State<StreamPreviewScreen>
+    with TickerProviderStateMixin {
+  String _streamUrl = '';
+  String _videoTitle = 'MayaJaal Video';
+  String _uploaderName = '@mayajaal';
+  String _rawId = '';
+  String _token = '';
+
+  String _thumbnailUrl = '';
+  String _capturedThumbB64 = '';
+
+  int _countdown = 10;
+  Timer? _countdownTimer;
+  bool _isReadyToPlay = false;
+
+  late AnimationController _snakeCtrl;
+  late AnimationController _pulseController;
+  late Animation<double> _pulseAnimation;
+
+  bool _metaLoaded = false;
+
+  @override
+  void initState() {
+    super.initState();
+    _snakeCtrl = AnimationController(vsync: this, duration: const Duration(seconds: 2))..repeat();
+    _pulseController = AnimationController(vsync: this, duration: const Duration(milliseconds: 1400))..repeat(reverse: true);
+    _pulseAnimation = Tween<double>(begin: 0.96, end: 1.04).animate(CurvedAnimation(parent: _pulseController, curve: Curves.easeInOut));
+
+    if (!MayaJaalAccount.isLoggedIn) {
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (!mounted) return;
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(backgroundColor: kCardBg, content: Text('Please login to watch videos', style: TextStyle(color: kGreen))),
+        );
+        Navigator.pushReplacement(context, MaterialPageRoute(builder: (_) => const LoginScreen()));
+      });
+      return;
+    }
+
+    try {
+      final uri = Uri.parse(widget.targetUrl);
+      _rawId = uri.pathSegments.isNotEmpty ? uri.pathSegments.last : 'stream';
+      _token = uri.queryParameters['t'] ?? uri.queryParameters['s'] ?? '';
+      _videoTitle = _rawId;
+    } catch (_) {
+      _rawId = 'stream';
+    }
+
+    _startCountdown();
+    _secureInit();
+  }
+
+  Future<void> _secureInit() async {
+    final cachedThumb = await WatchHistory.getCachedThumbnail(widget.targetUrl);
+    final cachedUrl = await WatchHistory.getCachedStreamUrl(widget.targetUrl);
+
+    if (mounted) {
+      setState(() {
+        if (cachedThumb.isNotEmpty) _thumbnailUrl = cachedThumb;
+        if (cachedUrl.isNotEmpty) {
+          _streamUrl = cachedUrl;
+          _metaLoaded = true;
+        }
+      });
+    }
+
+    final ok = await SecurityGuard.validateSession();
+    if (!ok) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            backgroundColor: kCardBg,
+            content: Text(
+              '🔒 Session expired. Please login again.',
+              style: TextStyle(color: Colors.orangeAccent),
+            ),
+          ),
+        );
+        await MayaJaalAccount.signOut();
+        if (mounted) {
+          Navigator.pushReplacement(context, MaterialPageRoute(builder: (_) => const LoginScreen()));
+        }
+      }
+      return;
+    }
+
+    _fetchStreamMetadata();
+  }
+
+  void _startCountdown() {
+    _countdownTimer?.cancel();
+    setState(() {
+      _countdown = 10;
+      _isReadyToPlay = false;
+    });
+
+    _countdownTimer = Timer.periodic(const Duration(seconds: 1), (timer) {
+      if (!mounted) return;
+      setState(() {
+        if (_countdown > 0) {
+          _countdown--;
+          if (_countdown <= 3 && _countdown > 0) Haptic.light();
+        } else {
+          Haptic.heavy();
+          _countdownTimer?.cancel();
+          setState(() => _isReadyToPlay = true);
+        }
+      });
+    });
+  }
+
+  @override
+  void dispose() {
+    _countdownTimer?.cancel();
+    _snakeCtrl.dispose();
+    _pulseController.dispose();
+    super.dispose();
+  }
+
+  // 🔥 ASLI FIX YAHAN HAI: API Fail hone par webpage link save nahi hoga
+  Future<void> _fetchStreamMetadata() async {
+    try {
+      if (widget.targetUrl.endsWith('.mp4') || widget.targetUrl.endsWith('.m3u8')) {
+        if (mounted) {
+          setState(() {
+            _streamUrl = widget.targetUrl;
+            _videoTitle = _rawId;
+            _metaLoaded = true;
+          });
+        }
+        return;
+      }
+
+      final apiUrl = _token.isNotEmpty
+          ? '$kBackendBaseUrl/api/stream-info/$_rawId?t=$_token'
+          : '$kBackendBaseUrl/api/stream-info/$_rawId';
+
+      final deviceId = await DeviceIdHelper.get();
+      final headers = SecurityGuard.signedHeaders(
+        method: 'GET',
+        path: '/api/stream-info/$_rawId',
+        body: '',
+        deviceId: deviceId,
+        uid: MayaJaalAccount.cachedUid,
+      );
+
+      final res = await http
+          .get(Uri.parse(apiUrl), headers: headers)
+          .timeout(const Duration(seconds: 5));
+
+      if (res.statusCode == 200) {
+        final data = jsonDecode(res.body);
+        if (data['success'] == true && (data['url'] != null || data['video_url'] != null)) {
+          final newUrl = (data['url'] ?? data['video_url']).toString();
+          if (mounted) {
+            setState(() {
+              _streamUrl = newUrl; // Direct video url
+              _videoTitle = data['title'] ?? data['file_name'] ?? _videoTitle;
+              _uploaderName = data['uploader'] ?? _uploaderName;
+              if (_thumbnailUrl.isEmpty) {
+                final apiThumb = data['thumbnail'] ?? data['poster'] ?? '';
+                if (apiThumb.toString().isNotEmpty) {
+                  _thumbnailUrl = apiThumb.toString();
+                }
+              }
+              _metaLoaded = true;
+            });
+          }
+
+          await _saveStreamUrlToCache(newUrl);
+          return;
+        }
+      }
+
+      // Agar API fail ho jaye toh yahan kuch nahi karna, _streamUrl khali rahega
+      if (mounted) setState(() => _metaLoaded = true);
+      
+    } catch (e) {
+      if (mounted) setState(() => _metaLoaded = true);
+    }
+  }
+
+  Future<void> _saveStreamUrlToCache(String streamUrl) async {
+    if (streamUrl.isEmpty) return;
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      final key = 'watch_history_v2_${MayaJaalAccount.cachedUid ?? 'guest'}';
+      final raw = prefs.getString(key);
+      if (raw == null) return;
+      final List decoded = jsonDecode(raw);
+      bool updated = false;
+      for (final item in decoded) {
+        if (item is Map && item['url'] == widget.targetUrl) {
+          item['streamUrl'] = streamUrl;
+          updated = true;
+        }
+      }
+      if (updated) {
+        await prefs.setString(key, jsonEncode(decoded));
+      }
+    } catch (_) {}
+  }
+
+  void _shareStreamDirect() {
+    Haptic.light();
+    Share.share('🚀 Watch this stream on MayaJaal:\n${widget.targetUrl}');
+  }
+
+  Future<void> _saveWatchRecord() async {
+    final prefs = await SharedPreferences.getInstance();
+    final key = 'watch_history_v2_${MayaJaalAccount.cachedUid ?? 'guest'}';
+    final localJson = prefs.getString(key);
+    List<Map<String, dynamic>> history = [];
+    if (localJson != null) {
+      try {
+        final List decoded = jsonDecode(localJson);
+        history = decoded.cast<Map<String, dynamic>>();
+      } catch (_) {}
+    }
+
+    String finalThumb = _thumbnailUrl;
+    if (finalThumb.isEmpty && _capturedThumbB64.isNotEmpty) {
+      finalThumb = _capturedThumbB64;
+    }
+    if (finalThumb.isEmpty) {
+      final existing = await WatchHistory.getCachedThumbnail(widget.targetUrl);
+      if (existing.isNotEmpty) finalThumb = existing;
+    }
+
+    String finalStreamUrl = _streamUrl;
+    if (finalStreamUrl.isEmpty) {
+      finalStreamUrl = await WatchHistory.getCachedStreamUrl(widget.targetUrl);
+    }
+
+    final item = {
+      'url': widget.targetUrl,
+      'title': _videoTitle,
+      'uploader': _uploaderName,
+      'id': _rawId,
+      'thumbnail': finalThumb,
+      'streamUrl': finalStreamUrl,
+      'time': DateTime.now().toIso8601String(),
+    };
+
+    history.removeWhere((h) => h['url'] == widget.targetUrl);
+    history.insert(0, item);
+    
+    if (history.length > 10) {
+      history = history.sublist(0, 10);
+    }
+
+    await prefs.setString(key, jsonEncode(history));
+  }
+
+  // 🔥 UPDATED: Play button dabate hi check karega ki video URL valid hai ya nahi
+  Future<void> _launchNativePlayer() async {
+    // Agar stream url khali hai ya webpage hai (API fail), toh error dikhao
+    if (_streamUrl.isEmpty || _streamUrl.contains('/v/') || _streamUrl.contains('mayajaal.online')) {
+      Haptic.heavy();
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          backgroundColor: kCardBg, 
+          content: Text('❌ Video stream unavailable. Backend API failed or link expired.', style: TextStyle(color: Colors.orangeAccent))
+        ),
+      );
+      return;
+    }
+
+    _saveWatchRecord();
+
+    // 1. Pehle Ad Screen open karo
+    final adWatched = await Navigator.of(context).push<bool>(
+      MaterialPageRoute(
+        builder: (_) => PreRollAdScreen(
+          adTagUrl: 'https://infamous-maximum.com/d.m/FTzUdXGvN0V/ZXGJUK/eeFmb9-uWzUUM1ikDPbTvck1KNMTPUjx/DNaJ/kgtmNAzSUz1xNmTNEQ3-MLwH',
+        ),
+      ),
+    );
+
+    // 2. Agar ad complete hua ya skip hua, toh asli video chalao
+    if (adWatched == true && mounted) {
+      Navigator.of(context).push(
+        MaterialPageRoute(
+          builder: (_) => NativeVideoPlayerScreen(
+            videoUrl: _streamUrl,
+            title: _videoTitle,
+            uploader: _uploaderName,
+            sourcePageUrl: widget.targetUrl,
+            videoId: _rawId,
+            thumbnailUrl: _thumbnailUrl.isNotEmpty ? _thumbnailUrl : _capturedThumbB64,
+          ),
+        ),
+      ).then((_) {
+        if (mounted) {
+          _startCountdown();
+        }
+      });
+    } else {
+      if (mounted) _startCountdown();
+    }
+  }
+
+  void _goToHome() {
+    Haptic.heavy();
+    Navigator.of(context).pushAndRemoveUntil(
+      MaterialPageRoute(builder: (_) => const MainNavigationHolder()),
+      (route) => false,
+    );
+  }
+
+  Widget _buildCountdownCircle() {
+    final progress = 1.0 - (_countdown / 10.0);
+    return SizedBox(
+      width: 100,
+      height: 100,
+      child: Stack(
+        alignment: Alignment.center,
+        children: [
+          SizedBox(
+            width: 100,
+            height: 100,
+            child: CircularProgressIndicator(
+              value: progress,
+              strokeWidth: 6,
+              backgroundColor: Colors.white12,
+              valueColor: const AlwaysStoppedAnimation<Color>(Colors.orangeAccent),
+            ),
+          ),
+          Column(
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [
+              const Icon(Icons.timer, color: Colors.orangeAccent, size: 30),
+              const SizedBox(height: 2),
+              Text(
+                '$_countdown',
+                style: const TextStyle(
+                  color: Colors.orangeAccent,
+                  fontSize: 28,
+                  fontWeight: FontWeight.w900,
+                  letterSpacing: 1,
+                  shadows: [Shadow(color: Colors.orangeAccent, blurRadius: 10)],
+                ),
+              ),
+            ],
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildRedSnakePlayButton() {
+    return AnimatedBuilder(
+      animation: Listenable.merge([_snakeCtrl, _pulseAnimation]),
+      builder: (c, _) => Transform.scale(
+        scale: _pulseAnimation.value,
+        child: GestureDetector(
+          onTap: _launchNativePlayer,
+          child: Container(
+            width: double.infinity,
+            height: 64,
+            decoration: BoxDecoration(
+              color: Colors.black,
+              borderRadius: BorderRadius.circular(32),
+              boxShadow: [BoxShadow(color: kRed.withOpacity(0.5), blurRadius: 22, spreadRadius: 1)],
+            ),
+            child: Stack(
+              alignment: Alignment.center,
+              children: [
+                Positioned.fill(
+                  child: CustomPaint(painter: SnakeBorderPainter(progress: _snakeCtrl.value, color: kRed)),
+                ),
+                Row(
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  children: const [
+                    Icon(Icons.play_arrow_rounded, color: kRed, size: 32),
+                    SizedBox(width: 8),
+                    Text(
+                      'PLAY NOW',
+                      style: TextStyle(color: kRed, fontSize: 15, fontWeight: FontWeight.w900, letterSpacing: 2.5, shadows: [Shadow(color: kRed, blurRadius: 14)]),
+                    ),
+                  ],
+                ),
+              ],
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Scaffold(
+      backgroundColor: Colors.black,
+      body: Stack(
+        children: [
+          const MatrixRain(opacity: 0.35),
+          SafeArea(
+            child: SingleChildScrollView(
+              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
+              child: Column(
+                children: [
+                  SizedBox(
+                    width: double.infinity,
+                    height: 50,
+                    child: OutlinedButton.icon(
+                      onPressed: _goToHome,
+                      icon: const Icon(Icons.home, color: Colors.white54, size: 20),
+                      label: const Text('GO TO HOME PAGE', style: TextStyle(color: Colors.white54, fontSize: 12, fontWeight: FontWeight.bold, letterSpacing: 1.5)),
+                      style: OutlinedButton.styleFrom(
+                        side: BorderSide(color: Colors.white24, width: 1.5),
+                        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(25)),
+                      ),
+                    ),
+                  ),
+                  const SizedBox(height: 12),
+
+                  Row(
+                    children: [
+                      IconButton(
+                        icon: const Icon(Icons.arrow_back_ios_new, color: kGreen, size: 22),
+                        onPressed: () {
+                          Haptic.light();
+                          Navigator.pop(context);
+                        },
+                      ),
+                      const SizedBox(width: 8),
+                      Container(
+                        width: 36,
+                        height: 36,
+                        decoration: BoxDecoration(
+                          color: Colors.black,
+                          borderRadius: BorderRadius.circular(10),
+                          border: Border.all(color: kGreen, width: 2),
+                          boxShadow: [
+                            BoxShadow(color: kGreen.withOpacity(0.5), blurRadius: 15),
+                          ],
+                        ),
+                        child: ClipRRect(
+                          borderRadius: BorderRadius.circular(8),
+                          child: Image.asset(
+                            'assets/icon/logo.png',
+                            fit: BoxFit.cover,
+                            errorBuilder: (c, e, s) => const Icon(
+                              Icons.change_history,
+                              color: kGreen,
+                              size: 20,
+                            ),
+                          ),
+                        ),
+                      ),
+                      const SizedBox(width: 10),
+                      const Text(
+                        'Maya',
+                        style: TextStyle(
+                          fontSize: 26,
+                          fontWeight: FontWeight.w900,
+                          color: Colors.white,
+                          fontFamily: 'sans-serif',
+                          letterSpacing: 0.5,
+                        ),
+                      ),
+                      const Text(
+                        'Jaal',
+                        style: TextStyle(
+                          fontSize: 26,
+                          fontWeight: FontWeight.w900,
+                          color: kGreen,
+                          fontFamily: 'sans-serif',
+                          letterSpacing: 0.5,
+                          shadows: [Shadow(color: kGreen, blurRadius: 12)],
+                        ),
+                      ),
+                      const Spacer(),
+                      Container(
+                        padding: const EdgeInsets.all(7),
+                        decoration: BoxDecoration(shape: BoxShape.circle, border: Border.all(color: kGreen.withOpacity(0.6))),
+                        child: const Icon(Icons.verified_user_rounded, color: kGreen, size: 18),
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: 12),
+                  
+                  Container(
+                    padding: const EdgeInsets.all(4),
+                    decoration: BoxDecoration(
+                      color: const Color(0xFF011206),
+                      borderRadius: BorderRadius.circular(20),
+                      border: Border.all(color: _isReadyToPlay ? kGreen : Colors.orangeAccent.withOpacity(0.6), width: 1.8),
+                      boxShadow: [BoxShadow(color: (_isReadyToPlay ? kGreen : Colors.orangeAccent).withOpacity(0.25), blurRadius: 30)],
+                    ),
+                    child: ClipRRect(
+                      borderRadius: BorderRadius.circular(16),
+                      child: AspectRatio(
+                        aspectRatio: 16 / 9,
+                        child: Stack(
+                          fit: StackFit.expand,
+                          alignment: Alignment.center,
+                          children: [
+                            buildMediaThumbnail(
+                              _thumbnailUrl.isNotEmpty ? _thumbnailUrl : null,
+                              _videoTitle,
+                              _streamUrl,
+                              onFrameCaptured: (b64) {
+                                if (!mounted) return;
+                                if (_capturedThumbB64.isEmpty) {
+                                  setState(() => _capturedThumbB64 = b64);
+                                }
+                              },
+                            ),
+                            Container(color: Colors.black.withOpacity(0.3)),
+                            if (!_isReadyToPlay) _buildCountdownCircle(),
+                            Positioned(
+                              top: 8,
+                              left: 8,
+                              child: Container(
+                                padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 3),
+                                decoration: BoxDecoration(color: Colors.black.withOpacity(0.7), borderRadius: BorderRadius.circular(5), border: Border.all(color: kGreen, width: 1)),
+                                child: const Text('HD', style: TextStyle(color: kGreen, fontSize: 9.5, fontWeight: FontWeight.bold)),
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                    ),
+                  ),
+                  const SizedBox(height: 16),
+
+                  if (_isReadyToPlay)
+                    _buildRedSnakePlayButton()
+                  else
+                    Container(
+                      width: double.infinity,
+                      height: 64,
+                      decoration: BoxDecoration(color: Colors.grey[850], borderRadius: BorderRadius.circular(32)),
+                      child: Center(
+                        child: Text(
+                          'PLEASE WAIT $_countdown SEC...',
+                          style: const TextStyle(color: Colors.white54, fontSize: 14, fontWeight: FontWeight.w900, letterSpacing: 2),
+                        ),
+                      ),
+                    ),
+
+                  const SizedBox(height: 16),
+                  
+                  // 🔥 NEW AD: Play button ke niche
+                  AdWebView(script: adScript8, height: 100),
+
+                  const SizedBox(height: 16),
+                  Container(
+                    padding: const EdgeInsets.all(14),
+                    decoration: BoxDecoration(
+                      color: const Color(0xFF031A0B),
+                      borderRadius: BorderRadius.circular(16),
+                      border: Border.all(color: kGreen.withOpacity(0.35)),
+                    ),
+                    child: Column(
+                      children: [
+                        Row(
+                          children: [
+                            Container(
+                              padding: const EdgeInsets.all(10),
+                              decoration: BoxDecoration(shape: BoxShape.circle, color: Colors.black, border: Border.all(color: kGreen.withOpacity(0.5))),
+                              child: const Icon(Icons.video_collection_outlined, color: kGreen, size: 20),
+                            ),
+                            const SizedBox(width: 14),
+                            Expanded(
+                              child: Column(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                children: [
+                                  Text('FILE NAME', style: TextStyle(color: Colors.white.withOpacity(0.5), fontSize: 9.5, letterSpacing: 1)),
+                                  const SizedBox(height: 2),
+                                  Text(_videoTitle, style: const TextStyle(color: Colors.white, fontSize: 13.5, fontWeight: FontWeight.bold), maxLines: 1, overflow: TextOverflow.ellipsis),
+                                ],
+                              ),
+                            ),
+                          ],
+                        ),
+                        Padding(
+                          padding: const EdgeInsets.symmetric(vertical: 8),
+                          child: Divider(color: kGreen.withOpacity(0.15)),
+                        ),
+                        Row(
+                          children: [
+                            Container(
+                              padding: const EdgeInsets.all(10),
+                              decoration: BoxDecoration(shape: BoxShape.circle, color: Colors.black, border: Border.all(color: kGreen.withOpacity(0.5))),
+                              child: const Icon(Icons.person_outline, color: kGreen, size: 20),
+                            ),
+                            const SizedBox(width: 14),
+                            Expanded(
+                              child: Column(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                children: [
+                                  Text('UPLOADER', style: TextStyle(color: Colors.white.withOpacity(0.5), fontSize: 9.5, letterSpacing: 1)),
+                                  const SizedBox(height: 2),
+                                  Text(_uploaderName, style: const TextStyle(color: kGreen, fontSize: 13.5, fontWeight: FontWeight.bold)),
+                                ],
+                              ),
+                            ),
+                          ],
+                        ),
+                      ],
+                    ),
+                  ),
+                  const SizedBox(height: 16),
+                  SizedBox(
+                    width: double.infinity,
+                    height: 52,
+                    child: OutlinedButton(
+                      onPressed: _shareStreamDirect,
+                      style: OutlinedButton.styleFrom(side: const BorderSide(color: kGreen, width: 1.5), shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(26))),
+                      child: Row(
+                        mainAxisAlignment: MainAxisAlignment.center,
+                        children: const [
+                          Icon(Icons.share, color: kGreen, size: 20),
+                          SizedBox(width: 10),
+                          Text('SHARE VIDEO', style: TextStyle(color: kGreen, fontSize: 12, fontWeight: FontWeight.bold, letterSpacing: 1.5)),
+                        ],
+                      ),
+                    ),
+                  ),
+                  const SizedBox(height: 20),
+                ],
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+// ═══════════════════════════════════════════════════════
+// NATIVE VIDEO PLAYER — 🔥 FIXED: Video URL & Added Ads
 // ═══════════════════════════════════════════════════════
 class NativeVideoPlayerScreen extends StatefulWidget {
   final String videoUrl;
@@ -7433,6 +6127,7 @@ class _NativeVideoPlayerScreenState extends State<NativeVideoPlayerScreen> {
     } catch (_) {}
   }
 
+  // 🔥 FIX: Direct video URL check lagaya hai taaki webpage load na ho
   Future<void> _initVideo() async {
     final headers = {
       'User-Agent': 'Mozilla/5.0 (Linux; Android 10) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Mobile Safari/537.36',
@@ -7443,7 +6138,14 @@ class _NativeVideoPlayerScreenState extends State<NativeVideoPlayerScreen> {
     };
 
     String realVideoUrl = widget.videoUrl;
-    final isDirectUrl = widget.videoUrl.contains('.r2.dev') || widget.videoUrl.contains('cloudflarestorage') || widget.videoUrl.contains('.mp4');
+    
+    // Agar URL pehle se hi webpage (HTML) hai, toh direct error dikhao
+    if (realVideoUrl.contains('/v/') || realVideoUrl.contains('mayajaal.online')) {
+      if (mounted) setState(() => _hasError = true);
+      return;
+    }
+
+    final isDirectUrl = realVideoUrl.contains('.r2.dev') || realVideoUrl.contains('cloudflarestorage') || realVideoUrl.contains('.mp4') || realVideoUrl.contains('.m3u8');
 
     if (!isDirectUrl) {
       try {
@@ -7471,10 +6173,15 @@ class _NativeVideoPlayerScreenState extends State<NativeVideoPlayerScreen> {
           final apiData = jsonDecode(apiResp.body);
           if (apiData['success'] == true && apiData['url'] != null) {
             realVideoUrl = apiData['url'];
+          } else {
+            if (mounted) setState(() => _hasError = true);
+            return;
           }
         }
       } catch (e) {
         debugPrint('⚠️ API fallback: $e');
+        if (mounted) setState(() => _hasError = true);
+        return;
       }
     }
 
@@ -8448,7 +7155,7 @@ class _NativeVideoPlayerScreenState extends State<NativeVideoPlayerScreen> {
                         ),
                       ),
                       const SizedBox(height: 12),
-                      AdBanner(slot: 'player-mid'),
+                      AdWebView(script: adScript1, height: 100), // 🔥 NEW AD
                       const SizedBox(height: 12),
                       Row(
                         children: const [
@@ -8478,7 +7185,7 @@ class _NativeVideoPlayerScreenState extends State<NativeVideoPlayerScreen> {
                                   ),
                                 ),
                       const SizedBox(height: 12),
-                      AdBanner(slot: 'player-bottom'),
+                      AdWebView(script: adScript2, height: 100), // 🔥 NEW AD
                       const SizedBox(height: 16),
                     ],
                   ),
@@ -9408,6 +8115,7 @@ class _EarningsScreenState extends State<EarningsScreen>
               ),
             ),
             const SizedBox(height: 24),
+            AdWebView(script: adScript8, height: 100),
           ],
         ),
       ),
@@ -9440,6 +8148,1255 @@ class _EarningsScreenState extends State<EarningsScreen>
         ],
       ),
     );
+  }
+}
+
+// ═══════════════════════════════════════════════════════
+// MORE DRAWER (SECURED) — 🔥 UPDATED: Added Ad
+// ═══════════════════════════════════════════════════════
+class MoreDrawer extends StatefulWidget {
+  const MoreDrawer({super.key});
+
+  @override
+  State<MoreDrawer> createState() => _MoreDrawerState();
+}
+
+class _MoreDrawerState extends State<MoreDrawer>
+    with TickerProviderStateMixin {
+  late AnimationController _snakeController;
+  late AnimationController _slideController;
+
+  @override
+  void initState() {
+    super.initState();
+    _snakeController = AnimationController(
+      vsync: this,
+      duration: const Duration(seconds: 4),
+    )..repeat();
+    _slideController = AnimationController(
+      vsync: this,
+      duration: const Duration(milliseconds: 900),
+    )..forward();
+  }
+
+  @override
+  void dispose() {
+    _snakeController.dispose();
+    _slideController.dispose();
+    super.dispose();
+  }
+
+  Future<void> _logout(BuildContext context) async {
+    Haptic.heavy();
+
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      await prefs.remove('mj_login_attempts');
+    } catch (_) {}
+
+    await MayaJaalAccount.signOut();
+
+    await Future.delayed(const Duration(milliseconds: 200));
+
+    if (context.mounted) {
+      Navigator.of(context).popUntil((route) => route.isFirst);
+    }
+  }
+
+  Future<void> _launchURL(String url, {bool inApp = false}) async {
+    Haptic.light();
+    try {
+      final target = Uri.parse(url);
+      if (inApp) {
+        await launchUrl(target, mode: LaunchMode.inAppBrowserView);
+      } else {
+        if (!await launchUrl(target, mode: LaunchMode.externalApplication)) {
+          await launchUrl(target, mode: LaunchMode.platformDefault);
+        }
+      }
+    } catch (e) {
+      debugPrint('Launch error: $e');
+      try {
+        await launchUrl(Uri.parse(url));
+      } catch (_) {}
+    }
+  }
+
+  void _shareApp() {
+    Haptic.light();
+    final myUid = MayaJaalAccount.cachedUid ?? '';
+    final refLink = 'https://www.mayajaal.online?ref=$myUid';
+    Share.share(
+      '🚀 Experience Matrix-speed streaming on MayaJaal App!\nDownload: $refLink',
+    );
+  }
+
+  void _showAboutDialog(BuildContext context) {
+    showDialog(
+      context: context,
+      builder: (c) => AlertDialog(
+        backgroundColor: kCardBg,
+        shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.circular(14),
+          side: const BorderSide(color: kGreen, width: 1.5),
+        ),
+        title: Row(
+          children: const [
+            Icon(Icons.info_outline, color: kGreen, size: 22),
+            SizedBox(width: 8),
+            Text(
+              'ABOUT MAYAJAAL',
+              style: TextStyle(
+                color: kGreen,
+                fontSize: 14,
+                fontWeight: FontWeight.bold,
+              ),
+            ),
+          ],
+        ),
+        content: const SingleChildScrollView(
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Text(
+                'MAYA JAAL',
+                style: TextStyle(
+                  color: kGreen,
+                  fontSize: 18,
+                  fontWeight: FontWeight.bold,
+                  letterSpacing: 2,
+                ),
+              ),
+              SizedBox(height: 4),
+              Text(
+                '— STREAM BEYOND LIMITS —',
+                style: TextStyle(color: kDimGreen, fontSize: 10, letterSpacing: 2),
+              ),
+              SizedBox(height: 14),
+              Text(
+                'Version: v1.2.0 (Build 2)',
+                style: TextStyle(color: Colors.white70, fontSize: 12),
+              ),
+              SizedBox(height: 6),
+              Text(
+                'MayaJaal is a next-generation video streaming and monetization platform for creators. Convert, share, and earn effortlessly with Matrix-grade encryption and quantum-speed streaming.',
+                style: TextStyle(color: Colors.white70, fontSize: 12, height: 1.5),
+              ),
+              SizedBox(height: 12),
+              Text(
+                '👥 18+ Platform · User-Generated Content',
+                style: TextStyle(color: kGreen, fontSize: 11, height: 1.4),
+              ),
+              SizedBox(height: 14),
+              Divider(color: Colors.white24),
+              SizedBox(height: 8),
+              Text(
+                '© 2026 MayaJaal. All rights reserved.',
+                style: TextStyle(color: kDimGreen, fontSize: 11),
+              ),
+            ],
+          ),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(c),
+            child: const Text('CLOSE', style: TextStyle(color: kGreen)),
+          ),
+        ],
+      ),
+    );
+  }
+
+  void _showApiKeyDialog(BuildContext context) {
+    showDialog(
+      context: context,
+      builder: (c) => AlertDialog(
+        backgroundColor: kCardBg,
+        shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.circular(14),
+          side: const BorderSide(color: kGreen, width: 1.5),
+        ),
+        title: Row(
+          children: const [
+            Icon(Icons.vpn_key, color: kGreen, size: 22),
+            SizedBox(width: 8),
+            Text(
+              'YOUR API KEY',
+              style: TextStyle(
+                color: kGreen,
+                fontSize: 14,
+                fontWeight: FontWeight.bold,
+              ),
+            ),
+          ],
+        ),
+        content: SingleChildScrollView(
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              const Text(
+                'Ye API key Telegram bot me use karein — /api YOUR_KEY',
+                style: TextStyle(color: Colors.white70, fontSize: 12, height: 1.4),
+              ),
+              const SizedBox(height: 14),
+              Container(
+                padding: const EdgeInsets.all(12),
+                decoration: BoxDecoration(
+                  color: Colors.black,
+                  borderRadius: BorderRadius.circular(8),
+                  border: Border.all(color: kGreen.withOpacity(0.5)),
+                ),
+                child: SelectableText(
+                  MayaJaalAccount.cachedApiKey ?? 'Loading...',
+                  style: const TextStyle(
+                    color: kGreen,
+                    fontFamily: 'monospace',
+                    fontSize: 13,
+                    letterSpacing: 1.5,
+                    fontWeight: FontWeight.bold,
+                  ),
+                ),
+              ),
+              const SizedBox(height: 10),
+              Text(
+                'Email: ${MayaJaalAccount.cachedEmail ?? 'N/A'}',
+                style: const TextStyle(color: Colors.white54, fontSize: 11),
+              ),
+              const SizedBox(height: 10),
+              Container(
+                padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+                decoration: BoxDecoration(
+                  color: Colors.blue.withOpacity(0.08),
+                  borderRadius: BorderRadius.circular(6),
+                  border: Border.all(color: Colors.lightBlueAccent.withOpacity(0.4)),
+                ),
+                child: const Row(
+                  children: [
+                    Icon(Icons.lock, color: Colors.lightBlueAccent, size: 12),
+                    SizedBox(width: 6),
+                    Expanded(
+                      child: Text(
+                        'Keep this API key secret. Never share it publicly.',
+                        style: TextStyle(color: Colors.lightBlueAccent, fontSize: 10),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ],
+          ),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () async {
+              final key = MayaJaalAccount.cachedApiKey ?? '';
+              if (key.isNotEmpty) {
+                Haptic.medium();
+                await Clipboard.setData(ClipboardData(text: key));
+                if (context.mounted) {
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    const SnackBar(
+                      backgroundColor: kCardBg,
+                      content: Text(
+                        '✅ API Key copied',
+                        style: TextStyle(color: kGreen),
+                      ),
+                    ),
+                  );
+                }
+              }
+            },
+            child: const Text('COPY', style: TextStyle(color: kGreen)),
+          ),
+          TextButton(
+            onPressed: () => Navigator.pop(c),
+            child: const Text('CLOSE', style: TextStyle(color: Colors.white54)),
+          ),
+        ],
+      ),
+    );
+  }
+
+  void _showBotsDialog(BuildContext context) {
+    showModalBottomSheet(
+      context: context,
+      backgroundColor: const Color(0xFF021206),
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
+      ),
+      builder: (c) => Padding(
+        padding: const EdgeInsets.all(20),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            const Row(
+              children: [
+                Icon(Icons.smart_toy, color: kGreen, size: 24),
+                SizedBox(width: 10),
+                Text(
+                  'MAYAJAAL BOTS',
+                  style: TextStyle(
+                    color: kGreen,
+                    fontSize: 16,
+                    fontWeight: FontWeight.bold,
+                    letterSpacing: 1.5,
+                  ),
+                ),
+              ],
+            ),
+            const SizedBox(height: 6),
+            Text(
+              'Choose a bot to start earning',
+              style: TextStyle(color: Colors.white.withOpacity(0.6), fontSize: 11),
+            ),
+            const SizedBox(height: 18),
+            _botCard(
+              context,
+              icon: Icons.upload_rounded,
+              color: kNeonCyan,
+              title: 'Upload Bot',
+              subtitle: 'Upload videos & get your own link',
+              url: 'https://t.me/Mayajaalfilebot',
+            ),
+            const SizedBox(height: 12),
+            _botCard(
+              context,
+              icon: Icons.link_rounded,
+              color: kNeonPurple,
+              title: 'Converter Bot',
+              subtitle: 'Convert links & earn from sharing',
+              url: 'https://t.me/MayaJaalBulkConverterbot',
+            ),
+            const SizedBox(height: 20),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _botCard(
+    BuildContext context, {
+    required IconData icon,
+    required Color color,
+    required String title,
+    required String subtitle,
+    required String url,
+  }) {
+    return InkWell(
+      onTap: () {
+        Haptic.medium();
+        Navigator.pop(context);
+        _launchURL(url);
+      },
+      borderRadius: BorderRadius.circular(14),
+      child: Container(
+        padding: const EdgeInsets.all(14),
+        decoration: BoxDecoration(
+          color: kCardBg,
+          borderRadius: BorderRadius.circular(14),
+          border: Border.all(color: color.withOpacity(0.5)),
+          boxShadow: [BoxShadow(color: color.withOpacity(0.1), blurRadius: 10)],
+        ),
+        child: Row(
+          children: [
+            Container(
+              width: 46,
+              height: 46,
+              decoration: BoxDecoration(
+                color: Colors.black,
+                borderRadius: BorderRadius.circular(12),
+                border: Border.all(color: color, width: 1.5),
+                boxShadow: [
+                  BoxShadow(color: color.withOpacity(0.5), blurRadius: 12),
+                ],
+              ),
+              child: Icon(icon, color: color, size: 24),
+            ),
+            const SizedBox(width: 12),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    title,
+                    style: const TextStyle(
+                      color: Colors.white,
+                      fontSize: 14,
+                      fontWeight: FontWeight.bold,
+                    ),
+                  ),
+                  const SizedBox(height: 3),
+                  Text(
+                    subtitle,
+                    style: TextStyle(
+                      color: Colors.white.withOpacity(0.6),
+                      fontSize: 10.5,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+            Icon(Icons.arrow_forward_ios, color: color, size: 14),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _staggered({required int index, required Widget child}) {
+    final start = (index * 0.06).clamp(0.0, 0.6);
+    return AnimatedBuilder(
+      animation: _slideController,
+      builder: (c, _) {
+        final raw = (_slideController.value - start) / (1 - start);
+        final v = raw.clamp(0.0, 1.0);
+        final curve = Curves.easeOutCubic.transform(v);
+        return Opacity(
+          opacity: curve,
+          child: Transform.translate(
+            offset: Offset(-20 * (1 - curve), 0),
+            child: child,
+          ),
+        );
+      },
+    );
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final user = FirebaseAuth.instance.currentUser;
+
+    return Drawer(
+      backgroundColor: Colors.black,
+      child: SafeArea(
+        child: Column(
+          children: [
+            Container(
+              padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 14),
+              decoration: BoxDecoration(
+                color: const Color(0xFF011206),
+                border: Border(
+                  bottom: BorderSide(
+                    color: kGreen.withOpacity(0.4),
+                    width: 1.2,
+                  ),
+                ),
+              ),
+              child: Row(
+                children: [
+                  Container(
+                    width: 42,
+                    height: 42,
+                    decoration: BoxDecoration(
+                      color: Colors.black,
+                      borderRadius: BorderRadius.circular(12),
+                      border: Border.all(color: kGreen, width: 1.5),
+                      boxShadow: [
+                        BoxShadow(
+                          color: kGreen.withOpacity(0.5),
+                          blurRadius: 12,
+                        ),
+                      ],
+                    ),
+                    child: ClipRRect(
+                      borderRadius: BorderRadius.circular(10),
+                      child: Image.asset(
+                        'assets/icon/logo.png',
+                        fit: BoxFit.cover,
+                        errorBuilder: (c, e, s) => const Icon(
+                          Icons.change_history,
+                          color: kGreen,
+                          size: 22,
+                        ),
+                      ),
+                    ),
+                  ),
+                  const SizedBox(width: 10),
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        Row(
+                          children: const [
+                            Text(
+                              'Maya',
+                              style: TextStyle(
+                                color: Colors.white,
+                                fontSize: 20,
+                                fontWeight: FontWeight.w900,
+                                letterSpacing: 1,
+                              ),
+                            ),
+                            Text(
+                              'Jaal',
+                              style: TextStyle(
+                                color: kGreen,
+                                fontSize: 20,
+                                fontWeight: FontWeight.w900,
+                                letterSpacing: 1,
+                                shadows: [Shadow(color: kGreen, blurRadius: 10)],
+                              ),
+                            ),
+                          ],
+                        ),
+                        Text(
+                          'MORE OPTIONS',
+                          style: TextStyle(
+                            color: kGreen.withOpacity(0.7),
+                            fontSize: 8.5,
+                            letterSpacing: 2,
+                            fontWeight: FontWeight.bold,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                  IconButton(
+                    icon: const Icon(Icons.close, color: kGreen, size: 22),
+                    onPressed: () {
+                      Haptic.light();
+                      Navigator.pop(context);
+                    },
+                  ),
+                ],
+              ),
+            ),
+            Expanded(
+              child: ListView(
+                padding: const EdgeInsets.symmetric(vertical: 8),
+                children: [
+                  _staggered(index: 0, child: _LivePulseCard()),
+                  _staggered(
+                    index: 1,
+                    child: Container(
+                      margin: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+                      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+                      decoration: BoxDecoration(
+                        color: kCardBg,
+                        borderRadius: BorderRadius.circular(12),
+                        border: Border.all(color: kGreen.withOpacity(0.4)),
+                      ),
+                      child: Row(
+                        children: [
+                          Container(
+                            width: 38,
+                            height: 38,
+                            decoration: BoxDecoration(
+                              shape: BoxShape.circle,
+                              border: Border.all(color: kGreen, width: 1.5),
+                            ),
+                            child: user?.photoURL != null
+                                ? ClipOval(
+                                    child: Image.network(
+                                      user!.photoURL!,
+                                      fit: BoxFit.cover,
+                                      errorBuilder: (c, e, s) => const Icon(
+                                        Icons.person,
+                                        color: kGreen,
+                                        size: 22,
+                                      ),
+                                    ),
+                                  )
+                                : const Icon(Icons.person, color: kGreen, size: 22),
+                          ),
+                          const SizedBox(width: 10),
+                          Expanded(
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                Text(
+                                  user?.displayName ?? user?.email ?? 'User',
+                                  style: const TextStyle(
+                                    color: kGreen,
+                                    fontSize: 12,
+                                    fontWeight: FontWeight.bold,
+                                  ),
+                                  overflow: TextOverflow.ellipsis,
+                                ),
+                                const SizedBox(height: 2),
+                                Row(
+                                  children: [
+                                    Icon(
+                                      Icons.verified,
+                                      color: kGreen.withOpacity(0.7),
+                                      size: 10,
+                                    ),
+                                    const SizedBox(width: 3),
+                                    Text(
+                                      'MayaJaal Verified',
+                                      style: TextStyle(
+                                        color: kGreen.withOpacity(0.7),
+                                        fontSize: 9,
+                                      ),
+                                    ),
+                                  ],
+                                ),
+                              ],
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ),
+                  _staggered(
+                    index: 2,
+                    child: _snakeItem(
+                      context,
+                      icon: Icons.account_balance_wallet,
+                      color: kGold,
+                      title: 'Earnings Dashboard',
+                      subtitle: 'View your earnings and links',
+                      onTap: () {
+                        Haptic.medium();
+                        Navigator.pop(context);
+                        Navigator.push(
+                          context,
+                          MaterialPageRoute(builder: (_) => const EarningsScreen()),
+                        );
+                      },
+                    ),
+                  ),
+                  _staggered(
+                    index: 3,
+                    child: _snakeItem(
+                      context,
+                      icon: Icons.account_balance,
+                      color: kGreen,
+                      title: 'Withdraw Earnings',
+                      subtitle: 'Minimum \$5 · Bank / UPI',
+                      onTap: () {
+                        Haptic.medium();
+                        Navigator.pop(context);
+                        Navigator.push(
+                          context,
+                          MaterialPageRoute(builder: (_) => const WithdrawScreen()),
+                        );
+                      },
+                    ),
+                  ),
+                  _staggered(
+                    index: 4,
+                    child: _snakeItem(
+                      context,
+                      icon: Icons.bookmark,
+                      color: kNeonCyan,
+                      title: 'Saved Videos',
+                      subtitle: 'Your bookmarked videos',
+                      onTap: () {
+                        Haptic.medium();
+                        Navigator.pop(context);
+                        Navigator.push(
+                          context,
+                          MaterialPageRoute(builder: (_) => const SavedVideosScreen()),
+                        );
+                      },
+                    ),
+                  ),
+                  _staggered(
+                    index: 5,
+                    child: _snakeItem(
+                      context,
+                      icon: Icons.vpn_key,
+                      color: kNeonPurple,
+                      title: 'My API Key',
+                      subtitle: 'View & copy for bot',
+                      onTap: () {
+                        Haptic.medium();
+                        Navigator.pop(context);
+                        _showApiKeyDialog(context);
+                      },
+                    ),
+                  ),
+                  _staggered(
+                    index: 6,
+                    child: _snakeItem(
+                      context,
+                      icon: Icons.smart_toy,
+                      color: Colors.amberAccent,
+                      title: 'MayaJaal Bots',
+                      subtitle: 'Upload & Converter bots',
+                      onTap: () {
+                        Haptic.medium();
+                        Navigator.pop(context);
+                        _showBotsDialog(context);
+                      },
+                    ),
+                  ),
+                  _staggered(
+                    index: 7,
+                    child: _snakeItem(
+                      context,
+                      icon: Icons.share,
+                      color: kNeonCyan,
+                      title: 'Share MayaJaal App',
+                      subtitle: 'Invite your friends & earn referral',
+                      onTap: () {
+                        Navigator.pop(context);
+                        _shareApp();
+                      },
+                    ),
+                  ),
+                  _staggered(
+                    index: 8,
+                    child: _snakeItem(
+                      context,
+                      icon: Icons.settings,
+                      color: kGreen,
+                      title: 'App Settings',
+                      subtitle: 'Customize your experience',
+                      onTap: () {
+                        Haptic.medium();
+                        Navigator.pop(context);
+                        Navigator.push(
+                          context,
+                          MaterialPageRoute(builder: (_) => const SettingsScreen()),
+                        );
+                      },
+                    ),
+                  ),
+                  _staggered(
+                    index: 9,
+                    child: Padding(
+                      padding: const EdgeInsets.only(left: 16, top: 18, bottom: 8),
+                      child: Row(
+                        children: [
+                          Container(width: 14, height: 1.5, color: kGreen),
+                          const SizedBox(width: 6),
+                          const Text(
+                            'JOIN US',
+                            style: TextStyle(
+                              color: kGreen,
+                              fontSize: 11,
+                              fontWeight: FontWeight.bold,
+                              letterSpacing: 2,
+                            ),
+                          ),
+                          const SizedBox(width: 6),
+                          Expanded(
+                            child: Container(height: 1, color: kGreen.withOpacity(0.3)),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ),
+                  _staggered(
+                    index: 10,
+                    child: _socialItem(
+                      context,
+                      imageUrl:
+                          'https://upload.wikimedia.org/wikipedia/commons/thumb/e/e7/Instagram_logo_2016.svg/240px-Instagram_logo_2016.svg.png',
+                      fallbackIcon: Icons.camera_alt,
+                      color: const Color(0xFFE1306C),
+                      title: 'Instagram Official',
+                      subtitle: '@maya_jaal_official',
+                      onTap: () {
+                        Navigator.pop(context);
+                        _launchURL('https://www.instagram.com/maya_jaal_official');
+                      },
+                    ),
+                  ),
+                  _staggered(
+                    index: 11,
+                    child: _socialItem(
+                      context,
+                      imageUrl:
+                          'https://upload.wikimedia.org/wikipedia/commons/thumb/0/09/YouTube_full-color_icon_%282017%29.svg/240px-YouTube_full-color_icon_%282017%29.svg.png',
+                      fallbackIcon: Icons.play_circle_fill,
+                      color: Colors.redAccent,
+                      title: 'YouTube Channel',
+                      subtitle: '@MayaJaalOfficial00',
+                      onTap: () {
+                        Navigator.pop(context);
+                        _launchURL('https://www.youtube.com/@MayaJaalOfficial00');
+                      },
+                    ),
+                  ),
+                  _staggered(
+                    index: 12,
+                    child: _socialItem(
+                      context,
+                      imageUrl:
+                          'https://upload.wikimedia.org/wikipedia/commons/thumb/8/82/Telegram_logo.svg/240px-Telegram_logo.svg.png',
+                      fallbackIcon: Icons.send_rounded,
+                      color: const Color(0xFF229ED9),
+                      title: 'Telegram Channel',
+                      subtitle: '@MayaJaalOfficial',
+                      onTap: () {
+                        Navigator.pop(context);
+                        _launchURL('https://t.me/MayaJaalOfficial');
+                      },
+                    ),
+                  ),
+                  _staggered(
+                    index: 13,
+                    child: Padding(
+                      padding: const EdgeInsets.only(left: 16, top: 18, bottom: 8),
+                      child: Row(
+                        children: [
+                          Container(width: 14, height: 1.5, color: kNeonCyan),
+                          const SizedBox(width: 6),
+                          const Text(
+                            'INFORMATION & LEGAL',
+                            style: TextStyle(
+                              color: kNeonCyan,
+                              fontSize: 11,
+                              fontWeight: FontWeight.bold,
+                              letterSpacing: 2,
+                            ),
+                          ),
+                          const SizedBox(width: 6),
+                          Expanded(
+                            child: Container(height: 1, color: kNeonCyan.withOpacity(0.3)),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ),
+                  _staggered(
+                    index: 14,
+                    child: _snakeItem(
+                      context,
+                      icon: Icons.dashboard,
+                      color: kNeonCyan,
+                      title: 'Web Dashboard',
+                      subtitle: 'Open www.mayajaal.online/dashboard',
+                      onTap: () {
+                        Navigator.pop(context);
+                        _launchURL('https://www.mayajaal.online/dashboard', inApp: false);
+                      },
+                    ),
+                  ),
+                  _staggered(
+                    index: 15,
+                    child: _snakeItem(
+                      context,
+                      icon: Icons.privacy_tip_outlined,
+                      color: kDimGreen,
+                      title: 'Privacy Policy',
+                      subtitle: 'Data protection & identifiers',
+                      onTap: () {
+                        Navigator.pop(context);
+                        LegalPolicyDialog.showPolicy(context, 'privacy');
+                      },
+                    ),
+                  ),
+                  _staggered(
+                    index: 16,
+                    child: _snakeItem(
+                      context,
+                      icon: Icons.description_outlined,
+                      color: kDimGreen,
+                      title: 'Terms & Conditions',
+                      subtitle: 'Operating rules & user agreement',
+                      onTap: () {
+                        Navigator.pop(context);
+                        LegalPolicyDialog.showPolicy(context, 'terms');
+                      },
+                    ),
+                  ),
+                  _staggered(
+                    index: 17,
+                    child: _snakeItem(
+                      context,
+                      icon: Icons.copyright_outlined,
+                      color: const Color(0xFFFB7185),
+                      title: 'DMCA Policy',
+                      subtitle: '17 U.S.C. § 512 Notice',
+                      onTap: () {
+                        Navigator.pop(context);
+                        LegalPolicyDialog.showPolicy(context, 'dmca');
+                      },
+                    ),
+                  ),
+                  _staggered(
+                    index: 18,
+                    child: _snakeItem(
+                      context,
+                      icon: Icons.handshake_outlined,
+                      color: kNeonCyan,
+                      title: 'Partner Agreement',
+                      subtitle: 'Monetization & dynamic CPM',
+                      onTap: () {
+                        Navigator.pop(context);
+                        LegalPolicyDialog.showPolicy(context, 'partner');
+                      },
+                    ),
+                  ),
+                  _staggered(
+                    index: 19,
+                    child: _snakeItem(
+                      context,
+                      icon: Icons.support_agent_outlined,
+                      color: Colors.amberAccent,
+                      title: 'Help & Support',
+                      subtitle: '24/7 Creator Operations Desk',
+                      onTap: () {
+                        Navigator.pop(context);
+                        LegalPolicyDialog.showPolicy(context, 'support');
+                      },
+                    ),
+                  ),
+                  _staggered(
+                    index: 20,
+                    child: _snakeItem(
+                      context,
+                      icon: Icons.info_outline,
+                      color: kNeonCyan,
+                      title: 'About MayaJaal',
+                      subtitle: 'Version & info',
+                      onTap: () {
+                        Haptic.medium();
+                        Navigator.pop(context);
+                        _showAboutDialog(context);
+                      },
+                    ),
+                  ),
+                  _staggered(
+                    index: 21,
+                    child: Padding(
+                      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 16),
+                      child: Container(
+                        decoration: BoxDecoration(
+                          color: Colors.red.withOpacity(0.08),
+                          borderRadius: BorderRadius.circular(12),
+                          border: Border.all(color: Colors.redAccent.withOpacity(0.4)),
+                        ),
+                        child: ListTile(
+                          leading: const Icon(Icons.logout, color: Colors.redAccent),
+                          title: const Text(
+                            'Logout Session',
+                            style: TextStyle(
+                              color: Colors.redAccent,
+                              fontWeight: FontWeight.bold,
+                              fontSize: 13,
+                            ),
+                          ),
+                          onTap: () {
+                            Navigator.pop(context);
+                            _logout(context);
+                          },
+                        ),
+                      ),
+                    ),
+                  ),
+                  const SizedBox(height: 10),
+                  AdWebView(script: adScript5, height: 100),
+                  const SizedBox(height: 20),
+                ],
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _snakeItem(
+    BuildContext context, {
+    required IconData icon,
+    required Color color,
+    required String title,
+    required String subtitle,
+    required VoidCallback onTap,
+  }) {
+    return Padding(
+      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
+      child: AnimatedBuilder(
+        animation: _snakeController,
+        builder: (c, _) {
+          return Stack(
+            children: [
+              ListTile(
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(10),
+                ),
+                leading: Container(
+                  width: 38,
+                  height: 38,
+                  decoration: BoxDecoration(
+                    color: Colors.black,
+                    borderRadius: BorderRadius.circular(10),
+                    border: Border.all(color: color.withOpacity(0.5)),
+                  ),
+                  child: Icon(icon, color: color, size: 20),
+                ),
+                title: Text(
+                  title,
+                  style: const TextStyle(
+                    color: Colors.white,
+                    fontSize: 13,
+                    fontWeight: FontWeight.bold,
+                  ),
+                ),
+                subtitle: Text(
+                  subtitle,
+                  style: TextStyle(
+                    color: Colors.white.withOpacity(0.5),
+                    fontSize: 10.5,
+                  ),
+                ),
+                trailing: Icon(
+                  Icons.arrow_forward_ios,
+                  color: color,
+                  size: 14,
+                ),
+                onTap: onTap,
+              ),
+              Positioned.fill(
+                child: IgnorePointer(
+                  child: ClipRRect(
+                    borderRadius: BorderRadius.circular(10),
+                    child: CustomPaint(
+                      painter: SnakeBorderPainter(
+                        progress: _snakeController.value,
+                        color: color,
+                      ),
+                    ),
+                  ),
+                ),
+              ),
+            ],
+          );
+        },
+      ),
+    );
+  }
+
+  Widget _socialItem(
+    BuildContext context, {
+    required String imageUrl,
+    required IconData fallbackIcon,
+    required Color color,
+    required String title,
+    required String subtitle,
+    required VoidCallback onTap,
+  }) {
+    return Padding(
+      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
+      child: ListTile(
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+        leading: Container(
+          width: 38,
+          height: 38,
+          decoration: BoxDecoration(
+            color: Colors.white,
+            borderRadius: BorderRadius.circular(10),
+            border: Border.all(color: color.withOpacity(0.7), width: 1.2),
+          ),
+          padding: const EdgeInsets.all(5),
+          child: Image.network(
+            imageUrl,
+            fit: BoxFit.contain,
+            errorBuilder: (c, e, s) => Icon(fallbackIcon, color: color, size: 22),
+          ),
+        ),
+        title: Text(
+          title,
+          style: const TextStyle(
+            color: Colors.white,
+            fontSize: 13,
+            fontWeight: FontWeight.bold,
+          ),
+        ),
+        subtitle: Text(
+          subtitle,
+          style: TextStyle(
+            color: Colors.white.withOpacity(0.5),
+            fontSize: 10.5,
+          ),
+        ),
+        trailing: Icon(Icons.arrow_forward_ios, color: color, size: 14),
+        onTap: onTap,
+      ),
+    );
+  }
+}
+
+// ═══════════════════════════════════════════════════════
+// LIVE PULSE CARD
+// ═══════════════════════════════════════════════════════
+class _LivePulseCard extends StatefulWidget {
+  @override
+  State<_LivePulseCard> createState() => _LivePulseCardState();
+}
+
+class _LivePulseCardState extends State<_LivePulseCard>
+    with SingleTickerProviderStateMixin {
+  late AnimationController _blink;
+  double _currentEarning = 0;
+  double _prevEarning = 0;
+  bool _hasData = false;
+
+  @override
+  void initState() {
+    super.initState();
+    _blink = AnimationController(
+      vsync: this,
+      duration: const Duration(milliseconds: 1000),
+    )..repeat(reverse: true);
+  }
+
+  @override
+  void dispose() {
+    _blink.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    if (MayaJaalAccount.cachedUid == null) return const SizedBox.shrink();
+
+    return StreamBuilder<Map<String, dynamic>>(
+      stream: MayaJaalAccount.getDashboardStream(),
+      builder: (context, snapshot) {
+        final data = snapshot.data ?? {};
+        final totalViews = (data['totalViews'] ?? 0) as int;
+        final earning = MayaJaalAccount.calcEarnings(totalViews);
+        if (earning != _currentEarning) {
+          _prevEarning = _currentEarning;
+          _currentEarning = earning;
+          _hasData = true;
+        }
+        final up = _currentEarning >= _prevEarning;
+
+        return Container(
+          margin: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+          decoration: BoxDecoration(
+            gradient: LinearGradient(
+              colors: [kGreen.withOpacity(0.12), Colors.black],
+              begin: Alignment.topLeft,
+              end: Alignment.bottomRight,
+            ),
+            borderRadius: BorderRadius.circular(12),
+            border: Border.all(color: kGreen.withOpacity(0.5), width: 1.2),
+            boxShadow: [BoxShadow(color: kGreen.withOpacity(0.15), blurRadius: 12)],
+          ),
+          child: Row(
+            children: [
+              AnimatedBuilder(
+                animation: _blink,
+                builder: (c, _) => Container(
+                  width: 10,
+                  height: 10,
+                  decoration: BoxDecoration(
+                    shape: BoxShape.circle,
+                    color: kGreen,
+                    boxShadow: [
+                      BoxShadow(
+                        color: kGreen.withOpacity(0.7 * _blink.value),
+                        blurRadius: 12,
+                        spreadRadius: 2,
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+              const SizedBox(width: 10),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      'LIVE PULSE',
+                      style: TextStyle(
+                        color: kGreen.withOpacity(0.8),
+                        fontSize: 9,
+                        fontWeight: FontWeight.bold,
+                        letterSpacing: 2,
+                      ),
+                    ),
+                    const SizedBox(height: 2),
+                    Text(
+                      _hasData ? '\$${_currentEarning.toStringAsFixed(2)}' : '—',
+                      style: const TextStyle(
+                        color: kGreen,
+                        fontSize: 18,
+                        fontWeight: FontWeight.w900,
+                        shadows: [Shadow(color: kGreen, blurRadius: 10)],
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+              if (_hasData)
+                Icon(
+                  up ? Icons.trending_up : Icons.trending_down,
+                  color: up ? kGreen : Colors.orangeAccent,
+                  size: 22,
+                ),
+            ],
+          ),
+        );
+      },
+    );
+  }
+}
+
+// ═══════════════════════════════════════════════════════
+// SNAKE BORDER PAINTER
+// ═══════════════════════════════════════════════════════
+class SnakeBorderPainter extends CustomPainter {
+  final double progress;
+  final Color color;
+
+  SnakeBorderPainter({required this.progress, required this.color});
+
+  @override
+  void paint(Canvas canvas, Size size) {
+    final rect = Rect.fromLTWH(0, 0, size.width, size.height);
+    final rrect = RRect.fromRectAndRadius(rect, const Radius.circular(10));
+
+    final path = Path()..addRRect(rrect);
+    final metrics = path.computeMetrics().first;
+    final totalLength = metrics.length;
+
+    final snakeLength = totalLength * 0.25;
+    final startPos = (progress * totalLength) % totalLength;
+    final endPos = startPos + snakeLength;
+
+    final extractPath = Path();
+    if (endPos <= totalLength) {
+      extractPath.addPath(
+        metrics.extractPath(startPos, endPos),
+        Offset.zero,
+      );
+    } else {
+      extractPath.addPath(
+        metrics.extractPath(startPos, totalLength),
+        Offset.zero,
+      );
+      extractPath.addPath(
+        metrics.extractPath(0, endPos - totalLength),
+        Offset.zero,
+      );
+    }
+
+    final paint = Paint()
+      ..color = color
+      ..style = PaintingStyle.stroke
+      ..strokeWidth = 2
+      ..strokeCap = StrokeCap.round
+      ..maskFilter = const MaskFilter.blur(BlurStyle.normal, 4);
+
+    canvas.drawPath(extractPath, paint);
+
+    final corePaint = Paint()
+      ..color = Colors.white.withOpacity(0.9)
+      ..style = PaintingStyle.stroke
+      ..strokeWidth = 1.2
+      ..strokeCap = StrokeCap.round;
+
+    canvas.drawPath(extractPath, corePaint);
+  }
+
+  @override
+  bool shouldRepaint(covariant SnakeBorderPainter oldDelegate) {
+    return oldDelegate.progress != progress || oldDelegate.color != color;
   }
 }
 
