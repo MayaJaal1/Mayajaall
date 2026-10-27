@@ -61,18 +61,19 @@ final ValueNotifier<String> languageNotifier = ValueNotifier('English');
 final GlobalKey<NavigatorState> navigatorKey = GlobalKey<NavigatorState>();
 
 // ═══════════════════════════════════════════════════════
-// AD NETWORK SCRIPTS & DIRECT LINKS CONFIG
+// AD NETWORK SCRIPTS & DIRECT LINKS CONFIG (UPDATED)
 // ═══════════════════════════════════════════════════════
-const String kAdDirectUrl = 'https://infamous-maximum.com/dmm.FAz/dKG/NZv/ZdGwUm/reymt9PuhZNUulHkyPATIcN1oNST/UMxTNdj/kOtpNzz_UL1CN/TSEX3eMywF';
+const String kAdDirectUrl = 'https://infamous-maximum.com/dymFFDzNd.GHNxvTZmGfUa/EeJmu9MueZPUZlPkXP_TUc/1/NsTNUOxgNJjqkit/N/zkU/1ONSTgEb3mMGwj';
 
 const List<String> kAdScriptUrls = [
-  'https://dishoneststyle.com/bdX.Vhsyd/G/l/0XYTWicg/segmS9uuIZ/UWlxkZPJT/cf1bNIT/UNymNTz-MIt/NJzCUY1yNTTTIw3oNwwn',
-  'https://dishoneststyle.com/b.XxV/s-dqG-lX0MYtWycC/UexmY9cuCZAUJlGkPPKTbck1/NYTEUM1/MHj/kIteNrzaUc1ZNFTEUxz/Mxwb',
-  'https://dishoneststyle.com/bPXLVWs.d-G/lV0aYKWNcN/LeSmm9VuDZtUhlMkdPQTLcY1DN/TjUC1/NpDkUKtjNhzxUf1JN-TPUU0wOUQY',
-  'https://dishoneststyle.com/bgXnV.sldDG_lG0vY/WVcc/Aehmg9ou/ZuUElnk/PjTlci1pN/TEUO1fN/jWE/t/N/zZU-1/NLT/UN2uNdQp',
-  'https://dishoneststyle.com/b.XAVhsZdaGXlA0/Y_WYcf/we/mL9Ru/Z/Ual/kFPUTicK1ANNTpUs1ENmzOcqtSNZzCUj1iNGT/Uf4dMOQe',
-  'https://dishoneststyle.com/bdXjV.sQdQGjlO0sYOW-cg/neDmb9CuqZFUVlSk/P/Tpc_1zNgTJUT1rO/Dek/tGNvzYUK1wNJTUUO5HMwwH',
-  'https://dishoneststyle.com/bCXCV.suduG/lH0uYmWqch/leMma9OulZDUzlNk/P_TUcS1uNgTZU/2jMbj/Uot/N/zfUy1/NuTLYiyYOZQs',
+  'https://dishoneststyle.com/b-XrV.sQdMG/lD0uYGW_cc/ueUmM9gu_ZaUalukUPOTpcx1cNCT/Ux2vMTj/U/tPNfzxUv1HNfTIYOyYOxQI',
+  'https://dishoneststyle.com/bAX/V.s/dSGcla0yYjWbcZ/reEm/9xumZBUSlnkLPMT/cq1mNkT-Uu2yMxDwU/tcNRzLUW1HNZTOYqwoOLQP',
+  'https://dishoneststyle.com/b.X-VWsMdHGOlx0hYZWHct/JeEmh9wuzZxUclWkgPCTOc/1aN_TwUI1TO_DAkVtVNDzxUz1rNxToUz5vM/wW',
+  'https://dishoneststyle.com/b.XPVYsfdpG/l/0RYKWucs/xeWmQ9eufZ/U/lDk_PWTncX1cNrTVUv1/NSzXcttXNqz/Ux1_NXTTUp4/MPQH',
+  'https://dishoneststyle.com/b.XwVisXdhGhl/0tYlWxcw/XeVmK9VuYZuUtlSk/PTTFcx1_NbTOUT1ONnjEEwthNSzPU-1dNQTKUD2dNlQx',
+  'https://dishoneststyle.com/bsXSVXs.diGgl/0-YaWgcY/bepm/9/uUZNUelxktP/T/ce1iNaTdUR1/NZDRUetFN/z-UK1RNSTMU/0VOfQd',
+  'https://dishoneststyle.com/b.XQVWsrdGGSlP0/YLWWca/FeSmo9Vu/ZJUnlDkZPBTecH1ENKTIUc1KMbjxkqt_NYzvUL1aNxTLU-zuMDwV',
+  'https://dishoneststyle.com/bKX.V/sZdbGSlA0iYIWwcf/ae/m/9MuvZXUllskWP/Tvce1SNaTnUkysNUz/M-twNqzBUx1BNXTwIB3DNTwr',
 ];
 
 // ═══════════════════════════════════════════════════════
@@ -5921,10 +5922,11 @@ class _StreamPreviewScreenState extends State<StreamPreviewScreen>
 }
 // ═══════════════════════════════════════════════════════
 // MAYAJAAL APP — FULL PRODUCTION CODE (PART 6 OF 6)
+// UPDATED: Video ad at start + new banners + related thumb fix
 // ═══════════════════════════════════════════════════════
 
 // ═══════════════════════════════════════════════════════
-// CHANNEL SCREEN
+// CHANNEL SCREEN (UNCHANGED)
 // ═══════════════════════════════════════════════════════
 class ChannelScreen extends StatelessWidget {
   const ChannelScreen({super.key});
@@ -6003,7 +6005,7 @@ class ChannelScreen extends StatelessWidget {
 }
 
 // ═══════════════════════════════════════════════════════
-// GALLERY SCREEN
+// GALLERY SCREEN (UNCHANGED)
 // ═══════════════════════════════════════════════════════
 class GalleryScreen extends StatefulWidget {
   const GalleryScreen({super.key});
@@ -6369,7 +6371,7 @@ class _GalleryScreenState extends State<GalleryScreen> {
 }
 
 // ═══════════════════════════════════════════════════════
-// SAVED VIDEOS SCREEN
+// SAVED VIDEOS SCREEN (UPDATED — TOP BANNER ADDED)
 // ═══════════════════════════════════════════════════════
 class SavedVideosScreen extends StatefulWidget {
   const SavedVideosScreen({super.key});
@@ -6422,79 +6424,96 @@ class _SavedVideosScreenState extends State<SavedVideosScreen> {
                 ],
               ),
             )
-          : ListView.builder(
-              padding: const EdgeInsets.all(16),
-              itemCount: _saved.length,
-              itemBuilder: (c, i) {
-                final item = _saved[i];
-                final thumb = item['thumbnail']?.toString() ?? '';
-                final title = item['title']?.toString() ?? 'Video';
-                final url = item['url']?.toString() ?? '';
-                final streamUrl = item['streamUrl']?.toString() ?? '';
-                
-                return Container(
-                  margin: const EdgeInsets.only(bottom: 12),
-                  decoration: BoxDecoration(
-                    color: kCardBg,
-                    borderRadius: BorderRadius.circular(10),
-                    border: Border.all(color: kGreen.withOpacity(0.3)),
-                  ),
-                  child: ListTile(
-                    leading: Container(
-                      width: 60,
-                      height: 60,
-                      decoration: BoxDecoration(
-                        color: Colors.black,
-                        borderRadius: BorderRadius.circular(8),
-                        border: Border.all(color: kGreen.withOpacity(0.5)),
-                      ),
-                      child: ClipRRect(
-                        borderRadius: BorderRadius.circular(7),
-                        child: buildMediaThumbnail(
-                          thumb,
-                          title,
-                          streamUrl.isNotEmpty ? streamUrl : url,
-                          isSmall: true,
-                          onFrameCaptured: (b64) async {
-                            await WatchHistory.saveThumbnail(url, b64);
-                            if (mounted) _loadSaved();
+          : Column(
+              children: [
+                // 🔥 NEW: Saved videos top banner ad
+                const Padding(
+                  padding: EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+                  child: RealWebAdBanner(scriptIndex: 4, slotName: 'saved-top'),
+                ),
+                Expanded(
+                  child: ListView.builder(
+                    padding: const EdgeInsets.fromLTRB(16, 4, 16, 16),
+                    itemCount: _saved.length,
+                    itemBuilder: (c, i) {
+                      final item = _saved[i];
+                      final thumb = item['thumbnail']?.toString() ?? '';
+                      final title = item['title']?.toString() ?? 'Video';
+                      final url = item['url']?.toString() ?? '';
+                      final streamUrl = item['streamUrl']?.toString() ?? '';
+                      final id = item['id']?.toString() ?? '';
+
+                      // ✅ Prefer cached streamUrl; else build /stream/:id endpoint
+                      final thumbStreamUrl = streamUrl.isNotEmpty
+                          ? streamUrl
+                          : (id.isNotEmpty ? '$kBackendBaseUrl/stream/$id' : url);
+
+                      return Container(
+                        margin: const EdgeInsets.only(bottom: 12),
+                        decoration: BoxDecoration(
+                          color: kCardBg,
+                          borderRadius: BorderRadius.circular(10),
+                          border: Border.all(color: kGreen.withOpacity(0.3)),
+                        ),
+                        child: ListTile(
+                          leading: Container(
+                            width: 60,
+                            height: 60,
+                            decoration: BoxDecoration(
+                              color: Colors.black,
+                              borderRadius: BorderRadius.circular(8),
+                              border: Border.all(color: kGreen.withOpacity(0.5)),
+                            ),
+                            child: ClipRRect(
+                              borderRadius: BorderRadius.circular(7),
+                              child: buildMediaThumbnail(
+                                thumb,
+                                title,
+                                thumbStreamUrl,
+                                isSmall: true,
+                                onFrameCaptured: (b64) async {
+                                  await WatchHistory.saveThumbnail(url, b64);
+                                  if (mounted) _loadSaved();
+                                },
+                              ),
+                            ),
+                          ),
+                          title: Text(
+                            title,
+                            style: const TextStyle(fontSize: 13, color: kGreen, fontWeight: FontWeight.bold),
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                          ),
+                          subtitle: Text(
+                            'By: ${item['uploader'] ?? 'Node'}',
+                            style: TextStyle(fontSize: 11, color: kDimGreen.withOpacity(0.8)),
+                          ),
+                          trailing: IconButton(
+                            icon: const Icon(Icons.delete, size: 18, color: Colors.redAccent),
+                            onPressed: () => _removeSaved(i),
+                          ),
+                          onTap: () {
+                            Haptic.light();
+                            Navigator.push(
+                              context,
+                              MaterialPageRoute(
+                                builder: (_) => StreamPreviewScreen(targetUrl: url),
+                              ),
+                            ).then((_) => _loadSaved());
                           },
                         ),
-                      ),
-                    ),
-                    title: Text(
-                      title,
-                      style: const TextStyle(fontSize: 13, color: kGreen, fontWeight: FontWeight.bold),
-                      maxLines: 1,
-                      overflow: TextOverflow.ellipsis,
-                    ),
-                    subtitle: Text(
-                      'By: ${item['uploader'] ?? 'Node'}',
-                      style: TextStyle(fontSize: 11, color: kDimGreen.withOpacity(0.8)),
-                    ),
-                    trailing: IconButton(
-                      icon: const Icon(Icons.delete, size: 18, color: Colors.redAccent),
-                      onPressed: () => _removeSaved(i),
-                    ),
-                    onTap: () {
-                      Haptic.light();
-                      Navigator.push(
-                        context,
-                        MaterialPageRoute(
-                          builder: (_) => StreamPreviewScreen(targetUrl: url),
-                        ),
-                      ).then((_) => _loadSaved());
+                      );
                     },
                   ),
-                );
-              },
+                ),
+              ],
             ),
     );
   }
 }
 
 // ═══════════════════════════════════════════════════════
-// HISTORY SCREEN
+// HISTORY SCREEN (UPDATED — TOP BANNER ADDED)
 // ═══════════════════════════════════════════════════════
 class HistoryScreen extends StatefulWidget {
   const HistoryScreen({super.key});
@@ -6595,88 +6614,105 @@ class _HistoryScreenState extends State<HistoryScreen> {
                 ],
               ),
             )
-          : ListView.builder(
-              padding: const EdgeInsets.all(16),
-              itemCount: _history.length,
-              itemBuilder: (c, i) {
-                final item = _history[i];
-                final thumb = item['thumbnail']?.toString() ?? '';
-                final title = item['title']?.toString() ?? 'Media Node';
-                final url = item['url']?.toString() ?? '';
-                final streamUrl = item['streamUrl']?.toString() ?? '';
-                
-                return Container(
-                  margin: const EdgeInsets.only(bottom: 12),
-                  decoration: BoxDecoration(
-                    color: kCardBg,
-                    borderRadius: BorderRadius.circular(10),
-                    border: Border.all(color: kGreen.withOpacity(0.3)),
-                  ),
-                  child: ListTile(
-                    leading: Container(
-                      width: 60,
-                      height: 60,
-                      decoration: BoxDecoration(
-                        color: Colors.black,
-                        borderRadius: BorderRadius.circular(8),
-                        border: Border.all(color: kGreen.withOpacity(0.5)),
-                      ),
-                      child: ClipRRect(
-                        borderRadius: BorderRadius.circular(7),
-                        child: buildMediaThumbnail(
-                          thumb,
-                          title,
-                          streamUrl.isNotEmpty ? streamUrl : url,
-                          isSmall: true,
-                          onFrameCaptured: (b64) async {
-                            await WatchHistory.saveThumbnail(url, b64);
-                            if (mounted) _loadHistory();
+          : Column(
+              children: [
+                // 🔥 NEW: History top banner ad
+                const Padding(
+                  padding: EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+                  child: RealWebAdBanner(scriptIndex: 5, slotName: 'history-top'),
+                ),
+                Expanded(
+                  child: ListView.builder(
+                    padding: const EdgeInsets.fromLTRB(16, 4, 16, 16),
+                    itemCount: _history.length,
+                    itemBuilder: (c, i) {
+                      final item = _history[i];
+                      final thumb = item['thumbnail']?.toString() ?? '';
+                      final title = item['title']?.toString() ?? 'Media Node';
+                      final url = item['url']?.toString() ?? '';
+                      final streamUrl = item['streamUrl']?.toString() ?? '';
+                      final id = item['id']?.toString() ?? '';
+
+                      // ✅ Prefer cached streamUrl; else build /stream/:id endpoint
+                      final thumbStreamUrl = streamUrl.isNotEmpty
+                          ? streamUrl
+                          : (id.isNotEmpty ? '$kBackendBaseUrl/stream/$id' : url);
+
+                      return Container(
+                        margin: const EdgeInsets.only(bottom: 12),
+                        decoration: BoxDecoration(
+                          color: kCardBg,
+                          borderRadius: BorderRadius.circular(10),
+                          border: Border.all(color: kGreen.withOpacity(0.3)),
+                        ),
+                        child: ListTile(
+                          leading: Container(
+                            width: 60,
+                            height: 60,
+                            decoration: BoxDecoration(
+                              color: Colors.black,
+                              borderRadius: BorderRadius.circular(8),
+                              border: Border.all(color: kGreen.withOpacity(0.5)),
+                            ),
+                            child: ClipRRect(
+                              borderRadius: BorderRadius.circular(7),
+                              child: buildMediaThumbnail(
+                                thumb,
+                                title,
+                                thumbStreamUrl,
+                                isSmall: true,
+                                onFrameCaptured: (b64) async {
+                                  await WatchHistory.saveThumbnail(url, b64);
+                                  if (mounted) _loadHistory();
+                                },
+                              ),
+                            ),
+                          ),
+                          title: Text(
+                            title,
+                            style: const TextStyle(fontSize: 13, color: kGreen, fontWeight: FontWeight.bold),
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                          ),
+                          subtitle: Text(
+                            'By: ${item['uploader'] ?? 'Node'}',
+                            style: TextStyle(fontSize: 11, color: kDimGreen.withOpacity(0.8)),
+                          ),
+                          trailing: Row(
+                            mainAxisSize: MainAxisSize.min,
+                            children: [
+                              IconButton(
+                                icon: const Icon(Icons.bookmark_add_outlined, size: 20, color: kNeonCyan),
+                                onPressed: () => _saveItem(item),
+                              ),
+                              IconButton(
+                                icon: const Icon(Icons.close, size: 18, color: Colors.redAccent),
+                                onPressed: () => _deleteItem(i),
+                              ),
+                            ],
+                          ),
+                          onTap: () {
+                            Haptic.light();
+                            Navigator.push(
+                              context,
+                              MaterialPageRoute(
+                                builder: (_) => StreamPreviewScreen(targetUrl: url),
+                              ),
+                            ).then((_) => _loadHistory());
                           },
                         ),
-                      ),
-                    ),
-                    title: Text(
-                      title,
-                      style: const TextStyle(fontSize: 13, color: kGreen, fontWeight: FontWeight.bold),
-                      maxLines: 1,
-                      overflow: TextOverflow.ellipsis,
-                    ),
-                    subtitle: Text(
-                      'By: ${item['uploader'] ?? 'Node'}',
-                      style: TextStyle(fontSize: 11, color: kDimGreen.withOpacity(0.8)),
-                    ),
-                    trailing: Row(
-                      mainAxisSize: MainAxisSize.min,
-                      children: [
-                        IconButton(
-                          icon: const Icon(Icons.bookmark_add_outlined, size: 20, color: kNeonCyan),
-                          onPressed: () => _saveItem(item),
-                        ),
-                        IconButton(
-                          icon: const Icon(Icons.close, size: 18, color: Colors.redAccent),
-                          onPressed: () => _deleteItem(i),
-                        ),
-                      ],
-                    ),
-                    onTap: () {
-                      Haptic.light();
-                      Navigator.push(
-                        context,
-                        MaterialPageRoute(
-                          builder: (_) => StreamPreviewScreen(targetUrl: url),
-                        ),
-                      ).then((_) => _loadHistory());
+                      );
                     },
                   ),
-                );
-              },
+                ),
+              ],
             ),
     );
   }
 }
 
 // ═══════════════════════════════════════════════════════
-// SETTINGS SCREEN
+// SETTINGS SCREEN (UNCHANGED)
 // ═══════════════════════════════════════════════════════
 class SettingsScreen extends StatefulWidget {
   const SettingsScreen({super.key});
@@ -6871,7 +6907,13 @@ class _SettingsScreenState extends State<SettingsScreen> {
 }
 
 // ═══════════════════════════════════════════════════════
-// NATIVE VIDEO PLAYER — FIXED STREAMING & TIMED REAL ADS
+// NATIVE VIDEO PLAYER — UPDATED
+// ✅ Video ad fires IMMEDIATELY at init
+// ✅ 15-min recurring ad still works
+// ✅ NEW: player-top banner + related-middle banner
+// ✅ FIXED: related video thumbnail uses /stream/:id endpoint
+//           (5-sec looping video, jaise 10-sec page par)
+// ✅ Related video ka naam (filename) properly shown
 // ═══════════════════════════════════════════════════════
 class NativeVideoPlayerScreen extends StatefulWidget {
   final String videoUrl;
@@ -6946,8 +6988,10 @@ class _NativeVideoPlayerScreenState extends State<NativeVideoPlayerScreen> {
   List<Map<String, dynamic>> _relatedVideos = [];
   bool _relatedLoading = true;
 
-  // 🔥 TIMED REAL VIDEO ADS (1 min first, then every 15 mins)
-  bool _firstMinAdShown = false;
+  // 🔥 Ad state:
+  // 1) First ad fires IMMEDIATELY at player init
+  // 2) Then recurring every 15 min (900s)
+  bool _firstAdShown = false;
   int _secondsSinceLastAd = 0;
 
   @override
@@ -7080,15 +7124,8 @@ class _NativeVideoPlayerScreenState extends State<NativeVideoPlayerScreen> {
           _reportViewToBackend();
         }
 
-        // 🔥 1 minute ad trigger
-        if (!_firstMinAdShown && _watchedSeconds >= 60) {
-          _firstMinAdShown = true;
-          _secondsSinceLastAd = 0;
-          _triggerVideoAd();
-        }
-
-        // 🔥 15 minute (900 seconds) recurring ad trigger
-        if (_firstMinAdShown && _secondsSinceLastAd >= 900) {
+        // 🔥 15-minute (900 seconds) recurring ad — first ad already fired at init
+        if (_firstAdShown && _secondsSinceLastAd >= 900) {
           _secondsSinceLastAd = 0;
           _triggerVideoAd();
         }
@@ -7164,7 +7201,7 @@ class _NativeVideoPlayerScreenState extends State<NativeVideoPlayerScreen> {
     } catch (_) {}
   }
 
-  // 🔥 ABSOLUTE FIX: Ensures direct /stream/:id endpoint is played cleanly
+  // 🔥 UPDATED: Video ad fires IMMEDIATELY on player init
   Future<void> _initVideo() async {
     final headers = {
       'User-Agent': 'Mozilla/5.0 (Linux; Android 10) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Mobile Safari/537.36',
@@ -7205,6 +7242,17 @@ class _NativeVideoPlayerScreenState extends State<NativeVideoPlayerScreen> {
       _resetControlTimer();
       _startWatchTracking();
       _captureThumbnail();
+
+      // 🔥 VIDEO AD AT START — fires immediately (once per player session)
+      if (!_firstAdShown) {
+        _firstAdShown = true;
+        _secondsSinceLastAd = 0;
+        WidgetsBinding.instance.addPostFrameCallback((_) async {
+          if (!mounted) return;
+          await Future.delayed(const Duration(milliseconds: 600));
+          if (mounted) _triggerVideoAd();
+        });
+      }
     } catch (e) {
       debugPrint('❌ Video Player Error: $e');
       setState(() => _hasError = true);
@@ -8054,6 +8102,10 @@ class _NativeVideoPlayerScreenState extends State<NativeVideoPlayerScreen> {
                   padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
                   child: Column(
                     children: [
+                      // 🔥 NEW: player-top banner ad (right after video area)
+                      const RealWebAdBanner(scriptIndex: 2, slotName: 'player-top'),
+                      const SizedBox(height: 8),
+
                       Container(
                         padding: const EdgeInsets.all(12),
                         decoration: BoxDecoration(color: const Color(0xFF031408), borderRadius: BorderRadius.circular(16), border: Border.all(color: kGreen.withOpacity(0.55))),
@@ -8157,11 +8209,11 @@ class _NativeVideoPlayerScreenState extends State<NativeVideoPlayerScreen> {
                       ),
                       const SizedBox(height: 12),
 
-                      // REAL AD BANNER: LIKE/DISLIKE KE THEEK NEECHE
+                      // REAL AD BANNER: like/dislike ke theek neeche
                       const RealWebAdBanner(scriptIndex: 5, slotName: 'player-below-controls'),
                       const SizedBox(height: 12),
 
-                      // REAL AD BANNER: RELATED VIDEOS KE UPAR
+                      // REAL AD BANNER: related videos ke upar
                       const RealWebAdBanner(scriptIndex: 6, slotName: 'player-above-related'),
                       const SizedBox(height: 12),
 
@@ -8173,6 +8225,11 @@ class _NativeVideoPlayerScreenState extends State<NativeVideoPlayerScreen> {
                         ],
                       ),
                       const SizedBox(height: 10),
+
+                      // 🔥 NEW: related-middle banner ad (between heading and list)
+                      const RealWebAdBanner(scriptIndex: 4, slotName: 'related-middle'),
+                      const SizedBox(height: 10),
+
                       _relatedLoading
                           ? const Center(child: Padding(padding: EdgeInsets.all(20), child: CircularProgressIndicator(color: kGreen, strokeWidth: 2)))
                           : _relatedVideos.isEmpty
@@ -8194,7 +8251,7 @@ class _NativeVideoPlayerScreenState extends State<NativeVideoPlayerScreen> {
                                 ),
                       const SizedBox(height: 12),
 
-                      // REAL AD BANNER: RELATED VIDEOS KE NEECHE
+                      // REAL AD BANNER: related videos ke neeche
                       const RealWebAdBanner(scriptIndex: 0, slotName: 'player-below-related'),
                       const SizedBox(height: 16),
                     ],
@@ -8208,13 +8265,17 @@ class _NativeVideoPlayerScreenState extends State<NativeVideoPlayerScreen> {
     );
   }
 
+  // 🔥 UPDATED: related card uses /stream/:id endpoint → 5-sec looping thumbnail
+  //    Same as the 10-sec page preview. Video name from `filename` shown.
   Widget _buildRelatedCard(Map<String, dynamic> v) {
     final id = v['id']?.toString() ?? '';
-    final title = (v['filename'] ?? v['originalUrl'] ?? 'Video').toString();
+    final title = (v['filename'] ?? v['title'] ?? v['originalUrl'] ?? 'Video').toString();
     final uploader = (v['uploader'] ?? '@mayajaal').toString();
     final views = (v['views'] ?? 0) as int;
     final thumb = v['thumbnail']?.toString() ?? '';
-    final streamUrl = (v['originalUrl'] ?? v['url'] ?? '').toString();
+
+    // ✅ Use direct /stream/:id endpoint so VideoLoopThumbnail plays 5-sec loop
+    final String streamUrl = id.isNotEmpty ? '$kBackendBaseUrl/stream/$id' : '';
 
     return Padding(
       padding: const EdgeInsets.only(right: 10),
@@ -8273,7 +8334,7 @@ class _NativeVideoPlayerScreenState extends State<NativeVideoPlayerScreen> {
 }
 
 // ═══════════════════════════════════════════════════════
-// WITHDRAW SCREEN
+// WITHDRAW SCREEN (UNCHANGED)
 // ═══════════════════════════════════════════════════════
 class WithdrawScreen extends StatefulWidget {
   const WithdrawScreen({super.key});
@@ -8515,7 +8576,7 @@ class _WithdrawScreenState extends State<WithdrawScreen> {
 }
 
 // ═══════════════════════════════════════════════════════
-// USER SEARCH DELEGATE
+// USER SEARCH DELEGATE (UNCHANGED)
 // ═══════════════════════════════════════════════════════
 class UserSearchDelegate extends SearchDelegate {
   @override
@@ -8617,7 +8678,7 @@ class UserSearchDelegate extends SearchDelegate {
 }
 
 // ═══════════════════════════════════════════════════════
-// USER PROFILE SCREEN
+// USER PROFILE SCREEN (UNCHANGED, but thumbnail stream fix also applied)
 // ═══════════════════════════════════════════════════════
 class UserProfileScreen extends StatefulWidget {
   final Map<String, dynamic> channelProfile;
@@ -8753,10 +8814,11 @@ class _UserProfileScreenState extends State<UserProfileScreen> {
                           itemBuilder: (context, i) {
                             final vid = _videos[i];
                             final id = vid['id']?.toString() ?? '';
-                            final name = vid['filename'] ?? 'Video';
+                            final name = (vid['filename'] ?? vid['title'] ?? 'Video').toString();
                             final views = vid['views'] ?? 0;
                             final thumb = vid['thumbnail']?.toString() ?? '';
-                            final streamUrl = (vid['originalUrl'] ?? vid['url'] ?? '').toString();
+                            // ✅ Use /stream/:id so 5-sec looping thumbnail plays
+                            final streamUrl = id.isNotEmpty ? '$kBackendBaseUrl/stream/$id' : '';
 
                             return Container(
                               margin: const EdgeInsets.only(bottom: 8),
@@ -8795,7 +8857,7 @@ class _UserProfileScreenState extends State<UserProfileScreen> {
 }
 
 // ═══════════════════════════════════════════════════════
-// EARNINGS SCREEN
+// EARNINGS SCREEN (UNCHANGED)
 // ═══════════════════════════════════════════════════════
 class EarningsScreen extends StatefulWidget {
   const EarningsScreen({super.key});
