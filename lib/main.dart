@@ -91,7 +91,7 @@ class SoundService {
 // ═══════════════════════════════════════════════════════════════════════════════
 // AD NETWORK CONFIG (ALL 9 SCRIPTS INTACT & VERIFIED)
 // ═══════════════════════════════════════════════════════════════════════════════
-const String kAdDirectUrl = 'https://thoroughgear.com/gvnfTI';[span_0](start_span)[span_0](end_span)
+const String kAdDirectUrl = 'https://thoroughgear.com/gvnfTI';
 
 const List<String> kAdHtmlScripts = [
   '''
@@ -105,8 +105,6 @@ const List<String> kAdHtmlScripts = [
   })(document);
   </script>
   </body></html>
-  ''',[span_1](start_span)[span_1](end_span)
-  '''
   <!DOCTYPE html><html><head><meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no"><style>body { margin: 0; padding: 0; display: flex; justify-content: center; align-items: center; background-color: transparent; overflow: hidden; }</style></head><body>
   <script>
   (function(ynnkjd){
@@ -119,8 +117,6 @@ const List<String> kAdHtmlScripts = [
   })({})
   </script>
   </body></html>
-  ''',[span_2](start_span)[span_2](end_span)
-  '''
   <!DOCTYPE html><html><head><meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no"><style>body { margin: 0; padding: 0; display: flex; justify-content: center; align-items: center; background-color: transparent; overflow: hidden; }</style></head><body>
   <script>
   (function(ynnkjd){
@@ -133,8 +129,6 @@ const List<String> kAdHtmlScripts = [
   })({})
   </script>
   </body></html>
-  ''',[span_3](start_span)[span_3](end_span)
-  '''
   <!DOCTYPE html><html><head><meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no"><style>body { margin: 0; padding: 0; display: flex; justify-content: center; align-items: center; background-color: transparent; overflow: hidden; }</style></head><body>
   <script>
   (function(ynnkjd){
@@ -147,8 +141,6 @@ const List<String> kAdHtmlScripts = [
   })({})
   </script>
   </body></html>
-  ''',[span_4](start_span)[span_4](end_span)
-  '''
   <!DOCTYPE html><html><head><meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no"><style>body { margin: 0; padding: 0; display: flex; justify-content: center; align-items: center; background-color: transparent; overflow: hidden; }</style></head><body>
   <script>
   (function(ynnkjd){
@@ -161,8 +153,6 @@ const List<String> kAdHtmlScripts = [
   })({})
   </script>
   </body></html>
-  ''',[span_5](start_span)[span_5](end_span)
-  '''
   <!DOCTYPE html><html><head><meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no"><style>body { margin: 0; padding: 0; display: flex; justify-content: center; align-items: center; background-color: transparent; overflow: hidden; }</style></head><body>
   <script>
   (function(ynnkjd){
@@ -175,8 +165,6 @@ const List<String> kAdHtmlScripts = [
   })({})
   </script>
   </body></html>
-  ''',[span_6](start_span)[span_6](end_span)
-  '''
   <!DOCTYPE html><html><head><meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no"><style>body { margin: 0; padding: 0; display: flex; justify-content: center; align-items: center; background-color: transparent; overflow: hidden; }</style></head><body>
   <script>
   (function(ynnkjd){
@@ -189,8 +177,6 @@ const List<String> kAdHtmlScripts = [
   })({})
   </script>
   </body></html>
-  ''',[span_7](start_span)[span_7](end_span)
-  '''
   <!DOCTYPE html><html><head><meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no"><style>body { margin: 0; padding: 0; display: flex; justify-content: center; align-items: center; background-color: transparent; overflow: hidden; }</style></head><body>
   <script>
   (function(ynnkjd){
@@ -203,8 +189,6 @@ const List<String> kAdHtmlScripts = [
   })({})
   </script>
   </body></html>
-  ''',[span_8](start_span)[span_8](end_span)
-  '''
   <!DOCTYPE html><html><head><meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no"><style>body { margin: 0; padding: 0; display: flex; justify-content: center; align-items: center; background-color: transparent; overflow: hidden; }</style></head><body>
   <script>
   (function(ynnkjd){
@@ -217,7 +201,6 @@ const List<String> kAdHtmlScripts = [
   })({})
   </script>
   </body></html>
-  ''[span_9](start_span)'[span_9](end_span)
 ];
 
 // ═══════════════════════════════════════════════════════════════════════════════
