@@ -234,38 +234,35 @@ class RealWebAdBanner extends StatefulWidget {
   State<RealWebAdBanner> createState() => _RealWebAdBannerState();
 }
 
-class _RealWebAdBannerState extends State<RealWebAdBanner> {  f
+class _RealWebAdBannerState extends State<RealWebAdBanner> {
   late final WebViewController _controller;
 
   @override
   void initState() {
     super.initState();
     final htmlCode = kAdHtmlScripts[widget.scriptIndex % kAdHtmlScripts.length];
-    
+
     _controller = WebViewController()
-  ..setJavaScriptMode(JavaScriptMode.unrestricted)
-  ..setDisplayWithHybridComposition(true)
-  ..setBackgroundColor(Colors.transparent)
-  // 🔥 1. User-Agent set karein (Ad networks WebView ko block karte hain, isse Chrome lagega)
-  ..setUserAgent("Mozilla/5.0 (Linux; Android 10; K) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Mobile Safari/537.36")
-  ..setNavigationDelegate(
-    NavigationDelegate(
-      onNavigationRequest: (NavigationRequest request) {
-        // 🔥 2. Ad ke internal links ko WebView mein rehne dein, sirf click par browser khole
-        if (request.url.startsWith('http') && 
-            !request.url.contains('about:blank') && 
-            !request.url.contains('dishoneststyle.com') && 
-            !request.url.contains('infamous-maximum.com') &&
-            !request.url.contains('mayajaal.online')) {
-          launchUrl(Uri.parse(request.url), mode: LaunchMode.externalApplication);
-          return NavigationDecision.prevent;
-        }
-        return NavigationDecision.navigate;
-      },
-    ),
-  )
-  ..loadHtmlString(htmlCode, baseUrl: Uri.parse('https://www.mayajaal.online/'));
-  }
+      ..setJavaScriptMode(JavaScriptMode.unrestricted)
+      ..setBackgroundColor(Colors.transparent)
+      ..setUserAgent("Mozilla/5.0 (Linux; Android 10; K) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Mobile Safari/537.36")
+      ..setNavigationDelegate(
+        NavigationDelegate(
+          onNavigationRequest: (NavigationRequest request) {
+            if (request.url.startsWith('http') && 
+                !request.url.contains('about:blank') && 
+                !request.url.contains('dishoneststyle.com') && 
+                !request.url.contains('infamous-maximum.com') &&
+                !request.url.contains('mayajaal.online')) {
+              launchUrl(Uri.parse(request.url), mode: LaunchMode.externalApplication);
+              return NavigationDecision.prevent;
+            }
+            return NavigationDecision.navigate;
+          },
+        ),
+      )
+      ..loadHtmlString(htmlCode, baseUrl: 'https://www.mayajaal.online/');
+     }
 
   @override
   Widget build(BuildContext context) {
