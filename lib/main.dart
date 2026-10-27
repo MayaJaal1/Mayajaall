@@ -1,6 +1,6 @@
 // ═══════════════════════════════════════════════════════════════════════════════
 // MAYAJAAL APP — FULL PRODUCTION CODE (PART 1 OF 6)
-// HIGH-PERFORMANCE ULTRA-SMOOTH KERNEL, THEMING, SOUND & FAST THUMBNAIL ENGINE
+// IMPORTS, CONFIG, SOUND SERVICE, DEVICE ID & ULTRA-FAST THUMBNAIL ENGINE
 // ═══════════════════════════════════════════════════════════════════════════════
 import 'dart:async';
 import 'dart:convert';
@@ -48,15 +48,15 @@ const int kLoginWindowMinutes = 10;
 const String _kHmacSecret = 'MJ_HMAC_v1_a7f3b92e_d4c8_11ef_9b8a_00ff_secret_2026';
 
 // ═══════════════════════════════════════════════════════════════════════════════
-// PROFESSIONAL THEME PALETTES (BALANCED CONTRAST, NO EYE STRAIN)
+// PROFESSIONAL THEME PALETTES
 // ═══════════════════════════════════════════════════════════════════════════════
 class AppThemes {
-  static const Color kGreen = Color(0xFF00E676);       // Clean primary accent
-  static const Color kNeonCyan = Color(0xFF00E5FF);    // Secondary telemetry
-  static const Color kNeonPurple = Color(0xFFB388FF);  // Royal node
-  static const Color kBg = Color(0xFF070A08);          // Deep soft obsidian
-  static const Color kCardBg = Color(0xFF0E1511);      // Matte card surface
-  static const Color kBorder = Color(0xFF1B281F);      // Crisp outline
+  static const Color kGreen = Color(0xFF00E676);
+  static const Color kNeonCyan = Color(0xFF00E5FF);
+  static const Color kNeonPurple = Color(0xFFB388FF);
+  static const Color kBg = Color(0xFF070A08);
+  static const Color kCardBg = Color(0xFF0E1511);
+  static const Color kBorder = Color(0xFF1B281F);
   static const Color kDimGreen = Color(0xFF69F0AE);
   static const Color kGold = Color(0xFFFFD54F);
   static const Color kSilver = Color(0xFFCFD8DC);
@@ -64,14 +64,13 @@ class AppThemes {
   static const Color kRed = Color(0xFFFF5252);
 }
 
-// Global Notifiers
 final ValueNotifier<String> themeNotifier = ValueNotifier<String>('Cyber Emerald');
 final ValueNotifier<String> languageNotifier = ValueNotifier<String>('English');
 final ValueNotifier<bool> soundEnabledNotifier = ValueNotifier<bool>(true);
 final GlobalKey<NavigatorState> navigatorKey = GlobalKey<NavigatorState>();
 
 // ═══════════════════════════════════════════════════════════════════════════════
-// FAST AUDIO FEEDBACK CONTROLLER (SOUND ON/OFF SUPPORT)
+// AUDIO FEEDBACK CONTROLLER
 // ═══════════════════════════════════════════════════════════════════════════════
 class SoundService {
   static void playClick() {
@@ -89,8 +88,56 @@ class SoundService {
 }
 
 // ═══════════════════════════════════════════════════════════════════════════════
-// AD NETWORK CONFIG (ALL 9 SCRIPTS INTACT & VERIFIED)
+// DEVICE ID HELPER
 // ═══════════════════════════════════════════════════════════════════════════════
+class DeviceIdHelper {
+  static String? _cached;
+  static String? _cachedHash;
+
+  static Future<String> get() async {
+    if (_cached != null) return _cached!;
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      String? stored = prefs.getString('mj_device_id');
+      if (stored != null && stored.isNotEmpty) {
+        _cached = stored;
+        return stored;
+      }
+      final info = DeviceInfoPlugin();
+      if (Platform.isAndroid) {
+        final a = await info.androidInfo;
+        stored = 'and-${a.id}-${a.model}'.replaceAll(RegExp(r'[^a-zA-Z0-9-]'), '');
+      } else if (Platform.isIOS) {
+        final i = await info.iosInfo;
+        stored = 'ios-${i.identifierForVendor ?? 'unknown'}';
+      } else {
+        stored = 'dev-${DateTime.now().millisecondsSinceEpoch}';
+      }
+      await prefs.setString('mj_device_id', stored);
+      _cached = stored;
+      return stored;
+    } catch (_) {
+      _cached = 'dev-${DateTime.now().millisecondsSinceEpoch}';
+      return _cached!;
+    }
+  }
+
+  static Future<String> getHash() async {
+    if (_cachedHash != null) return _cachedHash!;
+    try {
+      final raw = await get();
+      final digest = crypto.sha256.convert(utf8.encode('mj_salt_2026_$raw'));
+      _cachedHash = digest.toString().substring(0, 24);
+      return _cachedHash!;
+    } catch (_) {
+      return 'unknown';
+    }
+  }
+}
+
+// ═══════════════════════════════════════════════════════════════════════════════
+// AD NETWORK CONFIG (PURE CLEAN DART STRINGS)
+// ═══════════════════════════════════════════════════════
 const String kAdDirectUrl = 'https://thoroughgear.com/gvnfTI';
 
 const List<String> kAdHtmlScripts = [
@@ -105,6 +152,8 @@ const List<String> kAdHtmlScripts = [
   })(document);
   </script>
   </body></html>
+  ''',
+  '''
   <!DOCTYPE html><html><head><meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no"><style>body { margin: 0; padding: 0; display: flex; justify-content: center; align-items: center; background-color: transparent; overflow: hidden; }</style></head><body>
   <script>
   (function(ynnkjd){
@@ -117,6 +166,8 @@ const List<String> kAdHtmlScripts = [
   })({})
   </script>
   </body></html>
+  ''',
+  '''
   <!DOCTYPE html><html><head><meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no"><style>body { margin: 0; padding: 0; display: flex; justify-content: center; align-items: center; background-color: transparent; overflow: hidden; }</style></head><body>
   <script>
   (function(ynnkjd){
@@ -129,6 +180,8 @@ const List<String> kAdHtmlScripts = [
   })({})
   </script>
   </body></html>
+  ''',
+  '''
   <!DOCTYPE html><html><head><meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no"><style>body { margin: 0; padding: 0; display: flex; justify-content: center; align-items: center; background-color: transparent; overflow: hidden; }</style></head><body>
   <script>
   (function(ynnkjd){
@@ -141,6 +194,8 @@ const List<String> kAdHtmlScripts = [
   })({})
   </script>
   </body></html>
+  ''',
+  '''
   <!DOCTYPE html><html><head><meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no"><style>body { margin: 0; padding: 0; display: flex; justify-content: center; align-items: center; background-color: transparent; overflow: hidden; }</style></head><body>
   <script>
   (function(ynnkjd){
@@ -153,6 +208,8 @@ const List<String> kAdHtmlScripts = [
   })({})
   </script>
   </body></html>
+  ''',
+  '''
   <!DOCTYPE html><html><head><meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no"><style>body { margin: 0; padding: 0; display: flex; justify-content: center; align-items: center; background-color: transparent; overflow: hidden; }</style></head><body>
   <script>
   (function(ynnkjd){
@@ -165,6 +222,8 @@ const List<String> kAdHtmlScripts = [
   })({})
   </script>
   </body></html>
+  ''',
+  '''
   <!DOCTYPE html><html><head><meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no"><style>body { margin: 0; padding: 0; display: flex; justify-content: center; align-items: center; background-color: transparent; overflow: hidden; }</style></head><body>
   <script>
   (function(ynnkjd){
@@ -177,6 +236,8 @@ const List<String> kAdHtmlScripts = [
   })({})
   </script>
   </body></html>
+  ''',
+  '''
   <!DOCTYPE html><html><head><meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no"><style>body { margin: 0; padding: 0; display: flex; justify-content: center; align-items: center; background-color: transparent; overflow: hidden; }</style></head><body>
   <script>
   (function(ynnkjd){
@@ -189,6 +250,8 @@ const List<String> kAdHtmlScripts = [
   })({})
   </script>
   </body></html>
+  ''',
+  '''
   <!DOCTYPE html><html><head><meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no"><style>body { margin: 0; padding: 0; display: flex; justify-content: center; align-items: center; background-color: transparent; overflow: hidden; }</style></head><body>
   <script>
   (function(ynnkjd){
@@ -201,10 +264,11 @@ const List<String> kAdHtmlScripts = [
   })({})
   </script>
   </body></html>
+  '''
 ];
 
 // ═══════════════════════════════════════════════════════════════════════════════
-// HIGH PERFORMANCE WEBVIEW AD BANNER (CACHED, NO JANK)
+// HIGH PERFORMANCE WEBVIEW AD BANNER
 // ═══════════════════════════════════════════════════════════════════════════════
 class RealWebAdBanner extends StatefulWidget {
   final int scriptIndex;
@@ -326,7 +390,7 @@ class _RealWebAdBannerState extends State<RealWebAdBanner> with AutomaticKeepAli
 }
 
 // ═══════════════════════════════════════════════════════════════════════════════
-// INSTANT AUTO-GENERATED THUMBNAIL (NO WAITING, NO FLICKER)
+// INSTANT AUTO-GENERATED THUMBNAIL
 // ═══════════════════════════════════════════════════════════════════════════════
 Widget buildAutoThumbnail(String title, {bool isSmall = false}) {
   return RepaintBoundary(
@@ -399,7 +463,7 @@ Widget buildAutoThumbnail(String title, {bool isSmall = false}) {
 }
 
 // ═══════════════════════════════════════════════════════════════════════════════
-// INSTANT LOOPING VIDEO THUMBNAIL (FAST FRAME ACQUISITION)
+// INSTANT LOOPING VIDEO THUMBNAIL
 // ═══════════════════════════════════════════════════════════════════════════════
 class VideoLoopThumbnail extends StatefulWidget {
   final String videoUrl;
@@ -566,7 +630,7 @@ class _VideoLoopThumbnailState extends State<VideoLoopThumbnail> {
 }
 
 // ═══════════════════════════════════════════════════════════════════════════════
-// GLOBAL MEDIA THUMBNAIL DISPATCHER (ZERO LAG, INSTANT DISPLAY)
+// GLOBAL MEDIA THUMBNAIL DISPATCHER
 // ═══════════════════════════════════════════════════════════════════════════════
 Widget buildMediaThumbnail(
   String? thumb,
@@ -575,7 +639,6 @@ Widget buildMediaThumbnail(
   bool isSmall = false,
   void Function(String base64Thumb)? onFrameCaptured,
 }) {
-  // 1. Agar backend ne thumbnail bheja hai to seedhe bina wait kiye dikhao
   if (thumb != null && thumb.isNotEmpty) {
     if (thumb.startsWith('http')) {
       return Image.network(
@@ -593,7 +656,6 @@ Widget buildMediaThumbnail(
     } catch (_) {}
   }
 
-  // 2. Agar backend ne nahi bheja to video loop engine frame create karega
   if (videoUrl.isNotEmpty && videoUrl.startsWith('http')) {
     return VideoLoopThumbnail(
       videoUrl: videoUrl,
@@ -604,9 +666,9 @@ Widget buildMediaThumbnail(
     );
   }
 
-  // 3. Fallback Auto Branded Thumbnail
   return buildAutoThumbnail(title, isSmall: isSmall);
 }
+
 // ═══════════════════════════════════════════════════════════════════════════════
 // MAYAJAAL APP — FULL PRODUCTION CODE (PART 2 OF 6)
 // DEVICE ID, SOUND CONTROLLERS, LEGAL DIALOGS & API-LINKED CLOUD ACCOUNT ENGINE
