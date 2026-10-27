@@ -43,7 +43,7 @@
         android:icon="@mipmap/ic_launcher"
         android:hardwareAccelerated="true"
         android:networkSecurityConfig="@xml/network_security_config"
-        android:usesCleartextTraffic="false"
+        android:usesCleartextTraffic="true"  <!-- 🔥 YAHAN FALSE KO TRUE KAR DIYA HAI -->
         tools:targetApi="34">
 
         <!-- 🔥 NEW: AdMob App ID (Required by Google IMA SDK for Ads) -->
@@ -104,7 +104,7 @@
 
         <!-- Flutter Embedding -->
         <meta-data
-            android:name="flutterEmbedding"
+            android:name="flutter.embedding"
             android:value="2" />
     </application>
 
