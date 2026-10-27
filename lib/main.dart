@@ -210,7 +210,7 @@ class RealWebAdBanner extends StatefulWidget {
   const RealWebAdBanner({
     super.key,
     this.scriptIndex = 0,
-    this.height = 85, // Height thodi badha di taaki ad fit ho jaye
+    this.height = 85,
     this.slotName = 'Banner Ad',
   });
 
@@ -227,7 +227,6 @@ class _RealWebAdBannerState extends State<RealWebAdBanner> {
     super.initState();
     final htmlCode = kAdHtmlScripts[widget.scriptIndex % kAdHtmlScripts.length];
     
-    // 🔥 Platform specific params banayein
     PlatformWebViewControllerCreationParams params;
     if (WebViewPlatform.instance is AndroidWebViewPlatform) {
       params = AndroidWebViewControllerCreationParams();
@@ -237,7 +236,6 @@ class _RealWebAdBannerState extends State<RealWebAdBanner> {
     
     _controller = WebViewController.fromPlatformCreationParams(params);
     
-    // 🔥 Android ke liye video autoplay enable karein
     if (_controller.platform is AndroidWebViewController) {
       (_controller.platform as AndroidWebViewController)
           .setMediaPlaybackRequiresUserGesture(false);
@@ -265,56 +263,6 @@ class _RealWebAdBannerState extends State<RealWebAdBanner> {
       )
       ..loadHtmlString(htmlCode);
   }
-
-  @override
-  Widget build(BuildContext context) {
-    return Container(
-      width: double.infinity,
-      height: widget.height,
-      margin: const EdgeInsets.symmetric(vertical: 6),
-      decoration: BoxDecoration(
-        color: const Color(0xFF021206),
-        borderRadius: BorderRadius.circular(12),
-        border: Border.all(color: kGreen.withOpacity(0.35)),
-      ),
-      child: ClipRRect(
-        borderRadius: BorderRadius.circular(12),
-        child: Stack(
-          children: [
-            Positioned.fill(
-              child: WebViewWidget(controller: _controller),
-            ),
-            if (_isLoading)
-              const Center(
-                child: CircularProgressIndicator(color: kGreen, strokeWidth: 2),
-              ),
-            Positioned(
-              top: 4,
-              right: 6,
-              child: Container(
-                padding: const EdgeInsets.symmetric(horizontal: 5, vertical: 1.5),
-                decoration: BoxDecoration(
-                  color: Colors.black.withOpacity(0.6),
-                  borderRadius: BorderRadius.circular(4),
-                  border: Border.all(color: kGreen.withOpacity(0.4)),
-                ),
-                child: const Text(
-                  'SPONSORED',
-                  style: TextStyle(
-                    color: kGreen,
-                    fontSize: 8,
-                    fontWeight: FontWeight.bold,
-                    letterSpacing: 1,
-                  ),
-                ),
-              ),
-            ),
-          ],
-        ),
-      ),
-    );
-  }
-}
 
   @override
   Widget build(BuildContext context) {
