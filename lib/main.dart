@@ -1411,6 +1411,16 @@ class MayaJaalAccount {
       return null;
     }
   }
+    
+  static Future<Map<String, dynamic>> getDashboard() async {
+    if (cachedUid == null) return {};
+    try {
+      final snap = await _rtdb.child('users/$cachedUid/dashboard').once();
+      return Map<String, dynamic>.from((snap.snapshot.value ?? {}) as Map);
+    } catch (e) {
+      return {};
+    }
+  }
 
   static Stream<Map<String, dynamic>> getDashboardStream() {
     if (cachedUid == null) return const Stream.empty();
