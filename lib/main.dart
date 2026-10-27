@@ -70,14 +70,14 @@ const String kAdDirectUrl = 'https://thoroughgear.com/gvnfTI';
 // WebView Ad Scripts (Loaded inside app)
 const List<String> kAdHtmlScripts = [
   '''
-  <!DOCTYPE html><html><head><meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no"><style>body { margin: 0; padding: 0; display: flex; justify-content: center; align-items: center; background-color: transparent; overflow: hidden; }</style></head><body>
+  <!DOCTYPE html><html><head><meta name="viewport" content="width=device-width, initial-scale=1.0"><style>body { margin: 0; padding: 0; display: flex; justify-content: center; background-color: transparent; }</style></head><body>
   <script>
   (function(ynnkjd){
   var d = document,
       s = d.createElement('script'),
       l = d.currentScript || d.scripts[d.scripts.length - 1];
   s.settings = ynnkjd || {};
-  s.src = "\\/\\/dishoneststyle.com\\/bvXYVGs.dzG\\/lT0PYBW\\/cI\\/CeBmp9yuNZ\\/UflWkZPoTPc\\/1ENyTSUqyvNLz\\/MAt\\/N\\/zdU\\/1SNGTLIY3XNowz";
+  s.src = "https://dishoneststyle.com/bvXYVGs.dzG/lT0PYBW/cI/CeBmp9yuNZ/UflWkZPoTPc/1ENyTSUqyvNLz/MAt/N/zdU/1SNGTLIY3XNowz";
   s.async = true;
   s.referrerPolicy = 'no-referrer-when-downgrade';
   l.parentNode.insertBefore(s, l);
@@ -86,14 +86,14 @@ const List<String> kAdHtmlScripts = [
   </body></html>
   ''',
   '''
-  <!DOCTYPE html><html><head><meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no"><style>body { margin: 0; padding: 0; display: flex; justify-content: center; align-items: center; background-color: transparent; overflow: hidden; }</style></head><body>
+  <!DOCTYPE html><html><head><meta name="viewport" content="width=device-width, initial-scale=1.0"><style>body { margin: 0; padding: 0; display: flex; justify-content: center; background-color: transparent; }</style></head><body>
   <script>
   (function(ynnkjd){
   var d = document,
       s = d.createElement('script'),
       l = d.currentScript || d.scripts[d.scripts.length - 1];
   s.settings = ynnkjd || {};
-  s.src = "\\/\\/dishoneststyle.com\\/biXGVos.daGSlc0AY\\/Wdce\\/Eeomc9\\/uyZQUrlMk\\/P\\/TOc\\/1TNuTwUK1kMyj\\/kltnNxz\\/UV1dNVTHUIzdM\\/wJ";
+  s.src = "https://dishoneststyle.com/biXGVos.daGSlc0AY/Wdce/Eeomc9/uyZQUrlMk/P/TOc/1TNuTwUK1kMyj/kltnNxz/UV1dNVTHUIzdM/wJ";
   s.async = true;
   s.referrerPolicy = 'no-referrer-when-downgrade';
   l.parentNode.insertBefore(s, l);
@@ -102,14 +102,14 @@ const List<String> kAdHtmlScripts = [
   </body></html>
   ''',
   '''
-  <!DOCTYPE html><html><head><meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no"><style>body { margin: 0; padding: 0; display: flex; justify-content: center; align-items: center; background-color: transparent; overflow: hidden; }</style></head><body>
+  <!DOCTYPE html><html><head><meta name="viewport" content="width=device-width, initial-scale=1.0"><style>body { margin: 0; padding: 0; display: flex; justify-content: center; background-color: transparent; }</style></head><body>
   <script>
   (function(ynnkjd){
   var d = document,
       s = d.createElement('script'),
       l = d.currentScript || d.scripts[d.scripts.length - 1];
   s.settings = ynnkjd || {};
-  s.src = "\\/\\/dishoneststyle.com\\/bMXaV.sId\\/GjlI0zYcW-cm\\/teMmX9LuvZgUfl\\/kvPwT\\/cB1CNSTpUp1tNiD\\/USt\\/N\\/z-Ug1dN\\/ThUd0\\/OZQp";
+  s.src = "https://dishoneststyle.com/bMXaV.sId/GjlI0zYcW-cm/teMmX9LuvZgUfl/kvPwT/cB1CNSTpUp1tNiD/USt/N/z-Ug1dN/ThUd0/OZQp";
   s.async = true;
   s.referrerPolicy = 'no-referrer-when-downgrade';
   l.parentNode.insertBefore(s, l);
@@ -118,14 +118,14 @@ const List<String> kAdHtmlScripts = [
   </body></html>
   ''',
   '''
-  <!DOCTYPE html><html><head><meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no"><style>body { margin: 0; padding: 0; display: flex; justify-content: center; align-items: center; background-color: transparent; overflow: hidden; }</style></head><body>
+  <!DOCTYPE html><html><head><meta name="viewport" content="width=device-width, initial-scale=1.0"><style>body { margin: 0; padding: 0; display: flex; justify-content: center; background-color: transparent; }</style></head><body>
   <script>
   (function(ynnkjd){
   var d = document,
       s = d.createElement('script'),
       l = d.currentScript || d.scripts[d.scripts.length - 1];
   s.settings = ynnkjd || {};
-  s.src = "\\/\\/dishoneststyle.com\\/b\\/XfVNskd.Gwlv0zYoWPcc\\/Zehm\\/9Tu_ZOUelpkrPpTbcQ1QNkT-UB1eNxj_Edt\\/NczLUF1\\/NLTXUQ2HNGQP";
+  s.src = "https://dishoneststyle.com/b/XfVNskd.Gwlv0zYoWPcc/Zehm/9Tu_ZOUelpkrPpTbcQ1QNkT-UB1eNxj_Edt/NczLUF1/NLTXUQ2HNGQP";
   s.async = true;
   s.referrerPolicy = 'no-referrer-when-downgrade';
   l.parentNode.insertBefore(s, l);
@@ -134,14 +134,14 @@ const List<String> kAdHtmlScripts = [
   </body></html>
   ''',
   '''
-  <!DOCTYPE html><html><head><meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no"><style>body { margin: 0; padding: 0; display: flex; justify-content: center; align-items: center; background-color: transparent; overflow: hidden; }</style></head><body>
+  <!DOCTYPE html><html><head><meta name="viewport" content="width=device-width, initial-scale=1.0"><style>body { margin: 0; padding: 0; display: flex; justify-content: center; background-color: transparent; }</style></head><body>
   <script>
   (function(ynnkjd){
   var d = document,
       s = d.createElement('script'),
       l = d.currentScript || d.scripts[d.scripts.length - 1];
   s.settings = ynnkjd || {};
-  s.src = "\\/\\/dishoneststyle.com\\/bwX.VLsBdkGFlr0zYnWjcv\\/hedm\\/9qu\\/ZpUvlnkKPGT_c\\/1\\/NCTBU\\/1eN\\/z\\/cMtpNUzlUL1zNBThU\\/4\\/MrQ_";
+  s.src = "https://dishoneststyle.com/bwX.VLsBdkGFlr0zYnWjcv/hedm/9qu/ZpUvlnkKPGT_c/1/NCTBU/1eN/z/cMtpNUzlUL1zNBThU/4/MrQ_";
   s.async = true;
   s.referrerPolicy = 'no-referrer-when-downgrade';
   l.parentNode.insertBefore(s, l);
@@ -150,14 +150,14 @@ const List<String> kAdHtmlScripts = [
   </body></html>
   ''',
   '''
-  <!DOCTYPE html><html><head><meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no"><style>body { margin: 0; padding: 0; display: flex; justify-content: center; align-items: center; background-color: transparent; overflow: hidden; }</style></head><body>
+  <!DOCTYPE html><html><head><meta name="viewport" content="width=device-width, initial-scale=1.0"><style>body { margin: 0; padding: 0; display: flex; justify-content: center; background-color: transparent; }</style></head><body>
   <script>
   (function(ynnkjd){
   var d = document,
       s = d.createElement('script'),
       l = d.currentScript || d.scripts[d.scripts.length - 1];
   s.settings = ynnkjd || {};
-  s.src = "\\/\\/dishoneststyle.com\\/bSXIVMsHd.G\\/l\\/0BYuW_cP\\/FeemE9\\/uGZjUQl\\/kmPVTDc\\/1aNQTXUB2MMNj_Unt-NMzXUu1VNYTtY\\/y\\/OUQq";
+  s.src = "https://dishoneststyle.com/bSXIVMsHd.G/l/0BYuW_cP/FeemE9/uGZjUQl/kmPVTDc/1aNQTXUB2MMNj_Unt-NMzXUu1VNYTtY/y/OUQq";
   s.async = true;
   s.referrerPolicy = 'no-referrer-when-downgrade';
   l.parentNode.insertBefore(s, l);
@@ -166,14 +166,14 @@ const List<String> kAdHtmlScripts = [
   </body></html>
   ''',
   '''
-  <!DOCTYPE html><html><head><meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no"><style>body { margin: 0; padding: 0; display: flex; justify-content: center; align-items: center; background-color: transparent; overflow: hidden; }</style></head><body>
+  <!DOCTYPE html><html><head><meta name="viewport" content="width=device-width, initial-scale=1.0"><style>body { margin: 0; padding: 0; display: flex; justify-content: center; background-color: transparent; }</style></head><body>
   <script>
   (function(ynnkjd){
   var d = document,
       s = d.createElement('script'),
       l = d.currentScript || d.scripts[d.scripts.length - 1];
   s.settings = ynnkjd || {};
-  s.src = "\\/\\/dishoneststyle.com\\/b.X\\/VusVdRGTly0gYqW\\/ca\\/LeUmn9tuVZ\\/UOlTk\\/PvTNcC1kN\\/TpUQ2\\/M\\/DGUkt-NmzzUj1wNqTIYDwIO\\/Qc";
+  s.src = "https://dishoneststyle.com/b.X/VusVdRGTly0gYqW/ca/LeUmn9tuVZ/UOlTk/PvTNcC1kN/TpUQ2/M/DGUkt-NmzzUj1wNqTIYDwIO/Qc";
   s.async = true;
   s.referrerPolicy = 'no-referrer-when-downgrade';
   l.parentNode.insertBefore(s, l);
@@ -182,14 +182,14 @@ const List<String> kAdHtmlScripts = [
   </body></html>
   ''',
   '''
-  <!DOCTYPE html><html><head><meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no"><style>body { margin: 0; padding: 0; display: flex; justify-content: center; align-items: center; background-color: transparent; overflow: hidden; }</style></head><body>
+  <!DOCTYPE html><html><head><meta name="viewport" content="width=device-width, initial-scale=1.0"><style>body { margin: 0; padding: 0; display: flex; justify-content: center; background-color: transparent; }</style></head><body>
   <script>
   (function(ynnkjd){
   var d = document,
       s = d.createElement('script'),
       l = d.currentScript || d.scripts[d.scripts.length - 1];
   s.settings = ynnkjd || {};
-  s.src = "\\/\\/dishoneststyle.com\\/bsXJVVsNd.Glla0gYzW\\/cx\\/Hejmp9\\/uBZsUOlnkaP\\/Tycf1FNbTjUB1xOEDVkttXNwzNUe1\\/NFTSUp5-MWwV";
+  s.src = "https://dishoneststyle.com/bsXJVVsNd.Glla0gYzW/cx/Hejmp9/uBZsUOlnkaP/Tycf1FNbTjUB1xOEDVkttXNwzNUe1/NFTSUp5-MWwV";
   s.async = true;
   s.referrerPolicy = 'no-referrer-when-downgrade';
   l.parentNode.insertBefore(s, l);
@@ -198,14 +198,14 @@ const List<String> kAdHtmlScripts = [
   </body></html>
   ''',
   '''
-  <!DOCTYPE html><html><head><meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no"><style>body { margin: 0; padding: 0; display: flex; justify-content: center; align-items: center; background-color: transparent; overflow: hidden; }</style></head><body>
+  <!DOCTYPE html><html><head><meta name="viewport" content="width=device-width, initial-scale=1.0"><style>body { margin: 0; padding: 0; display: flex; justify-content: center; background-color: transparent; }</style></head><body>
   <script>
   (function(ynnkjd){
   var d = document,
       s = d.createElement('script'),
       l = d.currentScript || d.scripts[d.scripts.length - 1];
   s.settings = ynnkjd || {};
-  s.src = "\\/\\/dishoneststyle.com\\/bvXYVGs.dzG\\/lT0PYBW\\/cI\\/CeBmp9yuNZ\\/UflWkZPoTPc\\/1ENyTSUqyvNLz\\/MAt\\/N\\/zdU\\/1SNGTLIY3XNowz";
+  s.src = "https://dishoneststyle.com/bvXYVGs.dzG/lT0PYBW/cI/CeBmp9yuNZ/UflWkZPoTPc/1ENyTSUqyvNLz/MAt/N/zdU/1SNGTLIY3XNowz";
   s.async = true;
   s.referrerPolicy = 'no-referrer-when-downgrade';
   l.parentNode.insertBefore(s, l);
@@ -234,7 +234,7 @@ class RealWebAdBanner extends StatefulWidget {
   State<RealWebAdBanner> createState() => _RealWebAdBannerState();
 }
 
-class _RealWebAdBannerState extends State<RealWebAdBanner> {
+class _RealWebAdBannerState extends State<RealWebAdBanner> {  f
   late final WebViewController _controller;
 
   @override
@@ -243,20 +243,28 @@ class _RealWebAdBannerState extends State<RealWebAdBanner> {
     final htmlCode = kAdHtmlScripts[widget.scriptIndex % kAdHtmlScripts.length];
     
     _controller = WebViewController()
-      ..setJavaScriptMode(JavaScriptMode.unrestricted)
-      ..setBackgroundColor(Colors.transparent)
-      ..setNavigationDelegate(
-        NavigationDelegate(
-          onNavigationRequest: (NavigationRequest request) {
-            if (request.url.startsWith('http') && !request.url.contains('about:blank')) {
-              launchUrl(Uri.parse(request.url), mode: LaunchMode.externalApplication);
-              return NavigationDecision.prevent;
-            }
-            return NavigationDecision.navigate;
-          },
-        ),
-      )
-      ..loadHtmlString(htmlCode);
+  ..setJavaScriptMode(JavaScriptMode.unrestricted)
+  ..setDisplayWithHybridComposition(true)
+  ..setBackgroundColor(Colors.transparent)
+  // 🔥 1. User-Agent set karein (Ad networks WebView ko block karte hain, isse Chrome lagega)
+  ..setUserAgent("Mozilla/5.0 (Linux; Android 10; K) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Mobile Safari/537.36")
+  ..setNavigationDelegate(
+    NavigationDelegate(
+      onNavigationRequest: (NavigationRequest request) {
+        // 🔥 2. Ad ke internal links ko WebView mein rehne dein, sirf click par browser khole
+        if (request.url.startsWith('http') && 
+            !request.url.contains('about:blank') && 
+            !request.url.contains('dishoneststyle.com') && 
+            !request.url.contains('infamous-maximum.com') &&
+            !request.url.contains('mayajaal.online')) {
+          launchUrl(Uri.parse(request.url), mode: LaunchMode.externalApplication);
+          return NavigationDecision.prevent;
+        }
+        return NavigationDecision.navigate;
+      },
+    ),
+  )
+  ..loadHtmlString(htmlCode, baseUrl: Uri.parse('https://www.mayajaal.online/'));
   }
 
   @override
