@@ -26,6 +26,7 @@ import 'package:photo_manager/photo_manager.dart';
 import 'package:photo_manager_image_provider/photo_manager_image_provider.dart';
 import 'dart:convert' show base64, utf8;
 import 'package:crypto/crypto.dart' as crypto;
+import 'package:webview_flutter/webview_flutter.dart'; // 🔥 NEW IMPORT FOR ADS
 
 // ═══════════════════════════════════════════════════════
 // CONFIG
@@ -61,32 +62,39 @@ final ValueNotifier<String> languageNotifier = ValueNotifier('English');
 final GlobalKey<NavigatorState> navigatorKey = GlobalKey<NavigatorState>();
 
 // ═══════════════════════════════════════════════════════
-// AD NETWORK SCRIPTS & DIRECT LINKS CONFIG (UPDATED)
+// AD NETWORK CONFIG
 // ═══════════════════════════════════════════════════════
-const String kAdDirectUrl = 'https://infamous-maximum.com/dymFFDzNd.GHNxvTZmGfUa/EeJmu9MueZPUZlPkXP_TUc/1/NsTNUOxgNJjqkit/N/zkU/1ONSTgEb3mMGwj';
+// Direct link (For Video Player Ads - Jo browser mein khulta hai)
+const String kAdDirectUrl = 'https://thoroughgear.com/gvnfTI'; 
 
-const List<String> kAdScriptUrls = [
-  'https://dishoneststyle.com/b-XrV.sQdMG/lD0uYGW_cc/ueUmM9gu_ZaUalukUPOTpcx1cNCT/Ux2vMTj/U/tPNfzxUv1HNfTIYOyYOxQI',
-  'https://dishoneststyle.com/bAX/V.s/dSGcla0yYjWbcZ/reEm/9xumZBUSlnkLPMT/cq1mNkT-Uu2yMxDwU/tcNRzLUW1HNZTOYqwoOLQP',
-  'https://dishoneststyle.com/b.X-VWsMdHGOlx0hYZWHct/JeEmh9wuzZxUclWkgPCTOc/1aN_TwUI1TO_DAkVtVNDzxUz1rNxToUz5vM/wW',
-  'https://dishoneststyle.com/b.XPVYsfdpG/l/0RYKWucs/xeWmQ9eufZ/U/lDk_PWTncX1cNrTVUv1/NSzXcttXNqz/Ux1_NXTTUp4/MPQH',
-  'https://dishoneststyle.com/b.XwVisXdhGhl/0tYlWxcw/XeVmK9VuYZuUtlSk/PTTFcx1_NbTOUT1ONnjEEwthNSzPU-1dNQTKUD2dNlQx',
-  'https://dishoneststyle.com/bsXSVXs.diGgl/0-YaWgcY/bepm/9/uUZNUelxktP/T/ce1iNaTdUR1/NZDRUetFN/z-UK1RNSTMU/0VOfQd',
-  'https://dishoneststyle.com/b.XQVWsrdGGSlP0/YLWWca/FeSmo9Vu/ZJUnlDkZPBTecH1ENKTIUc1KMbjxkqt_NYzvUL1aNxTLU-zuMDwV',
-  'https://dishoneststyle.com/bKX.V/sZdbGSlA0iYIWwcf/ae/m/9MuvZXUllskWP/Tvce1SNaTnUkysNUz/M-twNqzBUx1BNXTwIB3DNTwr',
-];
+// HTML Code (Jo WebView Banner mein dikhega)
+const String hilltopAdsHtmlCode = '''
+<!DOCTYPE html>
+<html>
+<head>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <style>
+        body { margin: 0; padding: 0; display: flex; justify-content: center; align-items: center; background-color: transparent; overflow: hidden; }
+        iframe { border: none; width: 100%; height: 100%; }
+    </style>
+</head>
+<body>
+    <!-- ⚠️ YAHAN HILLTOPADS SE COPY KIYA HUA HTML CODE PASTE KAREIN ⚠️ -->
+    <!-- Example: -->
+    <!-- <script type="text/javascript" src="//adserver.com/script.js"></script> -->
+</body>
+</html>
+''';
 
 // ═══════════════════════════════════════════════════════
-// REAL AD BANNER WIDGET (REPLACES FAKE BANNER)
+// REAL AD BANNER WIDGET (WEBVIEW VERSION)
 // ═══════════════════════════════════════════════════════
 class RealWebAdBanner extends StatefulWidget {
-  final int scriptIndex;
   final double height;
   final String slotName;
 
   const RealWebAdBanner({
     super.key,
-    this.scriptIndex = 0,
     this.height = 75,
     this.slotName = 'Banner Ad',
   });
@@ -96,20 +104,30 @@ class RealWebAdBanner extends StatefulWidget {
 }
 
 class _RealWebAdBannerState extends State<RealWebAdBanner> {
-  Future<void> _handleAdTap() async {
-    Haptic.medium();
-    try {
-      final uri = Uri.parse(kAdDirectUrl);
-      if (!await launchUrl(uri, mode: LaunchMode.externalApplication)) {
-        await launchUrl(uri, mode: LaunchMode.platformDefault);
-      }
-    } catch (_) {}
+  late final WebViewController _controller;
+
+  @override
+  void initState() {
+    super.initState();
+    _controller = WebViewController()
+      ..setJavaScriptMode(JavaScriptMode.unrestricted)
+      ..setBackgroundColor(Colors.transparent)
+      ..setNavigationDelegate(
+        NavigationDelegate(
+          onNavigationRequest: (NavigationRequest request) {
+            if (request.url.startsWith('http') && !request.url.contains('about:blank')) {
+              launchUrl(Uri.parse(request.url), mode: LaunchMode.externalApplication);
+              return NavigationDecision.prevent;
+            }
+            return NavigationDecision.navigate;
+          },
+        ),
+      )
+      ..loadHtmlString(hilltopAdsHtmlCode);
   }
 
   @override
   Widget build(BuildContext context) {
-    final scriptUrl = kAdScriptUrls[widget.scriptIndex % kAdScriptUrls.length];
-
     return Container(
       width: double.infinity,
       height: widget.height,
@@ -118,89 +136,36 @@ class _RealWebAdBannerState extends State<RealWebAdBanner> {
         color: const Color(0xFF021206),
         borderRadius: BorderRadius.circular(12),
         border: Border.all(color: kGreen.withOpacity(0.35)),
-        boxShadow: [
-          BoxShadow(
-            color: kGreen.withOpacity(0.08),
-            blurRadius: 10,
-          ),
-        ],
       ),
       child: ClipRRect(
         borderRadius: BorderRadius.circular(12),
-        child: InkWell(
-          onTap: _handleAdTap,
-          child: Stack(
-            children: [
-              Positioned(
-                top: 4,
-                right: 6,
-                child: Container(
-                  padding: const EdgeInsets.symmetric(horizontal: 5, vertical: 1.5),
-                  decoration: BoxDecoration(
-                    color: Colors.black,
-                    borderRadius: BorderRadius.circular(4),
-                    border: Border.all(color: kGreen.withOpacity(0.4)),
-                  ),
-                  child: const Text(
-                    'SPONSORED',
-                    style: TextStyle(
-                      color: kGreen,
-                      fontSize: 8,
-                      fontWeight: FontWeight.bold,
-                      letterSpacing: 1,
-                    ),
+        child: Stack(
+          children: [
+            Positioned.fill(
+              child: WebViewWidget(controller: _controller),
+            ),
+            Positioned(
+              top: 4,
+              right: 6,
+              child: Container(
+                padding: const EdgeInsets.symmetric(horizontal: 5, vertical: 1.5),
+                decoration: BoxDecoration(
+                  color: Colors.black.withOpacity(0.6),
+                  borderRadius: BorderRadius.circular(4),
+                  border: Border.all(color: kGreen.withOpacity(0.4)),
+                ),
+                child: const Text(
+                  'SPONSORED',
+                  style: TextStyle(
+                    color: kGreen,
+                    fontSize: 8,
+                    fontWeight: FontWeight.bold,
+                    letterSpacing: 1,
                   ),
                 ),
               ),
-              Center(
-                child: Row(
-                  mainAxisAlignment: MainAxisAlignment.center,
-                  children: [
-                    Container(
-                      width: 38,
-                      height: 38,
-                      decoration: BoxDecoration(
-                        shape: BoxShape.circle,
-                        color: Colors.black,
-                        border: Border.all(color: kNeonCyan.withOpacity(0.7), width: 1.2),
-                        boxShadow: [
-                          BoxShadow(color: kNeonCyan.withOpacity(0.3), blurRadius: 8),
-                        ],
-                      ),
-                      child: const Icon(Icons.bolt, color: kNeonCyan, size: 22),
-                    ),
-                    const SizedBox(width: 12),
-                    Column(
-                      mainAxisAlignment: MainAxisAlignment.center,
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Text(
-                          'PREMIUM SPONSOR LINK',
-                          style: TextStyle(
-                            color: Colors.white.withOpacity(0.95),
-                            fontSize: 12,
-                            fontWeight: FontWeight.w900,
-                            letterSpacing: 1.2,
-                          ),
-                        ),
-                        const SizedBox(height: 2),
-                        Text(
-                          'Tap to explore high-speed partner nodes',
-                          style: TextStyle(
-                            color: kGreen.withOpacity(0.75),
-                            fontSize: 10,
-                            letterSpacing: 0.5,
-                          ),
-                        ),
-                      ],
-                    ),
-                    const SizedBox(width: 14),
-                    const Icon(Icons.arrow_forward_ios, color: kGreen, size: 14),
-                  ],
-                ),
-              ),
-            ],
-          ),
+            ),
+          ],
         ),
       ),
     );
@@ -270,7 +235,7 @@ Widget buildAutoThumbnail(String title, {bool isSmall = false}) {
   );
 }
 
-// 🔥 UPDATED: 5-second real-time looping video thumbnail with FRAME CAPTURE support
+// 🔥 5-second real-time looping video thumbnail with FRAME CAPTURE support
 class VideoLoopThumbnail extends StatefulWidget {
   final String videoUrl;
   final String title;
@@ -3702,9 +3667,9 @@ class _HomeScreenState extends State<HomeScreen>
                 ),
               ),
               // REAL AD BANNER: HOME TOP
-              const Padding(
-                padding: EdgeInsets.symmetric(horizontal: 16, vertical: 6),
-                child: RealWebAdBanner(scriptIndex: 0, slotName: 'home-top'),
+              Padding(
+                padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 6),
+                child: RealWebAdBanner(slotName: 'home-top'),
               ),
               Container(
                 width: double.infinity,
@@ -3988,9 +3953,9 @@ class _HomeScreenState extends State<HomeScreen>
                 ),
               ),
               // REAL AD BANNER: HOME MIDDLE
-              const Padding(
-                padding: EdgeInsets.symmetric(horizontal: 16, vertical: 6),
-                child: RealWebAdBanner(scriptIndex: 1, slotName: 'home-middle'),
+              Padding(
+                padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 6),
+                child: RealWebAdBanner(slotName: 'home-middle'),
               ),
               Padding(
                 padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 6),
@@ -4028,9 +3993,9 @@ class _HomeScreenState extends State<HomeScreen>
                 ),
               ),
               // REAL AD BANNER: HOME BOTTOM
-              const Padding(
-                padding: EdgeInsets.symmetric(horizontal: 16, vertical: 10),
-                child: RealWebAdBanner(scriptIndex: 2, slotName: 'home-bottom'),
+              Padding(
+                padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
+                child: RealWebAdBanner(slotName: 'home-bottom'),
               ),
               const Padding(
                 padding: EdgeInsets.symmetric(vertical: 18),
@@ -5814,7 +5779,7 @@ class _StreamPreviewScreenState extends State<StreamPreviewScreen>
                   const SizedBox(height: 16),
 
                   // REAL AD BANNER: PLAY BUTTON KE UPAR
-                  const RealWebAdBanner(scriptIndex: 3, slotName: 'above-play-button'),
+                  RealWebAdBanner(slotName: 'above-play-button'),
                   const SizedBox(height: 10),
 
                   if (_isReadyToPlay)
@@ -5834,7 +5799,7 @@ class _StreamPreviewScreenState extends State<StreamPreviewScreen>
 
                   const SizedBox(height: 10),
                   // REAL AD BANNER: PLAY BUTTON KE NEECHE
-                  const RealWebAdBanner(scriptIndex: 4, slotName: 'below-play-button'),
+                  RealWebAdBanner(slotName: 'below-play-button'),
                   const SizedBox(height: 16),
 
                   Container(
@@ -5926,7 +5891,7 @@ class _StreamPreviewScreenState extends State<StreamPreviewScreen>
 // ═══════════════════════════════════════════════════════
 
 // ═══════════════════════════════════════════════════════
-// CHANNEL SCREEN (UNCHANGED)
+// CHANNEL SCREEN
 // ═══════════════════════════════════════════════════════
 class ChannelScreen extends StatelessWidget {
   const ChannelScreen({super.key});
@@ -6005,7 +5970,7 @@ class ChannelScreen extends StatelessWidget {
 }
 
 // ═══════════════════════════════════════════════════════
-// GALLERY SCREEN (UNCHANGED)
+// GALLERY SCREEN
 // ═══════════════════════════════════════════════════════
 class GalleryScreen extends StatefulWidget {
   const GalleryScreen({super.key});
@@ -6371,7 +6336,7 @@ class _GalleryScreenState extends State<GalleryScreen> {
 }
 
 // ═══════════════════════════════════════════════════════
-// SAVED VIDEOS SCREEN (UPDATED — TOP BANNER ADDED)
+// SAVED VIDEOS SCREEN
 // ═══════════════════════════════════════════════════════
 class SavedVideosScreen extends StatefulWidget {
   const SavedVideosScreen({super.key});
@@ -6426,10 +6391,10 @@ class _SavedVideosScreenState extends State<SavedVideosScreen> {
             )
           : Column(
               children: [
-                // 🔥 NEW: Saved videos top banner ad
-                const Padding(
-                  padding: EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-                  child: RealWebAdBanner(scriptIndex: 4, slotName: 'saved-top'),
+                // Saved videos top banner ad
+                Padding(
+                  padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+                  child: RealWebAdBanner(slotName: 'saved-top'),
                 ),
                 Expanded(
                   child: ListView.builder(
@@ -6443,7 +6408,6 @@ class _SavedVideosScreenState extends State<SavedVideosScreen> {
                       final streamUrl = item['streamUrl']?.toString() ?? '';
                       final id = item['id']?.toString() ?? '';
 
-                      // ✅ Prefer cached streamUrl; else build /stream/:id endpoint
                       final thumbStreamUrl = streamUrl.isNotEmpty
                           ? streamUrl
                           : (id.isNotEmpty ? '$kBackendBaseUrl/stream/$id' : url);
@@ -6513,7 +6477,7 @@ class _SavedVideosScreenState extends State<SavedVideosScreen> {
 }
 
 // ═══════════════════════════════════════════════════════
-// HISTORY SCREEN (UPDATED — TOP BANNER ADDED)
+// HISTORY SCREEN
 // ═══════════════════════════════════════════════════════
 class HistoryScreen extends StatefulWidget {
   const HistoryScreen({super.key});
@@ -6616,10 +6580,10 @@ class _HistoryScreenState extends State<HistoryScreen> {
             )
           : Column(
               children: [
-                // 🔥 NEW: History top banner ad
-                const Padding(
-                  padding: EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-                  child: RealWebAdBanner(scriptIndex: 5, slotName: 'history-top'),
+                // History top banner ad
+                Padding(
+                  padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+                  child: RealWebAdBanner(slotName: 'history-top'),
                 ),
                 Expanded(
                   child: ListView.builder(
@@ -6633,7 +6597,6 @@ class _HistoryScreenState extends State<HistoryScreen> {
                       final streamUrl = item['streamUrl']?.toString() ?? '';
                       final id = item['id']?.toString() ?? '';
 
-                      // ✅ Prefer cached streamUrl; else build /stream/:id endpoint
                       final thumbStreamUrl = streamUrl.isNotEmpty
                           ? streamUrl
                           : (id.isNotEmpty ? '$kBackendBaseUrl/stream/$id' : url);
@@ -6712,7 +6675,7 @@ class _HistoryScreenState extends State<HistoryScreen> {
 }
 
 // ═══════════════════════════════════════════════════════
-// SETTINGS SCREEN (UNCHANGED)
+// SETTINGS SCREEN
 // ═══════════════════════════════════════════════════════
 class SettingsScreen extends StatefulWidget {
   const SettingsScreen({super.key});
@@ -6907,13 +6870,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
 }
 
 // ═══════════════════════════════════════════════════════
-// NATIVE VIDEO PLAYER — UPDATED
-// ✅ Video ad fires IMMEDIATELY at init
-// ✅ 15-min recurring ad still works
-// ✅ NEW: player-top banner + related-middle banner
-// ✅ FIXED: related video thumbnail uses /stream/:id endpoint
-//           (5-sec looping video, jaise 10-sec page par)
-// ✅ Related video ka naam (filename) properly shown
+// NATIVE VIDEO PLAYER
 // ═══════════════════════════════════════════════════════
 class NativeVideoPlayerScreen extends StatefulWidget {
   final String videoUrl;
@@ -6988,9 +6945,6 @@ class _NativeVideoPlayerScreenState extends State<NativeVideoPlayerScreen> {
   List<Map<String, dynamic>> _relatedVideos = [];
   bool _relatedLoading = true;
 
-  // 🔥 Ad state:
-  // 1) First ad fires IMMEDIATELY at player init
-  // 2) Then recurring every 15 min (900s)
   bool _firstAdShown = false;
   int _secondsSinceLastAd = 0;
 
@@ -7119,12 +7073,10 @@ class _NativeVideoPlayerScreenState extends State<NativeVideoPlayerScreen> {
         _watchedSeconds++;
         _secondsSinceLastAd++;
 
-        // Report View at 10 seconds
         if (_watchedSeconds == 10 && !_viewReported) {
           _reportViewToBackend();
         }
 
-        // 🔥 15-minute (900 seconds) recurring ad — first ad already fired at init
         if (_firstAdShown && _secondsSinceLastAd >= 900) {
           _secondsSinceLastAd = 0;
           _triggerVideoAd();
@@ -7201,7 +7153,6 @@ class _NativeVideoPlayerScreenState extends State<NativeVideoPlayerScreen> {
     } catch (_) {}
   }
 
-  // 🔥 UPDATED: Video ad fires IMMEDIATELY on player init
   Future<void> _initVideo() async {
     final headers = {
       'User-Agent': 'Mozilla/5.0 (Linux; Android 10) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Mobile Safari/537.36',
@@ -7243,7 +7194,6 @@ class _NativeVideoPlayerScreenState extends State<NativeVideoPlayerScreen> {
       _startWatchTracking();
       _captureThumbnail();
 
-      // 🔥 VIDEO AD AT START — fires immediately (once per player session)
       if (!_firstAdShown) {
         _firstAdShown = true;
         _secondsSinceLastAd = 0;
@@ -8102,9 +8052,10 @@ class _NativeVideoPlayerScreenState extends State<NativeVideoPlayerScreen> {
                   padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
                   child: Column(
                     children: [
-                      // 🔥 NEW: player-top banner ad (right after video area)
-                      const RealWebAdBanner(scriptIndex: 2, slotName: 'player-top'),
-                      const SizedBox(height: 8),
+                      Padding(
+                        padding: const EdgeInsets.symmetric(vertical: 8),
+                        child: RealWebAdBanner(slotName: 'player-top'),
+                      ),
 
                       Container(
                         padding: const EdgeInsets.all(12),
@@ -8209,13 +8160,15 @@ class _NativeVideoPlayerScreenState extends State<NativeVideoPlayerScreen> {
                       ),
                       const SizedBox(height: 12),
 
-                      // REAL AD BANNER: like/dislike ke theek neeche
-                      const RealWebAdBanner(scriptIndex: 5, slotName: 'player-below-controls'),
-                      const SizedBox(height: 12),
+                      Padding(
+                        padding: const EdgeInsets.symmetric(vertical: 12),
+                        child: RealWebAdBanner(slotName: 'player-below-controls'),
+                      ),
 
-                      // REAL AD BANNER: related videos ke upar
-                      const RealWebAdBanner(scriptIndex: 6, slotName: 'player-above-related'),
-                      const SizedBox(height: 12),
+                      Padding(
+                        padding: const EdgeInsets.symmetric(vertical: 12),
+                        child: RealWebAdBanner(slotName: 'player-above-related'),
+                      ),
 
                       Row(
                         children: const [
@@ -8226,9 +8179,10 @@ class _NativeVideoPlayerScreenState extends State<NativeVideoPlayerScreen> {
                       ),
                       const SizedBox(height: 10),
 
-                      // 🔥 NEW: related-middle banner ad (between heading and list)
-                      const RealWebAdBanner(scriptIndex: 4, slotName: 'related-middle'),
-                      const SizedBox(height: 10),
+                      Padding(
+                        padding: const EdgeInsets.symmetric(vertical: 10),
+                        child: RealWebAdBanner(slotName: 'related-middle'),
+                      ),
 
                       _relatedLoading
                           ? const Center(child: Padding(padding: EdgeInsets.all(20), child: CircularProgressIndicator(color: kGreen, strokeWidth: 2)))
@@ -8251,9 +8205,10 @@ class _NativeVideoPlayerScreenState extends State<NativeVideoPlayerScreen> {
                                 ),
                       const SizedBox(height: 12),
 
-                      // REAL AD BANNER: related videos ke neeche
-                      const RealWebAdBanner(scriptIndex: 0, slotName: 'player-below-related'),
-                      const SizedBox(height: 16),
+                      Padding(
+                        padding: const EdgeInsets.symmetric(vertical: 16),
+                        child: RealWebAdBanner(slotName: 'player-below-related'),
+                      ),
                     ],
                   ),
                 ),
@@ -8265,8 +8220,6 @@ class _NativeVideoPlayerScreenState extends State<NativeVideoPlayerScreen> {
     );
   }
 
-  // 🔥 UPDATED: related card uses /stream/:id endpoint → 5-sec looping thumbnail
-  //    Same as the 10-sec page preview. Video name from `filename` shown.
   Widget _buildRelatedCard(Map<String, dynamic> v) {
     final id = v['id']?.toString() ?? '';
     final title = (v['filename'] ?? v['title'] ?? v['originalUrl'] ?? 'Video').toString();
@@ -8274,7 +8227,6 @@ class _NativeVideoPlayerScreenState extends State<NativeVideoPlayerScreen> {
     final views = (v['views'] ?? 0) as int;
     final thumb = v['thumbnail']?.toString() ?? '';
 
-    // ✅ Use direct /stream/:id endpoint so VideoLoopThumbnail plays 5-sec loop
     final String streamUrl = id.isNotEmpty ? '$kBackendBaseUrl/stream/$id' : '';
 
     return Padding(
@@ -8334,7 +8286,7 @@ class _NativeVideoPlayerScreenState extends State<NativeVideoPlayerScreen> {
 }
 
 // ═══════════════════════════════════════════════════════
-// WITHDRAW SCREEN (UNCHANGED)
+// WITHDRAW SCREEN
 // ═══════════════════════════════════════════════════════
 class WithdrawScreen extends StatefulWidget {
   const WithdrawScreen({super.key});
@@ -8576,7 +8528,7 @@ class _WithdrawScreenState extends State<WithdrawScreen> {
 }
 
 // ═══════════════════════════════════════════════════════
-// USER SEARCH DELEGATE (UNCHANGED)
+// USER SEARCH DELEGATE
 // ═══════════════════════════════════════════════════════
 class UserSearchDelegate extends SearchDelegate {
   @override
@@ -8678,7 +8630,7 @@ class UserSearchDelegate extends SearchDelegate {
 }
 
 // ═══════════════════════════════════════════════════════
-// USER PROFILE SCREEN (UNCHANGED, but thumbnail stream fix also applied)
+// USER PROFILE SCREEN
 // ═══════════════════════════════════════════════════════
 class UserProfileScreen extends StatefulWidget {
   final Map<String, dynamic> channelProfile;
@@ -8817,7 +8769,6 @@ class _UserProfileScreenState extends State<UserProfileScreen> {
                             final name = (vid['filename'] ?? vid['title'] ?? 'Video').toString();
                             final views = vid['views'] ?? 0;
                             final thumb = vid['thumbnail']?.toString() ?? '';
-                            // ✅ Use /stream/:id so 5-sec looping thumbnail plays
                             final streamUrl = id.isNotEmpty ? '$kBackendBaseUrl/stream/$id' : '';
 
                             return Container(
@@ -8857,7 +8808,7 @@ class _UserProfileScreenState extends State<UserProfileScreen> {
 }
 
 // ═══════════════════════════════════════════════════════
-// EARNINGS SCREEN (UNCHANGED)
+// EARNINGS SCREEN
 // ═══════════════════════════════════════════════════════
 class EarningsScreen extends StatefulWidget {
   const EarningsScreen({super.key});
