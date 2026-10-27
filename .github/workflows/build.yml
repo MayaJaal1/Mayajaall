@@ -68,6 +68,7 @@ jobs:
             cupertino_icons: ^1.0.6
             app_links: ^6.3.2
             webview_flutter: ^4.7.0
+            webview_flutter_android: ^4.0.0  # 🔥 YEH LINE ADD KI HAI
             google_sign_in: ^6.2.1
             shared_preferences: ^2.2.2
             url_launcher: ^6.2.2
@@ -173,6 +174,9 @@ jobs:
                   <domain includeSubdomains="true">telegram.org</domain>
                   <domain includeSubdomains="true">youtube.com</domain>
                   <domain includeSubdomains="true">instagram.com</domain>
+                  <!-- Ads Domains -->
+                  <domain includeSubdomains="true">dishoneststyle.com</domain>
+                  <domain includeSubdomains="true">infamous-maximum.com</domain>
                   <trust-anchors>
                       <certificates src="system" />
                   </trust-anchors>
@@ -369,7 +373,6 @@ jobs:
           plugins {
               id "dev.flutter.flutter-plugin-loader" version "1.0.0"
               id "com.android.application" version "8.7.0" apply false
-              // 🔥 FIX: Kotlin version 2.1.0 kar diya
               id "org.jetbrains.kotlin.android" version "2.1.0" apply false
               id "com.google.gms.google-services" version "4.4.0" apply false
           }
