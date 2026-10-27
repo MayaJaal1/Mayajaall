@@ -18,7 +18,7 @@ dependencies:
 
   # ── Deep Links / URL / Storage ──
   app_links: ^6.3.2
-  webview_flutter: ^4.7.0
+  webview_flutter: ^4.7.0  # 🔥 Ye line ads ko app ke andar dikhane ke liye zaruri hai
   url_launcher: ^6.2.2
   shared_preferences: ^2.2.2
   path_provider: ^2.1.4
@@ -54,7 +54,7 @@ dependencies:
   photo_manager_image_provider: ^2.1.1
 
   # ── 📺 Google IMA SDK for Pre-roll Ads (VAST Tags) ──
-  # 🔥 Version 0.1.2 Flutter 3.19.6 ke saath compatible hai
+  # (Optional rakha hai, kyunki abhi hum WebView aur Direct link use kar rahe hain)
   interactive_media_ads: 0.2.6
 
 # ═══════════════════════════════════════════════════════
@@ -81,5 +81,7 @@ flutter_launcher_icons:
 # ═══════════════════════════════════════════════════════
 flutter:
   uses-material-design: true
+  
+  # ── Assets ──
   assets:
     - assets/icon/
