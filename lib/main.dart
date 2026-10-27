@@ -1,7 +1,6 @@
-// ═══════════════════════════════════════════════════════════════════════════════
+// ═══════════════════════════════════════════════════════
 // MAYAJAAL APP — FULL PRODUCTION CODE (PART 1 OF 6)
-// RE-ARCHITECTED: ZERO-LAG ENGINE, DUAL-TRACE LIVE PULSE, CLOUD PERSISTENCE
-// ═══════════════════════════════════════════════════════════════════════════════
+// ═══════════════════════════════════════════════════════
 import 'dart:async';
 import 'dart:convert';
 import 'dart:io';
@@ -30,13 +29,13 @@ import 'package:crypto/crypto.dart' as crypto;
 import 'package:webview_flutter/webview_flutter.dart';
 import 'package:webview_flutter_android/webview_flutter_android.dart';
 
-// ═══════════════════════════════════════════════════════════════════════════════
-// GLOBAL ENGINE CONSTANTS & PRODUCTION CONFIG
-// ═══════════════════════════════════════════════════════════════════════════════
+// ═══════════════════════════════════════════════════════
+// CONFIG
+// ═══════════════════════════════════════════════════════
 const String webClientId = '96139047750-5ooi0pbvch98qu447somuurh6k6fmhcj.apps.googleusercontent.com';
 const String oneSignalAppId = '06b99c2b-b3b4-413b-b6cc-480a624f4e25';
 const String kBackendBaseUrl = 'https://www.mayajaal.online';
-const int kAppCurrentVersionCode = 3;
+const int kAppCurrentVersionCode = 2;
 
 const List<String> kAllowedEmailDomains = [
   '@gmail.com',
@@ -48,7 +47,6 @@ const int kMaxLoginAttempts = 5;
 const int kLoginWindowMinutes = 10;
 const String _kHmacSecret = 'MJ_HMAC_v1_a7f3b92e_d4c8_11ef_9b8a_00ff_secret_2026';
 
-// Quantum Matrix Theme Colors
 const Color kGreen = Color(0xFF00FF66);
 const Color kNeonCyan = Color(0xFF00F0FF);
 const Color kNeonPurple = Color(0xFF9D00FF);
@@ -64,13 +62,14 @@ final ValueNotifier<ThemeMode> themeNotifier = ValueNotifier(ThemeMode.dark);
 final ValueNotifier<String> languageNotifier = ValueNotifier<String>('English');
 final GlobalKey<NavigatorState> navigatorKey = GlobalKey<NavigatorState>();
 
-// ═══════════════════════════════════════════════════════════════════════════════
-// AD NETWORK CONFIG (ALL HIGH-CONVERSION SCRIPTS + NEW NETWORK SCRIPT)
-// ═══════════════════════════════════════════════════════════════════════════════
+// ═══════════════════════════════════════════════════════
+// AD NETWORK CONFIG (ALL 9 SCRIPTS INTEGRATED)
+// ═══════════════════════════════════════════════════════
+// Video Ad Direct Link (Opens in browser at video start)
 const String kAdDirectUrl = 'https://thoroughgear.com/gvnfTI'; 
 
+// WebView Ad Scripts (Loaded inside app)
 const List<String> kAdHtmlScripts = [
-  // 0. Primary High-Performing Direct Tag
   '''
   <!DOCTYPE html><html><head><meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no"><style>body { margin: 0; padding: 0; display: flex; justify-content: center; align-items: center; background-color: transparent; overflow: hidden; }</style></head><body>
   <script>
@@ -83,12 +82,13 @@ const List<String> kAdHtmlScripts = [
   </script>
   </body></html>
   ''',
-  // 1. Script Slot 1
   '''
   <!DOCTYPE html><html><head><meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no"><style>body { margin: 0; padding: 0; display: flex; justify-content: center; align-items: center; background-color: transparent; overflow: hidden; }</style></head><body>
   <script>
   (function(ynnkjd){
-  var d = document, s = d.createElement('script'), l = d.currentScript || d.scripts[d.scripts.length - 1];
+  var d = document,
+      s = d.createElement('script'),
+      l = d.currentScript || d.scripts[d.scripts.length - 1];
   s.settings = ynnkjd || {};
   s.src = "https://dishoneststyle.com/bvXYVGs.dzG/lT0PYBW/cI/CeBmp9yuNZ/UflWkZPoTPc/1ENyTSUqyvNLz/MAt/N/zdU/1SNGTLIY3XNowz";
   s.async = true;
@@ -98,12 +98,13 @@ const List<String> kAdHtmlScripts = [
   </script>
   </body></html>
   ''',
-  // 2. Script Slot 2
   '''
   <!DOCTYPE html><html><head><meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no"><style>body { margin: 0; padding: 0; display: flex; justify-content: center; align-items: center; background-color: transparent; overflow: hidden; }</style></head><body>
   <script>
   (function(ynnkjd){
-  var d = document, s = d.createElement('script'), l = d.currentScript || d.scripts[d.scripts.length - 1];
+  var d = document,
+      s = d.createElement('script'),
+      l = d.currentScript || d.scripts[d.scripts.length - 1];
   s.settings = ynnkjd || {};
   s.src = "https://dishoneststyle.com/biXGVos.daGSlc0AY/Wdce/Eeomc9/uyZQUrlMk/P/TOc/1TNuTwUK1kMyj/kltnNxz/UV1dNVTHUIzdM/wJ";
   s.async = true;
@@ -113,12 +114,13 @@ const List<String> kAdHtmlScripts = [
   </script>
   </body></html>
   ''',
-  // 3. Script Slot 3
   '''
   <!DOCTYPE html><html><head><meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no"><style>body { margin: 0; padding: 0; display: flex; justify-content: center; align-items: center; background-color: transparent; overflow: hidden; }</style></head><body>
   <script>
   (function(ynnkjd){
-  var d = document, s = d.createElement('script'), l = d.currentScript || d.scripts[d.scripts.length - 1];
+  var d = document,
+      s = d.createElement('script'),
+      l = d.currentScript || d.scripts[d.scripts.length - 1];
   s.settings = ynnkjd || {};
   s.src = "https://dishoneststyle.com/bMXaV.sld/GjlI0zYcW-cm/teMmX9LuvZgUfl/kvPwT/cB1CNSTpUp1tNiD/USt/N/z-Ug1dN/ThUd0/OZQp";
   s.async = true;
@@ -128,12 +130,13 @@ const List<String> kAdHtmlScripts = [
   </script>
   </body></html>
   ''',
-  // 4. Script Slot 4
   '''
   <!DOCTYPE html><html><head><meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no"><style>body { margin: 0; padding: 0; display: flex; justify-content: center; align-items: center; background-color: transparent; overflow: hidden; }</style></head><body>
   <script>
   (function(ynnkjd){
-  var d = document, s = d.createElement('script'), l = d.currentScript || d.scripts[d.scripts.length - 1];
+  var d = document,
+      s = d.createElement('script'),
+      l = d.currentScript || d.scripts[d.scripts.length - 1];
   s.settings = ynnkjd || {};
   s.src = "https://dishoneststyle.com/b/XfVNskd.Gwlv0zYoWPcc/Zehm/9Tu_ZOUelpkrPpTbcQ1QNkT-UB1eNxj_Edt/NczLUF1/NLTXUQ2HNGQP";
   s.async = true;
@@ -143,12 +146,13 @@ const List<String> kAdHtmlScripts = [
   </script>
   </body></html>
   ''',
-  // 5. Script Slot 5
   '''
   <!DOCTYPE html><html><head><meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no"><style>body { margin: 0; padding: 0; display: flex; justify-content: center; align-items: center; background-color: transparent; overflow: hidden; }</style></head><body>
   <script>
   (function(ynnkjd){
-  var d = document, s = d.createElement('script'), l = d.currentScript || d.scripts[d.scripts.length - 1];
+  var d = document,
+      s = d.createElement('script'),
+      l = d.currentScript || d.scripts[d.scripts.length - 1];
   s.settings = ynnkjd || {};
   s.src = "https://dishoneststyle.com/bwX.VLsBdkGFlr0zYnWjcv/hedm/9qu/ZpUvlnkKPGT_c/1/NCTBU/1eN/z/cMtpNUzlUL1zNBThU/4/MrQ_";
   s.async = true;
@@ -158,12 +162,13 @@ const List<String> kAdHtmlScripts = [
   </script>
   </body></html>
   ''',
-  // 6. Script Slot 6
   '''
   <!DOCTYPE html><html><head><meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no"><style>body { margin: 0; padding: 0; display: flex; justify-content: center; align-items: center; background-color: transparent; overflow: hidden; }</style></head><body>
   <script>
   (function(ynnkjd){
-  var d = document, s = d.createElement('script'), l = d.currentScript || d.scripts[d.scripts.length - 1];
+  var d = document,
+      s = d.createElement('script'),
+      l = d.currentScript || d.scripts[d.scripts.length - 1];
   s.settings = ynnkjd || {};
   s.src = "https://dishoneststyle.com/bSXIVMsHd.G/l/0BYuW_cP/FeemE9/uGZjUQl/kmPVTDc/1aNQTXUB2MMNj_Unt-NMzXUu1VNYTtY/y/OUQq";
   s.async = true;
@@ -173,12 +178,13 @@ const List<String> kAdHtmlScripts = [
   </script>
   </body></html>
   ''',
-  // 7. Script Slot 7
   '''
   <!DOCTYPE html><html><head><meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no"><style>body { margin: 0; padding: 0; display: flex; justify-content: center; align-items: center; background-color: transparent; overflow: hidden; }</style></head><body>
   <script>
   (function(ynnkjd){
-  var d = document, s = d.createElement('script'), l = d.currentScript || d.scripts[d.scripts.length - 1];
+  var d = document,
+      s = d.createElement('script'),
+      l = d.currentScript || d.scripts[d.scripts.length - 1];
   s.settings = ynnkjd || {};
   s.src = "https://dishoneststyle.com/b.X/VusVdRGTly0gYqW/ca/LeUmn9tuVZ/UOlTk/PvTNcC1kN/TpUQ2/M/DGUkt-NmzzUj1wNqTIYDwIO/Qc";
   s.async = true;
@@ -188,12 +194,13 @@ const List<String> kAdHtmlScripts = [
   </script>
   </body></html>
   ''',
-  // 8. Script Slot 8
   '''
   <!DOCTYPE html><html><head><meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no"><style>body { margin: 0; padding: 0; display: flex; justify-content: center; align-items: center; background-color: transparent; overflow: hidden; }</style></head><body>
   <script>
   (function(ynnkjd){
-  var d = document, s = d.createElement('script'), l = d.currentScript || d.scripts[d.scripts.length - 1];
+  var d = document,
+      s = d.createElement('script'),
+      l = d.currentScript || d.scripts[d.scripts.length - 1];
   s.settings = ynnkjd || {};
   s.src = "https://dishoneststyle.com/bsXJVVsNd.Glla0gYzW/cx/Hejmp9/uBZsUOlnkaP/Tycf1FNbTjUB1xOEDVkttXNwzNUe1/NFTSUp5-MWwV";
   s.async = true;
@@ -204,10 +211,10 @@ const List<String> kAdHtmlScripts = [
   </body></html>
   '''
 ];
-
-// ═══════════════════════════════════════════════════════════════════════════════
-// HIGH PERFORMANCE CACHED AD BANNER WIDGET
-// ═══════════════════════════════════════════════════════════════════════════════
+  
+// ═══════════════════════════════════════════════════════
+// REAL AD BANNER WIDGET (WEBVIEW VERSION - ZERO LAG)
+// ═══════════════════════════════════════════════════════
 class RealWebAdBanner extends StatefulWidget {
   final int scriptIndex;
   final double height;
@@ -279,7 +286,7 @@ class _RealWebAdBannerState extends State<RealWebAdBanner> with AutomaticKeepAli
     return Container(
       width: double.infinity,
       height: widget.height,
-      margin: const EdgeInsets.symmetric(vertical: 5),
+      margin: const EdgeInsets.symmetric(vertical: 6),
       decoration: BoxDecoration(
         color: const Color(0xFF021206),
         borderRadius: BorderRadius.circular(12),
@@ -294,7 +301,7 @@ class _RealWebAdBannerState extends State<RealWebAdBanner> with AutomaticKeepAli
             ),
             if (_isLoading)
               const Center(
-                child: CircularProgressIndicator(color: kGreen, strokeWidth: 1.8),
+                child: CircularProgressIndicator(color: kGreen, strokeWidth: 2),
               ),
             Positioned(
               top: 4,
@@ -302,7 +309,7 @@ class _RealWebAdBannerState extends State<RealWebAdBanner> with AutomaticKeepAli
               child: Container(
                 padding: const EdgeInsets.symmetric(horizontal: 5, vertical: 1.5),
                 decoration: BoxDecoration(
-                  color: Colors.black.withOpacity(0.65),
+                  color: Colors.black.withOpacity(0.6),
                   borderRadius: BorderRadius.circular(4),
                   border: Border.all(color: kGreen.withOpacity(0.4)),
                 ),
@@ -310,7 +317,7 @@ class _RealWebAdBannerState extends State<RealWebAdBanner> with AutomaticKeepAli
                   'SPONSORED',
                   style: TextStyle(
                     color: kGreen,
-                    fontSize: 7.5,
+                    fontSize: 8,
                     fontWeight: FontWeight.bold,
                     letterSpacing: 1,
                   ),
@@ -324,307 +331,332 @@ class _RealWebAdBannerState extends State<RealWebAdBanner> with AutomaticKeepAli
   }
 }
 
-// ═══════════════════════════════════════════════════════════════════════════════
-// DUAL-TRACE LIVE PULSE OSCILLOSCOPE PAINTER
-// ═══════════════════════════════════════════════════════════════════════════════
-class LivePulseGraphPainter extends CustomPainter {
-  final List<double> viewPoints;
-  final List<double> earningPoints;
-  final double animPhase;
+// ═══════════════════════════════════════════════════════
+// HELPER: AUTO THUMBNAIL GENERATOR
+// ═══════════════════════════════════════════════════════
+Widget buildAutoThumbnail(String title, {bool isSmall = false}) {
+  return Container(
+    decoration: BoxDecoration(
+      gradient: LinearGradient(
+        colors: [Colors.black, kGreen.withOpacity(0.3), Colors.black],
+        begin: Alignment.topLeft,
+        end: Alignment.bottomRight,
+      ),
+      border: Border.all(color: kGreen.withOpacity(0.3)),
+    ),
+    child: Stack(
+      alignment: Alignment.center,
+      children: [
+        Positioned(
+          top: 4,
+          left: 4,
+          right: 4,
+          child: Text(
+            'MAYAJAAL',
+            textAlign: TextAlign.center,
+            style: TextStyle(
+              color: Colors.white.withOpacity(0.3),
+              fontSize: isSmall ? 6 : 10,
+              fontWeight: FontWeight.w900,
+              letterSpacing: 1.5,
+            ),
+          ),
+        ),
+        Container(
+          width: isSmall ? 24 : 48,
+          height: isSmall ? 24 : 48,
+          decoration: BoxDecoration(
+            shape: BoxShape.circle,
+            color: Colors.black.withOpacity(0.7),
+            border: Border.all(color: kGreen, width: 1.5),
+            boxShadow: [BoxShadow(color: kGreen.withOpacity(0.4), blurRadius: 10)],
+          ),
+          child: Icon(Icons.play_arrow_rounded, color: kGreen, size: isSmall ? 16 : 28),
+        ),
+        Positioned(
+          left: 6,
+          bottom: 6,
+          right: 6,
+          child: Text(
+            title,
+            maxLines: 1,
+            overflow: TextOverflow.ellipsis,
+            style: TextStyle(
+              color: Colors.white.withOpacity(0.9),
+              fontSize: isSmall ? 8 : 11,
+              fontWeight: FontWeight.bold,
+              shadows: const [Shadow(color: Colors.black, blurRadius: 4)],
+            ),
+          ),
+        ),
+      ],
+    ),
+  );
+}
 
-  LivePulseGraphPainter({
-    required this.viewPoints,
-    required this.earningPoints,
-    required this.animPhase,
+// ═══════════════════════════════════════════════════════
+// 5-SECOND REAL-TIME LOOPING VIDEO THUMBNAIL WIDGET
+// ═══════════════════════════════════════════════════════
+class VideoLoopThumbnail extends StatefulWidget {
+  final String videoUrl;
+  final String title;
+  final bool isSmall;
+  final String? fallbackThumb; 
+  final void Function(String base64Thumb)? onFrameCaptured;
+  const VideoLoopThumbnail({
+    super.key,
+    required this.videoUrl,
+    required this.title,
+    this.isSmall = false,
+    this.fallbackThumb,
+    this.onFrameCaptured,
   });
-
   @override
-  void paint(Canvas canvas, Size size) {
-    if (viewPoints.isEmpty || earningPoints.isEmpty) return;
-
-    // Draw grid background lines
-    final gridPaint = Paint()
-      ..color = kGreen.withOpacity(0.08)
-      ..strokeWidth = 0.8;
-
-    for (double y = 0; y <= size.height; y += size.height / 4) {
-      canvas.drawLine(Offset(0, y), Offset(size.width, y), gridPaint);
-    }
-    for (double x = 0; x <= size.width; x += size.width / 6) {
-      canvas.drawLine(Offset(x, 0), Offset(x, size.height), gridPaint);
-    }
-
-    _drawSmoothTrace(canvas, size, viewPoints, kNeonCyan, true);
-    _drawSmoothTrace(canvas, size, earningPoints, kGreen, false);
-  }
-
-  void _drawSmoothTrace(Canvas canvas, Size size, List<double> points, Color color, bool isTop) {
-    if (points.length < 2) return;
-
-    final path = Path();
-    final fillPath = Path();
-
-    final stepX = size.width / (points.length - 1);
-    final maxVal = points.reduce(math.max);
-    final minVal = points.reduce(math.min);
-    final range = (maxVal - minVal) <= 0.001 ? 1.0 : (maxVal - minVal);
-
-    List<Offset> mapped = [];
-    for (int i = 0; i < points.length; i++) {
-      final normY = (points[i] - minVal) / range;
-      // Invert Y coordinate with padding
-      final py = (size.height - 10) - (normY * (size.height - 20));
-      final px = i * stepX;
-      mapped.add(Offset(px, py));
-    }
-
-    path.moveTo(mapped[0].dx, mapped[0].dy);
-    fillPath.moveTo(mapped[0].dx, size.height);
-    fillPath.lineTo(mapped[0].dx, mapped[0].dy);
-
-    for (int i = 0; i < mapped.length - 1; i++) {
-      final p0 = mapped[i];
-      final p1 = mapped[i + 1];
-      final cpX = (p0.dx + p1.dx) / 2;
-      path.cubicTo(cpX, p0.dy, cpX, p1.dy, p1.dx, p1.dy);
-      fillPath.cubicTo(cpX, p0.dy, cpX, p1.dy, p1.dx, p1.dy);
-    }
-
-    fillPath.lineTo(size.width, size.height);
-    fillPath.close();
-
-    // Fill Gradient
-    final fillPaint = Paint()
-      ..shader = LinearGradient(
-        colors: [color.withOpacity(0.25), color.withOpacity(0.0)],
-        begin: Alignment.topCenter,
-        end: Alignment.bottomCenter,
-      ).createShader(Rect.fromLTWH(0, 0, size.width, size.height))
-      ..style = PaintingStyle.fill;
-    canvas.drawPath(fillPath, fillPaint);
-
-    // Stroke Neon Line
-    final strokePaint = Paint()
-      ..color = color
-      ..strokeWidth = 2.0
-      ..style = PaintingStyle.stroke
-      ..strokeCap = StrokeCap.round
-      ..maskFilter = const MaskFilter.blur(BlurStyle.solid, 2.0);
-    canvas.drawPath(path, strokePaint);
-
-    // Glowing current head dot
-    final lastPoint = mapped.last;
-    final dotGlow = Paint()
-      ..color = color.withOpacity(0.6)
-      ..maskFilter = const MaskFilter.blur(BlurStyle.normal, 6.0);
-    canvas.drawCircle(lastPoint, 5.0, dotGlow);
-
-    final dotSolid = Paint()..color = Colors.white;
-    canvas.drawCircle(lastPoint, 2.5, dotSolid);
-  }
-
-  @override
-  bool shouldRepaint(covariant LivePulseGraphPainter oldDelegate) {
-    return oldDelegate.animPhase != animPhase ||
-        oldDelegate.viewPoints != viewPoints ||
-        oldDelegate.earningPoints != earningPoints;
-  }
+  State<VideoLoopThumbnail> createState() => _VideoLoopThumbnailState();
 }
 
-// ═══════════════════════════════════════════════════════════════════════════════
-// LIVE PULSE CARD WIDGET (WITH REAL TIME TELEMETRY & ANIMATED GRAPH)
-// ═══════════════════════════════════════════════════════════════════════════════
-class LivePulseCard extends StatefulWidget {
-  const LivePulseCard({super.key});
-
-  @override
-  State<LivePulseCard> createState() => _LivePulseCardState();
-}
-
-class _LivePulseCardState extends State<LivePulseCard> with SingleTickerProviderStateMixin {
-  late AnimationController _animCtrl;
-  final List<double> _viewHistory = [0.0, 1.0, 1.0, 2.0, 3.0, 5.0, 4.0, 6.0, 8.0, 9.0];
-  final List<double> _earningHistory = [0.0, 0.01, 0.02, 0.03, 0.05, 0.08, 0.09, 0.12, 0.15, 0.18];
-
-  int _prevViews = -1;
-  double _prevEarning = -1.0;
+class _VideoLoopThumbnailState extends State<VideoLoopThumbnail> {
+  VideoPlayerController? _controller;
+  bool _isInit = false;
+  bool _firstFrameReady = false;
+  bool _hasError = false;
+  final GlobalKey _captureKey = GlobalKey();
+  bool _captureAttempted = false;
 
   @override
   void initState() {
     super.initState();
-    _animCtrl = AnimationController(vsync: this, duration: const Duration(seconds: 2))..repeat();
+    _init();
+  }
+
+  @override
+  void didUpdateWidget(covariant VideoLoopThumbnail oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (oldWidget.videoUrl != widget.videoUrl && widget.videoUrl.isNotEmpty) {
+      _controller?.dispose();
+      _controller = null;
+      _isInit = false;
+      _firstFrameReady = false;
+      _captureAttempted = false;
+      _hasError = false;
+      _init();
+    }
+  }
+
+  Future<void> _init() async {
+    if (widget.videoUrl.isEmpty || !widget.videoUrl.startsWith('http')) return;
+
+    try {
+      _controller = VideoPlayerController.networkUrl(
+        Uri.parse(widget.videoUrl),
+        videoPlayerOptions: VideoPlayerOptions(mixWithOthers: true),
+        httpHeaders: {
+          'User-Agent': 'Mozilla/5.0 (Linux; Android 10) AppleWebKit/537.36',
+          'Accept': '*/*',
+          'Accept-Encoding': 'identity',
+        },
+      );
+
+      await _controller!.initialize();
+      if (!mounted) return;
+
+      _controller!.setVolume(0);
+      _controller!.play();
+      _controller!.addListener(_onVideoUpdate);
+
+      if (mounted) setState(() => _isInit = true);
+      _attemptFrameCapture();
+    } catch (e) {
+      debugPrint('LoopThumb init error: $e');
+      if (mounted) setState(() => _hasError = true);
+    }
+  }
+
+  void _onVideoUpdate() {
+    if (!mounted || _controller == null) return;
+    final val = _controller!.value;
+    if (!val.isInitialized) return;
+
+    if (!_firstFrameReady && val.position > Duration.zero) {
+      setState(() => _firstFrameReady = true);
+    }
+
+    if (val.position.inMilliseconds >= 5000) {
+      _controller!.seekTo(Duration.zero);
+    }
+  }
+
+  Future<void> _attemptFrameCapture() async {
+    if (_captureAttempted || widget.onFrameCaptured == null) return;
+    await Future.delayed(const Duration(milliseconds: 800));
+    if (!mounted || _captureAttempted || !_firstFrameReady) return;
+    _captureAttempted = true;
+
+    try {
+      final ctx = _captureKey.currentContext;
+      if (ctx == null) return;
+      final boundary = ctx.findRenderObject();
+      if (boundary is! RenderRepaintBoundary) return;
+      final image = await boundary.toImage(pixelRatio: 0.5);
+      final byteData = await image.toByteData(format: ui.ImageByteFormat.png);
+      if (byteData == null) return;
+      final b64 = base64Encode(byteData.buffer.asUint8List());
+      if (mounted) widget.onFrameCaptured!(b64);
+    } catch (e) {
+      debugPrint('Frame capture error: $e');
+    }
+  }
+
+  Widget _buildFallback() {
+    if (widget.fallbackThumb != null && widget.fallbackThumb!.isNotEmpty) {
+      if (widget.fallbackThumb!.startsWith('http')) {
+        return Image.network(
+          widget.fallbackThumb!,
+          fit: BoxFit.cover,
+          errorBuilder: (c, e, s) => buildAutoThumbnail(widget.title, isSmall: widget.isSmall),
+        );
+      }
+      try {
+        return Image.memory(
+          base64Decode(widget.fallbackThumb!),
+          fit: BoxFit.cover,
+          errorBuilder: (c, e, s) => buildAutoThumbnail(widget.title, isSmall: widget.isSmall),
+        );
+      } catch (_) {}
+    }
+    return buildAutoThumbnail(widget.title, isSmall: widget.isSmall);
   }
 
   @override
   void dispose() {
-    _animCtrl.dispose();
+    _controller?.removeListener(_onVideoUpdate);
+    _controller?.dispose();
     super.dispose();
-  }
-
-  void _pushTelemetry(int views, double earnings) {
-    if (_prevViews == views && _prevEarning == earnings) return;
-    _prevViews = views;
-    _prevEarning = earnings;
-
-    if (_viewHistory.length >= 16) {
-      _viewHistory.removeAt(0);
-      _earningHistory.removeAt(0);
-    }
-    _viewHistory.add(views.toDouble());
-    _earningHistory.add(earnings);
   }
 
   @override
   Widget build(BuildContext context) {
-    final uid = MayaJaalAccount.cachedUid;
-    if (uid == null) return const SizedBox.shrink();
+    if (_hasError || (!_isInit && _controller == null)) {
+      return _buildFallback();
+    }
 
-    return StreamBuilder<Map<String, dynamic>>(
-      stream: MayaJaalAccount.getDashboardStream(),
-      builder: (context, snapshot) {
-        final data = snapshot.data ?? {};
-        final totalViews = (data['totalViews'] ?? 0) as int;
-        final earnings = MayaJaalAccount.calcEarnings(totalViews);
-
-        _pushTelemetry(totalViews, earnings);
-
-        return Container(
-          margin: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-          padding: const EdgeInsets.all(14),
-          decoration: BoxDecoration(
-            color: const Color(0xFF011407),
-            borderRadius: BorderRadius.circular(16),
-            border: Border.all(color: kGreen.withOpacity(0.55), width: 1.3),
-            boxShadow: [
-              BoxShadow(color: kGreen.withOpacity(0.18), blurRadius: 18, spreadRadius: 1),
-            ],
-          ),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Row(
-                children: [
-                  AnimatedBuilder(
-                    animation: _animCtrl,
-                    builder: (c, _) => Container(
-                      width: 10,
-                      height: 10,
-                      decoration: BoxDecoration(
-                        shape: BoxShape.circle,
-                        color: kGreen,
-                        boxShadow: [
-                          BoxShadow(
-                            color: kGreen.withOpacity(0.8),
-                            blurRadius: 10 * _animCtrl.value,
-                            spreadRadius: 2 * _animCtrl.value,
-                          ),
-                        ],
-                      ),
-                    ),
-                  ),
-                  const SizedBox(width: 8),
-                  const Text(
-                    'LIVE OSCILLOSCOPE PULSE',
-                    style: TextStyle(
-                      color: kGreen,
-                      fontSize: 10.5,
-                      fontWeight: FontWeight.w900,
-                      letterSpacing: 2.0,
-                    ),
-                  ),
-                  const Spacer(),
-                  // Legend markers
-                  Row(
-                    children: [
-                      Container(width: 8, height: 8, decoration: const BoxDecoration(shape: BoxShape.circle, color: kNeonCyan)),
-                      const SizedBox(width: 4),
-                      const Text('Views', style: TextStyle(color: kNeonCyan, fontSize: 9.5, fontWeight: FontWeight.bold)),
-                      const SizedBox(width: 10),
-                      Container(width: 8, height: 8, decoration: const BoxDecoration(shape: BoxShape.circle, color: kGreen)),
-                      const SizedBox(width: 4),
-                      const Text('USD', style: TextStyle(color: kGreen, fontSize: 9.5, fontWeight: FontWeight.bold)),
-                    ],
-                  ),
-                ],
-              ),
-              const SizedBox(height: 10),
-              // Realtime Numbers
-              Row(
-                mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                children: [
-                  Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Text(
-                        '\$${earnings.toStringAsFixed(2)}',
-                        style: const TextStyle(
-                          color: kGreen,
-                          fontSize: 22,
-                          fontWeight: FontWeight.w900,
-                          shadows: [Shadow(color: kGreen, blurRadius: 12)],
-                        ),
-                      ),
-                      const Text(
-                        'REAL-TIME BALANCE',
-                        style: TextStyle(color: Colors.white54, fontSize: 8.5, letterSpacing: 1),
-                      ),
-                    ],
-                  ),
-                  Column(
-                    crossAxisAlignment: CrossAxisAlignment.end,
-                    children: [
-                      Text(
-                        '$totalViews',
-                        style: const TextStyle(
-                          color: kNeonCyan,
-                          fontSize: 22,
-                          fontWeight: FontWeight.w900,
-                          shadows: [Shadow(color: kNeonCyan, blurRadius: 12)],
-                        ),
-                      ),
-                      const Text(
-                        'VERIFIED APP VIEWS',
-                        style: TextStyle(color: Colors.white54, fontSize: 8.5, letterSpacing: 1),
-                      ),
-                    ],
-                  ),
-                ],
-              ),
-              const SizedBox(height: 12),
-              // Dual-Trace Canvas Graph
-              ClipRRect(
-                borderRadius: BorderRadius.circular(10),
-                child: Container(
-                  height: 65,
-                  width: double.infinity,
-                  color: Colors.black.withOpacity(0.55),
-                  child: AnimatedBuilder(
-                    animation: _animCtrl,
-                    builder: (c, _) => CustomPaint(
-                      painter: LivePulseGraphPainter(
-                        viewPoints: _viewHistory,
-                        earningPoints: _earningHistory,
-                        animPhase: _animCtrl.value,
-                      ),
-                    ),
-                  ),
+    return Stack(
+      fit: StackFit.expand,
+      children: [
+        if (_isInit && _controller != null)
+          RepaintBoundary(
+            key: _captureKey,
+            child: SizedBox.expand(
+              child: FittedBox(
+                fit: BoxFit.cover,
+                child: SizedBox(
+                  width: _controller!.value.size.width,
+                  height: _controller!.value.size.height,
+                  child: VideoPlayer(_controller!),
                 ),
               ),
-            ],
+            ),
           ),
-        );
-      },
+        if (!_firstFrameReady) _buildFallback(),
+      ],
     );
   }
 }
-// ═══════════════════════════════════════════════════════════════════════════════
-// MAYAJAAL APP — FULL PRODUCTION CODE (PART 2 OF 6)
-// LEGAL DIALOGS, LOCALIZATION, SECURITY GUARD & REALTIME CLOUD DATA LAYER
-// ═══════════════════════════════════════════════════════════════════════════════
 
-// ═══════════════════════════════════════════════════════════════════════════════
-// IN-APP LEGAL & POLICY DIALOG (ENTERPRISE GRADE COMPLIANCE)
-// ═══════════════════════════════════════════════════════════════════════════════
+// ═══════════════════════════════════════════════════════
+// GLOBAL MEDIA THUMBNAIL DISPATCHER
+// ═══════════════════════════════════════════════════════
+Widget buildMediaThumbnail(
+  String? thumb,
+  String title,
+  String videoUrl, {
+  bool isSmall = false,
+  void Function(String base64Thumb)? onFrameCaptured,
+}) {
+  if (videoUrl.isNotEmpty && videoUrl.startsWith('http')) {
+    return VideoLoopThumbnail(
+      videoUrl: videoUrl,
+      title: title,
+      isSmall: isSmall,
+      fallbackThumb: thumb,
+      onFrameCaptured: onFrameCaptured,
+    );
+  }
+
+  if (thumb != null && thumb.isNotEmpty) {
+    if (thumb.startsWith('http')) {
+      return Image.network(
+        thumb,
+        fit: BoxFit.cover,
+        errorBuilder: (c, e, s) => buildAutoThumbnail(title, isSmall: isSmall),
+      );
+    }
+    try {
+      return Image.memory(
+        base64Decode(thumb),
+        fit: BoxFit.cover,
+        errorBuilder: (c, e, s) => buildAutoThumbnail(title, isSmall: isSmall),
+      );
+    } catch (_) {}
+  }
+
+  return buildAutoThumbnail(title, isSmall: isSmall);
+}
+// ═══════════════════════════════════════════════════════
+// MAYAJAAL APP — FULL PRODUCTION CODE (PART 2 OF 6)
+// ═══════════════════════════════════════════════════════
+
+// ═══════════════════════════════════════════════════════
+// DEVICE ID HELPER (HARDWARE IDENTIFICATION & BINDING)
+// ═══════════════════════════════════════════════════════
+class DeviceIdHelper {
+  static String? _cached;
+  static String? _cachedHash;
+
+  static Future<String> get() async {
+    if (_cached != null) return _cached!;
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      String? stored = prefs.getString('mj_device_id');
+      if (stored != null && stored.isNotEmpty) {
+        _cached = stored;
+        return stored;
+      }
+      final info = DeviceInfoPlugin();
+      if (Platform.isAndroid) {
+        final a = await info.androidInfo;
+        stored = 'and-${a.id}-${a.model}'.replaceAll(RegExp(r'[^a-zA-Z0-9-]'), '');
+      } else if (Platform.isIOS) {
+        final i = await info.iosInfo;
+        stored = 'ios-${i.identifierForVendor ?? 'unknown'}';
+      } else {
+        stored = 'dev-${DateTime.now().millisecondsSinceEpoch}';
+      }
+      await prefs.setString('mj_device_id', stored);
+      _cached = stored;
+      return stored;
+    } catch (_) {
+      _cached = 'dev-${DateTime.now().millisecondsSinceEpoch}';
+      return _cached!;
+    }
+  }
+
+  static Future<String> getHash() async {
+    if (_cachedHash != null) return _cachedHash!;
+    try {
+      final raw = await get();
+      final digest = crypto.sha256.convert(utf8.encode('mj_salt_2026_$raw'));
+      _cachedHash = digest.toString().substring(0, 24);
+      return _cachedHash!;
+    } catch (_) {
+      return 'unknown';
+    }
+  }
+}
+
+// ═══════════════════════════════════════════════════════
+// IN-APP LEGAL & POLICY DIALOG
+// ═══════════════════════════════════════════════════════
 class LegalPolicyDialog {
   static const Color kGreen = Color(0xFF00FF66);
   static const Color kDimGreen = Color(0xFF4FBF8B);
@@ -646,7 +678,7 @@ class LegalPolicyDialog {
           _buildSection('Introduction',
             'Thank you for choosing MayaJaal ("Platform", "App", "we", "us"). This Privacy Policy is engineered to help you understand how we collect, process, utilize, disclose, and safeguard your personal data and technical telemetry when accessing our web dashboard, Android streaming application, Cloudflare R2 media caches, and official Telegram automation bots (@Mayajaalfilebot, @MayaJaalBulkConverterbot, @MayaJaalExpiryBot). By creating an account or using the platform, you agree to the terms outlined herein.'),
           _buildSection('1. Information We Collect',
-            '1.1 User & Creator Provided Information: When registering an account or initiating monetization, we collect your verified email address, cryptographically hashed passwords, and payout identifiers (including UPI IDs and Bank account records) strictly for processing withdrawals.\n\n1.2 Media & Video Assets: Utilizing our streaming pipelines involves ingesting, transcoding, and storing video files, stream manifests, and technical duration metadata across Cloudflare edge storage.\n\n1.3 In-App Interactions: The MayaJaal mobile app collects and stores your Recent Watch History, Liked/Disliked video records, and Saved Video Library directly to Firebase RTDB to ensure permanent data availability across sessions.'),
+            '1.1 User & Creator Provided Information: When registering an account or initiating monetization, we collect your verified email address, cryptographically hashed passwords, and payout identifiers (including UPI IDs and Bank account records) strictly for processing withdrawals.\n\n1.2 Media & Video Assets: Utilizing our streaming pipelines involves ingesting, transcoding, and storing video files, stream manifests, and technical duration metadata across Cloudflare edge storage.\n\n1.3 In-App Interactions: The MayaJaal mobile app collects and stores your Recent Watch History, Liked/Disliked video records, and Saved Video Library to ensure a personalized streaming experience.'),
           _buildSection('2. Automatically Collected Telemetry & Cookies',
             '2.1 Device & Network Telemetry: We automatically log unique device identifiers, IP addresses, operating system types, browser fingerprints, and playback resolution metrics to detect proxy loops and optimize streaming throughput.\n\n2.2 Cookies & Local Tokens: The platform utilizes encrypted session cookies, authentication tokens, and local cache entries to maintain creator logins and remember player settings.'),
           _buildSection('3. How We Use Your Information',
@@ -656,7 +688,7 @@ class LegalPolicyDialog {
           _buildSection('5. Video Viewing & Interactive Functionality',
             '5.1 Creator Responsibility: Users are solely accountable for the media files uploaded and converted through the service, ensuring compliance with intellectual property standards.\n\n5.2 Sharing & Distribution: Creators exercise direct discretion over the distribution of their converted stream links across social networks or websites.'),
           _buildSection('6. Advertisements & Monetization Delivery',
-            'MayaJaal displays programmatic advertising banners and native direct video triggers. Third-party ad networks capture non-personally identifiable telemetry to serve relevant ads. We do not transmit confidential creator account credentials to external advertising networks.'),
+            'MayaJaal may display programmatic advertising banners or native video interstitials. Third-party ad networks may capture non-personally identifiable telemetry to serve relevant ads. We do not transmit confidential creator account credentials to external advertising networks.'),
           _buildSection('7. Data Security Measures',
             '7.1 Cryptographic Controls: We deploy end-to-end TLS 1.3 encryption, Cloudflare security firewalls, and restricted database permissions to protect your account against unauthorized access, alteration, or disclosure.\n\n7.2 Transmission Disclaimer: While we enforce enterprise-grade security protocols, no method of transmission over the internet or cloud storage can be guaranteed 100% impenetrable.'),
           _buildSection('8. User Rights & Account Choices',
@@ -682,7 +714,7 @@ class LegalPolicyDialog {
           _buildSection('3. Privacy & Telemetry Isolation',
             'Your privacy is protected in strict accordance with the MayaJaal Privacy Policy. Creator analytics, financial settlement records, and viewing histories are never brokered or sold to external data syndicates.'),
           _buildSection('4. Advertisements, Promotions & Third-Party Services',
-            'The platform and mobile streaming application display integrated advertisements. Users acknowledge that MayaJaal does not control, endorse, or assume legal liability for third-party ad creatives, external landing pages, or advertiser representations.\n\nAny business dealings, transactions, or interactions with third-party advertisers appearing on the platform are strictly between the user and such third parties.'),
+            'The platform and mobile streaming application may display third-party advertisements. Users acknowledge that MayaJaal does not control, endorse, or assume legal liability for third-party ad creatives, external landing pages, or advertiser representations.\n\nAny business dealings, transactions, or interactions with third-party advertisers appearing on the platform are strictly between the user and such third parties.'),
           _buildSection('5. Media Validity, 28-Day Expiration & Renewal Protocol',
             '5.1 28-Day Default Lifecycle: All converted streamable media links are provisioned with an automated twenty-eight (28) day active routing lifecycle on our edge storage clusters.\n\n5.2 Automated Warning Alerts: Automated renewal notifications are dispatched via @MayaJaalExpiryBot 24 hours prior to link expiration.\n\n5.3 Multi-Channel Renewal: Creators may renew active links within the 24-hour expiration window directly via the Web Dashboard 28-Day Renewal Manager or within the MayaJaal mobile app to maintain uninterrupted streaming delivery.\n\n5.4 Dormant Media Purge: Links that are not renewed within the designated alert window, or media assets exceeding cloud storage allocations without active viewing traffic, are automatically decommissioned and permanently purged under our Fair Use Storage Policy.'),
           _buildSection('6. App Features & User Interactive Functionality',
@@ -716,11 +748,11 @@ class LegalPolicyDialog {
           _buildSection('3. Absence of Pre-Upload Adjudication Authority',
             'In the absence of a verified notification submitted by an authenticated copyright holder or their lawful representative, MayaJaal possesses neither the statutory authority nor the technical capacity to determine whether an individual creator owns, holds a valid distribution proxy for, or is legally entitled to share specific media under the doctrines of fair use or the public domain. In accordance with applicable intermediary liability laws, all transmitted content is presumed compliant with our Terms of Service unless and until a formal written infringement claim is received.'),
           _buildSection('4. Requirements for Submitting a Legitimate DMCA Takedown Notice',
-            'To submit an actionable, legally binding takedown notification under 17 U.S.C. § 512(c)(3), the copyright owner or their designated legal agent must transmit a written communication containing all of the following criteria:\n\nLegal Authority & Signature: Identification of yourself as the verified owner of an exclusive right that is allegedly infringed, or as an authorized agent operating on behalf of such owner, accompanied by a valid physical or electronic signature.\n\nIdentification of Protected Asset: Specific identification and clear description of the copyrighted work claimed to have been infringed.\n\nExact Infringing URLs: Identification of the material that is claimed to be infringing, providing the direct, exact web URLs (e.g., https://mayajaal.online/... or associated streaming manifest endpoints) hosted on our routing infrastructure. Generalized domain references or unverified filenames are insufficient.\n\nContact Details & Affiliation: Comprehensive contact details for the notifying party, including full legal name, physical address, direct telephone number, and verifiable email address.\n\nGood Faith Representation: An unambiguous statement that: "I have a good faith belief that use of the aforementioned material in the manner complained of is not authorized by the copyright owner, its agent, or the law."\n\nPenalty of Perjury Certification: An express declaration that: "I swear, under penalty of perjury, that the information in this notification is accurate and that I am the copyright owner, or authorized to act on behalf of the owner of an exclusive right that is allegedly infringed."\n\nDesignated DMCA Compliance Desk:\nEmail: mayajaalsupport@gmail.com'),
+            'To submit an actionable, legally binding takedown notification under 17 U.S.C. § 512(c)(3), the copyright owner or their designated legal agent must transmit a written communication containing all of the following criteria:\n\nLegal Authority & Signature: Identification of yourself as the verified owner of an exclusive right that is allegedly infringed, or as an authorized agent operating on behalf of such owner, accompanied by a valid physical or electronic signature.\n\nIdentification of Protected Asset: Specific identification and clear description of the copyrighted work claimed to have been infringed.\n\nExact Infringing URLs: Identification of the material that is claimed to be infringing, providing the direct, exact web URLs (e.g., https://mayajaal.online/... or associated streaming manifest endpoints) hosted on our routing infrastructure. Generalized domain references or unverified filenames are insufficient.\n\nContact Details & Affiliation: Comprehensive contact details for the notifying party, including full legal name, physical address, direct telephone number, and verifiable email address. If acting as an external vendor or legal counsel, indicate the corporate relationship to the rights holder.\n\nGood Faith Representation: An unambiguous statement that: "I have a good faith belief that use of the aforementioned material in the manner complained of is not authorized by the copyright owner, its agent, or the law."\n\nPenalty of Perjury Certification: An express declaration that: "I swear, under penalty of perjury, that the information in this notification is accurate and that I am the copyright owner, or authorized to act on behalf of the owner of an exclusive right that is allegedly infringed."\n\nDesignated DMCA Compliance Desk:\nEmail: mayajaalsupport@gmail.com'),
           _buildSection('5. Notice & Takedown Protocol (Rapid Purge)',
-            'Upon receipt of a valid, fully executed DMCA notification meeting the statutory standards above, MayaJaal will act expeditiously to remove or permanently disable access to the designated infringing materials from our Cloudflare edge routing layers.'),
+            'Upon receipt of a valid, fully executed DMCA notification meeting the statutory standards above, MayaJaal will act expeditiously to remove or permanently disable access to the designated infringing materials from our Cloudflare edge routing layers. Formal confirmation of removal is dispatched once the link has been disconnected from the routing tables.'),
           _buildSection('6. Plain Text Requirement & Attachment Protocol',
-            'In accordance with cyber security safeguards, all takedown communications, statements, and URL indices must be delivered directly within the body of the message as plain text. Enclosed executable files, encrypted archives, ZIP folders, or unsolicited external download links will not be opened or examined due to malicious payload prevention protocols.'),
+            'In accordance with cyber security safeguards, all takedown communications, statements, and URL indices must be delivered directly within the body of the message as plain text. Enclosed executable files, encrypted archives, ZIP folders, or unsolicited external download links will not be opened or examined due to malicious payload prevention protocols. Documentary attachments will be processed solely upon direct request by the compliance desk.'),
           _buildSection('7. Repeat Infringer Policy & Banishment',
             'MayaJaal maintains an active termination policy for accounts that repeatedly infringe intellectual property rights. Creators who accumulate verified copyright complaints will face immediate revocation of streaming link privileges, forfeiture of account access, and permanent blacklisting of associated Telegram bot endpoints.'),
         ];
@@ -734,7 +766,7 @@ class LegalPolicyDialog {
           _buildSection('Introduction',
             'This Agreement governs creator monetization, traffic integrity, referral commissions, and wallet settlements across the MayaJaal network. Compliance with these security and anti-abuse protocols is strictly mandatory.'),
           _buildSection('1. Qualified Views & Streaming Monetization',
-            '1.1 Human Initiation: A Qualified View is recorded solely when a genuine, authenticated human end-user initiates real-time playback through the hardware-accelerated MayaJaal player.\n\n1.2 Server-Side Verification: Views are validated server-side after 10 continuous seconds of playback. Embedded automated loops, auto-refresh iframes, or headless browser scripts will not be counted toward creator earnings.'),
+            '1.1 Human Initiation: A Qualified View is recorded solely when a genuine, authenticated human end-user initiates real-time playback through the hardware-accelerated MayaJaal player.\n\n1.2 Server-Side Verification: Views are validated server-side. Embedded automated loops, auto-refresh iframes, or headless browser scripts will not be counted toward creator earnings.'),
           _buildSection('2. Strict Account Ban Triggers & Multi-Account Fraud',
             '2.1 1 Device = 1 Account Policy (Hardware Device Lock): Only one authenticated MayaJaal account is permitted per physical hardware device. Creating or rotating multiple accounts on a single mobile device will trigger an automated hardware lock and permanent account termination.\n\n2.2 Self-Referral & App Share Fraud: Creating multiple fake Gmail accounts on the same phone to exploit app share links or referral rewards is strictly detected by our device telemetry. Any account engaging in fake self-referral cloning will face instant permanent ban and complete forfeiture of all balances.\n\n2.3 Prohibited Environments (Emulators & Rooted Phones): Operating the MayaJaal App via virtual emulators (e.g., BlueStacks, LDPlayer, Nox), rooted Android builds, or jailbroken devices is strictly blocked. Ingestion from virtualized environments results in immediate security suspension.'),
           _buildSection('3. Authentication & Sign-Up Protocols',
@@ -756,11 +788,11 @@ class LegalPolicyDialog {
         accentColor = Colors.amberAccent;
         sections = [
           _buildSection('Official Compliance Email',
-            'mayajaalsupport@gmail.com\n\nDirect verified response desk.'),
+            'mayajaalsupport@gmail.com\n\nDirect Email'),
           _buildSection('Telegram Official Helpdesk',
-            '@MayaJaalSupport\n\nInstant support bot and agent channel.'),
+            '@MayaJaalSupport'),
           _buildSection('Official Instagram Desk',
-            '@maya_jaal_official\n\nUpdates and creator announcements.'),
+            '@maya_jaal_official'),
           _buildSection('Response Times',
             'Automated bots operate 24/7. Support inquiries are reviewed and resolved within 12–24 business hours.'),
         ];
@@ -926,9 +958,9 @@ class LegalPolicyDialog {
   }
 }
 
-// ═══════════════════════════════════════════════════════════════════════════════
+// ═══════════════════════════════════════════════════════
 // TRANSLATIONS
-// ═══════════════════════════════════════════════════════════════════════════════
+// ═══════════════════════════════════════════════════════
 final Map<String, Map<String, String>> localizedStrings = {
   'English': {
     'app_title': 'MAYA JAAL',
@@ -965,9 +997,9 @@ String tr(String key) {
   return localizedStrings[lang]?[key] ?? localizedStrings['English']?[key] ?? key;
 }
 
-// ═══════════════════════════════════════════════════════════════════════════════
+// ═══════════════════════════════════════════════════════
 // HAPTIC HELPER
-// ═══════════════════════════════════════════════════════════════════════════════
+// ═══════════════════════════════════════════════════════
 class Haptic {
   static Future<void> light() async {
     try { await HapticFeedback.lightImpact(); } catch (_) {}
@@ -983,9 +1015,9 @@ class Haptic {
   }
 }
 
-// ═══════════════════════════════════════════════════════════════════════════════
-// SECURITY GUARD & DEVICE INTEGRITY
-// ═══════════════════════════════════════════════════════════════════════════════
+// ═══════════════════════════════════════════════════════
+// SECURITY GUARD
+// ═══════════════════════════════════════════════════════
 class SecurityGuard {
   static bool isGmailOnly(String? email) {
     if (email == null || email.isEmpty) return false;
@@ -1131,7 +1163,14 @@ class SecurityGuard {
   }
 
   static Future<bool> isPackageIntact() async {
-    return true;
+    try {
+      if (Platform.isAndroid) {
+        return true;
+      }
+      return true;
+    } catch (_) {
+      return true;
+    }
   }
 
   static Future<bool> checkLoginRateLimit() async {
@@ -1245,9 +1284,9 @@ class SecurityGuard {
   }
 }
 
-// ═══════════════════════════════════════════════════════════════════════════════
+// ═══════════════════════════════════════════════════════
 // CYBER RANK SYSTEM
-// ═══════════════════════════════════════════════════════════════════════════════
+// ═══════════════════════════════════════════════════════
 class CyberRank {
   static const List<Map<String, dynamic>> ranks = [
     {'name': 'Neon Rookie', 'emoji': '🥉', 'color': kSilver, 'min': 0},
@@ -1281,9 +1320,9 @@ class CyberRank {
   }
 }
 
-// ═══════════════════════════════════════════════════════════════════════════════
+// ═══════════════════════════════════════════════════════
 // AD TRACKER
-// ═══════════════════════════════════════════════════════════════════════════════
+// ═══════════════════════════════════════════════════════
 class AdTracker {
   static const String _kCountKey = 'ads_watched_count';
   static const String _kLastTimeKey = 'ads_last_reset_time';
@@ -1337,9 +1376,9 @@ class AdTracker {
   }
 }
 
-// ═══════════════════════════════════════════════════════════════════════════════
-// MAYAJAAL FIREBASE ACCOUNT SERVICE (100% REAL CLOUD PERSISTENCE)
-// ═══════════════════════════════════════════════════════════════════════════════
+// ═══════════════════════════════════════════════════════
+// MAYAJAAL FIREBASE ACCOUNT SERVICE
+// ═══════════════════════════════════════════════════════
 class MayaJaalAccount {
   static String? cachedUid;
   static String? cachedEmail;
@@ -1607,13 +1646,12 @@ class MayaJaalAccount {
     }
   }
 
-  // Exact Anti-Fraud Dynamic CPM Tier Calculation
   static double calcEarnings(int views) {
     views = math.max(0, views);
     if (views <= 0) return 0.0;
-    if (views <= 1000) return _r2(views * 0.001); // 1k = $1.00
-    if (views <= 2000) return _r2(1.00 + (views - 1000) * 0.001); // 2k = $2.00
-    if (views <= 10000) return _r2(2.00 + (views - 2000) * 0.002875); // 10k = $25.00
+    if (views <= 1000) return _r2(views * 0.001); // 1k views = $1.00
+    if (views <= 2000) return _r2(1.00 + (views - 1000) * 0.001); // 2k views = $2.00
+    if (views <= 10000) return _r2(2.00 + (views - 2000) * 0.002875); // 10k views = $25.00
     return _r2(25.00 + (views - 10000) * 0.0025);
   }
 
@@ -1637,14 +1675,13 @@ class MayaJaalAccount {
 
   static double _r2(num n) => (n * 100).round() / 100;
 }
-// ═══════════════════════════════════════════════════════════════════════════════
+// ═══════════════════════════════════════════════════════
 // MAYAJAAL APP — FULL PRODUCTION CODE (PART 3 OF 6)
-// CLOUD PERSISTENCE, REALTIME NOTIFICATIONS & DYNAMIC OVERLAYS
-// ═══════════════════════════════════════════════════════════════════════════════
+// ═══════════════════════════════════════════════════════
 
-// ═══════════════════════════════════════════════════════════════════════════════
-// FIREBASE SERVICE — REALTIME CLOUD INTEGRATION & NOTIFICATION SYSTEM
-// ═══════════════════════════════════════════════════════════════════════════════
+// ═══════════════════════════════════════════════════════
+// FIREBASE SERVICE — REALTIME CLOUD INTEGRATION & NOTIFICATIONS
+// ═══════════════════════════════════════════════════════
 class FirebaseService {
   static DatabaseReference get _rtdb => FirebaseDatabase.instance.ref();
 
@@ -2010,9 +2047,9 @@ class FirebaseService {
   }
 }
 
-// ═══════════════════════════════════════════════════════════════════════════════
+// ═══════════════════════════════════════════════════════
 // NOTIFICATION DETAILS SCREEN (FULL-SCREEN DEDICATED VIEW)
-// ═══════════════════════════════════════════════════════════════════════════════
+// ═══════════════════════════════════════════════════════
 class NotificationDetailsScreen extends StatelessWidget {
   final Map<String, dynamic> notification;
   const NotificationDetailsScreen({super.key, required this.notification});
@@ -2125,9 +2162,9 @@ class NotificationDetailsScreen extends StatelessWidget {
   }
 }
 
-// ═══════════════════════════════════════════════════════════════════════════════
-// TOP SLIDE-DOWN NOTIFICATION DROPDOWN OVERLAY (SMOOTH SLIDE ANIMATION)
-// ═══════════════════════════════════════════════════════════════════════════════
+// ═══════════════════════════════════════════════════════
+// TOP SLIDE-DOWN NOTIFICATION DROPDOWN OVERLAY (BARRIER COLOR ERROR FIXED)
+// ═══════════════════════════════════════════════════════
 void showTopNotificationDropdown(BuildContext context) {
   final uid = MayaJaalAccount.cachedUid;
   if (uid == null) return;
@@ -2136,7 +2173,6 @@ void showTopNotificationDropdown(BuildContext context) {
     context: context,
     barrierDismissible: true,
     barrierLabel: 'Notifications',
-    barrierColor: Colors.black60,
     transitionDuration: const Duration(milliseconds: 320),
     pageBuilder: (ctx, anim1, anim2) {
       return Align(
@@ -2283,9 +2319,9 @@ void showTopNotificationDropdown(BuildContext context) {
   );
 }
 
-// ═══════════════════════════════════════════════════════════════════════════════
-// CLOUD-SYNCED WATCH HISTORY & SAVED VIDEOS HELPER (PERMANENT PERSISTENCE)
-// ═══════════════════════════════════════════════════════════════════════════════
+// ═══════════════════════════════════════════════════════
+// CLOUD-SYNCED WATCH HISTORY & SAVED VIDEOS HELPER
+// ═══════════════════════════════════════════════════════
 class WatchHistory {
   static String get _uid => MayaJaalAccount.cachedUid ?? 'guest';
   static String get _historyKey => 'watch_history_v2_$_uid';
@@ -2398,7 +2434,6 @@ class WatchHistory {
     } catch (_) {}
   }
 
-  // 100% Realtime Cloud Synchronizer
   static Future<void> syncWatchRecordCloud(Map<String, dynamic> item) async {
     if (_uid == 'guest') return;
     try {
@@ -2429,14 +2464,13 @@ class WatchHistory {
     }
   }
 }
-// ═══════════════════════════════════════════════════════════════════════════════
+// ═══════════════════════════════════════════════════════
 // MAYAJAAL APP — FULL PRODUCTION CODE (PART 4 OF 6)
-// MAIN ENTRY, MATRIX RAIN, LOADERS, ZERO-LAG AUTH GATE, GOOGLE LOGIN & NAVIGATION
-// ═══════════════════════════════════════════════════════════════════════════════
+// ═══════════════════════════════════════════════════════
 
-// ═══════════════════════════════════════════════════════════════════════════════
+// ═══════════════════════════════════════════════════════
 // MAIN APPLICATION ENTRY POINT (APP STARTUP)
-// ═══════════════════════════════════════════════════════════════════════════════
+// ═══════════════════════════════════════════════════════
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
 
@@ -2475,9 +2509,9 @@ Future<void> main() async {
   runApp(const MyApp());
 }
 
-// ═══════════════════════════════════════════════════════════════════════════════
+// ═══════════════════════════════════════════════════════
 // MATRIX DIGITAL RAIN BACKGROUND EFFECT
-// ═══════════════════════════════════════════════════════════════════════════════
+// ═══════════════════════════════════════════════════════
 class MatrixRain extends StatefulWidget {
   final double opacity;
   const MatrixRain({super.key, this.opacity = 0.7});
@@ -2548,9 +2582,9 @@ class _MatrixRainState extends State<MatrixRain> {
   }
 }
 
-// ═══════════════════════════════════════════════════════════════════════════════
+// ═══════════════════════════════════════════════════════
 // PROFESSIONAL MATRIX ROTATING LOADER SCREEN
-// ═══════════════════════════════════════════════════════════════════════════════
+// ═══════════════════════════════════════════════════════
 class ProfessionalLoader extends StatefulWidget {
   final String message;
   const ProfessionalLoader({super.key, this.message = 'LOADING...'});
@@ -2687,9 +2721,9 @@ class _ProfessionalLoaderState extends State<ProfessionalLoader>
   }
 }
 
-// ═══════════════════════════════════════════════════════════════════════════════
+// ═══════════════════════════════════════════════════════
 // SPLASH SCREEN
-// ═══════════════════════════════════════════════════════════════════════════════
+// ═══════════════════════════════════════════════════════
 class SplashScreen extends StatefulWidget {
   const SplashScreen({super.key});
   @override
@@ -2797,9 +2831,9 @@ class _SplashScreenState extends State<SplashScreen>
   }
 }
 
-// ═══════════════════════════════════════════════════════════════════════════════
+// ═══════════════════════════════════════════════════════
 // MY APP — ROOT APP CONTAINER & DEEP LINK HANDLER
-// ═══════════════════════════════════════════════════════════════════════════════
+// ═══════════════════════════════════════════════════════
 class MyApp extends StatefulWidget {
   const MyApp({super.key});
   @override
@@ -2953,9 +2987,9 @@ class _MyAppState extends State<MyApp> {
   }
 }
 
-// ═══════════════════════════════════════════════════════════════════════════════
+// ═══════════════════════════════════════════════════════
 // AUTH GATE (ZERO-LAG ROUTER & SAFE LOGIN PERMISSION DISPATCHER)
-// ═══════════════════════════════════════════════════════════════════════════════
+// ═══════════════════════════════════════════════════════
 class AuthGate extends StatefulWidget {
   const AuthGate({super.key});
   @override
@@ -3051,7 +3085,7 @@ class _AuthGateState extends State<AuthGate> {
             await MayaJaalAccount.syncUserToRTDB(user);
             await MayaJaalAccount.loadApiKey();
 
-            // ✅ CRITICAL FIX: Notification permission sirf verify/login hone ke baad hi maangi jayegi
+            // Notification permission sirf successful login ke baad
             try {
               OneSignal.Notifications.requestPermission(true);
             } catch (_) {}
@@ -3077,9 +3111,9 @@ class _AuthGateState extends State<AuthGate> {
   }
 }
 
-// ═══════════════════════════════════════════════════════════════════════════════
+// ═══════════════════════════════════════════════════════
 // SECURITY BLOCK SCREEN
-// ═══════════════════════════════════════════════════════════════════════════════
+// ═══════════════════════════════════════════════════════
 class _SecurityBlockScreen extends StatelessWidget {
   final String error;
   final VoidCallback onRetry;
@@ -3181,9 +3215,9 @@ class _SecurityBlockScreen extends StatelessWidget {
   }
 }
 
-// ═══════════════════════════════════════════════════════════════════════════════
+// ═══════════════════════════════════════════════════════
 // GOOGLE AUTHENTICATION SCREEN
-// ═══════════════════════════════════════════════════════════════════════════════
+// ═══════════════════════════════════════════════════════
 class LoginScreen extends StatefulWidget {
   final VoidCallback? onLoginSuccess;
   const LoginScreen({super.key, this.onLoginSuccess});
@@ -3441,9 +3475,9 @@ class _LoginScreenState extends State<LoginScreen>
   }
 }
 
-// ═══════════════════════════════════════════════════════════════════════════════
-// MAIN NAVIGATION HOLDER (INTEGRATED TOP DROPDOWN DISPATCHER)
-// ═══════════════════════════════════════════════════════════════════════════════
+// ═══════════════════════════════════════════════════════
+// MAIN NAVIGATION HOLDER (DIRECT TOP DROPDOWN DISPATCHER)
+// ═══════════════════════════════════════════════════════
 class MainNavigationHolder extends StatefulWidget {
   const MainNavigationHolder({super.key});
   @override
@@ -3637,14 +3671,299 @@ class _MainNavigationHolderState extends State<MainNavigationHolder> with Ticker
     );
   }
 }
-// ═══════════════════════════════════════════════════════════════════════════════
+// ═══════════════════════════════════════════════════════
 // MAYAJAAL APP — FULL PRODUCTION CODE (PART 5 OF 6)
-// HOME SCREEN, LIVE PULSE INTEGRATION, MORE DRAWER & STREAM PREVIEW SCREEN
-// ═══════════════════════════════════════════════════════════════════════════════
+// ═══════════════════════════════════════════════════════
 
-// ═══════════════════════════════════════════════════════════════════════════════
-// HOME SCREEN (WITH ALL INTEGRATED AD BANNERS & MATRIX NODE)
-// ═══════════════════════════════════════════════════════════════════════════════
+// ═══════════════════════════════════════════════════════
+// LIVE PULSE GRAPH PAINTER (DUAL-TRACE OSCILLOSCOPE)
+// ═══════════════════════════════════════════════════════
+class LivePulseGraphPainter extends CustomPainter {
+  final List<double> viewPoints;
+  final List<double> earningPoints;
+  final double animPhase;
+
+  LivePulseGraphPainter({
+    required this.viewPoints,
+    required this.earningPoints,
+    required this.animPhase,
+  });
+
+  @override
+  void paint(Canvas canvas, Size size) {
+    if (viewPoints.isEmpty || earningPoints.isEmpty) return;
+
+    final gridPaint = Paint()
+      ..color = kGreen.withOpacity(0.08)
+      ..strokeWidth = 0.8;
+
+    for (double y = 0; y <= size.height; y += size.height / 4) {
+      canvas.drawLine(Offset(0, y), Offset(size.width, y), gridPaint);
+    }
+    for (double x = 0; x <= size.width; x += size.width / 6) {
+      canvas.drawLine(Offset(x, 0), Offset(x, size.height), gridPaint);
+    }
+
+    _drawSmoothTrace(canvas, size, viewPoints, kNeonCyan, true);
+    _drawSmoothTrace(canvas, size, earningPoints, kGreen, false);
+  }
+
+  void _drawSmoothTrace(Canvas canvas, Size size, List<double> points, Color color, bool isTop) {
+    if (points.length < 2) return;
+
+    final path = Path();
+    final fillPath = Path();
+
+    final stepX = size.width / (points.length - 1);
+    final maxVal = points.reduce(math.max);
+    final minVal = points.reduce(math.min);
+    final range = (maxVal - minVal) <= 0.001 ? 1.0 : (maxVal - minVal);
+
+    List<Offset> mapped = [];
+    for (int i = 0; i < points.length; i++) {
+      final normY = (points[i] - minVal) / range;
+      final py = (size.height - 10) - (normY * (size.height - 20));
+      final px = i * stepX;
+      mapped.add(Offset(px, py));
+    }
+
+    path.moveTo(mapped[0].dx, mapped[0].dy);
+    fillPath.moveTo(mapped[0].dx, size.height);
+    fillPath.lineTo(mapped[0].dx, mapped[0].dy);
+
+    for (int i = 0; i < mapped.length - 1; i++) {
+      final p0 = mapped[i];
+      final p1 = mapped[i + 1];
+      final cpX = (p0.dx + p1.dx) / 2;
+      path.cubicTo(cpX, p0.dy, cpX, p1.dy, p1.dx, p1.dy);
+      fillPath.cubicTo(cpX, p0.dy, cpX, p1.dy, p1.dx, p1.dy);
+    }
+
+    fillPath.lineTo(size.width, size.height);
+    fillPath.close();
+
+    final fillPaint = Paint()
+      ..shader = LinearGradient(
+        colors: [color.withOpacity(0.25), color.withOpacity(0.0)],
+        begin: Alignment.topCenter,
+        end: Alignment.bottomCenter,
+      ).createShader(Rect.fromLTWH(0, 0, size.width, size.height))
+      ..style = PaintingStyle.fill;
+    canvas.drawPath(fillPath, fillPaint);
+
+    final strokePaint = Paint()
+      ..color = color
+      ..strokeWidth = 2.0
+      ..style = PaintingStyle.stroke
+      ..strokeCap = StrokeCap.round
+      ..maskFilter = const MaskFilter.blur(BlurStyle.solid, 2.0);
+    canvas.drawPath(path, strokePaint);
+
+    final lastPoint = mapped.last;
+    final dotGlow = Paint()
+      ..color = color.withOpacity(0.6)
+      ..maskFilter = const MaskFilter.blur(BlurStyle.normal, 6.0);
+    canvas.drawCircle(lastPoint, 5.0, dotGlow);
+
+    final dotSolid = Paint()..color = Colors.white;
+    canvas.drawCircle(lastPoint, 2.5, dotSolid);
+  }
+
+  @override
+  bool shouldRepaint(covariant LivePulseGraphPainter oldDelegate) {
+    return oldDelegate.animPhase != animPhase ||
+        oldDelegate.viewPoints != viewPoints ||
+        oldDelegate.earningPoints != earningPoints;
+  }
+}
+
+// ═══════════════════════════════════════════════════════
+// LIVE PULSE CARD WIDGET
+// ═══════════════════════════════════════════════════════
+class LivePulseCard extends StatefulWidget {
+  const LivePulseCard({super.key});
+
+  @override
+  State<LivePulseCard> createState() => _LivePulseCardState();
+}
+
+class _LivePulseCardState extends State<LivePulseCard> with SingleTickerProviderStateMixin {
+  late AnimationController _animCtrl;
+  final List<double> _viewHistory = [0.0, 1.0, 1.0, 2.0, 3.0, 5.0, 4.0, 6.0, 8.0, 9.0];
+  final List<double> _earningHistory = [0.0, 0.01, 0.02, 0.03, 0.05, 0.08, 0.09, 0.12, 0.15, 0.18];
+
+  int _prevViews = -1;
+  double _prevEarning = -1.0;
+
+  @override
+  void initState() {
+    super.initState();
+    _animCtrl = AnimationController(vsync: this, duration: const Duration(seconds: 2))..repeat();
+  }
+
+  @override
+  void dispose() {
+    _animCtrl.dispose();
+    super.dispose();
+  }
+
+  void _pushTelemetry(int views, double earnings) {
+    if (_prevViews == views && _prevEarning == earnings) return;
+    _prevViews = views;
+    _prevEarning = earnings;
+
+    if (_viewHistory.length >= 16) {
+      _viewHistory.removeAt(0);
+      _earningHistory.removeAt(0);
+    }
+    _viewHistory.add(views.toDouble());
+    _earningHistory.add(earnings);
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final uid = MayaJaalAccount.cachedUid;
+    if (uid == null) return const SizedBox.shrink();
+
+    return StreamBuilder<Map<String, dynamic>>(
+      stream: MayaJaalAccount.getDashboardStream(),
+      builder: (context, snapshot) {
+        final data = snapshot.data ?? {};
+        final totalViews = (data['totalViews'] ?? 0) as int;
+        final earnings = MayaJaalAccount.calcEarnings(totalViews);
+
+        _pushTelemetry(totalViews, earnings);
+
+        return Container(
+          margin: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+          padding: const EdgeInsets.all(14),
+          decoration: BoxDecoration(
+            color: const Color(0xFF011407),
+            borderRadius: BorderRadius.circular(16),
+            border: Border.all(color: kGreen.withOpacity(0.55), width: 1.3),
+            boxShadow: [
+              BoxShadow(color: kGreen.withOpacity(0.18), blurRadius: 18, spreadRadius: 1),
+            ],
+          ),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Row(
+                children: [
+                  AnimatedBuilder(
+                    animation: _animCtrl,
+                    builder: (c, _) => Container(
+                      width: 10,
+                      height: 10,
+                      decoration: BoxDecoration(
+                        shape: BoxShape.circle,
+                        color: kGreen,
+                        boxShadow: [
+                          BoxShadow(
+                            color: kGreen.withOpacity(0.8),
+                            blurRadius: 10 * _animCtrl.value,
+                            spreadRadius: 2 * _animCtrl.value,
+                          ),
+                        ],
+                      ),
+                    ),
+                  ),
+                  const SizedBox(width: 8),
+                  const Text(
+                    'LIVE OSCILLOSCOPE PULSE',
+                    style: TextStyle(
+                      color: kGreen,
+                      fontSize: 10.5,
+                      fontWeight: FontWeight.w900,
+                      letterSpacing: 2.0,
+                    ),
+                  ),
+                  const Spacer(),
+                  Row(
+                    children: [
+                      Container(width: 8, height: 8, decoration: const BoxDecoration(shape: BoxShape.circle, color: kNeonCyan)),
+                      const SizedBox(width: 4),
+                      const Text('Views', style: TextStyle(color: kNeonCyan, fontSize: 9.5, fontWeight: FontWeight.bold)),
+                      const SizedBox(width: 10),
+                      Container(width: 8, height: 8, decoration: const BoxDecoration(shape: BoxShape.circle, color: kGreen)),
+                      const SizedBox(width: 4),
+                      const Text('USD', style: TextStyle(color: kGreen, fontSize: 9.5, fontWeight: FontWeight.bold)),
+                    ],
+                  ),
+                ],
+              ),
+              const SizedBox(height: 10),
+              Row(
+                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                children: [
+                  Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        '\$${earnings.toStringAsFixed(2)}',
+                        style: const TextStyle(
+                          color: kGreen,
+                          fontSize: 22,
+                          fontWeight: FontWeight.w900,
+                          shadows: [Shadow(color: kGreen, blurRadius: 12)],
+                        ),
+                      ),
+                      const Text(
+                        'REAL-TIME BALANCE',
+                        style: TextStyle(color: Colors.white54, fontSize: 8.5, letterSpacing: 1),
+                      ),
+                    ],
+                  ),
+                  Column(
+                    crossAxisAlignment: CrossAxisAlignment.end,
+                    children: [
+                      Text(
+                        '$totalViews',
+                        style: const TextStyle(
+                          color: kNeonCyan,
+                          fontSize: 22,
+                          fontWeight: FontWeight.w900,
+                          shadows: [Shadow(color: kNeonCyan, blurRadius: 12)],
+                        ),
+                      ),
+                      const Text(
+                        'VERIFIED APP VIEWS',
+                        style: TextStyle(color: Colors.white54, fontSize: 8.5, letterSpacing: 1),
+                      ),
+                    ],
+                  ),
+                ],
+              ),
+              const SizedBox(height: 12),
+              ClipRRect(
+                borderRadius: BorderRadius.circular(10),
+                child: Container(
+                  height: 65,
+                  width: double.infinity,
+                  color: Colors.black.withOpacity(0.55),
+                  child: AnimatedBuilder(
+                    animation: _animCtrl,
+                    builder: (c, _) => CustomPaint(
+                      painter: LivePulseGraphPainter(
+                        viewPoints: _viewHistory,
+                        earningPoints: _earningHistory,
+                        animPhase: _animCtrl.value,
+                      ),
+                    ),
+                  ),
+                ),
+              ),
+            ],
+          ),
+        );
+      },
+    );
+  }
+}
+
+// ═══════════════════════════════════════════════════════
+// HOME SCREEN
+// ═══════════════════════════════════════════════════════
 class HomeScreen extends StatefulWidget {
   final VoidCallback? onMenuTap;
   const HomeScreen({super.key, this.onMenuTap});
@@ -3871,7 +4190,6 @@ class _HomeScreenState extends State<HomeScreen>
                             ),
                             onPressed: () {
                               Haptic.light();
-                              // Top Slide-Down Notification Drawer Dialog trigger
                               showTopNotificationDropdown(context);
                             },
                           ),
@@ -3911,7 +4229,7 @@ class _HomeScreenState extends State<HomeScreen>
                 ),
               ),
 
-              // REAL AD BANNER: HOME TOP (Slot 0 - High conversion tag)
+              // REAL AD BANNER: HOME TOP
               const Padding(
                 padding: EdgeInsets.symmetric(horizontal: 16, vertical: 6),
                 child: RealWebAdBanner(scriptIndex: 0, slotName: 'home-top'),
@@ -4201,7 +4519,7 @@ class _HomeScreenState extends State<HomeScreen>
                 ),
               ),
 
-              // REAL AD BANNER: HOME MIDDLE (Slot 1)
+              // REAL AD BANNER: HOME MIDDLE
               const Padding(
                 padding: EdgeInsets.symmetric(horizontal: 16, vertical: 6),
                 child: RealWebAdBanner(scriptIndex: 1, slotName: 'home-middle'),
@@ -4243,7 +4561,7 @@ class _HomeScreenState extends State<HomeScreen>
                 ),
               ),
 
-              // REAL AD BANNER: HOME BOTTOM (Slot 2)
+              // REAL AD BANNER: HOME BOTTOM
               const Padding(
                 padding: EdgeInsets.symmetric(horizontal: 16, vertical: 10),
                 child: RealWebAdBanner(scriptIndex: 2, slotName: 'home-bottom'),
@@ -4269,9 +4587,9 @@ class _HomeScreenState extends State<HomeScreen>
   }
 }
 
-// ═══════════════════════════════════════════════════════════════════════════════
-// MORE DRAWER (WITH ZERO-LAG DUAL-TRACE LIVE PULSE OSCILLOSCOPE)
-// ═══════════════════════════════════════════════════════════════════════════════
+// ═══════════════════════════════════════════════════════
+// MORE DRAWER
+// ═══════════════════════════════════════════════════════
 class MoreDrawer extends StatefulWidget {
   const MoreDrawer({super.key});
 
@@ -4787,9 +5105,7 @@ class _MoreDrawerState extends State<MoreDrawer>
               child: ListView(
                 padding: const EdgeInsets.symmetric(vertical: 8),
                 children: [
-                  // 🔥 DUAL-TRACE LIVE PULSE OSCILLOSCOPE INTEGRATED HERE
                   _staggered(index: 0, child: const LivePulseCard()),
-
                   _staggered(
                     index: 1,
                     child: Container(
@@ -5333,9 +5649,9 @@ class _MoreDrawerState extends State<MoreDrawer>
   }
 }
 
-// ═══════════════════════════════════════════════════════════════════════════════
+// ═══════════════════════════════════════════════════════
 // SNAKE BORDER PAINTER
-// ═══════════════════════════════════════════════════════════════════════════════
+// ═══════════════════════════════════════════════════════
 class SnakeBorderPainter extends CustomPainter {
   final double progress;
   final Color color;
@@ -5396,9 +5712,9 @@ class SnakeBorderPainter extends CustomPainter {
   }
 }
 
-// ═══════════════════════════════════════════════════════════════════════════════
-// STREAM PREVIEW SCREEN (10S COUNTDOWN & VERIFIED STREAM PREVIEW)
-// ═══════════════════════════════════════════════════════════════════════════════
+// ═══════════════════════════════════════════════════════
+// STREAM PREVIEW SCREEN (WITH FIXED STREAM URL & REAL ADS)
+// ═══════════════════════════════════════════════════════
 class StreamPreviewScreen extends StatefulWidget {
   final String targetUrl;
   const StreamPreviewScreen({super.key, required this.targetUrl});
@@ -5671,7 +5987,6 @@ class _StreamPreviewScreenState extends State<StreamPreviewScreen>
     }
 
     await prefs.setString(key, jsonEncode(history));
-    // Realtime Two-Way Cloud Sync
     await WatchHistory.syncWatchRecordCloud(item);
   }
 
@@ -5804,7 +6119,7 @@ class _StreamPreviewScreenState extends State<StreamPreviewScreen>
                       icon: const Icon(Icons.home, color: Colors.white54, size: 20),
                       label: const Text('GO TO HOME PAGE', style: TextStyle(color: Colors.white54, fontSize: 12, fontWeight: FontWeight.bold, letterSpacing: 1.5)),
                       style: OutlinedButton.styleFrom(
-                        side: BorderSide(color: Colors.white24, width: 1.5),
+                        side: const BorderSide(color: Colors.white24, width: 1.5),
                         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(25)),
                       ),
                     ),
@@ -5922,7 +6237,7 @@ class _StreamPreviewScreenState extends State<StreamPreviewScreen>
                   ),
                   const SizedBox(height: 16),
 
-                  // REAL AD BANNER: PLAY BUTTON KE UPAR (Slot 3)
+                  // REAL AD BANNER: PLAY BUTTON KE UPAR
                   const RealWebAdBanner(scriptIndex: 3, slotName: 'above-play-button'),
                   const SizedBox(height: 10),
 
@@ -5942,7 +6257,7 @@ class _StreamPreviewScreenState extends State<StreamPreviewScreen>
                     ),
 
                   const SizedBox(height: 10),
-                  // REAL AD BANNER: PLAY BUTTON KE NEECHE (Slot 4)
+                  // REAL AD BANNER: PLAY BUTTON KE NEECHE
                   const RealWebAdBanner(scriptIndex: 4, slotName: 'below-play-button'),
                   const SizedBox(height: 16),
 
@@ -6029,14 +6344,14 @@ class _StreamPreviewScreenState extends State<StreamPreviewScreen>
     );
   }
 }
-// ═══════════════════════════════════════════════════════════════════════════════
+// ═══════════════════════════════════════════════════════
 // MAYAJAAL APP — FULL PRODUCTION CODE (PART 6 OF 6)
 // ZERO-LAG HARDWARE PLAYER, REALTIME WITHDRAWAL HISTORY & COMPLETE SCREENS
-// ═══════════════════════════════════════════════════════════════════════════════
+// ═══════════════════════════════════════════════════════
 
-// ═══════════════════════════════════════════════════════════════════════════════
+// ═══════════════════════════════════════════════════════
 // CHANNEL SCREEN
-// ═══════════════════════════════════════════════════════════════════════════════
+// ═══════════════════════════════════════════════════════
 class ChannelScreen extends StatelessWidget {
   const ChannelScreen({super.key});
 
@@ -6113,9 +6428,9 @@ class ChannelScreen extends StatelessWidget {
   }
 }
 
-// ═══════════════════════════════════════════════════════════════════════════════
+// ═══════════════════════════════════════════════════════
 // GALLERY SCREEN
-// ═══════════════════════════════════════════════════════════════════════════════
+// ═══════════════════════════════════════════════════════
 class GalleryScreen extends StatefulWidget {
   const GalleryScreen({super.key});
   @override
@@ -6436,7 +6751,6 @@ class _GalleryScreenState extends State<GalleryScreen> {
   void _openPreview(AssetEntity asset) {
     showDialog(
       context: context,
-      barrierColor: Colors.black.withOpacity(0.95),
       builder: (c) => Dialog(
         backgroundColor: Colors.transparent,
         insetPadding: EdgeInsets.zero,
@@ -6479,9 +6793,9 @@ class _GalleryScreenState extends State<GalleryScreen> {
   }
 }
 
-// ═══════════════════════════════════════════════════════════════════════════════
+// ═══════════════════════════════════════════════════════
 // SAVED VIDEOS SCREEN (CLOUD PERSISTENCE & TOP BANNER AD)
-// ═══════════════════════════════════════════════════════════════════════════════
+// ═══════════════════════════════════════════════════════
 class SavedVideosScreen extends StatefulWidget {
   const SavedVideosScreen({super.key});
   @override
@@ -6569,7 +6883,6 @@ class _SavedVideosScreenState extends State<SavedVideosScreen> {
                 )
               : Column(
                   children: [
-                    // Saved videos top banner ad
                     Padding(
                       padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
                       child: RealWebAdBanner(scriptIndex: 4, slotName: 'saved-top'),
@@ -6657,9 +6970,9 @@ class _SavedVideosScreenState extends State<SavedVideosScreen> {
   }
 }
 
-// ═══════════════════════════════════════════════════════════════════════════════
+// ═══════════════════════════════════════════════════════
 // HISTORY SCREEN (CLOUD PERSISTENCE & TOP BANNER AD)
-// ═══════════════════════════════════════════════════════════════════════════════
+// ═══════════════════════════════════════════════════════
 class HistoryScreen extends StatefulWidget {
   const HistoryScreen({super.key});
   @override
@@ -6809,7 +7122,6 @@ class _HistoryScreenState extends State<HistoryScreen> {
                 )
               : Column(
                   children: [
-                    // History top banner ad
                     Padding(
                       padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
                       child: RealWebAdBanner(scriptIndex: 5, slotName: 'history-top'),
@@ -6906,9 +7218,9 @@ class _HistoryScreenState extends State<HistoryScreen> {
   }
 }
 
-// ═══════════════════════════════════════════════════════════════════════════════
+// ═══════════════════════════════════════════════════════
 // SETTINGS SCREEN
-// ═══════════════════════════════════════════════════════════════════════════════
+// ═══════════════════════════════════════════════════════
 class SettingsScreen extends StatefulWidget {
   const SettingsScreen({super.key});
   @override
@@ -7102,9 +7414,9 @@ class _SettingsScreenState extends State<SettingsScreen> {
   }
 }
 
-// ═══════════════════════════════════════════════════════════════════════════════
-// NATIVE VIDEO PLAYER SCREEN (ZERO-LAG HARDWARE ENGINE, REAL 10S VIEW & ADS)
-// ═══════════════════════════════════════════════════════════════════════════════
+// ═══════════════════════════════════════════════════════
+// NATIVE VIDEO PLAYER SCREEN (ZERO-LAG HARDWARE ACCELERATED ENGINE)
+// ═══════════════════════════════════════════════════════
 class NativeVideoPlayerScreen extends StatefulWidget {
   final String videoUrl;
   final String title;
@@ -7178,7 +7490,6 @@ class _NativeVideoPlayerScreenState extends State<NativeVideoPlayerScreen> {
   List<Map<String, dynamic>> _relatedVideos = [];
   bool _relatedLoading = true;
 
-  // Ad Trigger Logic (Fires immediately at init, then every 15 min recurring)
   bool _firstAdShown = false;
   int _secondsSinceLastAd = 0;
 
@@ -7270,7 +7581,7 @@ class _NativeVideoPlayerScreenState extends State<NativeVideoPlayerScreen> {
         _watchedSeconds++;
         _secondsSinceLastAd++;
 
-        // Exactly 10s playback count
+        // Real 10s playback verification trigger
         if (_watchedSeconds == 10 && !_viewReported) {
           _reportViewToBackend();
         }
@@ -7393,7 +7704,7 @@ class _NativeVideoPlayerScreenState extends State<NativeVideoPlayerScreen> {
       _startWatchTracking();
       _captureThumbnail();
 
-      // Video Ad Trigger at init
+      // Video ad trigger at player start
       if (!_firstAdShown) {
         _firstAdShown = true;
         _secondsSinceLastAd = 0;
@@ -8409,7 +8720,7 @@ class _NativeVideoPlayerScreenState extends State<NativeVideoPlayerScreen> {
                                 ),
                       const SizedBox(height: 12),
 
-                      // REAL AD BANNER: related videos ke neeche (Slot 0 - High conversion tag)
+                      // REAL AD BANNER: related videos ke neeche (Slot 0)
                       Padding(
                         padding: const EdgeInsets.symmetric(vertical: 16),
                         child: RealWebAdBanner(scriptIndex: 0, slotName: 'player-below-related'),
@@ -8499,9 +8810,9 @@ class _NativeVideoPlayerScreenState extends State<NativeVideoPlayerScreen> {
   }
 }
 
-// ═══════════════════════════════════════════════════════════════════════════════
+// ═══════════════════════════════════════════════════════
 // WITHDRAW SCREEN (REALTIME CLOUD HISTORY & SUBMISSION PIPELINE)
-// ═══════════════════════════════════════════════════════════════════════════════
+// ═══════════════════════════════════════════════════════
 class WithdrawScreen extends StatefulWidget {
   const WithdrawScreen({super.key});
   @override
@@ -8851,9 +9162,9 @@ class _WithdrawScreenState extends State<WithdrawScreen> {
   }
 }
 
-// ═══════════════════════════════════════════════════════════════════════════════
+// ═══════════════════════════════════════════════════════
 // USER SEARCH DELEGATE
-// ═══════════════════════════════════════════════════════════════════════════════
+// ═══════════════════════════════════════════════════════
 class UserSearchDelegate extends SearchDelegate {
   @override
   ThemeData appBarTheme(BuildContext context) {
@@ -8953,9 +9264,9 @@ class UserSearchDelegate extends SearchDelegate {
   }
 }
 
-// ═══════════════════════════════════════════════════════════════════════════════
+// ═══════════════════════════════════════════════════════
 // USER PROFILE SCREEN
-// ═══════════════════════════════════════════════════════════════════════════════
+// ═══════════════════════════════════════════════════════
 class UserProfileScreen extends StatefulWidget {
   final Map<String, dynamic> channelProfile;
   const UserProfileScreen({super.key, required this.channelProfile});
@@ -9140,9 +9451,9 @@ class _UserProfileScreenState extends State<UserProfileScreen> {
   }
 }
 
-// ═══════════════════════════════════════════════════════════════════════════════
-// EARNINGS SCREEN (AUTHENTIC ANTI-FRAUD CPM METRICS)
-// ═══════════════════════════════════════════════════════════════════════════════
+// ═══════════════════════════════════════════════════════
+// EARNINGS SCREEN (REALTIME MONETIZATION CPM METRICS)
+// ═══════════════════════════════════════════════════════
 class EarningsScreen extends StatefulWidget {
   const EarningsScreen({super.key});
   @override
@@ -9465,8 +9776,9 @@ class _EarningsScreenState extends State<EarningsScreen>
                   Row(children: [Icon(Icons.info_outline, color: kGreen, size: 16), SizedBox(width: 6), Text('WITHDRAWAL INFO', style: TextStyle(color: kGreen, fontSize: 11, fontWeight: FontWeight.bold, letterSpacing: 1.2))]),
                   SizedBox(height: 8),
                   Text('• Minimum: \$5 (≈₹400)', style: TextStyle(color: Colors.white70, fontSize: 11.5)),
+                  Text('• Processing time: 24–48 hours', style: TextStyle(color: Colors.white70, fontSize: 11.5)),
                   Text('• Methods: Bank Transfer · UPI · Any Bank', style: TextStyle(color: Colors.white70, fontSize: 11.5)),
-                  Text('• Processing: 24–48 hours', style: TextStyle(color: Colors.white70, fontSize: 11.5)),
+                  Text('• TDS @ 2% applies above ₹15,000/year', style: TextStyle(color: Colors.white70, fontSize: 11.5)),
                 ],
               ),
             ),
@@ -9506,6 +9818,6 @@ class _EarningsScreenState extends State<EarningsScreen>
   }
 }
 
-// ═══════════════════════════════════════════════════════════════════════════════
+// ═══════════════════════════════════════════════════════
 // END OF COMPLETE FILE (PARTS 1 TO 6 FULLY MERGED & PRODUCTION READY)
-// ═══════════════════════════════════════════════════════════════════════════════
+// ═══════════════════════════════════════════════════════
