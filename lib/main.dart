@@ -27,7 +27,7 @@ import 'package:photo_manager_image_provider/photo_manager_image_provider.dart';
 import 'dart:convert' show base64, utf8;
 import 'package:crypto/crypto.dart' as crypto;
 import 'package:webview_flutter/webview_flutter.dart'; // 🔥 WEBVIEW IMPORT FOR ADS
-
+import 'package:webview_flutter_android/webview_flutter_android.dart';
 // ═══════════════════════════════════════════════════════
 // CONFIG
 // ═══════════════════════════════════════════════════════
@@ -217,7 +217,6 @@ class RealWebAdBanner extends StatefulWidget {
   @override
   State<RealWebAdBanner> createState() => _RealWebAdBannerState();
 }
-
 class _RealWebAdBannerState extends State<RealWebAdBanner> {
   late final WebViewController _controller;
   bool _isLoading = true;
@@ -227,10 +226,25 @@ class _RealWebAdBannerState extends State<RealWebAdBanner> {
     super.initState();
     final htmlCode = kAdHtmlScripts[widget.scriptIndex % kAdHtmlScripts.length];
     
-    _controller = WebViewController()
+    // 🔥 Platform specific params banayein
+    PlatformWebViewControllerCreationParams params;
+    if (WebViewPlatform.instance is AndroidWebViewPlatform) {
+      params = AndroidWebViewControllerCreationParams();
+    } else {
+      params = const PlatformWebViewControllerCreationParams();
+    }
+    
+    _controller = WebViewController.fromPlatformCreationParams(params);
+    
+    // 🔥 Android ke liye video autoplay enable karein
+    if (_controller.platform is AndroidWebViewController) {
+      (_controller.platform as AndroidWebViewController)
+          .setMediaPlaybackRequiresUserGesture(false);
+    }
+    
+    _controller
       ..setJavaScriptMode(JavaScriptMode.unrestricted)
       ..setBackgroundColor(Colors.transparent)
-      ..setMediaPlaybackRequiresUserGesture(false) // Video ads ke liye zaruri hai
       ..setNavigationDelegate(
         NavigationDelegate(
           onPageStarted: (url) {
@@ -250,6 +264,10 @@ class _RealWebAdBannerState extends State<RealWebAdBanner> {
       )
       ..loadHtmlString(htmlCode);
   }
+  
+  // ... baaki ka build method waise hi rahega ...
+}
+
 
   @override
   Widget build(BuildContext context) {
