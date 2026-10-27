@@ -70,7 +70,7 @@ const String kAdDirectUrl = 'https://thoroughgear.com/gvnfTI';
 // WebView Ad Scripts (Loaded inside app)
 const List<String> kAdHtmlScripts = [
   '''
-  <!DOCTYPE html><html><head><meta name="viewport" content="width=device-width, initial-scale=1.0"><style>body { margin: 0; padding: 0; display: flex; justify-content: center; background-color: transparent; }</style></head><body>
+  <!DOCTYPE html><html><head><meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no"><style>body { margin: 0; padding: 0; display: flex; justify-content: center; align-items: center; background-color: transparent; overflow: hidden; }</style></head><body>
   <script>
   (function(ynnkjd){
   var d = document,
@@ -86,7 +86,7 @@ const List<String> kAdHtmlScripts = [
   </body></html>
   ''',
   '''
-  <!DOCTYPE html><html><head><meta name="viewport" content="width=device-width, initial-scale=1.0"><style>body { margin: 0; padding: 0; display: flex; justify-content: center; background-color: transparent; }</style></head><body>
+  <!DOCTYPE html><html><head><meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no"><style>body { margin: 0; padding: 0; display: flex; justify-content: center; align-items: center; background-color: transparent; overflow: hidden; }</style></head><body>
   <script>
   (function(ynnkjd){
   var d = document,
@@ -102,14 +102,14 @@ const List<String> kAdHtmlScripts = [
   </body></html>
   ''',
   '''
-  <!DOCTYPE html><html><head><meta name="viewport" content="width=device-width, initial-scale=1.0"><style>body { margin: 0; padding: 0; display: flex; justify-content: center; background-color: transparent; }</style></head><body>
+  <!DOCTYPE html><html><head><meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no"><style>body { margin: 0; padding: 0; display: flex; justify-content: center; align-items: center; background-color: transparent; overflow: hidden; }</style></head><body>
   <script>
   (function(ynnkjd){
   var d = document,
       s = d.createElement('script'),
       l = d.currentScript || d.scripts[d.scripts.length - 1];
   s.settings = ynnkjd || {};
-  s.src = "https://dishoneststyle.com/bMXaV.sId/GjlI0zYcW-cm/teMmX9LuvZgUfl/kvPwT/cB1CNSTpUp1tNiD/USt/N/z-Ug1dN/ThUd0/OZQp";
+  s.src = "https://dishoneststyle.com/bMXaV.sld/GjlI0zYcW-cm/teMmX9LuvZgUfl/kvPwT/cB1CNSTpUp1tNiD/USt/N/z-Ug1dN/ThUd0/OZQp";
   s.async = true;
   s.referrerPolicy = 'no-referrer-when-downgrade';
   l.parentNode.insertBefore(s, l);
@@ -118,7 +118,7 @@ const List<String> kAdHtmlScripts = [
   </body></html>
   ''',
   '''
-  <!DOCTYPE html><html><head><meta name="viewport" content="width=device-width, initial-scale=1.0"><style>body { margin: 0; padding: 0; display: flex; justify-content: center; background-color: transparent; }</style></head><body>
+  <!DOCTYPE html><html><head><meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no"><style>body { margin: 0; padding: 0; display: flex; justify-content: center; align-items: center; background-color: transparent; overflow: hidden; }</style></head><body>
   <script>
   (function(ynnkjd){
   var d = document,
@@ -134,7 +134,7 @@ const List<String> kAdHtmlScripts = [
   </body></html>
   ''',
   '''
-  <!DOCTYPE html><html><head><meta name="viewport" content="width=device-width, initial-scale=1.0"><style>body { margin: 0; padding: 0; display: flex; justify-content: center; background-color: transparent; }</style></head><body>
+  <!DOCTYPE html><html><head><meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no"><style>body { margin: 0; padding: 0; display: flex; justify-content: center; align-items: center; background-color: transparent; overflow: hidden; }</style></head><body>
   <script>
   (function(ynnkjd){
   var d = document,
@@ -150,7 +150,7 @@ const List<String> kAdHtmlScripts = [
   </body></html>
   ''',
   '''
-  <!DOCTYPE html><html><head><meta name="viewport" content="width=device-width, initial-scale=1.0"><style>body { margin: 0; padding: 0; display: flex; justify-content: center; background-color: transparent; }</style></head><body>
+  <!DOCTYPE html><html><head><meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no"><style>body { margin: 0; padding: 0; display: flex; justify-content: center; align-items: center; background-color: transparent; overflow: hidden; }</style></head><body>
   <script>
   (function(ynnkjd){
   var d = document,
@@ -166,7 +166,7 @@ const List<String> kAdHtmlScripts = [
   </body></html>
   ''',
   '''
-  <!DOCTYPE html><html><head><meta name="viewport" content="width=device-width, initial-scale=1.0"><style>body { margin: 0; padding: 0; display: flex; justify-content: center; background-color: transparent; }</style></head><body>
+  <!DOCTYPE html><html><head><meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no"><style>body { margin: 0; padding: 0; display: flex; justify-content: center; align-items: center; background-color: transparent; overflow: hidden; }</style></head><body>
   <script>
   (function(ynnkjd){
   var d = document,
@@ -182,7 +182,7 @@ const List<String> kAdHtmlScripts = [
   </body></html>
   ''',
   '''
-  <!DOCTYPE html><html><head><meta name="viewport" content="width=device-width, initial-scale=1.0"><style>body { margin: 0; padding: 0; display: flex; justify-content: center; background-color: transparent; }</style></head><body>
+  <!DOCTYPE html><html><head><meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no"><style>body { margin: 0; padding: 0; display: flex; justify-content: center; align-items: center; background-color: transparent; overflow: hidden; }</style></head><body>
   <script>
   (function(ynnkjd){
   var d = document,
@@ -196,25 +196,9 @@ const List<String> kAdHtmlScripts = [
   })({})
   </script>
   </body></html>
-  ''',
-  '''
-  <!DOCTYPE html><html><head><meta name="viewport" content="width=device-width, initial-scale=1.0"><style>body { margin: 0; padding: 0; display: flex; justify-content: center; background-color: transparent; }</style></head><body>
-  <script>
-  (function(ynnkjd){
-  var d = document,
-      s = d.createElement('script'),
-      l = d.currentScript || d.scripts[d.scripts.length - 1];
-  s.settings = ynnkjd || {};
-  s.src = "https://dishoneststyle.com/bvXYVGs.dzG/lT0PYBW/cI/CeBmp9yuNZ/UflWkZPoTPc/1ENyTSUqyvNLz/MAt/N/zdU/1SNGTLIY3XNowz";
-  s.async = true;
-  s.referrerPolicy = 'no-referrer-when-downgrade';
-  l.parentNode.insertBefore(s, l);
-  })({})
-  </script>
-  </body></html>
   '''
 ];
-
+  
 // ═══════════════════════════════════════════════════════
 // REAL AD BANNER WIDGET (WEBVIEW VERSION)
 // ═══════════════════════════════════════════════════════
@@ -226,7 +210,7 @@ class RealWebAdBanner extends StatefulWidget {
   const RealWebAdBanner({
     super.key,
     this.scriptIndex = 0,
-    this.height = 75,
+    this.height = 85, // Height thodi badha di taaki ad fit ho jaye
     this.slotName = 'Banner Ad',
   });
 
@@ -236,24 +220,27 @@ class RealWebAdBanner extends StatefulWidget {
 
 class _RealWebAdBannerState extends State<RealWebAdBanner> {
   late final WebViewController _controller;
+  bool _isLoading = true;
 
   @override
   void initState() {
     super.initState();
     final htmlCode = kAdHtmlScripts[widget.scriptIndex % kAdHtmlScripts.length];
-
+    
     _controller = WebViewController()
       ..setJavaScriptMode(JavaScriptMode.unrestricted)
       ..setBackgroundColor(Colors.transparent)
-      ..setUserAgent("Mozilla/5.0 (Linux; Android 10; K) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Mobile Safari/537.36")
+      ..setMediaPlaybackRequiresUserGesture(false) // Video ads ke liye zaruri hai
       ..setNavigationDelegate(
         NavigationDelegate(
+          onPageStarted: (url) {
+            if (mounted) setState(() => _isLoading = true);
+          },
+          onPageFinished: (url) {
+            if (mounted) setState(() => _isLoading = false);
+          },
           onNavigationRequest: (NavigationRequest request) {
-            if (request.url.startsWith('http') && 
-                !request.url.contains('about:blank') && 
-                !request.url.contains('dishoneststyle.com') && 
-                !request.url.contains('infamous-maximum.com') &&
-                !request.url.contains('mayajaal.online')) {
+            if (request.url.startsWith('http') && !request.url.contains('about:blank')) {
               launchUrl(Uri.parse(request.url), mode: LaunchMode.externalApplication);
               return NavigationDecision.prevent;
             }
@@ -261,8 +248,8 @@ class _RealWebAdBannerState extends State<RealWebAdBanner> {
           },
         ),
       )
-      ..loadHtmlString(htmlCode, baseUrl: 'https://www.mayajaal.online/');
-     }
+      ..loadHtmlString(htmlCode);
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -282,6 +269,10 @@ class _RealWebAdBannerState extends State<RealWebAdBanner> {
             Positioned.fill(
               child: WebViewWidget(controller: _controller),
             ),
+            if (_isLoading)
+              const Center(
+                child: CircularProgressIndicator(color: kGreen, strokeWidth: 2),
+              ),
             Positioned(
               top: 4,
               right: 6,
@@ -5566,7 +5557,16 @@ class _StreamPreviewScreenState extends State<StreamPreviewScreen>
           if (mounted) {
             setState(() {
               _streamUrl = newUrl;
-              _videoTitle = data['title'] ?? data['filename'] ?? data['file_name'] ?? _videoTitle;
+              String apiTitle = (data['title'] ?? '').toString().trim();
+String apiFilename = (data['filename'] ?? '').toString().trim();
+String apiFileName = (data['file_name'] ?? '').toString().trim();
+if (apiTitle.isNotEmpty && apiTitle != 'null') {
+  _videoTitle = apiTitle;
+} else if (apiFilename.isNotEmpty && apiFilename != 'null') {
+  _videoTitle = apiFilename;
+} else if (apiFileName.isNotEmpty && apiFileName != 'null') {
+  _videoTitle = apiFileName;
+}
               _uploaderName = data['uploader'] ?? _uploaderName;
               final apiThumb = data['thumbnailUrl'] ?? data['thumbnail'] ?? data['poster'] ?? '';
               if (apiThumb.toString().isNotEmpty) {
@@ -6541,7 +6541,10 @@ class _SavedVideosScreenState extends State<SavedVideosScreen> {
                     itemBuilder: (c, i) {
                       final item = _saved[i];
                       final thumb = item['thumbnail']?.toString() ?? '';
-                      final title = item['title']?.toString() ?? 'Video';
+                      String title = item['title']?.toString().trim() ?? '';
+                      if (title.isEmpty || title == 'null') {
+                      title = item['id']?.toString() ?? 'MayaJaal Video';
+                     }
                       final url = item['url']?.toString() ?? '';
                       final streamUrl = item['streamUrl']?.toString() ?? '';
                       final id = item['id']?.toString() ?? '';
@@ -6731,7 +6734,10 @@ class _HistoryScreenState extends State<HistoryScreen> {
                     itemBuilder: (c, i) {
                       final item = _history[i];
                       final thumb = item['thumbnail']?.toString() ?? '';
-                      final title = item['title']?.toString() ?? 'Media Node';
+                      String title = item['title']?.toString().trim() ?? '';
+                      if (title.isEmpty || title == 'null') {
+                      title = item['id']?.toString() ?? 'MayaJaal Video';
+                     }
                       final url = item['url']?.toString() ?? '';
                       final streamUrl = item['streamUrl']?.toString() ?? '';
                       final id = item['id']?.toString() ?? '';
@@ -8382,7 +8388,16 @@ class _NativeVideoPlayerScreenState extends State<NativeVideoPlayerScreen> {
   //    Same as the 10-sec page preview. Video name from `filename` shown.
   Widget _buildRelatedCard(Map<String, dynamic> v) {
     final id = v['id']?.toString() ?? '';
-    final title = (v['filename'] ?? v['title'] ?? v['originalUrl'] ?? 'Video').toString();
+    String title = '';
+String fName = (v['filename'] ?? '').toString().trim();
+String tName = (v['title'] ?? '').toString().trim();
+if (fName.isNotEmpty && fName != 'null') {
+  title = fName;
+} else if (tName.isNotEmpty && tName != 'null') {
+  title = tName;
+} else {
+  title = 'MayaJaal Video';
+}
     final uploader = (v['uploader'] ?? '@mayajaal').toString();
     final views = (v['views'] ?? 0) as int;
     final thumb = v['thumbnail']?.toString() ?? '';
@@ -8927,7 +8942,16 @@ class _UserProfileScreenState extends State<UserProfileScreen> {
                           itemBuilder: (context, i) {
                             final vid = _videos[i];
                             final id = vid['id']?.toString() ?? '';
-                            final name = (vid['filename'] ?? vid['title'] ?? 'Video').toString();
+                            String name = '';
+                            String fName = (vid['filename'] ?? '').toString().trim();
+                            String tName = (vid['title'] ?? '').toString().trim();
+                            if (fName.isNotEmpty && fName != 'null') {
+                            name = fName;
+                          } else if (tName.isNotEmpty && tName != 'null') {
+                            name = tName;
+                          } else {
+                            name = 'MayaJaal Video';
+                          }
                             final views = vid['views'] ?? 0;
                             final thumb = vid['thumbnail']?.toString() ?? '';
                             // ✅ Use /stream/:id so 5-sec looping thumbnail plays
