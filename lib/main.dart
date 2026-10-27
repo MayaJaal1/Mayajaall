@@ -88,54 +88,6 @@ class SoundService {
 }
 
 // ═══════════════════════════════════════════════════════════════════════════════
-// DEVICE ID HELPER
-// ═══════════════════════════════════════════════════════════════════════════════
-class DeviceIdHelper {
-  static String? _cached;
-  static String? _cachedHash;
-
-  static Future<String> get() async {
-    if (_cached != null) return _cached!;
-    try {
-      final prefs = await SharedPreferences.getInstance();
-      String? stored = prefs.getString('mj_device_id');
-      if (stored != null && stored.isNotEmpty) {
-        _cached = stored;
-        return stored;
-      }
-      final info = DeviceInfoPlugin();
-      if (Platform.isAndroid) {
-        final a = await info.androidInfo;
-        stored = 'and-${a.id}-${a.model}'.replaceAll(RegExp(r'[^a-zA-Z0-9-]'), '');
-      } else if (Platform.isIOS) {
-        final i = await info.iosInfo;
-        stored = 'ios-${i.identifierForVendor ?? 'unknown'}';
-      } else {
-        stored = 'dev-${DateTime.now().millisecondsSinceEpoch}';
-      }
-      await prefs.setString('mj_device_id', stored);
-      _cached = stored;
-      return stored;
-    } catch (_) {
-      _cached = 'dev-${DateTime.now().millisecondsSinceEpoch}';
-      return _cached!;
-    }
-  }
-
-  static Future<String> getHash() async {
-    if (_cachedHash != null) return _cachedHash!;
-    try {
-      final raw = await get();
-      final digest = crypto.sha256.convert(utf8.encode('mj_salt_2026_$raw'));
-      _cachedHash = digest.toString().substring(0, 24);
-      return _cachedHash!;
-    } catch (_) {
-      return 'unknown';
-    }
-  }
-}
-
-// ═══════════════════════════════════════════════════════════════════════════════
 // AD NETWORK CONFIG (PURE CLEAN DART STRINGS)
 // ═══════════════════════════════════════════════════════
 const String kAdDirectUrl = 'https://thoroughgear.com/gvnfTI';
@@ -673,10 +625,9 @@ Widget buildMediaThumbnail(
 // MAYAJAAL APP — FULL PRODUCTION CODE (PART 2 OF 6)
 // DEVICE ID, SOUND CONTROLLERS, LEGAL DIALOGS & API-LINKED CLOUD ACCOUNT ENGINE
 // ═══════════════════════════════════════════════════════════════════════════════
-
-// ═══════════════════════════════════════════════════════════════════════════════
-// DEVICE ID HELPER (HARDWARE IDENTIFICATION & SECURE BINDING)
-// ═══════════════════════════════════════════════════════════════════════════════
+// ═══════════════════════════════════════════════════════
+// DEVICE ID HELPER (HARDWARE IDENTIFICATION & BINDING)
+// ═══════════════════════════════════════════════════════
 class DeviceIdHelper {
   static String? _cached;
   static String? _cachedHash;
