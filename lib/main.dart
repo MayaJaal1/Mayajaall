@@ -1476,6 +1476,28 @@ class MayaJaalAccount {
       return [];
     }
   }
+
+  // ═══════════════════════════════════════════════════════════════════════════
+  // ⭐⭐⭐ CRITICAL FIX ADDED HERE — getTierInfo() METHOD ⭐⭐⭐
+  // This method was referenced in StatsScreen but missing from this class
+  // causing compilation error. Now fully implemented.
+  // ═══════════════════════════════════════════════════════════════════════════
+  static Map<String, dynamic> getTierInfo(int views) {
+    views = math.max(0, views);
+    if (views < 1000) {
+      return {'tier': 1, 'next': 1000 - views};
+    }
+    if (views < 2000) {
+      return {'tier': 2, 'next': 2000 - views};
+    }
+    if (views < 10000) {
+      return {'tier': 3, 'next': 10000 - views};
+    }
+    return {
+      'tier': 4 + (views ~/ 10000),
+      'next': 10000 - (views % 10000),
+    };
+  }
 }
 
 // ═══════════════════════════════════════════════════════════════════════════════
@@ -2850,7 +2872,7 @@ class _MyAppState extends State<MyApp> {
 }
 
 // ═══════════════════════════════════════════════════════════════════════════════
-// AUTH GATE (ZERO-LAG ROUTER & VERIFIED LOGIN FLOW)
+// AUTH GATE
 // ═══════════════════════════════════════════════════════════════════════════════
 class AuthGate extends StatefulWidget {
   const AuthGate({super.key});
@@ -3087,7 +3109,6 @@ class _LoginScreenState extends State<LoginScreen>
   String _error = '';
 
   late AnimationController _magicController;
-  late Animation<double> _glowAnimation;
 
   @override
   void initState() {
@@ -3095,9 +3116,6 @@ class _LoginScreenState extends State<LoginScreen>
     _magicController = AnimationController(
       vsync: this,
       duration: const Duration(milliseconds: 1000),
-    );
-    _glowAnimation = Tween<double>(begin: 0.0, end: 30.0).animate(
-      CurvedAnimation(parent: _magicController, curve: Curves.easeInOut),
     );
   }
 
@@ -3380,7 +3398,7 @@ class _MainNavigationHolderState extends State<MainNavigationHolder> {
 }
 
 // ═══════════════════════════════════════════════════════════════════════════════
-// LIVE PULSE GRAPH PAINTER (DUAL-TRACE OSCILLOSCOPE)
+// LIVE PULSE GRAPH PAINTER
 // ═══════════════════════════════════════════════════════════════════════════════
 class LivePulseGraphPainter extends CustomPainter {
   final List<double> viewPoints;
@@ -3481,7 +3499,7 @@ class LivePulseGraphPainter extends CustomPainter {
 }
 
 // ═══════════════════════════════════════════════════════════════════════════════
-// LIVE PULSE CARD WIDGET (VIEWS + LINKS, NO MONEY)
+// LIVE PULSE CARD WIDGET (VIEWS + LINKS)
 // ═══════════════════════════════════════════════════════════════════════════════
 class LivePulseCard extends StatefulWidget {
   const LivePulseCard({super.key});
@@ -3660,7 +3678,7 @@ class _LivePulseCardState extends State<LivePulseCard> with SingleTickerProvider
 }
 
 // ═══════════════════════════════════════════════════════════════════════════════
-// HOME SCREEN (ALL ADS REMOVED)
+// HOME SCREEN
 // ═══════════════════════════════════════════════════════════════════════════════
 class HomeScreen extends StatefulWidget {
   final VoidCallback? onMenuTap;
@@ -4250,16 +4268,11 @@ class MoreDrawer extends StatefulWidget {
 
 class _MoreDrawerState extends State<MoreDrawer>
     with TickerProviderStateMixin {
-  late AnimationController _snakeController;
   late AnimationController _slideController;
 
   @override
   void initState() {
     super.initState();
-    _snakeController = AnimationController(
-      vsync: this,
-      duration: const Duration(seconds: 4),
-    )..repeat();
     _slideController = AnimationController(
       vsync: this,
       duration: const Duration(milliseconds: 600),
@@ -4268,7 +4281,6 @@ class _MoreDrawerState extends State<MoreDrawer>
 
   @override
   void dispose() {
-    _snakeController.dispose();
     _slideController.dispose();
     super.dispose();
   }
@@ -4615,9 +4627,6 @@ class _MoreDrawerState extends State<MoreDrawer>
     );
   }
 
-  // ═══════════════════════════════════════════════════════════════════════════
-  // ⭐ DELETE ACCOUNT DIALOG (PLAY STORE MANDATORY)
-  // ═══════════════════════════════════════════════════════════════════════════
   void _showDeleteAccountDialog(BuildContext context) {
     SoundService.playClick();
     final confirmCtrl = TextEditingController();
@@ -4769,7 +4778,7 @@ class _MoreDrawerState extends State<MoreDrawer>
                         await MayaJaalAccount.deleteAccount();
                         if (c.mounted) {
                           Navigator.pop(c);
-                          Navigator.pop(context); // close drawer
+                          Navigator.pop(context);
                           Navigator.of(context).pushAndRemoveUntil(
                             MaterialPageRoute(builder: (_) => const LoginScreen()),
                             (route) => false,
@@ -5545,7 +5554,87 @@ class SnakeBorderPainter extends CustomPainter {
 }
 
 // ═══════════════════════════════════════════════════════════════════════════════
-// STREAM PREVIEW SCREEN (ALL ADS REMOVED · REAL NAME FIXED)
+// ⭐ NEW: VIDEO METADATA RESOLVER (SIZE + AGE)
+// ═══════════════════════════════════════════════════════════════════════════════
+class VideoMetaResolver {
+  static Future<Map<String, dynamic>> resolveMeta(String videoId) async {
+    if (videoId.isEmpty) return {};
+    try {
+      final snap = await FirebaseDatabase.instance.ref('links/$videoId').once();
+      final val = snap.snapshot.value;
+      if (val == null || val is! Map) return {};
+      final data = Map<String, dynamic>.from(val);
+
+      // Try multiple possible size field names
+      int sizeBytes = 0;
+      final rawSize = data['size'] ??
+          data['fileSize'] ??
+          data['file_size'] ??
+          data['filesize'] ??
+          data['bytes'] ??
+          0;
+      if (rawSize is num) {
+        sizeBytes = rawSize.toInt();
+      } else if (rawSize is String) {
+        sizeBytes = int.tryParse(rawSize) ?? 0;
+      }
+
+      // Try multiple possible createdAt field names
+      int createdAtMs = 0;
+      final rawCreated = data['createdAt'] ??
+          data['uploadedAt'] ??
+          data['created_at'] ??
+          data['timestamp'] ??
+          data['uploadDate'] ??
+          0;
+      if (rawCreated is num) {
+        createdAtMs = rawCreated.toInt();
+      } else if (rawCreated is String) {
+        createdAtMs = int.tryParse(rawCreated) ?? 0;
+        if (createdAtMs == 0) {
+          try {
+            createdAtMs = DateTime.parse(rawCreated).millisecondsSinceEpoch;
+          } catch (_) {}
+        }
+      }
+
+      return {
+        'sizeBytes': sizeBytes,
+        'createdAt': createdAtMs,
+      };
+    } catch (_) {
+      return {};
+    }
+  }
+
+  static String formatSize(int bytes) {
+    if (bytes <= 0) return '';
+    if (bytes < 1024) return '$bytes B';
+    if (bytes < 1024 * 1024) return '${(bytes / 1024).toStringAsFixed(1)} KB';
+    if (bytes < 1024 * 1024 * 1024) {
+      return '${(bytes / (1024 * 1024)).toStringAsFixed(1)} MB';
+    }
+    return '${(bytes / (1024 * 1024 * 1024)).toStringAsFixed(2)} GB';
+  }
+
+  static String formatAge(int createdAtMs) {
+    if (createdAtMs <= 0) return '';
+    final diff = DateTime.now().difference(
+      DateTime.fromMillisecondsSinceEpoch(createdAtMs),
+    );
+    final days = diff.inDays;
+    if (days <= 0) return 'Today';
+    if (days == 1) return '1 day ago';
+    if (days < 30) return '$days days ago';
+    final months = (days / 30).floor();
+    if (months < 12) return '$months ${months == 1 ? "month" : "months"} ago';
+    final years = (days / 365).floor();
+    return '$years ${years == 1 ? "year" : "years"} ago';
+  }
+}
+
+// ═══════════════════════════════════════════════════════════════════════════════
+// STREAM PREVIEW SCREEN (10-SEC COUNTDOWN · ADS REMOVED · SIZE + AGE ADDED)
 // ═══════════════════════════════════════════════════════════════════════════════
 class StreamPreviewScreen extends StatefulWidget {
   final String targetUrl;
@@ -5561,6 +5650,10 @@ class _StreamPreviewScreenState extends State<StreamPreviewScreen>
   String _uploaderName = '@mayajaal';
   String _rawId = '';
   String _token = '';
+
+  // ⭐ NEW: Size and Age fields
+  String _videoSize = '';
+  String _videoAge = '';
 
   String _thumbnailUrl = '';
   String _capturedThumbB64 = '';
@@ -5741,6 +5834,23 @@ class _StreamPreviewScreenState extends State<StreamPreviewScreen>
         setState(() => _videoTitle = real);
       }
     }
+
+    // ⭐ NEW: Fetch size + age metadata from Firebase
+    try {
+      final meta = await VideoMetaResolver.resolveMeta(_rawId);
+      if (meta.isNotEmpty && mounted) {
+        final sizeBytes = (meta['sizeBytes'] ?? 0) as int;
+        final createdAt = (meta['createdAt'] ?? 0) as int;
+        setState(() {
+          if (sizeBytes > 0) {
+            _videoSize = VideoMetaResolver.formatSize(sizeBytes);
+          }
+          if (createdAt > 0) {
+            _videoAge = VideoMetaResolver.formatAge(createdAt);
+          }
+        });
+      }
+    } catch (_) {}
   }
 
   Future<void> _saveStreamUrlToCache(String streamUrl) async {
@@ -5803,6 +5913,9 @@ class _StreamPreviewScreenState extends State<StreamPreviewScreen>
       'id': _rawId,
       'thumbnail': finalThumb,
       'streamUrl': finalStreamUrl,
+      // ⭐ NEW: Save size and age with history item
+      'size': _videoSize,
+      'age': _videoAge,
       'time': DateTime.now().toIso8601String(),
     };
 
@@ -6075,6 +6188,9 @@ class _StreamPreviewScreenState extends State<StreamPreviewScreen>
 
                   const SizedBox(height: 12),
 
+                  // ═══════════════════════════════════════════════════════════
+                  // ⭐ INFO CARD with SIZE + AGE additions
+                  // ═══════════════════════════════════════════════════════════
                   Container(
                     padding: const EdgeInsets.all(12),
                     decoration: BoxDecoration(
@@ -6084,6 +6200,7 @@ class _StreamPreviewScreenState extends State<StreamPreviewScreen>
                     ),
                     child: Column(
                       children: [
+                        // FILE NAME row
                         Row(
                           children: [
                             Container(
@@ -6104,6 +6221,8 @@ class _StreamPreviewScreenState extends State<StreamPreviewScreen>
                             ),
                           ],
                         ),
+
+                        // UPLOADER row
                         Padding(
                           padding: const EdgeInsets.symmetric(vertical: 6),
                           child: Divider(color: Colors.white10, height: 1),
@@ -6128,6 +6247,62 @@ class _StreamPreviewScreenState extends State<StreamPreviewScreen>
                             ),
                           ],
                         ),
+
+                        // ⭐ NEW: FILE SIZE row (only if available)
+                        if (_videoSize.isNotEmpty) ...[
+                          Padding(
+                            padding: const EdgeInsets.symmetric(vertical: 6),
+                            child: Divider(color: Colors.white10, height: 1),
+                          ),
+                          Row(
+                            children: [
+                              Container(
+                                padding: const EdgeInsets.all(8),
+                                decoration: BoxDecoration(shape: BoxShape.circle, color: Colors.black, border: Border.all(color: AppThemes.kBorder)),
+                                child: const Icon(Icons.sd_storage_outlined, color: AppThemes.kNeonCyan, size: 18),
+                              ),
+                              const SizedBox(width: 12),
+                              Expanded(
+                                child: Column(
+                                  crossAxisAlignment: CrossAxisAlignment.start,
+                                  children: [
+                                    Text('FILE SIZE', style: TextStyle(color: Colors.white.withOpacity(0.4), fontSize: 8.5, letterSpacing: 0.8)),
+                                    const SizedBox(height: 1),
+                                    Text(_videoSize, style: const TextStyle(color: AppThemes.kNeonCyan, fontSize: 12.5, fontWeight: FontWeight.bold), maxLines: 1, overflow: TextOverflow.ellipsis),
+                                  ],
+                                ),
+                              ),
+                            ],
+                          ),
+                        ],
+
+                        // ⭐ NEW: UPLOAD AGE row (only if available)
+                        if (_videoAge.isNotEmpty) ...[
+                          Padding(
+                            padding: const EdgeInsets.symmetric(vertical: 6),
+                            child: Divider(color: Colors.white10, height: 1),
+                          ),
+                          Row(
+                            children: [
+                              Container(
+                                padding: const EdgeInsets.all(8),
+                                decoration: BoxDecoration(shape: BoxShape.circle, color: Colors.black, border: Border.all(color: AppThemes.kBorder)),
+                                child: const Icon(Icons.calendar_today_outlined, color: AppThemes.kGold, size: 18),
+                              ),
+                              const SizedBox(width: 12),
+                              Expanded(
+                                child: Column(
+                                  crossAxisAlignment: CrossAxisAlignment.start,
+                                  children: [
+                                    Text('UPLOADED', style: TextStyle(color: Colors.white.withOpacity(0.4), fontSize: 8.5, letterSpacing: 0.8)),
+                                    const SizedBox(height: 1),
+                                    Text(_videoAge, style: const TextStyle(color: AppThemes.kGold, fontSize: 12.5, fontWeight: FontWeight.bold), maxLines: 1, overflow: TextOverflow.ellipsis),
+                                  ],
+                                ),
+                              ),
+                            ],
+                          ),
+                        ],
                       ],
                     ),
                   ),
@@ -6600,7 +6775,7 @@ class _GalleryScreenState extends State<GalleryScreen> {
 }
 
 // ═══════════════════════════════════════════════════════════════════════════════
-// SAVED VIDEOS SCREEN (NO ADS)
+// SAVED VIDEOS SCREEN
 // ═══════════════════════════════════════════════════════════════════════════════
 class SavedVideosScreen extends StatefulWidget {
   const SavedVideosScreen({super.key});
@@ -6778,7 +6953,7 @@ class _SavedVideosScreenState extends State<SavedVideosScreen> {
 }
 
 // ═══════════════════════════════════════════════════════════════════════════════
-// HISTORY SCREEN (NO ADS)
+// HISTORY SCREEN
 // ═══════════════════════════════════════════════════════════════════════════════
 class HistoryScreen extends StatefulWidget {
   const HistoryScreen({super.key});
@@ -7305,7 +7480,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
 }
 
 // ═══════════════════════════════════════════════════════════════════════════════
-// NATIVE VIDEO PLAYER SCREEN (ALL ADS FULLY REMOVED · NO AD TRIGGERS)
+// NATIVE VIDEO PLAYER SCREEN (SIZE + AGE DISPLAY ADDED)
 // ═══════════════════════════════════════════════════════════════════════════════
 class NativeVideoPlayerScreen extends StatefulWidget {
   final String videoUrl;
@@ -7338,6 +7513,10 @@ class _NativeVideoPlayerScreenState extends State<NativeVideoPlayerScreen> {
 
   bool _isFullscreen = false;
   bool _isZoomed = false;
+
+  // ⭐ NEW: Size and Age fields
+  String _videoSize = '';
+  String _videoAge = '';
 
   String _flashFeedback = '';
   Timer? _feedbackTimer;
@@ -7387,6 +7566,27 @@ class _NativeVideoPlayerScreenState extends State<NativeVideoPlayerScreen> {
     _initVideo();
     _startStatsListeners();
     _fetchOwner().then((_) => _loadRelatedVideos());
+    // ⭐ NEW: Fetch size + age metadata
+    _fetchVideoMeta();
+  }
+
+  // ⭐ NEW METHOD: Fetch size + age from Firebase
+  Future<void> _fetchVideoMeta() async {
+    try {
+      final meta = await VideoMetaResolver.resolveMeta(widget.videoId);
+      if (meta.isNotEmpty && mounted) {
+        final sizeBytes = (meta['sizeBytes'] ?? 0) as int;
+        final createdAt = (meta['createdAt'] ?? 0) as int;
+        setState(() {
+          if (sizeBytes > 0) {
+            _videoSize = VideoMetaResolver.formatSize(sizeBytes);
+          }
+          if (createdAt > 0) {
+            _videoAge = VideoMetaResolver.formatAge(createdAt);
+          }
+        });
+      }
+    } catch (_) {}
   }
 
   Future<void> _captureThumbnail() async {
@@ -7867,6 +8067,9 @@ class _NativeVideoPlayerScreenState extends State<NativeVideoPlayerScreen> {
       'id': widget.videoId,
       'thumbnail': widget.thumbnailUrl,
       'streamUrl': widget.videoUrl,
+      // ⭐ NEW: Save size and age in saved item
+      'size': _videoSize,
+      'age': _videoAge,
     };
 
     if (_isSaved) {
@@ -8437,6 +8640,65 @@ class _NativeVideoPlayerScreenState extends State<NativeVideoPlayerScreen> {
                                 Text('|   👁 ${_stats['views']} views', style: const TextStyle(color: Colors.white38, fontSize: 9.5)),
                               ],
                             ),
+
+                            // ⭐ NEW: Size + Age chips row in player
+                            if (_videoSize.isNotEmpty || _videoAge.isNotEmpty) ...[
+                              const SizedBox(height: 8),
+                              Row(
+                                children: [
+                                  if (_videoSize.isNotEmpty)
+                                    Container(
+                                      padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 3),
+                                      margin: const EdgeInsets.only(right: 6),
+                                      decoration: BoxDecoration(
+                                        color: AppThemes.kNeonCyan.withOpacity(0.1),
+                                        borderRadius: BorderRadius.circular(5),
+                                        border: Border.all(color: AppThemes.kNeonCyan.withOpacity(0.4)),
+                                      ),
+                                      child: Row(
+                                        mainAxisSize: MainAxisSize.min,
+                                        children: [
+                                          const Icon(Icons.sd_storage_outlined, size: 10, color: AppThemes.kNeonCyan),
+                                          const SizedBox(width: 4),
+                                          Text(
+                                            _videoSize,
+                                            style: const TextStyle(
+                                              color: AppThemes.kNeonCyan,
+                                              fontSize: 9.5,
+                                              fontWeight: FontWeight.bold,
+                                            ),
+                                          ),
+                                        ],
+                                      ),
+                                    ),
+                                  if (_videoAge.isNotEmpty)
+                                    Container(
+                                      padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 3),
+                                      decoration: BoxDecoration(
+                                        color: AppThemes.kGold.withOpacity(0.1),
+                                        borderRadius: BorderRadius.circular(5),
+                                        border: Border.all(color: AppThemes.kGold.withOpacity(0.4)),
+                                      ),
+                                      child: Row(
+                                        mainAxisSize: MainAxisSize.min,
+                                        children: [
+                                          const Icon(Icons.calendar_today_outlined, size: 10, color: AppThemes.kGold),
+                                          const SizedBox(width: 4),
+                                          Text(
+                                            _videoAge,
+                                            style: const TextStyle(
+                                              color: AppThemes.kGold,
+                                              fontSize: 9.5,
+                                              fontWeight: FontWeight.bold,
+                                            ),
+                                          ),
+                                        ],
+                                      ),
+                                    ),
+                                ],
+                              ),
+                            ],
+
                             const SizedBox(height: 10),
                             Row(
                               children: [
@@ -8916,7 +9178,7 @@ class _UserProfileScreenState extends State<UserProfileScreen> {
 }
 
 // ═══════════════════════════════════════════════════════════════════════════════
-// STATS SCREEN (FORMERLY EARNINGS — NOW NO $, NO WITHDRAWAL)
+// STATS SCREEN
 // ═══════════════════════════════════════════════════════════════════════════════
 class StatsScreen extends StatefulWidget {
   const StatsScreen({super.key});
@@ -9272,6 +9534,7 @@ class _StatsScreenState extends State<StatsScreen>
 }
 
 // ═══════════════════════════════════════════════════════════════════════════════
-// END OF COMPLETE FILE (PARTS 1 & 2 MERGED · PLAY STORE READY)
-// ✅ No Ads · ✅ No Withdrawal · ✅ No 18+ · ✅ Account Deletion · ✅ Soft Security
+// END OF COMPLETE FILE (PART 1 + PART 2 · PLAY STORE READY · SIZE+AGE ADDED)
+// ✅ Real Video Name · ✅ File Size · ✅ Upload Age · ✅ No Ads · ✅ No Withdrawal
+// ✅ No 18+ · ✅ Account Deletion · ✅ Soft Security
 // ═══════════════════════════════════════════════════════════════════════════════
