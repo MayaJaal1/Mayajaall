@@ -1,7 +1,3 @@
-// ═══════════════════════════════════════════════════════════════════════════════
-// MAYAJAAL APP — FULL PRODUCTION CODE (PART 1 OF 6)
-// IMPORTS, CONFIG, SOUND SERVICE, DEVICE ID & ULTRA-FAST THUMBNAIL ENGINE
-// ═══════════════════════════════════════════════════════════════════════════════
 import 'dart:async';
 import 'dart:convert';
 import 'dart:io';
@@ -84,260 +80,6 @@ class SoundService {
       HapticFeedback.mediumImpact();
       SystemSound.play(SystemSoundType.alert);
     }
-  }
-}
-
-// ═══════════════════════════════════════════════════════════════════════════════
-// AD NETWORK CONFIG (PURE CLEAN DART STRINGS)
-// ═══════════════════════════════════════════════════════
-const String kAdDirectUrl = 'https://thoroughgear.com/gvnfTI';
-
-const List<String> kAdHtmlScripts = [
-  '''
-  <!DOCTYPE html><html><head><meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no"><style>body { margin: 0; padding: 0; display: flex; justify-content: center; align-items: center; background-color: transparent; overflow: hidden; }</style></head><body>
-  <script>
-  (function(d,z,s){
-    s.src='https://infamous-maximum.com/dXmzFxzyd.GFN/vBZLGkUm/CecmU9_uHZ/UUl/kOPpTHck1/NnTIUkxuNpj/kUthNYz_U/1GN/T/E/3YMNww';
-    s.async=true;
-    s.referrerPolicy='no-referrer-when-downgrade';
-    d.head.appendChild(s);
-  })(document);
-  </script>
-  </body></html>
-  ''',
-  '''
-  <!DOCTYPE html><html><head><meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no"><style>body { margin: 0; padding: 0; display: flex; justify-content: center; align-items: center; background-color: transparent; overflow: hidden; }</style></head><body>
-  <script>
-  (function(ynnkjd){
-  var d = document, s = d.createElement('script'), l = d.currentScript || d.scripts[d.scripts.length - 1];
-  s.settings = ynnkjd || {};
-  s.src = "https://dishoneststyle.com/bvXYVGs.dzG/lT0PYBW/cI/CeBmp9yuNZ/UflWkZPoTPc/1ENyTSUqyvNLz/MAt/N/zdU/1SNGTLIY3XNowz";
-  s.async = true;
-  s.referrerPolicy = 'no-referrer-when-downgrade';
-  l.parentNode.insertBefore(s, l);
-  })({})
-  </script>
-  </body></html>
-  ''',
-  '''
-  <!DOCTYPE html><html><head><meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no"><style>body { margin: 0; padding: 0; display: flex; justify-content: center; align-items: center; background-color: transparent; overflow: hidden; }</style></head><body>
-  <script>
-  (function(ynnkjd){
-  var d = document, s = d.createElement('script'), l = d.currentScript || d.scripts[d.scripts.length - 1];
-  s.settings = ynnkjd || {};
-  s.src = "https://dishoneststyle.com/biXGVos.daGSlc0AY/Wdce/Eeomc9/uyZQUrlMk/P/TOc/1TNuTwUK1kMyj/kltnNxz/UV1dNVTHUIzdM/wJ";
-  s.async = true;
-  s.referrerPolicy = 'no-referrer-when-downgrade';
-  l.parentNode.insertBefore(s, l);
-  })({})
-  </script>
-  </body></html>
-  ''',
-  '''
-  <!DOCTYPE html><html><head><meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no"><style>body { margin: 0; padding: 0; display: flex; justify-content: center; align-items: center; background-color: transparent; overflow: hidden; }</style></head><body>
-  <script>
-  (function(ynnkjd){
-  var d = document, s = d.createElement('script'), l = d.currentScript || d.scripts[d.scripts.length - 1];
-  s.settings = ynnkjd || {};
-  s.src = "https://dishoneststyle.com/bMXaV.sld/GjlI0zYcW-cm/teMmX9LuvZgUfl/kvPwT/cB1CNSTpUp1tNiD/USt/N/z-Ug1dN/ThUd0/OZQp";
-  s.async = true;
-  s.referrerPolicy = 'no-referrer-when-downgrade';
-  l.parentNode.insertBefore(s, l);
-  })({})
-  </script>
-  </body></html>
-  ''',
-  '''
-  <!DOCTYPE html><html><head><meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no"><style>body { margin: 0; padding: 0; display: flex; justify-content: center; align-items: center; background-color: transparent; overflow: hidden; }</style></head><body>
-  <script>
-  (function(ynnkjd){
-  var d = document, s = d.createElement('script'), l = d.currentScript || d.scripts[d.scripts.length - 1];
-  s.settings = ynnkjd || {};
-  s.src = "https://dishoneststyle.com/b/XfVNskd.Gwlv0zYoWPcc/Zehm/9Tu_ZOUelpkrPpTbcQ1QNkT-UB1eNxj_Edt/NczLUF1/NLTXUQ2HNGQP";
-  s.async = true;
-  s.referrerPolicy = 'no-referrer-when-downgrade';
-  l.parentNode.insertBefore(s, l);
-  })({})
-  </script>
-  </body></html>
-  ''',
-  '''
-  <!DOCTYPE html><html><head><meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no"><style>body { margin: 0; padding: 0; display: flex; justify-content: center; align-items: center; background-color: transparent; overflow: hidden; }</style></head><body>
-  <script>
-  (function(ynnkjd){
-  var d = document, s = d.createElement('script'), l = d.currentScript || d.scripts[d.scripts.length - 1];
-  s.settings = ynnkjd || {};
-  s.src = "https://dishoneststyle.com/bwX.VLsBdkGFlr0zYnWjcv/hedm/9qu/ZpUvlnkKPGT_c/1/NCTBU/1eN/z/cMtpNUzlUL1zNBThU/4/MrQ_";
-  s.async = true;
-  s.referrerPolicy = 'no-referrer-when-downgrade';
-  l.parentNode.insertBefore(s, l);
-  })({})
-  </script>
-  </body></html>
-  ''',
-  '''
-  <!DOCTYPE html><html><head><meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no"><style>body { margin: 0; padding: 0; display: flex; justify-content: center; align-items: center; background-color: transparent; overflow: hidden; }</style></head><body>
-  <script>
-  (function(ynnkjd){
-  var d = document, s = d.createElement('script'), l = d.currentScript || d.scripts[d.scripts.length - 1];
-  s.settings = ynnkjd || {};
-  s.src = "https://dishoneststyle.com/bSXIVMsHd.G/l/0BYuW_cP/FeemE9/uGZjUQl/kmPVTDc/1aNQTXUB2MMNj_Unt-NMzXUu1VNYTtY/y/OUQq";
-  s.async = true;
-  s.referrerPolicy = 'no-referrer-when-downgrade';
-  l.parentNode.insertBefore(s, l);
-  })({})
-  </script>
-  </body></html>
-  ''',
-  '''
-  <!DOCTYPE html><html><head><meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no"><style>body { margin: 0; padding: 0; display: flex; justify-content: center; align-items: center; background-color: transparent; overflow: hidden; }</style></head><body>
-  <script>
-  (function(ynnkjd){
-  var d = document, s = d.createElement('script'), l = d.currentScript || d.scripts[d.scripts.length - 1];
-  s.settings = ynnkjd || {};
-  s.src = "https://dishoneststyle.com/b.X/VusVdRGTly0gYqW/ca/LeUmn9tuVZ/UOlTk/PvTNcC1kN/TpUQ2/M/DGUkt-NmzzUj1wNqTIYDwIO/Qc";
-  s.async = true;
-  s.referrerPolicy = 'no-referrer-when-downgrade';
-  l.parentNode.insertBefore(s, l);
-  })({})
-  </script>
-  </body></html>
-  ''',
-  '''
-  <!DOCTYPE html><html><head><meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no"><style>body { margin: 0; padding: 0; display: flex; justify-content: center; align-items: center; background-color: transparent; overflow: hidden; }</style></head><body>
-  <script>
-  (function(ynnkjd){
-  var d = document, s = d.createElement('script'), l = d.currentScript || d.scripts[d.scripts.length - 1];
-  s.settings = ynnkjd || {};
-  s.src = "https://dishoneststyle.com/bsXJVVsNd.Glla0gYzW/cx/Hejmp9/uBZsUOlnkaP/Tycf1FNbTjUB1xOEDVkttXNwzNUe1/NFTSUp5-MWwV";
-  s.async = true;
-  s.referrerPolicy = 'no-referrer-when-downgrade';
-  l.parentNode.insertBefore(s, l);
-  })({})
-  </script>
-  </body></html>
-  '''
-];
-
-// ═══════════════════════════════════════════════════════════════════════════════
-// HIGH PERFORMANCE WEBVIEW AD BANNER
-// ═══════════════════════════════════════════════════════════════════════════════
-class RealWebAdBanner extends StatefulWidget {
-  final int scriptIndex;
-  final double height;
-  final String slotName;
-
-  const RealWebAdBanner({
-    super.key,
-    this.scriptIndex = 0,
-    this.height = 78,
-    this.slotName = 'Banner Ad',
-  });
-
-  @override
-  State<RealWebAdBanner> createState() => _RealWebAdBannerState();
-}
-
-class _RealWebAdBannerState extends State<RealWebAdBanner> with AutomaticKeepAliveClientMixin {
-  late final WebViewController _controller;
-  bool _isLoading = true;
-
-  @override
-  bool get wantKeepAlive => true;
-
-  @override
-  void initState() {
-    super.initState();
-    final htmlCode = kAdHtmlScripts[widget.scriptIndex % kAdHtmlScripts.length];
-
-    PlatformWebViewControllerCreationParams params;
-    if (WebViewPlatform.instance is AndroidWebViewPlatform) {
-      params = AndroidWebViewControllerCreationParams();
-    } else {
-      params = const PlatformWebViewControllerCreationParams();
-    }
-
-    _controller = WebViewController.fromPlatformCreationParams(params);
-
-    if (_controller.platform is AndroidWebViewController) {
-      (_controller.platform as AndroidWebViewController).setMediaPlaybackRequiresUserGesture(false);
-    }
-
-    _controller
-      ..setJavaScriptMode(JavaScriptMode.unrestricted)
-      ..setBackgroundColor(Colors.transparent)
-      ..setNavigationDelegate(
-        NavigationDelegate(
-          onPageStarted: (url) {
-            if (mounted) setState(() => _isLoading = true);
-          },
-          onPageFinished: (url) {
-            if (mounted) setState(() => _isLoading = false);
-          },
-          onNavigationRequest: (NavigationRequest request) {
-            if (request.url.startsWith('http') && !request.url.contains('about:blank')) {
-              launchUrl(Uri.parse(request.url), mode: LaunchMode.externalApplication);
-              return NavigationDecision.prevent;
-            }
-            return NavigationDecision.navigate;
-          },
-        ),
-      )
-      ..loadHtmlString(htmlCode);
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    super.build(context);
-    return RepaintBoundary(
-      child: Container(
-        width: double.infinity,
-        height: widget.height,
-        margin: const EdgeInsets.symmetric(vertical: 4),
-        decoration: BoxDecoration(
-          color: AppThemes.kCardBg,
-          borderRadius: BorderRadius.circular(10),
-          border: Border.all(color: AppThemes.kBorder),
-        ),
-        child: ClipRRect(
-          borderRadius: BorderRadius.circular(10),
-          child: Stack(
-            children: [
-              Positioned.fill(child: WebViewWidget(controller: _controller)),
-              if (_isLoading)
-                const Center(
-                  child: SizedBox(
-                    width: 18,
-                    height: 18,
-                    child: CircularProgressIndicator(color: AppThemes.kGreen, strokeWidth: 1.5),
-                  ),
-                ),
-              Positioned(
-                top: 4,
-                right: 6,
-                child: Container(
-                  padding: const EdgeInsets.symmetric(horizontal: 5, vertical: 1.5),
-                  decoration: BoxDecoration(
-                    color: Colors.black87,
-                    borderRadius: BorderRadius.circular(4),
-                    border: Border.all(color: AppThemes.kGreen.withOpacity(0.35)),
-                  ),
-                  child: const Text(
-                    'SPONSORED',
-                    style: TextStyle(
-                      color: AppThemes.kGreen,
-                      fontSize: 7.5,
-                      fontWeight: FontWeight.w800,
-                      letterSpacing: 0.8,
-                    ),
-                  ),
-                ),
-              ),
-            ],
-          ),
-        ),
-      ),
-    );
   }
 }
 
@@ -622,12 +364,64 @@ Widget buildMediaThumbnail(
 }
 
 // ═══════════════════════════════════════════════════════════════════════════════
-// MAYAJAAL APP — FULL PRODUCTION CODE (PART 2 OF 6)
-// DEVICE ID, SOUND CONTROLLERS, LEGAL DIALOGS & API-LINKED CLOUD ACCOUNT ENGINE
+// ⭐ REAL VIDEO NAME RESOLVER — FIREBASE RTDB BACKUP
 // ═══════════════════════════════════════════════════════════════════════════════
-// ═══════════════════════════════════════════════════════
+class VideoNameResolver {
+  /// Fetches real filename / title / file_name directly from Firebase RTDB.
+  /// Returns empty string on failure.
+  static Future<String> resolve(String videoId) async {
+    if (videoId.isEmpty) return '';
+    try {
+      final snap = await FirebaseDatabase.instance.ref('links/$videoId').once();
+      final val = snap.snapshot.value;
+      if (val == null || val is! Map) return '';
+      final data = Map<String, dynamic>.from(val);
+
+      // Priority: filename → title → file_name → originalUrl basename
+      final candidates = [
+        (data['filename'] ?? '').toString().trim(),
+        (data['title'] ?? '').toString().trim(),
+        (data['file_name'] ?? '').toString().trim(),
+      ];
+
+      for (final c in candidates) {
+        if (c.isNotEmpty && c.toLowerCase() != 'null' && c != videoId) {
+          return c;
+        }
+      }
+
+      // Last resort: extract basename from originalUrl
+      final origUrl = (data['originalUrl'] ?? '').toString();
+      if (origUrl.isNotEmpty) {
+        try {
+          final u = Uri.parse(origUrl);
+          final last = u.pathSegments.isNotEmpty ? u.pathSegments.last : '';
+          if (last.isNotEmpty) return Uri.decodeComponent(last);
+        } catch (_) {}
+      }
+    } catch (_) {}
+    return '';
+  }
+
+  /// Checks if a title is a "bad" title (equals video ID, empty, or null).
+  static bool isBadTitle(String title, String videoId) {
+    final t = title.trim();
+    return t.isEmpty ||
+        t.toLowerCase() == 'null' ||
+        t == videoId ||
+        t.toLowerCase() == 'mayajaal video';
+  }
+}
+
+// ═══════════════════════════════════════════════════════════════════════════════
+// MAYAJAAL APP — (PART 1 CONTINUED)
+// DEVICE ID, LEGAL DIALOGS, LOCALIZATION, SECURITY, RANKS, ACCOUNT SERVICE,
+// FIREBASE NOTIFICATION HUB, WATCH HISTORY & SAVED VIDEOS
+// ═══════════════════════════════════════════════════════════════════════════════
+
+// ═══════════════════════════════════════════════════════════════════════════════
 // DEVICE ID HELPER (HARDWARE IDENTIFICATION & BINDING)
-// ═══════════════════════════════════════════════════════
+// ═══════════════════════════════════════════════════════════════════════════════
 class DeviceIdHelper {
   static String? _cached;
   static String? _cachedHash;
@@ -1384,62 +1178,6 @@ class CyberRank {
 }
 
 // ═══════════════════════════════════════════════════════════════════════════════
-// AD TRACKER
-// ═══════════════════════════════════════════════════════════════════════════════
-class AdTracker {
-  static const String _kCountKey = 'ads_watched_count';
-  static const String _kLastTimeKey = 'ads_last_reset_time';
-
-  static Future<int> getWatchedCount() async {
-    try {
-      final prefs = await SharedPreferences.getInstance();
-      return prefs.getInt(_kCountKey) ?? 0;
-    } catch (_) {
-      return 0;
-    }
-  }
-
-  static Future<void> increment() async {
-    try {
-      final prefs = await SharedPreferences.getInstance();
-      final current = prefs.getInt(_kCountKey) ?? 0;
-      final newCount = current + 1;
-      if (newCount >= 7) {
-        await prefs.setInt(_kCountKey, 0);
-        await prefs.setInt(_kLastTimeKey, DateTime.now().millisecondsSinceEpoch);
-      } else {
-        await prefs.setInt(_kCountKey, newCount);
-      }
-    } catch (_) {}
-  }
-
-  static Future<bool> isAdFreeWindow() async {
-    try {
-      final prefs = await SharedPreferences.getInstance();
-      final lastTime = prefs.getInt(_kLastTimeKey) ?? 0;
-      if (lastTime == 0) return false;
-      final diff = DateTime.now().millisecondsSinceEpoch - lastTime;
-      return diff < 24 * 60 * 60 * 1000;
-    } catch (_) {
-      return false;
-    }
-  }
-
-  static Future<int> hoursRemaining() async {
-    try {
-      final prefs = await SharedPreferences.getInstance();
-      final lastTime = prefs.getInt(_kLastTimeKey) ?? 0;
-      if (lastTime == 0) return 0;
-      final diff = DateTime.now().millisecondsSinceEpoch - lastTime;
-      final remaining = 24 * 60 * 60 * 1000 - diff;
-      return remaining > 0 ? (remaining / (60 * 60 * 1000)).ceil() : 0;
-    } catch (_) {
-      return 0;
-    }
-  }
-}
-
-// ═══════════════════════════════════════════════════════════════════════════════
 // MAYAJAAL ACCOUNT SERVICE (DIRECT WEB SERVER API & CLOUD PERSISTENCE ENGINE)
 // ═══════════════════════════════════════════════════════════════════════════════
 class MayaJaalAccount {
@@ -1622,14 +1360,11 @@ class MayaJaalAccount {
     }
   }
 
-  // 100% REALTIME WEB SERVER API SYNC (MATCHES EXACT TELEGRAM BOT & WEB DASHBOARD DATA)
   static Future<Map<String, dynamic>> getDashboard() async {
     if (cachedUid == null) return {};
     try {
-      // 1. User ki verified dynamic API key load karein
       final apiKey = cachedApiKey ?? await loadApiKey();
 
-      // 2. Direct Web Server API se dynamic User Stats fetch karein
       final url = Uri.parse('$kBackendBaseUrl/api/user-stats?key=$apiKey&uid=$cachedUid');
       final response = await http.get(url).timeout(const Duration(seconds: 4));
 
@@ -1649,7 +1384,6 @@ class MayaJaalAccount {
       debugPrint('Web Server API stats fetch fallback: $e');
     }
 
-    // 3. Fallback: Aggregate direct links count and views
     try {
       final snap = await _rtdb.child('links').orderByChild('ownerUid').equalTo(cachedUid!).once();
       int calculatedViews = 0;
@@ -1723,13 +1457,12 @@ class MayaJaalAccount {
     }
   }
 
-  // Exact Anti-Fraud CPM Tier Calculation
   static double calcEarnings(int views) {
     views = math.max(0, views);
     if (views <= 0) return 0.0;
-    if (views <= 1000) return _r2(views * 0.001); // 1k views = $1.00
-    if (views <= 2000) return _r2(1.00 + (views - 1000) * 0.001); // 2k views = $2.00
-    if (views <= 10000) return _r2(2.00 + (views - 2000) * 0.002875); // 10k views = $25.00
+    if (views <= 1000) return _r2(views * 0.001);
+    if (views <= 2000) return _r2(1.00 + (views - 1000) * 0.001);
+    if (views <= 10000) return _r2(2.00 + (views - 2000) * 0.002875);
     return _r2(25.00 + (views - 10000) * 0.0025);
   }
 
@@ -1753,10 +1486,6 @@ class MayaJaalAccount {
 
   static double _r2(num n) => (n * 100).round() / 100;
 }
-// ═══════════════════════════════════════════════════════════════════════════════
-// MAYAJAAL APP — FULL PRODUCTION CODE (PART 3 OF 6)
-// FIREBASE NOTIFICATION HUB, FULL-PAGE VIEWER & CLOUD PERSISTENCE ENGINE
-// ═══════════════════════════════════════════════════════════════════════════════
 
 // ═══════════════════════════════════════════════════════════════════════════════
 // FIREBASE SERVICE — REALTIME CLOUD INTEGRATION & NOTIFICATIONS
@@ -2127,7 +1856,7 @@ class FirebaseService {
 }
 
 // ═══════════════════════════════════════════════════════════════════════════════
-// NOTIFICATION DETAILS SCREEN (FULL-PAGE DETAILED VIEW)
+// NOTIFICATION DETAILS SCREEN
 // ═══════════════════════════════════════════════════════════════════════════════
 class NotificationDetailsScreen extends StatelessWidget {
   final Map<String, dynamic> notification;
@@ -2250,7 +1979,7 @@ class NotificationDetailsScreen extends StatelessWidget {
 }
 
 // ═══════════════════════════════════════════════════════════════════════════════
-// TOP SLIDE-DOWN NOTIFICATION DROPDOWN OVERLAY (ZERO JANK, CLEAN UI)
+// TOP SLIDE-DOWN NOTIFICATION DROPDOWN OVERLAY
 // ═══════════════════════════════════════════════════════════════════════════════
 void showTopNotificationDropdown(BuildContext context) {
   final uid = MayaJaalAccount.cachedUid;
@@ -2417,7 +2146,7 @@ void showTopNotificationDropdown(BuildContext context) {
 }
 
 // ═══════════════════════════════════════════════════════════════════════════════
-// CLOUD-SYNCED WATCH HISTORY & SAVED VIDEOS (BI-DIRECTIONAL PERSISTENCE)
+// CLOUD-SYNCED WATCH HISTORY & SAVED VIDEOS
 // ═══════════════════════════════════════════════════════════════════════════════
 class WatchHistory {
   static String get _uid => MayaJaalAccount.cachedUid ?? 'guest';
@@ -2558,10 +2287,57 @@ class WatchHistory {
       debugPrint('Cloud saved sync error: $e');
     }
   }
+
+  /// ⭐ NEW: Cleans up bad titles in history & saved lists and re-fetches
+  /// real filenames from Firebase RTDB.
+  static Future<void> repairBadTitles({
+    required List<Map<String, dynamic>> history,
+    required List<Map<String, dynamic>> saved,
+  }) async {
+    bool historyChanged = false;
+    bool savedChanged = false;
+
+    for (final item in history) {
+      final id = (item['id'] ?? '').toString();
+      final title = (item['title'] ?? '').toString();
+      if (id.isNotEmpty && VideoNameResolver.isBadTitle(title, id)) {
+        final real = await VideoNameResolver.resolve(id);
+        if (real.isNotEmpty) {
+          item['title'] = real;
+          historyChanged = true;
+        }
+      }
+    }
+
+    for (final item in saved) {
+      final id = (item['id'] ?? '').toString();
+      final title = (item['title'] ?? '').toString();
+      if (id.isNotEmpty && VideoNameResolver.isBadTitle(title, id)) {
+        final real = await VideoNameResolver.resolve(id);
+        if (real.isNotEmpty) {
+          item['title'] = real;
+          savedChanged = true;
+        }
+      }
+    }
+
+    final prefs = await SharedPreferences.getInstance();
+    if (historyChanged) {
+      await prefs.setString(_historyKey, jsonEncode(history));
+    }
+    if (savedChanged) {
+      await prefs.setString(_savedKey, jsonEncode(saved));
+    }
+  }
 }
+
 // ═══════════════════════════════════════════════════════════════════════════════
-// MAYAJAAL APP — FULL PRODUCTION CODE (PART 4 OF 6)
-// APP ROOT, MATRIX ENGINE, ZERO-LAG AUTH GATE, GOOGLE LOGIN & 4-TAB NAVIGATION
+// END OF PART 1 OF 2 — CONTINUE WITH PART 2 (App Root, Screens & Player)
+// ═══════════════════════════════════════════════════════════════════════════════
+// ═══════════════════════════════════════════════════════════════════════════════
+// MAYAJAAL APP — FULL PRODUCTION CODE (PART 2 OF 2)
+// APP ROOT, MATRIX ENGINE, AUTH GATE, HOME, DRAWER, PREVIEW & PLAYER
+// (ALL ADS REMOVED · REAL VIDEO NAMES FIXED)
 // ═══════════════════════════════════════════════════════════════════════════════
 
 // ═══════════════════════════════════════════════════════════════════════════════
@@ -3548,7 +3324,7 @@ class _LoginScreenState extends State<LoginScreen>
 }
 
 // ═══════════════════════════════════════════════════════════════════════════════
-// MAIN NAVIGATION HOLDER (4 TABS: HOME, CHANNEL, GALLERY, HISTORY - NO ALERT TAB)
+// MAIN NAVIGATION HOLDER (4 TABS)
 // ═══════════════════════════════════════════════════════════════════════════════
 class MainNavigationHolder extends StatefulWidget {
   const MainNavigationHolder({super.key});
@@ -3559,14 +3335,6 @@ class MainNavigationHolder extends StatefulWidget {
 class _MainNavigationHolderState extends State<MainNavigationHolder> {
   final GlobalKey<ScaffoldState> _scaffoldKey = GlobalKey<ScaffoldState>();
   int _currentIndex = 0;
-
-  // Ultra-fast cached views
-  final List<Widget> _screens = [
-    HomeScreen(onMenuTap: null), // Will be bound in build
-    const ChannelScreen(),
-    const GalleryScreen(),
-    const HistoryScreen(),
-  ];
 
   @override
   Widget build(BuildContext context) {
@@ -3631,13 +3399,9 @@ class _MainNavigationHolderState extends State<MainNavigationHolder> {
     );
   }
 }
-// ═══════════════════════════════════════════════════════════════════════════════
-// MAYAJAAL APP — FULL PRODUCTION CODE (PART 5 OF 6)
-// LIVE PULSE OSCILLOSCOPE, HOME SCREEN, MORE DRAWER & STREAM PREVIEW SCREEN
-// ═══════════════════════════════════════════════════════════════════════════════
 
 // ═══════════════════════════════════════════════════════════════════════════════
-// LIVE PULSE GRAPH PAINTER (DUAL-TRACE OSCILLOSCOPE - NO OVERFLOW)
+// LIVE PULSE GRAPH PAINTER
 // ═══════════════════════════════════════════════════════════════════════════════
 class LivePulseGraphPainter extends CustomPainter {
   final List<double> viewPoints;
@@ -3738,7 +3502,7 @@ class LivePulseGraphPainter extends CustomPainter {
 }
 
 // ═══════════════════════════════════════════════════════════════════════════════
-// LIVE PULSE CARD WIDGET (CLEAN CONTRAST & STRICT BOUNDS)
+// LIVE PULSE CARD WIDGET
 // ═══════════════════════════════════════════════════════════════════════════════
 class LivePulseCard extends StatefulWidget {
   const LivePulseCard({super.key});
@@ -3917,7 +3681,7 @@ class _LivePulseCardState extends State<LivePulseCard> with SingleTickerProvider
 }
 
 // ═══════════════════════════════════════════════════════════════════════════════
-// HOME SCREEN (OPTIMIZED UI, REAL ADS & SEARCH-PLAY PIPELINE)
+// HOME SCREEN (ADS REMOVED)
 // ═══════════════════════════════════════════════════════════════════════════════
 class HomeScreen extends StatefulWidget {
   final VoidCallback? onMenuTap;
@@ -4185,11 +3949,7 @@ class _HomeScreenState extends State<HomeScreen>
                 ),
               ),
 
-              // REAL AD BANNER: HOME TOP (Slot 0)
-              const Padding(
-                padding: EdgeInsets.symmetric(horizontal: 14, vertical: 4),
-                child: RealWebAdBanner(scriptIndex: 0, slotName: 'home-top'),
-              ),
+              // ⛔ AD REMOVED: HOME TOP (Slot 0)
 
               Container(
                 width: double.infinity,
@@ -4443,11 +4203,7 @@ class _HomeScreenState extends State<HomeScreen>
                 ),
               ),
 
-              // REAL AD BANNER: HOME MIDDLE (Slot 1)
-              const Padding(
-                padding: EdgeInsets.symmetric(horizontal: 14, vertical: 4),
-                child: RealWebAdBanner(scriptIndex: 1, slotName: 'home-middle'),
-              ),
+              // ⛔ AD REMOVED: HOME MIDDLE (Slot 1)
 
               Padding(
                 padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 6),
@@ -4487,11 +4243,7 @@ class _HomeScreenState extends State<HomeScreen>
                 ),
               ),
 
-              // REAL AD BANNER: HOME BOTTOM (Slot 2)
-              const Padding(
-                padding: EdgeInsets.symmetric(horizontal: 14, vertical: 6),
-                child: RealWebAdBanner(scriptIndex: 2, slotName: 'home-bottom'),
-              ),
+              // ⛔ AD REMOVED: HOME BOTTOM (Slot 2)
 
               const Padding(
                 padding: EdgeInsets.symmetric(vertical: 14),
@@ -4514,7 +4266,7 @@ class _HomeScreenState extends State<HomeScreen>
 }
 
 // ═══════════════════════════════════════════════════════════════════════════════
-// MORE DRAWER (BALANCED DESIGN & DUAL-TRACE OSCILLOSCOPE)
+// MORE DRAWER
 // ═══════════════════════════════════════════════════════════════════════════════
 class MoreDrawer extends StatefulWidget {
   const MoreDrawer({super.key});
@@ -5580,7 +5332,7 @@ class SnakeBorderPainter extends CustomPainter {
 }
 
 // ═══════════════════════════════════════════════════════════════════════════════
-// STREAM PREVIEW SCREEN (FAST THUMBNAIL, VERIFIED 10S & RED SNAKE BUTTON)
+// STREAM PREVIEW SCREEN (ADS REMOVED · REAL NAME FIXED)
 // ═══════════════════════════════════════════════════════════════════════════════
 class StreamPreviewScreen extends StatefulWidget {
   final String targetUrl;
@@ -5699,6 +5451,7 @@ class _StreamPreviewScreenState extends State<StreamPreviewScreen>
   }
 
   Future<void> _fetchStreamMetadata() async {
+    bool apiSuccess = false;
     try {
       final apiUrl = _token.isNotEmpty
           ? '$kBackendBaseUrl/api/stream-info/$_rawId?t=$_token'
@@ -5727,19 +5480,22 @@ class _StreamPreviewScreenState extends State<StreamPreviewScreen>
             newUrl = '$kBackendBaseUrl/stream/$_rawId';
           }
 
+          String apiTitle = (data['title'] ?? '').toString().trim();
+          String apiFilename = (data['filename'] ?? '').toString().trim();
+          String apiFileName = (data['file_name'] ?? '').toString().trim();
+          String resolvedTitle = '';
+          if (apiTitle.isNotEmpty && apiTitle != 'null') {
+            resolvedTitle = apiTitle;
+          } else if (apiFilename.isNotEmpty && apiFilename != 'null') {
+            resolvedTitle = apiFilename;
+          } else if (apiFileName.isNotEmpty && apiFileName != 'null') {
+            resolvedTitle = apiFileName;
+          }
+
           if (mounted) {
             setState(() {
               _streamUrl = newUrl;
-              String apiTitle = (data['title'] ?? '').toString().trim();
-              String apiFilename = (data['filename'] ?? '').toString().trim();
-              String apiFileName = (data['file_name'] ?? '').toString().trim();
-              if (apiTitle.isNotEmpty && apiTitle != 'null') {
-                _videoTitle = apiTitle;
-              } else if (apiFilename.isNotEmpty && apiFilename != 'null') {
-                _videoTitle = apiFilename;
-              } else if (apiFileName.isNotEmpty && apiFileName != 'null') {
-                _videoTitle = apiFileName;
-              }
+              if (resolvedTitle.isNotEmpty) _videoTitle = resolvedTitle;
               _uploaderName = data['uploader'] ?? _uploaderName;
               final apiThumb = data['thumbnailUrl'] ?? data['thumbnail'] ?? data['poster'] ?? '';
               if (apiThumb.toString().isNotEmpty) {
@@ -5749,10 +5505,31 @@ class _StreamPreviewScreenState extends State<StreamPreviewScreen>
           }
 
           await _saveStreamUrlToCache(_streamUrl);
-          return;
+          apiSuccess = true;
+
+          // ⭐ If title still bad (equals rawId), try Firebase RTDB
+          if (VideoNameResolver.isBadTitle(_videoTitle, _rawId)) {
+            final real = await VideoNameResolver.resolve(_rawId);
+            if (real.isNotEmpty && mounted) {
+              setState(() => _videoTitle = real);
+            }
+          }
         }
       }
     } catch (_) {}
+
+    // ⭐ API failed → Firebase RTDB fallback for real name
+    if (!apiSuccess) {
+      final real = await VideoNameResolver.resolve(_rawId);
+      if (real.isNotEmpty && mounted) {
+        setState(() => _videoTitle = real);
+      }
+    } else if (VideoNameResolver.isBadTitle(_videoTitle, _rawId)) {
+      final real = await VideoNameResolver.resolve(_rawId);
+      if (real.isNotEmpty && mounted) {
+        setState(() => _videoTitle = real);
+      }
+    }
   }
 
   Future<void> _saveStreamUrlToCache(String streamUrl) async {
@@ -6070,8 +5847,7 @@ class _StreamPreviewScreenState extends State<StreamPreviewScreen>
                   ),
                   const SizedBox(height: 12),
 
-                  // REAL AD BANNER: PLAY BUTTON KE UPAR (Slot 3)
-                  const RealWebAdBanner(scriptIndex: 3, slotName: 'above-play-button'),
+                  // ⛔ AD REMOVED: ABOVE PLAY BUTTON (Slot 3)
                   const SizedBox(height: 8),
 
                   if (_isReadyToPlay)
@@ -6090,8 +5866,7 @@ class _StreamPreviewScreenState extends State<StreamPreviewScreen>
                     ),
 
                   const SizedBox(height: 8),
-                  // REAL AD BANNER: PLAY BUTTON KE NEECHE (Slot 4)
-                  const RealWebAdBanner(scriptIndex: 4, slotName: 'below-play-button'),
+                  // ⛔ AD REMOVED: BELOW PLAY BUTTON (Slot 4)
                   const SizedBox(height: 12),
 
                   Container(
@@ -6177,10 +5952,6 @@ class _StreamPreviewScreenState extends State<StreamPreviewScreen>
     );
   }
 }
-// ═══════════════════════════════════════════════════════════════════════════════
-// MAYAJAAL APP — FULL PRODUCTION CODE (PART 6 OF 6)
-// ZERO-LAG HARDWARE PLAYER, SETTINGS (THEMES/SOUND), WITHDRAWAL & EARNINGS
-// ═══════════════════════════════════════════════════════════════════════════════
 
 // ═══════════════════════════════════════════════════════════════════════════════
 // CHANNEL SCREEN
@@ -6623,7 +6394,7 @@ class _GalleryScreenState extends State<GalleryScreen> {
 }
 
 // ═══════════════════════════════════════════════════════════════════════════════
-// SAVED VIDEOS SCREEN (CLOUD PERSISTENCE & TOP BANNER AD)
+// SAVED VIDEOS SCREEN (AD REMOVED · REAL NAME FIXED)
 // ═══════════════════════════════════════════════════════════════════════════════
 class SavedVideosScreen extends StatefulWidget {
   const SavedVideosScreen({super.key});
@@ -6672,12 +6443,23 @@ class _SavedVideosScreenState extends State<SavedVideosScreen> {
               _loading = false;
             });
             await prefs.setString(key, jsonEncode(_saved));
+
+            // ⭐ Repair any bad titles using Firebase RTDB lookup
+            await WatchHistory.repairBadTitles(history: [], saved: _saved);
+            if (mounted) setState(() {});
           }
           return;
         }
       } catch (_) {}
     }
+
     if (mounted) setState(() => _loading = false);
+
+    // ⭐ Repair bad titles even for local-only data
+    if (_saved.isNotEmpty) {
+      await WatchHistory.repairBadTitles(history: [], saved: _saved);
+      if (mounted) setState(() {});
+    }
   }
 
   Future<void> _removeSaved(int index) async {
@@ -6713,10 +6495,8 @@ class _SavedVideosScreenState extends State<SavedVideosScreen> {
                 )
               : Column(
                   children: [
-                    Padding(
-                      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 6),
-                      child: RealWebAdBanner(scriptIndex: 4, slotName: 'saved-top'),
-                    ),
+                    // ⛔ AD REMOVED: SAVED TOP (Slot 4)
+                    const SizedBox(height: 6),
                     Expanded(
                       child: ListView.builder(
                         padding: const EdgeInsets.fromLTRB(14, 2, 14, 14),
@@ -6802,7 +6582,7 @@ class _SavedVideosScreenState extends State<SavedVideosScreen> {
 }
 
 // ═══════════════════════════════════════════════════════════════════════════════
-// HISTORY SCREEN (CLOUD PERSISTENCE & TOP BANNER AD)
+// HISTORY SCREEN (AD REMOVED · REAL NAME FIXED)
 // ═══════════════════════════════════════════════════════════════════════════════
 class HistoryScreen extends StatefulWidget {
   const HistoryScreen({super.key});
@@ -6851,12 +6631,23 @@ class _HistoryScreenState extends State<HistoryScreen> {
               _loading = false;
             });
             await prefs.setString(key, jsonEncode(_history));
+
+            // ⭐ Repair any bad titles using Firebase RTDB lookup
+            await WatchHistory.repairBadTitles(history: _history, saved: []);
+            if (mounted) setState(() {});
           }
           return;
         }
       } catch (_) {}
     }
+
     if (mounted) setState(() => _loading = false);
+
+    // ⭐ Repair bad titles even for local-only data
+    if (_history.isNotEmpty) {
+      await WatchHistory.repairBadTitles(history: _history, saved: []);
+      if (mounted) setState(() {});
+    }
   }
 
   Future<void> _deleteItem(int index) async {
@@ -6956,10 +6747,8 @@ class _HistoryScreenState extends State<HistoryScreen> {
                 )
               : Column(
                   children: [
-                    Padding(
-                      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 6),
-                      child: RealWebAdBanner(scriptIndex: 5, slotName: 'history-top'),
-                    ),
+                    // ⛔ AD REMOVED: HISTORY TOP (Slot 5)
+                    const SizedBox(height: 6),
                     Expanded(
                       child: ListView.builder(
                         padding: const EdgeInsets.fromLTRB(14, 2, 14, 14),
@@ -7054,7 +6843,7 @@ class _HistoryScreenState extends State<HistoryScreen> {
 }
 
 // ═══════════════════════════════════════════════════════════════════════════════
-// SETTINGS SCREEN (THEMES, SOUND ON/OFF & SAVE SETTINGS BUTTON)
+// SETTINGS SCREEN
 // ═══════════════════════════════════════════════════════════════════════════════
 class SettingsScreen extends StatefulWidget {
   const SettingsScreen({super.key});
@@ -7130,7 +6919,6 @@ class _SettingsScreenState extends State<SettingsScreen> {
       body: ListView(
         padding: const EdgeInsets.symmetric(vertical: 6),
         children: [
-          // Sound Effects Switch
           ListTile(
             leading: const Icon(Icons.volume_up, color: AppThemes.kGreen, size: 20),
             title: Text(tr('sound_effects'), style: const TextStyle(color: Colors.white, fontSize: 13, fontWeight: FontWeight.bold)),
@@ -7149,8 +6937,6 @@ class _SettingsScreenState extends State<SettingsScreen> {
             ),
           ),
           Divider(color: Colors.white10),
-
-          // Theme Selector
           ListTile(
             leading: const Icon(Icons.palette_outlined, color: AppThemes.kNeonCyan, size: 20),
             title: Text(tr('dark_theme'), style: const TextStyle(color: Colors.white, fontSize: 13, fontWeight: FontWeight.bold)),
@@ -7159,8 +6945,6 @@ class _SettingsScreenState extends State<SettingsScreen> {
             onTap: _showThemeDialog,
           ),
           Divider(color: Colors.white10),
-
-          // Language Selector
           ListTile(
             leading: const Icon(Icons.language, color: AppThemes.kGreen, size: 20),
             title: Text(tr('language'), style: const TextStyle(color: Colors.white, fontSize: 13, fontWeight: FontWeight.bold)),
@@ -7169,8 +6953,6 @@ class _SettingsScreenState extends State<SettingsScreen> {
             onTap: _showLanguageDialog,
           ),
           Divider(color: Colors.white10),
-
-          // Download Location
           ListTile(
             leading: const Icon(Icons.download, color: AppThemes.kGold, size: 20),
             title: Text(tr('download_location'), style: const TextStyle(color: Colors.white, fontSize: 13, fontWeight: FontWeight.bold)),
@@ -7179,8 +6961,6 @@ class _SettingsScreenState extends State<SettingsScreen> {
             onTap: _showDownloadLocationDialog,
           ),
           Divider(color: Colors.white10),
-
-          // Security Status Box
           Container(
             margin: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
             padding: const EdgeInsets.all(12),
@@ -7213,8 +6993,6 @@ class _SettingsScreenState extends State<SettingsScreen> {
             ),
           ),
           const SizedBox(height: 16),
-
-          // Save Changes Button
           Padding(
             padding: const EdgeInsets.symmetric(horizontal: 14),
             child: SizedBox(
@@ -7236,7 +7014,6 @@ class _SettingsScreenState extends State<SettingsScreen> {
             ),
           ),
           const SizedBox(height: 24),
-
           Center(
             child: Text(
               '> MayaJaal v1.2.0 // Quantum Build',
@@ -7342,7 +7119,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
 }
 
 // ═══════════════════════════════════════════════════════════════════════════════
-// NATIVE VIDEO PLAYER SCREEN (ZERO-LAG HARDWARE ACCELERATED ENGINE)
+// NATIVE VIDEO PLAYER SCREEN (ALL ADS FULLY REMOVED · REAL NAME FIXED)
 // ═══════════════════════════════════════════════════════════════════════════════
 class NativeVideoPlayerScreen extends StatefulWidget {
   final String videoUrl;
@@ -7417,9 +7194,6 @@ class _NativeVideoPlayerScreenState extends State<NativeVideoPlayerScreen> {
   List<Map<String, dynamic>> _relatedVideos = [];
   bool _relatedLoading = true;
 
-  bool _firstAdShown = false;
-  int _secondsSinceLastAd = 0;
-
   @override
   void initState() {
     super.initState();
@@ -7489,14 +7263,7 @@ class _NativeVideoPlayerScreenState extends State<NativeVideoPlayerScreen> {
     }
   }
 
-  void _triggerVideoAd() async {
-    try {
-      final uri = Uri.parse(kAdDirectUrl);
-      if (!await launchUrl(uri, mode: LaunchMode.externalApplication)) {
-        await launchUrl(uri, mode: LaunchMode.platformDefault);
-      }
-    } catch (_) {}
-  }
+  // ⛔ _triggerVideoAd() METHOD REMOVED ENTIRELY
 
   void _startWatchTracking() {
     _watchTimer?.cancel();
@@ -7504,18 +7271,13 @@ class _NativeVideoPlayerScreenState extends State<NativeVideoPlayerScreen> {
       if (!mounted) return;
       if (_controller.value.isInitialized && _controller.value.isPlaying) {
         _watchedSeconds++;
-        _secondsSinceLastAd++;
 
         // Real 10s playback verification trigger
         if (_watchedSeconds == 10 && !_viewReported) {
           _reportViewToBackend();
         }
 
-        // 15-minute recurring video ad trigger
-        if (_firstAdShown && _secondsSinceLastAd >= 900) {
-          _secondsSinceLastAd = 0;
-          _triggerVideoAd();
-        }
+        // ⛔ 15-MINUTE RECURRING AD TRIGGER REMOVED
       }
     });
   }
@@ -7629,16 +7391,7 @@ class _NativeVideoPlayerScreenState extends State<NativeVideoPlayerScreen> {
       _startWatchTracking();
       _captureThumbnail();
 
-      // Video ad trigger at player start
-      if (!_firstAdShown) {
-        _firstAdShown = true;
-        _secondsSinceLastAd = 0;
-        WidgetsBinding.instance.addPostFrameCallback((_) async {
-          if (!mounted) return;
-          await Future.delayed(const Duration(milliseconds: 600));
-          if (mounted) _triggerVideoAd();
-        });
-      }
+      // ⛔ PLAYER START AD TRIGGER REMOVED
     } catch (e) {
       debugPrint('❌ Video Player Error: $e');
       setState(() => _hasError = true);
@@ -8474,11 +8227,8 @@ class _NativeVideoPlayerScreenState extends State<NativeVideoPlayerScreen> {
                   padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
                   child: Column(
                     children: [
-                      // Player top banner ad (Slot 2)
-                      Padding(
-                        padding: const EdgeInsets.symmetric(vertical: 6),
-                        child: RealWebAdBanner(scriptIndex: 2, slotName: 'player-top'),
-                      ),
+                      // ⛔ AD REMOVED: PLAYER TOP (Slot 2)
+                      const SizedBox(height: 6),
 
                       Container(
                         padding: const EdgeInsets.all(10),
@@ -8583,17 +8333,8 @@ class _NativeVideoPlayerScreenState extends State<NativeVideoPlayerScreen> {
                       ),
                       const SizedBox(height: 10),
 
-                      // REAL AD BANNER: like/dislike ke theek neeche (Slot 5)
-                      Padding(
-                        padding: const EdgeInsets.symmetric(vertical: 8),
-                        child: RealWebAdBanner(scriptIndex: 5, slotName: 'player-below-controls'),
-                      ),
-
-                      // REAL AD BANNER: related videos ke upar (Slot 6)
-                      Padding(
-                        padding: const EdgeInsets.symmetric(vertical: 8),
-                        child: RealWebAdBanner(scriptIndex: 6, slotName: 'player-above-related'),
-                      ),
+                      // ⛔ AD REMOVED: BELOW CONTROLS (Slot 5)
+                      // ⛔ AD REMOVED: ABOVE RELATED (Slot 6)
 
                       Row(
                         children: const [
@@ -8604,11 +8345,7 @@ class _NativeVideoPlayerScreenState extends State<NativeVideoPlayerScreen> {
                       ),
                       const SizedBox(height: 8),
 
-                      // REAL AD BANNER: related-middle banner ad (Slot 4)
-                      Padding(
-                        padding: const EdgeInsets.symmetric(vertical: 6),
-                        child: RealWebAdBanner(scriptIndex: 4, slotName: 'related-middle'),
-                      ),
+                      // ⛔ AD REMOVED: RELATED MIDDLE (Slot 4)
 
                       _relatedLoading
                           ? const Center(child: Padding(padding: EdgeInsets.all(16), child: CircularProgressIndicator(color: AppThemes.kGreen, strokeWidth: 1.8)))
@@ -8631,11 +8368,8 @@ class _NativeVideoPlayerScreenState extends State<NativeVideoPlayerScreen> {
                                 ),
                       const SizedBox(height: 10),
 
-                      // REAL AD BANNER: related videos ke neeche (Slot 0)
-                      Padding(
-                        padding: const EdgeInsets.symmetric(vertical: 12),
-                        child: RealWebAdBanner(scriptIndex: 0, slotName: 'player-below-related'),
-                      ),
+                      // ⛔ AD REMOVED: BELOW RELATED (Slot 0)
+                      const SizedBox(height: 12),
                     ],
                   ),
                 ),
@@ -8723,7 +8457,7 @@ class _NativeVideoPlayerScreenState extends State<NativeVideoPlayerScreen> {
 }
 
 // ═══════════════════════════════════════════════════════════════════════════════
-// WITHDRAW SCREEN (REALTIME CLOUD HISTORY & SUBMISSION PIPELINE)
+// WITHDRAW SCREEN
 // ═══════════════════════════════════════════════════════════════════════════════
 class WithdrawScreen extends StatefulWidget {
   const WithdrawScreen({super.key});
@@ -9366,7 +9100,7 @@ class _UserProfileScreenState extends State<UserProfileScreen> {
 }
 
 // ═══════════════════════════════════════════════════════════════════════════════
-// EARNINGS SCREEN (REALTIME WEB SERVER API SYNC - ZERO $0 GLITCH)
+// EARNINGS SCREEN
 // ═══════════════════════════════════════════════════════════════════════════════
 class EarningsScreen extends StatefulWidget {
   const EarningsScreen({super.key});
@@ -9426,7 +9160,6 @@ class _EarningsScreenState extends State<EarningsScreen>
         return;
       }
 
-      // 1. Direct Web Server API Call (Real User Stats & Balance)
       final dash = await MayaJaalAccount.getDashboard();
       final links = await MayaJaalAccount.getUserLinks(limit: 50);
 
@@ -9736,5 +9469,5 @@ class _EarningsScreenState extends State<EarningsScreen>
 }
 
 // ═══════════════════════════════════════════════════════════════════════════════
-// END OF COMPLETE FILE (PARTS 1 TO 6 MERGED & FULLY TESTED)
+// END OF COMPLETE FILE (PARTS 1 & 2 MERGED · ALL ADS REMOVED · REAL NAMES FIXED)
 // ═══════════════════════════════════════════════════════════════════════════════
