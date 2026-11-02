@@ -22,8 +22,6 @@ import 'package:permission_handler/permission_handler.dart';
 import 'package:photo_manager/photo_manager.dart';
 import 'package:photo_manager_image_provider/photo_manager_image_provider.dart';
 import 'package:crypto/crypto.dart' as crypto;
-import 'package:webview_flutter/webview_flutter.dart';
-import 'package:webview_flutter_android/webview_flutter_android.dart';
 
 // ═══════════════════════════════════════════════════════════════════════════════
 // CONFIG & NETWORK BASE URLS
@@ -31,7 +29,7 @@ import 'package:webview_flutter_android/webview_flutter_android.dart';
 const String webClientId = '96139047750-5ooi0pbvch98qu447somuurh6k6fmhcj.apps.googleusercontent.com';
 const String oneSignalAppId = '06b99c2b-b3b4-413b-b6cc-480a624f4e25';
 const String kBackendBaseUrl = 'https://www.mayajaal.online';
-const int kAppCurrentVersionCode = 4;
+const int kAppCurrentVersionCode = 5;
 
 const List<String> kAllowedEmailDomains = [
   '@gmail.com',
@@ -367,8 +365,6 @@ Widget buildMediaThumbnail(
 // ⭐ REAL VIDEO NAME RESOLVER — FIREBASE RTDB BACKUP
 // ═══════════════════════════════════════════════════════════════════════════════
 class VideoNameResolver {
-  /// Fetches real filename / title / file_name directly from Firebase RTDB.
-  /// Returns empty string on failure.
   static Future<String> resolve(String videoId) async {
     if (videoId.isEmpty) return '';
     try {
@@ -377,7 +373,6 @@ class VideoNameResolver {
       if (val == null || val is! Map) return '';
       final data = Map<String, dynamic>.from(val);
 
-      // Priority: filename → title → file_name → originalUrl basename
       final candidates = [
         (data['filename'] ?? '').toString().trim(),
         (data['title'] ?? '').toString().trim(),
@@ -390,7 +385,6 @@ class VideoNameResolver {
         }
       }
 
-      // Last resort: extract basename from originalUrl
       final origUrl = (data['originalUrl'] ?? '').toString();
       if (origUrl.isNotEmpty) {
         try {
@@ -403,7 +397,6 @@ class VideoNameResolver {
     return '';
   }
 
-  /// Checks if a title is a "bad" title (equals video ID, empty, or null).
   static bool isBadTitle(String title, String videoId) {
     final t = title.trim();
     return t.isEmpty ||
@@ -412,12 +405,6 @@ class VideoNameResolver {
         t.toLowerCase() == 'mayajaal video';
   }
 }
-
-// ═══════════════════════════════════════════════════════════════════════════════
-// MAYAJAAL APP — (PART 1 CONTINUED)
-// DEVICE ID, LEGAL DIALOGS, LOCALIZATION, SECURITY, RANKS, ACCOUNT SERVICE,
-// FIREBASE NOTIFICATION HUB, WATCH HISTORY & SAVED VIDEOS
-// ═══════════════════════════════════════════════════════════════════════════════
 
 // ═══════════════════════════════════════════════════════════════════════════════
 // DEVICE ID HELPER (HARDWARE IDENTIFICATION & BINDING)
@@ -468,7 +455,7 @@ class DeviceIdHelper {
 }
 
 // ═══════════════════════════════════════════════════════════════════════════════
-// IN-APP LEGAL & POLICY DIALOG (ENTERPRISE GRADE COMPLIANCE)
+// IN-APP LEGAL & POLICY DIALOG (PLAY STORE COMPLIANT — NO 18+ / NO WITHDRAWAL)
 // ═══════════════════════════════════════════════════════════════════════════════
 class LegalPolicyDialog {
   static void showPolicy(BuildContext context, String type) {
@@ -487,23 +474,23 @@ class LegalPolicyDialog {
           _buildSection('Introduction',
             'Thank you for choosing MayaJaal ("Platform", "App", "we", "us"). This Privacy Policy is engineered to help you understand how we collect, process, utilize, disclose, and safeguard your personal data and technical telemetry when accessing our web dashboard, Android streaming application, Cloudflare R2 media caches, and official Telegram automation bots (@Mayajaalfilebot, @MayaJaalBulkConverterbot, @MayaJaalExpiryBot). By creating an account or using the platform, you agree to the terms outlined herein.'),
           _buildSection('1. Information We Collect',
-            '1.1 User & Creator Provided Information: When registering an account or initiating monetization, we collect your verified email address, cryptographically hashed passwords, and payout identifiers (including UPI IDs and Bank account records) strictly for processing withdrawals.\n\n1.2 Media & Video Assets: Utilizing our streaming pipelines involves ingesting, transcoding, and storing video files, stream manifests, and technical duration metadata across Cloudflare edge storage.\n\n1.3 In-App Interactions: The MayaJaal mobile app collects and stores your Recent Watch History, Liked/Disliked video records, and Saved Video Library directly to Firebase RTDB to ensure permanent data availability across sessions.'),
+            '1.1 User & Creator Provided Information: When registering an account, we collect your verified email address, cryptographically hashed passwords, and account display name strictly for platform authentication and creator features.\n\n1.2 Media & Video Assets: Utilizing our streaming pipelines involves ingesting, transcoding, and storing video files, stream manifests, and technical duration metadata across Cloudflare edge storage.\n\n1.3 In-App Interactions: The MayaJaal mobile app collects and stores your Recent Watch History, Liked/Disliked video records, and Saved Video Library directly to Firebase RTDB to ensure permanent data availability across sessions.'),
           _buildSection('2. Automatically Collected Telemetry & Cookies',
-            '2.1 Device & Network Telemetry: We automatically log unique device identifiers, IP addresses, operating system types, browser fingerprints, and playback resolution metrics to detect proxy loops and optimize streaming throughput.\n\n2.2 Cookies & Local Tokens: The platform utilizes encrypted session cookies, authentication tokens, and local cache entries to maintain creator logins and remember player settings.'),
+            '2.1 Device & Network Telemetry: We automatically log unique device identifiers, IP addresses, operating system types, browser fingerprints, and playback resolution metrics to detect proxy loops, prevent abuse, and optimize streaming throughput.\n\n2.2 Cookies & Local Tokens: The platform utilizes encrypted session cookies, authentication tokens, and local cache entries to maintain creator logins and remember player settings.'),
           _buildSection('3. How We Use Your Information',
-            '3.1 Service Delivery & Streaming: To provide low-latency, hardware-accelerated 4K playback and maintain instant video conversion via Telegram bots.\n\n3.2 28-Day Lifecycle Automated Notifications: To track the 28-day validity of active links and dispatch automated renewal reminders via @MayaJaalExpiryBot 24 hours prior to link expiration.\n\n3.3 Payout Verification: To validate authentic human views, evaluate referral commissions, and disburse earnings through verified payment channels.'),
+            '3.1 Service Delivery & Streaming: To provide low-latency, hardware-accelerated 4K playback and maintain instant video conversion via Telegram bots.\n\n3.2 28-Day Lifecycle Automated Notifications: To track the 28-day validity of active links and dispatch automated renewal reminders via @MayaJaalExpiryBot 24 hours prior to link expiration.\n\n3.3 Platform Analytics: To compute engagement metrics such as view counts and creator ranking tiers.'),
           _buildSection('4. Information Sharing & Non-Disclosure',
             '4.1 Commercial Non-Disclosure: We do not sell, rent, broker, or trade personal creator data, media viewing logs, or platform engagement records to external advertising syndicates.\n\n4.2 Legal Compliance: We may disclose records solely in response to verified statutory demands, judicial subpoenas, or valid law enforcement inquiries concerning cyber attacks or unlawful material.'),
           _buildSection('5. Video Viewing & Interactive Functionality',
             '5.1 Creator Responsibility: Users are solely accountable for the media files uploaded and converted through the service, ensuring compliance with intellectual property standards.\n\n5.2 Sharing & Distribution: Creators exercise direct discretion over the distribution of their converted stream links across social networks or websites.'),
-          _buildSection('6. Advertisements & Monetization Delivery',
-            'MayaJaal displays programmatic advertising banners and native direct video triggers. Third-party ad networks capture non-personally identifiable telemetry to serve relevant ads. We do not transmit confidential creator account credentials to external advertising networks.'),
+          _buildSection('6. Platform Operations',
+            'MayaJaal operates as a video streaming and sharing platform. All content and interactions are governed by our Terms of Service and applicable platform policies.'),
           _buildSection('7. Data Security Measures',
             '7.1 Cryptographic Controls: We deploy end-to-end TLS 1.3 encryption, Cloudflare security firewalls, and restricted database permissions to protect your account against unauthorized access, alteration, or disclosure.\n\n7.2 Transmission Disclaimer: While we enforce enterprise-grade security protocols, no method of transmission over the internet or cloud storage can be guaranteed 100% impenetrable.'),
           _buildSection('8. User Rights & Account Choices',
-            '8.1 Account Management: Creators may review, modify, or update their payout parameters and account settings directly through the web dashboard.\n\n8.2 Data Purge: You may request the permanent deletion of your account and associated media links by submitting a verified request to our compliance desk.'),
-          _buildSection('9. Strict 18+ Age Restriction & Children\'s Privacy',
-            'The MayaJaal platform and its automation suite are strictly intended for individuals aged eighteen (18) years or older. We do not knowingly collect or maintain data from minors. Any discovered minor records or Child Sexual Abuse Material (CSAM) will be permanently purged immediately, with related IP telemetry escalated to Cyber Crime authorities.'),
+            '8.1 Account Management: Users may review, modify, or update their account settings directly through the app or web dashboard.\n\n8.2 Data Purge & Account Deletion: You may permanently delete your account and all associated data at any time using the in-app "Delete My Account" option in the app menu, or by submitting a verified request to our compliance desk at mayajaalsupport@gmail.com.'),
+          _buildSection('9. Children\'s Privacy',
+            'The MayaJaal platform is intended for general audiences. We do not knowingly collect or maintain data from children below the applicable age of digital consent in their jurisdiction. Parents or guardians who discover that a minor has created an account may contact our compliance desk to request immediate account termination and data purge. Any discovered Child Sexual Abuse Material (CSAM) will be permanently purged immediately, with related IP telemetry escalated to Cyber Crime authorities.'),
           _buildSection('10. Policy Modifications & Contact',
             'We reserve the right to revise this Privacy Policy periodically. Continued use of the platform following published amendments constitutes acceptance of the modified terms.\n\nOfficial Compliance Desk: mayajaalsupport@gmail.com'),
         ];
@@ -511,19 +498,19 @@ class LegalPolicyDialog {
 
       case 'terms':
         title = 'TERMS & CONDITIONS';
-        subtitle = 'Effective Date: October 2026 | Operating Governance & Creator Agreement';
+        subtitle = 'Effective Date: October 2026 | Operating Governance & User Agreement';
         accentColor = AppThemes.kGreen;
         sections = [
           _buildSection('Introduction',
             'By creating an account, accessing the MayaJaal web dashboard, utilizing our Telegram automation suite (@Mayajaalfilebot, @MayaJaalBulkConverterbot, @MayaJaalExpiryBot), or downloading the official MayaJaal Android Streaming APK, you acknowledge that you have read, understood, and agreed to be legally bound by these Terms and Conditions.'),
           _buildSection('1. Use of Services & Platform Architecture',
             'MayaJaal provides a hardware-accelerated video streaming network, link conversion engine, and media delivery platform. Users and creators are solely responsible for all content uploaded, converted, or streamed through the service.\n\nUsers shall not upload, transcode, or share any media that infringes intellectual property rights, privacy rights, or statutory laws. Any attempt to disrupt network performance, exploit APIs, or inject malicious payloads is strictly prohibited.'),
-          _buildSection('2. User Accounts & Strict 18+ Eligibility',
-            'The platform is strictly authorized for verified individuals aged eighteen (18) years or older. Minor onboarding is completely prohibited.\n\nCreators are responsible for maintaining the confidentiality of their credentials and all activities occurring under their accounts. MayaJaal reserves the absolute right to suspend or terminate accounts that breach platform standards or engage in deceptive conduct.'),
+          _buildSection('2. User Accounts & Platform Eligibility',
+            'The platform is available to users of all ages in accordance with local legal requirements. Users must be of the age of digital consent in their jurisdiction to independently create an account.\n\nCreators are responsible for maintaining the confidentiality of their credentials and all activities occurring under their accounts. MayaJaal reserves the absolute right to suspend or terminate accounts that breach platform standards or engage in deceptive conduct.'),
           _buildSection('3. Privacy & Telemetry Isolation',
             'Your privacy is protected in strict accordance with the MayaJaal Privacy Policy. Creator analytics, financial settlement records, and viewing histories are never brokered or sold to external data syndicates.'),
-          _buildSection('4. Advertisements, Promotions & Third-Party Services',
-            'The platform and mobile streaming application display integrated advertisements. Users acknowledge that MayaJaal does not control, endorse, or assume legal liability for third-party ad creatives, external landing pages, or advertiser representations.\n\nAny business dealings, transactions, or interactions with third-party advertisers appearing on the platform are strictly between the user and such third parties.'),
+          _buildSection('4. Platform Services',
+            'The platform and mobile streaming application are provided on an as-is basis. Users acknowledge that MayaJaal is not responsible for third-party ad creatives, external landing pages, or advertiser representations that may be accessed via external links.'),
           _buildSection('5. Media Validity, 28-Day Expiration & Renewal Protocol',
             '5.1 28-Day Default Lifecycle: All converted streamable media links are provisioned with an automated twenty-eight (28) day active routing lifecycle on our edge storage clusters.\n\n5.2 Automated Warning Alerts: Automated renewal notifications are dispatched via @MayaJaalExpiryBot 24 hours prior to link expiration.\n\n5.3 Multi-Channel Renewal: Creators may renew active links within the 24-hour expiration window directly via the Web Dashboard 28-Day Renewal Manager or within the MayaJaal mobile app to maintain uninterrupted streaming delivery.\n\n5.4 Dormant Media Purge: Links that are not renewed within the designated alert window, or media assets exceeding cloud storage allocations without active viewing traffic, are automatically decommissioned and permanently purged under our Fair Use Storage Policy.'),
           _buildSection('6. App Features & User Interactive Functionality',
@@ -532,10 +519,10 @@ class LegalPolicyDialog {
             'The MayaJaal platform, trademarks, logos, custom streaming software, and proprietary dashboard architectures are the intellectual property of MayaJaal and are protected by applicable copyright and international property laws.'),
           _buildSection('8. Copyright Complaints & DMCA Procedure',
             'If you believe that any material made available via MayaJaal infringes upon a copyright you own or represent, you may file a formal notification with our Designated Agent in full compliance with the statutory provisions of our DMCA Policy.'),
-          _buildSection('9. Child Abuse & CSAM Zero-Tolerance Protocol',
+          _buildSection('9. Child Safety & CSAM Zero-Tolerance Protocol',
             'MayaJaal maintains an absolute Zero-Tolerance policy against Child Sexual Abuse Material (CSAM), non-consensual sexual exploitation, and underage explicit media. Upon receipt of notice or automated telemetry detection, our compliance desk acts immediately to remove the content and permanently terminate the offending user\'s account.\n\nWe actively cooperate with law enforcement authorities, including Indian child protection units and Cyber Crime Police departments, providing forensic IP logs to assist in criminal prosecution.\n\nUrgent CSAM Reports: mayajaalsupport@gmail.com'),
-          _buildSection('10. Traffic Integrity, Anti-Fraud & Balance Forfeiture',
-            'Monetization accounts generating views via automated headless bots, click farms, proxy networks, emulators, or deceptive traffic exchanges will be immediately demonetized, with pending balances permanently forfeited.'),
+          _buildSection('10. Traffic Integrity & Anti-Fraud',
+            'Accounts generating views via automated headless bots, click farms, proxy networks, emulators, or deceptive traffic exchanges will be immediately flagged and subject to view count invalidation. MayaJaal employs sophisticated fraud detection telemetry to maintain platform integrity.'),
           _buildSection('11. Limitation of Liability',
             'In no event shall MayaJaal, its operators, or affiliates be held liable for any indirect, incidental, consequential, special, or punitive damages, including loss of profits, data, or platform availability resulting from service interruptions or third-party infrastructure failures.'),
           _buildSection('12. Governing Law, Modifications & Contact',
@@ -568,32 +555,32 @@ class LegalPolicyDialog {
         break;
 
       case 'partner':
-        title = 'PARTNER AGREEMENT';
-        subtitle = 'Effective Date: October 2026 | Creator Revenue Share & Anti-Fraud Governance';
+        title = 'CREATOR PROGRAM TERMS';
+        subtitle = 'Effective Date: October 2026 | Creator Engagement & Anti-Fraud Governance';
         accentColor = AppThemes.kNeonCyan;
         sections = [
           _buildSection('Introduction',
-            'This Agreement governs creator monetization, traffic integrity, referral commissions, and wallet settlements across the MayaJaal network. Compliance with these security and anti-abuse protocols is strictly mandatory.'),
-          _buildSection('1. Qualified Views & Streaming Monetization',
-            '1.1 Human Initiation: A Qualified View is recorded solely when a genuine, authenticated human end-user initiates real-time playback through the hardware-accelerated MayaJaal player.\n\n1.2 Server-Side Verification: Views are validated server-side after 10 continuous seconds of playback. Embedded automated loops, auto-refresh iframes, or headless browser scripts will not be counted toward creator earnings.'),
-          _buildSection('2. Strict Account Ban Triggers & Multi-Account Fraud',
-            '2.1 1 Device = 1 Account Policy (Hardware Device Lock): Only one authenticated MayaJaal account is permitted per physical hardware device. Creating or rotating multiple accounts on a single mobile device will trigger an automated hardware lock and permanent account termination.\n\n2.2 Self-Referral & App Share Fraud: Creating multiple fake Gmail accounts on the same phone to exploit app share links or referral rewards is strictly detected by our device telemetry. Any account engaging in fake self-referral cloning will face instant permanent ban and complete forfeiture of all balances.\n\n2.3 Prohibited Environments (Emulators & Rooted Phones): Operating the MayaJaal App via virtual emulators (e.g., BlueStacks, LDPlayer, Nox), rooted Android builds, or jailbroken devices is strictly blocked. Ingestion from virtualized environments results in immediate security suspension.'),
+            'This Agreement governs creator platform engagement, traffic integrity, creator ranking systems, and content sharing practices across the MayaJaal network. Compliance with these security and anti-abuse protocols is strictly mandatory for all creators.'),
+          _buildSection('1. Qualified Views & Engagement Tracking',
+            '1.1 Human Initiation: A Qualified View is recorded solely when a genuine, authenticated human end-user initiates real-time playback through the hardware-accelerated MayaJaal player.\n\n1.2 Server-Side Verification: Views are validated server-side after 10 continuous seconds of playback. Embedded automated loops, auto-refresh iframes, or headless browser scripts will not be counted toward creator engagement metrics.'),
+          _buildSection('2. Anti-Fraud & Platform Integrity',
+            '2.1 Self-View Manipulation: Creating multiple fake Gmail accounts on the same phone to artificially inflate view counts or engagement metrics is strictly detected by our device telemetry. Any account engaging in fake self-clicks or artificial traffic farming will face permanent ban.\n\n2.2 Prohibited Traffic Sources: Views generated via automated headless bots, click farms, proxy networks, emulators, or deceptive traffic exchanges will be invalidated. MayaJaal employs sophisticated fraud detection telemetry to maintain platform integrity.'),
           _buildSection('3. Authentication & Sign-Up Protocols',
-            '3.1 Verified Gmail OAuth Only: Account creation is restricted exclusively to verified @gmail.com addresses authenticated via official Google OAuth. Disposable, temporary, or unauthorized domains are automatically rejected.\n\n3.2 Brute-Force Rate Limiting: Repetitive authentication attacks or credential stuffing will trigger an automated 10-minute firewall lockout against the offending IP and device signature.'),
+            '3.1 Verified Gmail OAuth: Account creation is restricted to verified @gmail.com addresses authenticated via official Google OAuth. Disposable, temporary, or unauthorized domains are automatically rejected.\n\n3.2 Brute-Force Rate Limiting: Repetitive authentication attacks or credential stuffing will trigger an automated 10-minute firewall lockout against the offending IP and device signature.'),
           _buildSection('4. Cryptographic Security & Private Telemetry',
             '4.1 Military-Grade HMAC & TLS 1.3: Communications between mobile APKs, server endpoints, and cloud object caches are secured via HTTPS and military-grade HMAC tokenization, preventing Man-in-the-Middle (MITM) attacks.\n\n4.2 Private API Keys: Creator API tokens allocated for Telegram automation bots (@Mayajaalfilebot, @MayaJaalBulkConverterbot) are cryptographically isolated and visible solely to the account holder.'),
           _buildSection('5. 28-Day Link Renewal Lifecycle',
-            'Monetization is directly linked to active media assets. Converted video links maintain a 28-day lifecycle. Automated renewal alerts are transmitted via @MayaJaalExpiryBot 24 hours prior to expiration; non-renewed links cease to accumulate views upon deactivation.'),
-          _buildSection('6. Payout Rules & Thresholds',
-            '6.1 Threshold & Verification: Withdrawal requests may be submitted once the verified Available Balance reaches \$5.00 USD (or INR equivalent).\n\n6.2 Verified Rails: Disbursements are cleared via direct UPI and verified Bank Transfer within 24 to 72 business hours following anti-fraud telemetry screening.\n\n6.3 Reversals: Disputed, bot-manipulated, or fraudulent traffic balances will be permanently voided.'),
+            'All converted media assets maintain a 28-day streaming lifecycle. Automated renewal alerts are transmitted via @MayaJaalExpiryBot 24 hours prior to expiration; non-renewed links cease to accumulate views upon deactivation.'),
+          _buildSection('6. Creator Ranking & Recognition',
+            'Creators receive recognition through our Cyber Rank tier system, which is calculated based on cumulative verified view counts. Ranks are displayed on creator profiles and do not constitute any financial promise or liability.'),
           _buildSection('7. Independent Relationship',
-            'Creators operate as independent contractors. Participation establishes no employment, franchise, or agency relationship with MayaJaal.'),
+            'Creators operate as independent users. Participation establishes no employment, franchise, agency, or financial relationship with MayaJaal.'),
         ];
         break;
 
       case 'support':
         title = 'HELP & SUPPORT';
-        subtitle = 'For platform troubleshooting, Telegram bot configurations, link renewal assistance, or withdrawal verification, reach out through our official channels:';
+        subtitle = 'For platform troubleshooting, Telegram bot configurations, link renewal assistance, or account recovery, reach out through our official channels:';
         accentColor = AppThemes.kGold;
         sections = [
           _buildSection('Official Compliance Email',
@@ -880,7 +867,7 @@ class Haptic {
 }
 
 // ═══════════════════════════════════════════════════════════════════════════════
-// SECURITY GUARD & AUTHENTICATION PROTOCOLS
+// SECURITY GUARD & AUTHENTICATION PROTOCOLS (PLAY STORE FRIENDLY — SOFT CHECKS)
 // ═══════════════════════════════════════════════════════════════════════════════
 class SecurityGuard {
   static bool isGmailOnly(String? email) {
@@ -927,6 +914,8 @@ class SecurityGuard {
     return null;
   }
 
+  /// SOFT VERSION: Tracks device binding for security analytics but does NOT
+  /// block the user from logging in. Play Store friendly.
   static Future<Map<String, dynamic>> validateAndBindDevice(
     String uid,
     String email,
@@ -954,12 +943,15 @@ class SecurityGuard {
         return {'ok': true, 'firstBind': false};
       }
 
-      return {
-        'ok': false,
-        'reason': 'This device is already linked to a different MayaJaal account.',
-        'existingEmail': data['email']?.toString() ?? 'unknown',
-        'hint': 'Use the original account or contact support.',
-      };
+      // Different account on this device — track for analytics, but allow login
+      await ref.update({
+        'uid': uid,
+        'email': email,
+        'reboundAt': DateTime.now().millisecondsSinceEpoch,
+        'previousUid': existingUid,
+      });
+      debugPrint('ℹ️ Device rebound from $existingUid to $uid (allowed)');
+      return {'ok': true, 'firstBind': false, 'rebound': true};
     } catch (e) {
       debugPrint('Device bind error: $e');
       return {'ok': true, 'warning': 'binding_skipped'};
@@ -1114,25 +1106,22 @@ class SecurityGuard {
     }
   }
 
+  /// SOFT GATE: Only user credential validation is strict.
+  /// Device/emulator/root checks are logged for security analytics but
+  /// do NOT block login — Play Store friendly.
   static Future<String?> fullGate(User user) async {
     final userErr = await validateUser(user);
     if (userErr != null) return userErr;
 
     final device = await detectRootOrEmulator();
     if (device['emulator'] == true) {
-      return 'Emulator detected. MayaJaal requires a physical device.';
+      debugPrint('⚠️ Emulator detected (logged, not blocked): ${device['model']}');
     }
     if (device['rooted'] == true) {
-      return 'Rooted/jailbroken device detected. Please use a secure device.';
+      debugPrint('⚠️ Rooted device detected (logged, not blocked)');
     }
 
-    final intact = await isPackageIntact();
-    if (!intact) return 'App integrity check failed. Please reinstall from official source.';
-
-    final bind = await validateAndBindDevice(user.uid, user.email ?? '');
-    if (bind['ok'] != true) {
-      return bind['reason']?.toString() ?? 'Device binding failed. Contact support.';
-    }
+    await validateAndBindDevice(user.uid, user.email ?? '');
 
     final sessOk = await validateSession();
     if (!sessOk) return 'Session invalid. Please login again.';
@@ -1178,7 +1167,7 @@ class CyberRank {
 }
 
 // ═══════════════════════════════════════════════════════════════════════════════
-// MAYAJAAL ACCOUNT SERVICE (DIRECT WEB SERVER API & CLOUD PERSISTENCE ENGINE)
+// MAYAJAAL ACCOUNT SERVICE (NO WITHDRAWAL · PLAY STORE SAFE · ACCOUNT DELETION)
 // ═══════════════════════════════════════════════════════════════════════════════
 class MayaJaalAccount {
   static String? cachedUid;
@@ -1233,18 +1222,8 @@ class MayaJaalAccount {
           'totalLinks': 0,
           'totalViews': 0,
           'todayViews': 0,
-          'todayConversions': 0,
-          'totalIncome': 0.0,
-          'todayIncome': 0.0,
           'viewsByDay': {},
           'linksByDay': {},
-        };
-        updates['withdrawal'] = {
-          'upi': '',
-          'bank_account': '',
-          'ifsc': '',
-          'gmail': '',
-          'enabled': false,
         };
       }
 
@@ -1318,16 +1297,7 @@ class MayaJaalAccount {
       throw FirebaseAuthException(code: 'invalid-credential', message: err);
     }
 
-    final bind = await SecurityGuard.validateAndBindDevice(user.uid, user.email ?? '');
-    if (bind['ok'] != true) {
-      await FirebaseAuth.instance.signOut();
-      await googleSignIn.signOut();
-      throw FirebaseAuthException(
-        code: 'device-locked',
-        message: bind['reason']?.toString() ?? 'Device locked to another account.',
-      );
-    }
-
+    await SecurityGuard.validateAndBindDevice(user.uid, user.email ?? '');
     await SecurityGuard.clearLoginAttempts();
     return result;
   }
@@ -1347,6 +1317,79 @@ class MayaJaalAccount {
     cachedName = null;
     cachedPhoto = null;
     cachedApiKey = null;
+  }
+
+  // ═══════════════════════════════════════════════════════════════════════════
+  // ⭐ ACCOUNT DELETION (PLAY STORE MANDATORY FEATURE)
+  // ═══════════════════════════════════════════════════════════════════════════
+  static Future<void> deleteAccount() async {
+    final user = FirebaseAuth.instance.currentUser;
+    if (user == null) {
+      throw FirebaseAuthException(code: 'no-user', message: 'No user logged in.');
+    }
+
+    final uid = user.uid;
+    final deviceId = await DeviceIdHelper.get();
+
+    try {
+      // 1. Delete user profile data
+      await _rtdb.child('users/$uid').remove();
+
+      // 2. Delete device binding
+      try {
+        await _rtdb.child('deviceBindings/$deviceId').remove();
+      } catch (_) {}
+
+      // 3. Delete user's video links
+      try {
+        final linksSnap = await _rtdb
+            .child('links')
+            .orderByChild('ownerUid')
+            .equalTo(uid)
+            .once();
+        if (linksSnap.snapshot.value != null && linksSnap.snapshot.value is Map) {
+          final links = linksSnap.snapshot.value as Map;
+          for (final key in links.keys) {
+            await _rtdb.child('links/$key').remove();
+          }
+        }
+      } catch (_) {}
+
+      // 4. Delete user subscriptions & subs
+      try {
+        await _rtdb.child('userSubs/$uid').remove();
+        await _rtdb.child('subscriptions/$uid').remove();
+      } catch (_) {}
+
+      // 5. Delete local preferences
+      try {
+        final prefs = await SharedPreferences.getInstance();
+        await prefs.remove('saved_videos_v1_$uid');
+        await prefs.remove('watch_history_v2_$uid');
+        await prefs.remove('mj_login_attempts');
+      } catch (_) {}
+
+      // 6. Delete Firebase Auth account
+      try {
+        await user.delete();
+      } on FirebaseAuthException catch (e) {
+        if (e.code == 'requires-recent-login') {
+          // Need fresh authentication — sign out, user must re-login to delete
+          await signOut();
+          throw FirebaseAuthException(
+            code: 'requires-recent-login',
+            message: 'For security reasons, please re-login and try again.',
+          );
+        }
+        rethrow;
+      }
+
+      await signOut();
+    } catch (e) {
+      debugPrint('deleteAccount error: $e');
+      await signOut();
+      rethrow;
+    }
   }
 
   static Future<Map<String, dynamic>?> getProfile(String uid) async {
@@ -1376,7 +1419,6 @@ class MayaJaalAccount {
             'totalViews': (d['totalViews'] ?? d['views'] ?? 0) as int,
             'todayViews': (d['todayViews'] ?? 0) as int,
             'totalLinks': (d['totalLinks'] ?? d['links'] ?? 0) as int,
-            'totalIncome': (d['totalIncome'] ?? d['balance'] ?? 0.0) as num,
           };
         }
       }
@@ -1401,10 +1443,9 @@ class MayaJaalAccount {
         'totalViews': calculatedViews,
         'todayViews': 0,
         'totalLinks': calculatedLinks,
-        'totalIncome': calcEarnings(calculatedViews),
       };
     } catch (_) {
-      return {'totalViews': 0, 'todayViews': 0, 'totalLinks': 0, 'totalIncome': 0.0};
+      return {'totalViews': 0, 'todayViews': 0, 'totalLinks': 0};
     }
   }
 
@@ -1415,27 +1456,6 @@ class MayaJaalAccount {
       if (val == null || val is! Map) return <String, dynamic>{};
       return Map<String, dynamic>.from(val);
     });
-  }
-
-  static Future<Map<String, dynamic>> getWithdrawalInfo() async {
-    if (cachedUid == null) return {};
-    try {
-      final snap = await _rtdb.child('users/$cachedUid/withdrawal').once();
-      final val = snap.snapshot.value;
-      if (val == null || val is! Map) return {};
-      return Map<String, dynamic>.from(val);
-    } catch (_) {
-      return {};
-    }
-  }
-
-  static Future<void> saveWithdrawalInfo(Map<String, dynamic> data) async {
-    if (cachedUid == null) return;
-    try {
-      await _rtdb.child('users/$cachedUid/withdrawal').update(data);
-    } catch (e) {
-      debugPrint('Save withdrawal info error: $e');
-    }
   }
 
   static Future<List<Map<String, dynamic>>> getUserLinks({int limit = 50}) async {
@@ -1456,35 +1476,6 @@ class MayaJaalAccount {
       return [];
     }
   }
-
-  static double calcEarnings(int views) {
-    views = math.max(0, views);
-    if (views <= 0) return 0.0;
-    if (views <= 1000) return _r2(views * 0.001);
-    if (views <= 2000) return _r2(1.00 + (views - 1000) * 0.001);
-    if (views <= 10000) return _r2(2.00 + (views - 2000) * 0.002875);
-    return _r2(25.00 + (views - 10000) * 0.0025);
-  }
-
-  static Map<String, dynamic> getTierInfo(int views) {
-    views = math.max(0, views);
-    if (views < 1000) {
-      return {'tier': 1, 'rate': 1.00, 'next': 1000 - views};
-    }
-    if (views < 2000) {
-      return {'tier': 2, 'rate': 1.00, 'next': 2000 - views};
-    }
-    if (views < 10000) {
-      return {'tier': 3, 'rate': 2.87, 'next': 10000 - views};
-    }
-    return {
-      'tier': 4 + (views ~/ 10000),
-      'rate': 2.50,
-      'next': 10000 - (views % 10000),
-    };
-  }
-
-  static double _r2(num n) => (n * 100).round() / 100;
 }
 
 // ═══════════════════════════════════════════════════════════════════════════════
@@ -2288,8 +2279,6 @@ class WatchHistory {
     }
   }
 
-  /// ⭐ NEW: Cleans up bad titles in history & saved lists and re-fetches
-  /// real filenames from Firebase RTDB.
   static Future<void> repairBadTitles({
     required List<Map<String, dynamic>> history,
     required List<Map<String, dynamic>> saved,
@@ -2332,16 +2321,11 @@ class WatchHistory {
 }
 
 // ═══════════════════════════════════════════════════════════════════════════════
-// END OF PART 1 OF 2 — CONTINUE WITH PART 2 (App Root, Screens & Player)
-// ═══════════════════════════════════════════════════════════════════════════════
-// ═══════════════════════════════════════════════════════════════════════════════
-// MAYAJAAL APP — FULL PRODUCTION CODE (PART 2 OF 2)
-// APP ROOT, MATRIX ENGINE, AUTH GATE, HOME, DRAWER, PREVIEW & PLAYER
-// (ALL ADS REMOVED · REAL VIDEO NAMES FIXED)
+// END OF PART 1 OF 2 — CONTINUE WITH PART 2 (App Root & All Screens)
 // ═══════════════════════════════════════════════════════════════════════════════
 
 // ═══════════════════════════════════════════════════════════════════════════════
-// MAIN APPLICATION ENTRY POINT (APP STARTUP)
+// MAIN APPLICATION ENTRY POINT
 // ═══════════════════════════════════════════════════════════════════════════════
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
@@ -2351,7 +2335,6 @@ Future<void> main() async {
     statusBarIconBrightness: Brightness.light,
   ));
 
-  // Firebase Initialization
   try {
     await Firebase.initializeApp(
       options: const FirebaseOptions(
@@ -2370,7 +2353,6 @@ Future<void> main() async {
     debugPrint("Firebase Init Error: $e");
   }
 
-  // OneSignal Init (Permission login ke baad li jayegi)
   try {
     OneSignal.Debug.setLogLevel(OSLogLevel.verbose);
     OneSignal.initialize(oneSignalAppId);
@@ -2963,7 +2945,6 @@ class _AuthGateState extends State<AuthGate> {
             await MayaJaalAccount.syncUserToRTDB(user);
             await MayaJaalAccount.loadApiKey();
 
-            // Notification permission sirf successful verified login ke baad
             try {
               OneSignal.Notifications.requestPermission(true);
             } catch (_) {}
@@ -3164,8 +3145,6 @@ class _LoginScreenState extends State<LoginScreen>
         return 'Too many attempts, try again in 10 minutes';
       case 'network-request-failed':
         return 'Check your internet connection';
-      case 'device-locked':
-        return 'This device is locked to another account';
       default:
         return code.replaceAll('-', ' ');
     }
@@ -3243,7 +3222,7 @@ class _LoginScreenState extends State<LoginScreen>
                     ),
                   ),
                   const Text(
-                    'Your Earnings.',
+                    'Your Universe.',
                     style: TextStyle(
                       fontSize: 38,
                       fontWeight: FontWeight.w900,
@@ -3401,22 +3380,22 @@ class _MainNavigationHolderState extends State<MainNavigationHolder> {
 }
 
 // ═══════════════════════════════════════════════════════════════════════════════
-// LIVE PULSE GRAPH PAINTER
+// LIVE PULSE GRAPH PAINTER (DUAL-TRACE OSCILLOSCOPE)
 // ═══════════════════════════════════════════════════════════════════════════════
 class LivePulseGraphPainter extends CustomPainter {
   final List<double> viewPoints;
-  final List<double> earningPoints;
+  final List<double> linkPoints;
   final double animPhase;
 
   LivePulseGraphPainter({
     required this.viewPoints,
-    required this.earningPoints,
+    required this.linkPoints,
     required this.animPhase,
   });
 
   @override
   void paint(Canvas canvas, Size size) {
-    if (viewPoints.isEmpty || earningPoints.isEmpty) return;
+    if (viewPoints.isEmpty || linkPoints.isEmpty) return;
 
     final gridPaint = Paint()
       ..color = AppThemes.kGreen.withOpacity(0.06)
@@ -3429,11 +3408,11 @@ class LivePulseGraphPainter extends CustomPainter {
       canvas.drawLine(Offset(x, 0), Offset(x, size.height), gridPaint);
     }
 
-    _drawSmoothTrace(canvas, size, viewPoints, AppThemes.kNeonCyan, true);
-    _drawSmoothTrace(canvas, size, earningPoints, AppThemes.kGreen, false);
+    _drawSmoothTrace(canvas, size, viewPoints, AppThemes.kNeonCyan);
+    _drawSmoothTrace(canvas, size, linkPoints, AppThemes.kGreen);
   }
 
-  void _drawSmoothTrace(Canvas canvas, Size size, List<double> points, Color color, bool isTop) {
+  void _drawSmoothTrace(Canvas canvas, Size size, List<double> points, Color color) {
     if (points.length < 2) return;
 
     final path = Path();
@@ -3497,12 +3476,12 @@ class LivePulseGraphPainter extends CustomPainter {
   bool shouldRepaint(covariant LivePulseGraphPainter oldDelegate) {
     return oldDelegate.animPhase != animPhase ||
         oldDelegate.viewPoints != viewPoints ||
-        oldDelegate.earningPoints != earningPoints;
+        oldDelegate.linkPoints != linkPoints;
   }
 }
 
 // ═══════════════════════════════════════════════════════════════════════════════
-// LIVE PULSE CARD WIDGET
+// LIVE PULSE CARD WIDGET (VIEWS + LINKS, NO MONEY)
 // ═══════════════════════════════════════════════════════════════════════════════
 class LivePulseCard extends StatefulWidget {
   const LivePulseCard({super.key});
@@ -3514,10 +3493,10 @@ class LivePulseCard extends StatefulWidget {
 class _LivePulseCardState extends State<LivePulseCard> with SingleTickerProviderStateMixin {
   late AnimationController _animCtrl;
   final List<double> _viewHistory = [0.0, 1.0, 1.0, 2.0, 3.0, 5.0, 4.0, 6.0, 8.0, 9.0];
-  final List<double> _earningHistory = [0.0, 0.01, 0.02, 0.03, 0.05, 0.08, 0.09, 0.12, 0.15, 0.18];
+  final List<double> _linkHistory = [0.0, 0.0, 1.0, 1.0, 1.0, 2.0, 2.0, 2.0, 3.0, 3.0];
 
   int _prevViews = -1;
-  double _prevEarning = -1.0;
+  int _prevLinks = -1;
 
   @override
   void initState() {
@@ -3531,17 +3510,17 @@ class _LivePulseCardState extends State<LivePulseCard> with SingleTickerProvider
     super.dispose();
   }
 
-  void _pushTelemetry(int views, double earnings) {
-    if (_prevViews == views && _prevEarning == earnings) return;
+  void _pushTelemetry(int views, int links) {
+    if (_prevViews == views && _prevLinks == links) return;
     _prevViews = views;
-    _prevEarning = earnings;
+    _prevLinks = links;
 
     if (_viewHistory.length >= 14) {
       _viewHistory.removeAt(0);
-      _earningHistory.removeAt(0);
+      _linkHistory.removeAt(0);
     }
     _viewHistory.add(views.toDouble());
-    _earningHistory.add(earnings);
+    _linkHistory.add(links.toDouble());
   }
 
   @override
@@ -3554,9 +3533,9 @@ class _LivePulseCardState extends State<LivePulseCard> with SingleTickerProvider
       builder: (context, snapshot) {
         final data = snapshot.data ?? {};
         final totalViews = (data['totalViews'] ?? 0) as int;
-        final earnings = MayaJaalAccount.calcEarnings(totalViews);
+        final totalLinks = (data['totalLinks'] ?? 0) as int;
 
-        _pushTelemetry(totalViews, earnings);
+        _pushTelemetry(totalViews, totalLinks);
 
         return Container(
           margin: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
@@ -3608,7 +3587,7 @@ class _LivePulseCardState extends State<LivePulseCard> with SingleTickerProvider
                       const SizedBox(width: 8),
                       Container(width: 6, height: 6, decoration: const BoxDecoration(shape: BoxShape.circle, color: AppThemes.kGreen)),
                       const SizedBox(width: 4),
-                      const Text('USD', style: TextStyle(color: AppThemes.kGreen, fontSize: 9, fontWeight: FontWeight.bold)),
+                      const Text('Links', style: TextStyle(color: AppThemes.kGreen, fontSize: 9, fontWeight: FontWeight.bold)),
                     ],
                   ),
                 ],
@@ -3621,7 +3600,7 @@ class _LivePulseCardState extends State<LivePulseCard> with SingleTickerProvider
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
                       Text(
-                        '\$${earnings.toStringAsFixed(2)}',
+                        '$totalLinks',
                         style: const TextStyle(
                           color: AppThemes.kGreen,
                           fontSize: 18,
@@ -3629,7 +3608,7 @@ class _LivePulseCardState extends State<LivePulseCard> with SingleTickerProvider
                         ),
                       ),
                       const Text(
-                        'REAL-TIME BALANCE',
+                        'ACTIVE LINKS',
                         style: TextStyle(color: Colors.white38, fontSize: 8, letterSpacing: 0.8),
                       ),
                     ],
@@ -3665,7 +3644,7 @@ class _LivePulseCardState extends State<LivePulseCard> with SingleTickerProvider
                     builder: (c, _) => CustomPaint(
                       painter: LivePulseGraphPainter(
                         viewPoints: _viewHistory,
-                        earningPoints: _earningHistory,
+                        linkPoints: _linkHistory,
                         animPhase: _animCtrl.value,
                       ),
                     ),
@@ -3681,7 +3660,7 @@ class _LivePulseCardState extends State<LivePulseCard> with SingleTickerProvider
 }
 
 // ═══════════════════════════════════════════════════════════════════════════════
-// HOME SCREEN (ADS REMOVED)
+// HOME SCREEN (ALL ADS REMOVED)
 // ═══════════════════════════════════════════════════════════════════════════════
 class HomeScreen extends StatefulWidget {
   final VoidCallback? onMenuTap;
@@ -3949,8 +3928,6 @@ class _HomeScreenState extends State<HomeScreen>
                 ),
               ),
 
-              // ⛔ AD REMOVED: HOME TOP (Slot 0)
-
               Container(
                 width: double.infinity,
                 padding: const EdgeInsets.symmetric(vertical: 16),
@@ -4203,8 +4180,6 @@ class _HomeScreenState extends State<HomeScreen>
                 ),
               ),
 
-              // ⛔ AD REMOVED: HOME MIDDLE (Slot 1)
-
               Padding(
                 padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 6),
                 child: Container(
@@ -4243,8 +4218,6 @@ class _HomeScreenState extends State<HomeScreen>
                 ),
               ),
 
-              // ⛔ AD REMOVED: HOME BOTTOM (Slot 2)
-
               const Padding(
                 padding: EdgeInsets.symmetric(vertical: 14),
                 child: Text(
@@ -4266,7 +4239,7 @@ class _HomeScreenState extends State<HomeScreen>
 }
 
 // ═══════════════════════════════════════════════════════════════════════════════
-// MORE DRAWER
+// MORE DRAWER (NO WITHDRAW · + DELETE ACCOUNT)
 // ═══════════════════════════════════════════════════════════════════════════════
 class MoreDrawer extends StatefulWidget {
   const MoreDrawer({super.key});
@@ -4389,17 +4362,17 @@ class _MoreDrawerState extends State<MoreDrawer>
               ),
               SizedBox(height: 12),
               Text(
-                'Version: v1.2.0 (Build 4)',
+                'Version: v1.3.0 (Build 5)',
                 style: TextStyle(color: Colors.white70, fontSize: 11.5),
               ),
               SizedBox(height: 6),
               Text(
-                'MayaJaal is a next-generation video streaming and monetization platform for creators. Convert, share, and earn effortlessly with Matrix-grade encryption and quantum-speed streaming.',
+                'MayaJaal is a next-generation video streaming and sharing platform for creators. Convert, share, and enjoy seamlessly with Matrix-grade encryption and quantum-speed streaming.',
                 style: TextStyle(color: Colors.white60, fontSize: 11.5, height: 1.4),
               ),
               SizedBox(height: 10),
               Text(
-                '👥 18+ Platform · User-Generated Content',
+                '👥 Video Sharing Platform · User-Generated Content',
                 style: TextStyle(color: AppThemes.kDimGreen, fontSize: 10.5),
               ),
               SizedBox(height: 12),
@@ -4548,7 +4521,7 @@ class _MoreDrawerState extends State<MoreDrawer>
             ),
             const SizedBox(height: 4),
             Text(
-              'Choose a bot to start converting & earning',
+              'Choose a bot to start converting',
               style: TextStyle(color: Colors.white.withOpacity(0.5), fontSize: 10.5),
             ),
             const SizedBox(height: 14),
@@ -4566,7 +4539,7 @@ class _MoreDrawerState extends State<MoreDrawer>
               icon: Icons.link_rounded,
               color: AppThemes.kNeonPurple,
               title: 'Converter Bot',
-              subtitle: 'Convert links & earn from sharing',
+              subtitle: 'Convert links & share easily',
               url: 'https://t.me/MayaJaalBulkConverterbot',
             ),
             const SizedBox(height: 14),
@@ -4638,6 +4611,233 @@ class _MoreDrawerState extends State<MoreDrawer>
             Icon(Icons.arrow_forward_ios, color: color, size: 12),
           ],
         ),
+      ),
+    );
+  }
+
+  // ═══════════════════════════════════════════════════════════════════════════
+  // ⭐ DELETE ACCOUNT DIALOG (PLAY STORE MANDATORY)
+  // ═══════════════════════════════════════════════════════════════════════════
+  void _showDeleteAccountDialog(BuildContext context) {
+    SoundService.playClick();
+    final confirmCtrl = TextEditingController();
+    bool isDeleting = false;
+    String? errorMsg;
+
+    showDialog(
+      context: context,
+      barrierDismissible: false,
+      builder: (c) => StatefulBuilder(
+        builder: (ctx, setDialogState) => AlertDialog(
+          backgroundColor: AppThemes.kCardBg,
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(14),
+            side: BorderSide(color: AppThemes.kRed.withOpacity(0.6), width: 1.2),
+          ),
+          title: Row(
+            children: const [
+              Icon(Icons.warning_amber_rounded, color: AppThemes.kRed, size: 22),
+              SizedBox(width: 8),
+              Text(
+                'DELETE ACCOUNT',
+                style: TextStyle(
+                  color: AppThemes.kRed,
+                  fontSize: 14,
+                  fontWeight: FontWeight.bold,
+                  letterSpacing: 1.0,
+                ),
+              ),
+            ],
+          ),
+          content: SingleChildScrollView(
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                const Text(
+                  'This action is PERMANENT and cannot be undone.',
+                  style: TextStyle(
+                    color: Colors.white,
+                    fontSize: 12,
+                    fontWeight: FontWeight.bold,
+                  ),
+                ),
+                const SizedBox(height: 10),
+                const Text(
+                  'All of the following will be permanently deleted:',
+                  style: TextStyle(color: Colors.white70, fontSize: 11.5),
+                ),
+                const SizedBox(height: 8),
+                _bullet('Your account and profile'),
+                _bullet('All your uploaded videos and links'),
+                _bullet('Watch history and saved videos'),
+                _bullet('Notifications and subscription data'),
+                _bullet('API key and device binding'),
+                const SizedBox(height: 14),
+                Text(
+                  'Type DELETE below to confirm:',
+                  style: TextStyle(
+                    color: Colors.white.withOpacity(0.7),
+                    fontSize: 11.5,
+                    fontWeight: FontWeight.bold,
+                  ),
+                ),
+                const SizedBox(height: 8),
+                Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 2),
+                  decoration: BoxDecoration(
+                    color: Colors.black,
+                    borderRadius: BorderRadius.circular(8),
+                    border: Border.all(color: AppThemes.kBorder),
+                  ),
+                  child: TextField(
+                    controller: confirmCtrl,
+                    enabled: !isDeleting,
+                    textCapitalization: TextCapitalization.characters,
+                    style: const TextStyle(
+                      color: Colors.white,
+                      fontSize: 13,
+                      fontFamily: 'monospace',
+                      letterSpacing: 2,
+                      fontWeight: FontWeight.bold,
+                    ),
+                    decoration: const InputDecoration(
+                      hintText: 'DELETE',
+                      hintStyle: TextStyle(
+                        color: Colors.white24,
+                        fontSize: 12,
+                        fontFamily: 'monospace',
+                        letterSpacing: 2,
+                      ),
+                      border: InputBorder.none,
+                    ),
+                    onChanged: (_) => setDialogState(() {}),
+                  ),
+                ),
+                if (errorMsg != null) ...[
+                  const SizedBox(height: 10),
+                  Container(
+                    padding: const EdgeInsets.all(8),
+                    decoration: BoxDecoration(
+                      color: Colors.red.withOpacity(0.1),
+                      borderRadius: BorderRadius.circular(6),
+                      border: Border.all(color: Colors.redAccent.withOpacity(0.4)),
+                    ),
+                    child: Text(
+                      errorMsg!,
+                      style: const TextStyle(color: Colors.redAccent, fontSize: 10.5),
+                    ),
+                  ),
+                ],
+                if (isDeleting) ...[
+                  const SizedBox(height: 14),
+                  const Center(
+                    child: SizedBox(
+                      width: 24,
+                      height: 24,
+                      child: CircularProgressIndicator(
+                        color: AppThemes.kRed,
+                        strokeWidth: 2,
+                      ),
+                    ),
+                  ),
+                ],
+              ],
+            ),
+          ),
+          actions: [
+            TextButton(
+              onPressed: isDeleting ? null : () {
+                SoundService.playClick();
+                Navigator.pop(c);
+              },
+              child: const Text(
+                'CANCEL',
+                style: TextStyle(color: Colors.white54, fontWeight: FontWeight.bold),
+              ),
+            ),
+            ElevatedButton(
+              onPressed: (confirmCtrl.text == 'DELETE' && !isDeleting)
+                  ? () async {
+                      SoundService.playAlert();
+                      Haptic.heavy();
+                      setDialogState(() {
+                        isDeleting = true;
+                        errorMsg = null;
+                      });
+                      try {
+                        await MayaJaalAccount.deleteAccount();
+                        if (c.mounted) {
+                          Navigator.pop(c);
+                          Navigator.pop(context); // close drawer
+                          Navigator.of(context).pushAndRemoveUntil(
+                            MaterialPageRoute(builder: (_) => const LoginScreen()),
+                            (route) => false,
+                          );
+                          ScaffoldMessenger.of(context).showSnackBar(
+                            const SnackBar(
+                              backgroundColor: AppThemes.kCardBg,
+                              content: Text(
+                                '✅ Account deleted successfully',
+                                style: TextStyle(color: AppThemes.kGreen),
+                              ),
+                            ),
+                          );
+                        }
+                      } on FirebaseAuthException catch (e) {
+                        if (e.code == 'requires-recent-login') {
+                          setDialogState(() {
+                            isDeleting = false;
+                            errorMsg = 'For security, please re-login and try again.';
+                          });
+                        } else {
+                          setDialogState(() {
+                            isDeleting = false;
+                            errorMsg = e.message ?? 'Deletion failed. Try again.';
+                          });
+                        }
+                      } catch (e) {
+                        setDialogState(() {
+                          isDeleting = false;
+                          errorMsg = 'Deletion failed. Please try again.';
+                        });
+                      }
+                    }
+                  : null,
+              style: ElevatedButton.styleFrom(
+                backgroundColor: AppThemes.kRed,
+                foregroundColor: Colors.white,
+                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+                disabledBackgroundColor: Colors.white12,
+              ),
+              child: const Text(
+                'DELETE FOREVER',
+                style: TextStyle(fontWeight: FontWeight.bold, letterSpacing: 1.0),
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _bullet(String text) {
+    return Padding(
+      padding: const EdgeInsets.symmetric(vertical: 2),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          const Padding(
+            padding: EdgeInsets.only(top: 4, right: 6),
+            child: Icon(Icons.circle, size: 5, color: AppThemes.kRed),
+          ),
+          Expanded(
+            child: Text(
+              text,
+              style: const TextStyle(color: Colors.white60, fontSize: 11, height: 1.4),
+            ),
+          ),
+        ],
       ),
     );
   }
@@ -4821,42 +5021,23 @@ class _MoreDrawerState extends State<MoreDrawer>
                     index: 2,
                     child: _snakeItem(
                       context,
-                      icon: Icons.account_balance_wallet,
+                      icon: Icons.insights,
                       color: AppThemes.kGold,
-                      title: 'Earnings Dashboard',
-                      subtitle: 'Live balance & CPM analytics',
+                      title: 'Creator Stats',
+                      subtitle: 'Views, links & rank analytics',
                       onTap: () {
                         SoundService.playClick();
                         Haptic.medium();
                         Navigator.pop(context);
                         Navigator.push(
                           context,
-                          MaterialPageRoute(builder: (_) => const EarningsScreen()),
+                          MaterialPageRoute(builder: (_) => const StatsScreen()),
                         );
                       },
                     ),
                   ),
                   _staggered(
                     index: 3,
-                    child: _snakeItem(
-                      context,
-                      icon: Icons.account_balance,
-                      color: AppThemes.kGreen,
-                      title: 'Withdraw Earnings',
-                      subtitle: 'Minimum \$5 · Bank / UPI',
-                      onTap: () {
-                        SoundService.playClick();
-                        Haptic.medium();
-                        Navigator.pop(context);
-                        Navigator.push(
-                          context,
-                          MaterialPageRoute(builder: (_) => const WithdrawScreen()),
-                        );
-                      },
-                    ),
-                  ),
-                  _staggered(
-                    index: 4,
                     child: _snakeItem(
                       context,
                       icon: Icons.bookmark,
@@ -4875,7 +5056,7 @@ class _MoreDrawerState extends State<MoreDrawer>
                     ),
                   ),
                   _staggered(
-                    index: 5,
+                    index: 4,
                     child: _snakeItem(
                       context,
                       icon: Icons.vpn_key,
@@ -4889,7 +5070,7 @@ class _MoreDrawerState extends State<MoreDrawer>
                     ),
                   ),
                   _staggered(
-                    index: 6,
+                    index: 5,
                     child: _snakeItem(
                       context,
                       icon: Icons.smart_toy,
@@ -4903,7 +5084,7 @@ class _MoreDrawerState extends State<MoreDrawer>
                     ),
                   ),
                   _staggered(
-                    index: 7,
+                    index: 6,
                     child: _snakeItem(
                       context,
                       icon: Icons.share,
@@ -4917,7 +5098,7 @@ class _MoreDrawerState extends State<MoreDrawer>
                     ),
                   ),
                   _staggered(
-                    index: 8,
+                    index: 7,
                     child: _snakeItem(
                       context,
                       icon: Icons.settings,
@@ -4936,7 +5117,7 @@ class _MoreDrawerState extends State<MoreDrawer>
                     ),
                   ),
                   _staggered(
-                    index: 9,
+                    index: 8,
                     child: Padding(
                       padding: const EdgeInsets.only(left: 16, top: 14, bottom: 6),
                       child: Row(
@@ -4961,7 +5142,7 @@ class _MoreDrawerState extends State<MoreDrawer>
                     ),
                   ),
                   _staggered(
-                    index: 10,
+                    index: 9,
                     child: _socialItem(
                       context,
                       imageUrl:
@@ -4977,7 +5158,7 @@ class _MoreDrawerState extends State<MoreDrawer>
                     ),
                   ),
                   _staggered(
-                    index: 11,
+                    index: 10,
                     child: _socialItem(
                       context,
                       imageUrl:
@@ -4993,7 +5174,7 @@ class _MoreDrawerState extends State<MoreDrawer>
                     ),
                   ),
                   _staggered(
-                    index: 12,
+                    index: 11,
                     child: _socialItem(
                       context,
                       imageUrl:
@@ -5009,7 +5190,7 @@ class _MoreDrawerState extends State<MoreDrawer>
                     ),
                   ),
                   _staggered(
-                    index: 13,
+                    index: 12,
                     child: Padding(
                       padding: const EdgeInsets.only(left: 16, top: 14, bottom: 6),
                       child: Row(
@@ -5034,7 +5215,7 @@ class _MoreDrawerState extends State<MoreDrawer>
                     ),
                   ),
                   _staggered(
-                    index: 14,
+                    index: 13,
                     child: _snakeItem(
                       context,
                       icon: Icons.dashboard,
@@ -5048,7 +5229,7 @@ class _MoreDrawerState extends State<MoreDrawer>
                     ),
                   ),
                   _staggered(
-                    index: 15,
+                    index: 14,
                     child: _snakeItem(
                       context,
                       icon: Icons.privacy_tip_outlined,
@@ -5062,7 +5243,7 @@ class _MoreDrawerState extends State<MoreDrawer>
                     ),
                   ),
                   _staggered(
-                    index: 16,
+                    index: 15,
                     child: _snakeItem(
                       context,
                       icon: Icons.description_outlined,
@@ -5076,7 +5257,7 @@ class _MoreDrawerState extends State<MoreDrawer>
                     ),
                   ),
                   _staggered(
-                    index: 17,
+                    index: 16,
                     child: _snakeItem(
                       context,
                       icon: Icons.copyright_outlined,
@@ -5090,13 +5271,13 @@ class _MoreDrawerState extends State<MoreDrawer>
                     ),
                   ),
                   _staggered(
-                    index: 18,
+                    index: 17,
                     child: _snakeItem(
                       context,
                       icon: Icons.handshake_outlined,
                       color: AppThemes.kNeonCyan,
-                      title: 'Partner Agreement',
-                      subtitle: 'CPM & payout rules',
+                      title: 'Creator Program Terms',
+                      subtitle: 'Creator engagement & integrity',
                       onTap: () {
                         Navigator.pop(context);
                         LegalPolicyDialog.showPolicy(context, 'partner');
@@ -5104,7 +5285,7 @@ class _MoreDrawerState extends State<MoreDrawer>
                     ),
                   ),
                   _staggered(
-                    index: 19,
+                    index: 18,
                     child: _snakeItem(
                       context,
                       icon: Icons.support_agent_outlined,
@@ -5118,7 +5299,7 @@ class _MoreDrawerState extends State<MoreDrawer>
                     ),
                   ),
                   _staggered(
-                    index: 20,
+                    index: 19,
                     child: _snakeItem(
                       context,
                       icon: Icons.info_outline,
@@ -5132,7 +5313,7 @@ class _MoreDrawerState extends State<MoreDrawer>
                     ),
                   ),
                   _staggered(
-                    index: 21,
+                    index: 20,
                     child: Padding(
                       padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 14),
                       child: Container(
@@ -5159,6 +5340,38 @@ class _MoreDrawerState extends State<MoreDrawer>
                       ),
                     ),
                   ),
+                  _staggered(
+                    index: 21,
+                    child: Padding(
+                      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+                      child: Container(
+                        decoration: BoxDecoration(
+                          color: AppThemes.kRed.withOpacity(0.05),
+                          borderRadius: BorderRadius.circular(10),
+                          border: Border.all(color: AppThemes.kRed.withOpacity(0.5), width: 1.2),
+                        ),
+                        child: ListTile(
+                          leading: const Icon(Icons.delete_forever, color: AppThemes.kRed, size: 20),
+                          title: const Text(
+                            'Delete My Account',
+                            style: TextStyle(
+                              color: AppThemes.kRed,
+                              fontWeight: FontWeight.bold,
+                              fontSize: 12.5,
+                            ),
+                          ),
+                          subtitle: const Text(
+                            'Permanently delete all data',
+                            style: TextStyle(color: Colors.white38, fontSize: 9.5),
+                          ),
+                          onTap: () {
+                            _showDeleteAccountDialog(context);
+                          },
+                        ),
+                      ),
+                    ),
+                  ),
+                  const SizedBox(height: 16),
                 ],
               ),
             ),
@@ -5332,7 +5545,7 @@ class SnakeBorderPainter extends CustomPainter {
 }
 
 // ═══════════════════════════════════════════════════════════════════════════════
-// STREAM PREVIEW SCREEN (ADS REMOVED · REAL NAME FIXED)
+// STREAM PREVIEW SCREEN (ALL ADS REMOVED · REAL NAME FIXED)
 // ═══════════════════════════════════════════════════════════════════════════════
 class StreamPreviewScreen extends StatefulWidget {
   final String targetUrl;
@@ -5507,7 +5720,6 @@ class _StreamPreviewScreenState extends State<StreamPreviewScreen>
           await _saveStreamUrlToCache(_streamUrl);
           apiSuccess = true;
 
-          // ⭐ If title still bad (equals rawId), try Firebase RTDB
           if (VideoNameResolver.isBadTitle(_videoTitle, _rawId)) {
             final real = await VideoNameResolver.resolve(_rawId);
             if (real.isNotEmpty && mounted) {
@@ -5518,7 +5730,6 @@ class _StreamPreviewScreenState extends State<StreamPreviewScreen>
       }
     } catch (_) {}
 
-    // ⭐ API failed → Firebase RTDB fallback for real name
     if (!apiSuccess) {
       final real = await VideoNameResolver.resolve(_rawId);
       if (real.isNotEmpty && mounted) {
@@ -5847,9 +6058,6 @@ class _StreamPreviewScreenState extends State<StreamPreviewScreen>
                   ),
                   const SizedBox(height: 12),
 
-                  // ⛔ AD REMOVED: ABOVE PLAY BUTTON (Slot 3)
-                  const SizedBox(height: 8),
-
                   if (_isReadyToPlay)
                     _buildRedSnakePlayButton()
                   else
@@ -5865,8 +6073,6 @@ class _StreamPreviewScreenState extends State<StreamPreviewScreen>
                       ),
                     ),
 
-                  const SizedBox(height: 8),
-                  // ⛔ AD REMOVED: BELOW PLAY BUTTON (Slot 4)
                   const SizedBox(height: 12),
 
                   Container(
@@ -6394,7 +6600,7 @@ class _GalleryScreenState extends State<GalleryScreen> {
 }
 
 // ═══════════════════════════════════════════════════════════════════════════════
-// SAVED VIDEOS SCREEN (AD REMOVED · REAL NAME FIXED)
+// SAVED VIDEOS SCREEN (NO ADS)
 // ═══════════════════════════════════════════════════════════════════════════════
 class SavedVideosScreen extends StatefulWidget {
   const SavedVideosScreen({super.key});
@@ -6417,7 +6623,7 @@ class _SavedVideosScreenState extends State<SavedVideosScreen> {
     final prefs = await SharedPreferences.getInstance();
     final key = 'saved_videos_v1_${uid ?? 'guest'}';
     final jsonStr = prefs.getString(key);
-    
+
     if (jsonStr != null) {
       try {
         final List decoded = jsonDecode(jsonStr);
@@ -6444,7 +6650,6 @@ class _SavedVideosScreenState extends State<SavedVideosScreen> {
             });
             await prefs.setString(key, jsonEncode(_saved));
 
-            // ⭐ Repair any bad titles using Firebase RTDB lookup
             await WatchHistory.repairBadTitles(history: [], saved: _saved);
             if (mounted) setState(() {});
           }
@@ -6455,7 +6660,6 @@ class _SavedVideosScreenState extends State<SavedVideosScreen> {
 
     if (mounted) setState(() => _loading = false);
 
-    // ⭐ Repair bad titles even for local-only data
     if (_saved.isNotEmpty) {
       await WatchHistory.repairBadTitles(history: [], saved: _saved);
       if (mounted) setState(() {});
@@ -6469,7 +6673,7 @@ class _SavedVideosScreenState extends State<SavedVideosScreen> {
     final uid = MayaJaalAccount.cachedUid;
     final prefs = await SharedPreferences.getInstance();
     final key = 'saved_videos_v1_${uid ?? 'guest'}';
-    
+
     setState(() => _saved.removeAt(index));
     await prefs.setString(key, jsonEncode(_saved));
     await WatchHistory.syncSavedRecordCloud(item, false);
@@ -6493,96 +6697,88 @@ class _SavedVideosScreenState extends State<SavedVideosScreen> {
                     ],
                   ),
                 )
-              : Column(
-                  children: [
-                    // ⛔ AD REMOVED: SAVED TOP (Slot 4)
-                    const SizedBox(height: 6),
-                    Expanded(
-                      child: ListView.builder(
-                        padding: const EdgeInsets.fromLTRB(14, 2, 14, 14),
-                        itemCount: _saved.length,
-                        itemBuilder: (c, i) {
-                          final item = _saved[i];
-                          final thumb = item['thumbnail']?.toString() ?? '';
-                          String title = item['title']?.toString().trim() ?? '';
-                          if (title.isEmpty || title == 'null') {
-                            title = item['id']?.toString() ?? 'MayaJaal Video';
-                          }
-                          final url = item['url']?.toString() ?? '';
-                          final streamUrl = item['streamUrl']?.toString() ?? '';
-                          final id = item['id']?.toString() ?? '';
+              : ListView.builder(
+                  padding: const EdgeInsets.fromLTRB(14, 14, 14, 14),
+                  itemCount: _saved.length,
+                  itemBuilder: (c, i) {
+                    final item = _saved[i];
+                    final thumb = item['thumbnail']?.toString() ?? '';
+                    String title = item['title']?.toString().trim() ?? '';
+                    if (title.isEmpty || title == 'null') {
+                      title = item['id']?.toString() ?? 'MayaJaal Video';
+                    }
+                    final url = item['url']?.toString() ?? '';
+                    final streamUrl = item['streamUrl']?.toString() ?? '';
+                    final id = item['id']?.toString() ?? '';
 
-                          final thumbStreamUrl = streamUrl.isNotEmpty
-                              ? streamUrl
-                              : (id.isNotEmpty ? '$kBackendBaseUrl/stream/$id' : url);
+                    final thumbStreamUrl = streamUrl.isNotEmpty
+                        ? streamUrl
+                        : (id.isNotEmpty ? '$kBackendBaseUrl/stream/$id' : url);
 
-                          return Container(
-                            margin: const EdgeInsets.only(bottom: 8),
-                            decoration: BoxDecoration(
-                              color: AppThemes.kCardBg,
-                              borderRadius: BorderRadius.circular(10),
-                              border: Border.all(color: AppThemes.kBorder),
-                            ),
-                            child: ListTile(
-                              leading: Container(
-                                width: 54,
-                                height: 54,
-                                decoration: BoxDecoration(
-                                  color: Colors.black,
-                                  borderRadius: BorderRadius.circular(8),
-                                  border: Border.all(color: AppThemes.kBorder),
-                                ),
-                                child: ClipRRect(
-                                  borderRadius: BorderRadius.circular(7),
-                                  child: buildMediaThumbnail(
-                                    thumb,
-                                    title,
-                                    thumbStreamUrl,
-                                    isSmall: true,
-                                    onFrameCaptured: (b64) async {
-                                      await WatchHistory.saveThumbnail(url, b64);
-                                      if (mounted) _loadSaved();
-                                    },
-                                  ),
-                                ),
-                              ),
-                              title: Text(
-                                title,
-                                style: const TextStyle(fontSize: 12.5, color: Colors.white, fontWeight: FontWeight.bold),
-                                maxLines: 1,
-                                overflow: TextOverflow.ellipsis,
-                              ),
-                              subtitle: Text(
-                                'By: ${item['uploader'] ?? 'Node'}',
-                                style: const TextStyle(fontSize: 10.5, color: Colors.white38),
-                              ),
-                              trailing: IconButton(
-                                icon: const Icon(Icons.delete, size: 16, color: Colors.redAccent),
-                                onPressed: () => _removeSaved(i),
-                              ),
-                              onTap: () {
-                                SoundService.playClick();
-                                Haptic.light();
-                                Navigator.push(
-                                  context,
-                                  MaterialPageRoute(
-                                    builder: (_) => StreamPreviewScreen(targetUrl: url),
-                                  ),
-                                ).then((_) => _loadSaved());
+                    return Container(
+                      margin: const EdgeInsets.only(bottom: 8),
+                      decoration: BoxDecoration(
+                        color: AppThemes.kCardBg,
+                        borderRadius: BorderRadius.circular(10),
+                        border: Border.all(color: AppThemes.kBorder),
+                      ),
+                      child: ListTile(
+                        leading: Container(
+                          width: 54,
+                          height: 54,
+                          decoration: BoxDecoration(
+                            color: Colors.black,
+                            borderRadius: BorderRadius.circular(8),
+                            border: Border.all(color: AppThemes.kBorder),
+                          ),
+                          child: ClipRRect(
+                            borderRadius: BorderRadius.circular(7),
+                            child: buildMediaThumbnail(
+                              thumb,
+                              title,
+                              thumbStreamUrl,
+                              isSmall: true,
+                              onFrameCaptured: (b64) async {
+                                await WatchHistory.saveThumbnail(url, b64);
+                                if (mounted) _loadSaved();
                               },
                             ),
-                          );
+                          ),
+                        ),
+                        title: Text(
+                          title,
+                          style: const TextStyle(fontSize: 12.5, color: Colors.white, fontWeight: FontWeight.bold),
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                        ),
+                        subtitle: Text(
+                          'By: ${item['uploader'] ?? 'Node'}',
+                          style: const TextStyle(fontSize: 10.5, color: Colors.white38),
+                        ),
+                        trailing: IconButton(
+                          icon: const Icon(Icons.delete, size: 16, color: Colors.redAccent),
+                          onPressed: () => _removeSaved(i),
+                        ),
+                        onTap: () {
+                          SoundService.playClick();
+                          Haptic.light();
+                          Navigator.push(
+                            context,
+                            MaterialPageRoute(
+                              builder: (_) => StreamPreviewScreen(targetUrl: url),
+                            ),
+                          ).then((_) => _loadSaved());
                         },
                       ),
-                    ),
-                  ],
+                    );
+                  },
                 ),
     );
   }
 }
 
 // ═══════════════════════════════════════════════════════════════════════════════
-// HISTORY SCREEN (AD REMOVED · REAL NAME FIXED)
+// HISTORY SCREEN (NO ADS)
 // ═══════════════════════════════════════════════════════════════════════════════
 class HistoryScreen extends StatefulWidget {
   const HistoryScreen({super.key});
@@ -6605,7 +6801,7 @@ class _HistoryScreenState extends State<HistoryScreen> {
     final prefs = await SharedPreferences.getInstance();
     final key = 'watch_history_v2_${uid ?? 'guest'}';
     final localJson = prefs.getString(key);
-    
+
     if (localJson != null) {
       try {
         final List decoded = jsonDecode(localJson);
@@ -6632,7 +6828,6 @@ class _HistoryScreenState extends State<HistoryScreen> {
             });
             await prefs.setString(key, jsonEncode(_history));
 
-            // ⭐ Repair any bad titles using Firebase RTDB lookup
             await WatchHistory.repairBadTitles(history: _history, saved: []);
             if (mounted) setState(() {});
           }
@@ -6643,7 +6838,6 @@ class _HistoryScreenState extends State<HistoryScreen> {
 
     if (mounted) setState(() => _loading = false);
 
-    // ⭐ Repair bad titles even for local-only data
     if (_history.isNotEmpty) {
       await WatchHistory.repairBadTitles(history: _history, saved: []);
       if (mounted) setState(() {});
@@ -6657,7 +6851,7 @@ class _HistoryScreenState extends State<HistoryScreen> {
     final uid = MayaJaalAccount.cachedUid;
     final prefs = await SharedPreferences.getInstance();
     final key = 'watch_history_v2_${uid ?? 'guest'}';
-    
+
     setState(() => _history.removeAt(index));
     await prefs.setString(key, jsonEncode(_history));
 
@@ -6675,7 +6869,7 @@ class _HistoryScreenState extends State<HistoryScreen> {
     final uid = MayaJaalAccount.cachedUid;
     final prefs = await SharedPreferences.getInstance();
     final key = 'watch_history_v2_${uid ?? 'guest'}';
-    
+
     await prefs.remove(key);
     setState(() => _history = []);
 
@@ -6745,98 +6939,90 @@ class _HistoryScreenState extends State<HistoryScreen> {
                     ],
                   ),
                 )
-              : Column(
-                  children: [
-                    // ⛔ AD REMOVED: HISTORY TOP (Slot 5)
-                    const SizedBox(height: 6),
-                    Expanded(
-                      child: ListView.builder(
-                        padding: const EdgeInsets.fromLTRB(14, 2, 14, 14),
-                        itemCount: _history.length,
-                        itemBuilder: (c, i) {
-                          final item = _history[i];
-                          final thumb = item['thumbnail']?.toString() ?? '';
-                          String title = item['title']?.toString().trim() ?? '';
-                          if (title.isEmpty || title == 'null') {
-                            title = item['id']?.toString() ?? 'MayaJaal Video';
-                          }
-                          final url = item['url']?.toString() ?? '';
-                          final streamUrl = item['streamUrl']?.toString() ?? '';
-                          final id = item['id']?.toString() ?? '';
+              : ListView.builder(
+                  padding: const EdgeInsets.fromLTRB(14, 14, 14, 14),
+                  itemCount: _history.length,
+                  itemBuilder: (c, i) {
+                    final item = _history[i];
+                    final thumb = item['thumbnail']?.toString() ?? '';
+                    String title = item['title']?.toString().trim() ?? '';
+                    if (title.isEmpty || title == 'null') {
+                      title = item['id']?.toString() ?? 'MayaJaal Video';
+                    }
+                    final url = item['url']?.toString() ?? '';
+                    final streamUrl = item['streamUrl']?.toString() ?? '';
+                    final id = item['id']?.toString() ?? '';
 
-                          final thumbStreamUrl = streamUrl.isNotEmpty
-                              ? streamUrl
-                              : (id.isNotEmpty ? '$kBackendBaseUrl/stream/$id' : url);
+                    final thumbStreamUrl = streamUrl.isNotEmpty
+                        ? streamUrl
+                        : (id.isNotEmpty ? '$kBackendBaseUrl/stream/$id' : url);
 
-                          return Container(
-                            margin: const EdgeInsets.only(bottom: 8),
-                            decoration: BoxDecoration(
-                              color: AppThemes.kCardBg,
-                              borderRadius: BorderRadius.circular(10),
-                              border: Border.all(color: AppThemes.kBorder),
-                            ),
-                            child: ListTile(
-                              leading: Container(
-                                width: 54,
-                                height: 54,
-                                decoration: BoxDecoration(
-                                  color: Colors.black,
-                                  borderRadius: BorderRadius.circular(8),
-                                  border: Border.all(color: AppThemes.kBorder),
-                                ),
-                                child: ClipRRect(
-                                  borderRadius: BorderRadius.circular(7),
-                                  child: buildMediaThumbnail(
-                                    thumb,
-                                    title,
-                                    thumbStreamUrl,
-                                    isSmall: true,
-                                    onFrameCaptured: (b64) async {
-                                      await WatchHistory.saveThumbnail(url, b64);
-                                      if (mounted) _loadHistory();
-                                    },
-                                  ),
-                                ),
-                              ),
-                              title: Text(
-                                title,
-                                style: const TextStyle(fontSize: 12.5, color: Colors.white, fontWeight: FontWeight.bold),
-                                maxLines: 1,
-                                overflow: TextOverflow.ellipsis,
-                              ),
-                              subtitle: Text(
-                                'By: ${item['uploader'] ?? 'Node'}',
-                                style: const TextStyle(fontSize: 10.5, color: Colors.white38),
-                              ),
-                              trailing: Row(
-                                mainAxisSize: MainAxisSize.min,
-                                children: [
-                                  IconButton(
-                                    icon: const Icon(Icons.bookmark_add_outlined, size: 18, color: AppThemes.kNeonCyan),
-                                    onPressed: () => _saveItem(item),
-                                  ),
-                                  IconButton(
-                                    icon: const Icon(Icons.close, size: 16, color: Colors.redAccent),
-                                    onPressed: () => _deleteItem(i),
-                                  ),
-                                ],
-                              ),
-                              onTap: () {
-                                SoundService.playClick();
-                                Haptic.light();
-                                Navigator.push(
-                                  context,
-                                  MaterialPageRoute(
-                                    builder: (_) => StreamPreviewScreen(targetUrl: url),
-                                  ),
-                                ).then((_) => _loadHistory());
+                    return Container(
+                      margin: const EdgeInsets.only(bottom: 8),
+                      decoration: BoxDecoration(
+                        color: AppThemes.kCardBg,
+                        borderRadius: BorderRadius.circular(10),
+                        border: Border.all(color: AppThemes.kBorder),
+                      ),
+                      child: ListTile(
+                        leading: Container(
+                          width: 54,
+                          height: 54,
+                          decoration: BoxDecoration(
+                            color: Colors.black,
+                            borderRadius: BorderRadius.circular(8),
+                            border: Border.all(color: AppThemes.kBorder),
+                          ),
+                          child: ClipRRect(
+                            borderRadius: BorderRadius.circular(7),
+                            child: buildMediaThumbnail(
+                              thumb,
+                              title,
+                              thumbStreamUrl,
+                              isSmall: true,
+                              onFrameCaptured: (b64) async {
+                                await WatchHistory.saveThumbnail(url, b64);
+                                if (mounted) _loadHistory();
                               },
                             ),
-                          );
+                          ),
+                        ),
+                        title: Text(
+                          title,
+                          style: const TextStyle(fontSize: 12.5, color: Colors.white, fontWeight: FontWeight.bold),
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                        ),
+                        subtitle: Text(
+                          'By: ${item['uploader'] ?? 'Node'}',
+                          style: const TextStyle(fontSize: 10.5, color: Colors.white38),
+                        ),
+                        trailing: Row(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            IconButton(
+                              icon: const Icon(Icons.bookmark_add_outlined, size: 18, color: AppThemes.kNeonCyan),
+                              onPressed: () => _saveItem(item),
+                            ),
+                            IconButton(
+                              icon: const Icon(Icons.close, size: 16, color: Colors.redAccent),
+                              onPressed: () => _deleteItem(i),
+                            ),
+                          ],
+                        ),
+                        onTap: () {
+                          SoundService.playClick();
+                          Haptic.light();
+                          Navigator.push(
+                            context,
+                            MaterialPageRoute(
+                              builder: (_) => StreamPreviewScreen(targetUrl: url),
+                            ),
+                          ).then((_) => _loadHistory());
                         },
                       ),
-                    ),
-                  ],
+                    );
+                  },
                 ),
     );
   }
@@ -6983,7 +7169,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
                       ),
                       SizedBox(height: 2),
                       Text(
-                        'Gmail-only · Device-locked · TLS 1.3 Active',
+                        'Gmail-only · TLS 1.3 Encrypted · Verified',
                         style: TextStyle(color: Colors.white38, fontSize: 9.5),
                       ),
                     ],
@@ -7016,7 +7202,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
           const SizedBox(height: 24),
           Center(
             child: Text(
-              '> MayaJaal v1.2.0 // Quantum Build',
+              '> MayaJaal v1.3.0 // Quantum Build',
               style: TextStyle(color: Colors.white.withOpacity(0.3), fontSize: 10.5),
             ),
           ),
@@ -7119,7 +7305,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
 }
 
 // ═══════════════════════════════════════════════════════════════════════════════
-// NATIVE VIDEO PLAYER SCREEN (ALL ADS FULLY REMOVED · REAL NAME FIXED)
+// NATIVE VIDEO PLAYER SCREEN (ALL ADS FULLY REMOVED · NO AD TRIGGERS)
 // ═══════════════════════════════════════════════════════════════════════════════
 class NativeVideoPlayerScreen extends StatefulWidget {
   final String videoUrl;
@@ -7127,7 +7313,7 @@ class NativeVideoPlayerScreen extends StatefulWidget {
   final String uploader;
   final String sourcePageUrl;
   final String videoId;
-  final String thumbnailUrl; 
+  final String thumbnailUrl;
 
   const NativeVideoPlayerScreen({
     super.key,
@@ -7136,7 +7322,7 @@ class NativeVideoPlayerScreen extends StatefulWidget {
     required this.uploader,
     required this.sourcePageUrl,
     required this.videoId,
-    this.thumbnailUrl = '', 
+    this.thumbnailUrl = '',
   });
 
   @override
@@ -7151,8 +7337,8 @@ class _NativeVideoPlayerScreenState extends State<NativeVideoPlayerScreen> {
   bool _hasError = false;
 
   bool _isFullscreen = false;
-  bool _isZoomed = false; 
-  
+  bool _isZoomed = false;
+
   String _flashFeedback = '';
   Timer? _feedbackTimer;
 
@@ -7263,21 +7449,15 @@ class _NativeVideoPlayerScreenState extends State<NativeVideoPlayerScreen> {
     }
   }
 
-  // ⛔ _triggerVideoAd() METHOD REMOVED ENTIRELY
-
   void _startWatchTracking() {
     _watchTimer?.cancel();
     _watchTimer = Timer.periodic(const Duration(seconds: 1), (t) {
       if (!mounted) return;
       if (_controller.value.isInitialized && _controller.value.isPlaying) {
         _watchedSeconds++;
-
-        // Real 10s playback verification trigger
         if (_watchedSeconds == 10 && !_viewReported) {
           _reportViewToBackend();
         }
-
-        // ⛔ 15-MINUTE RECURRING AD TRIGGER REMOVED
       }
     });
   }
@@ -7390,8 +7570,6 @@ class _NativeVideoPlayerScreenState extends State<NativeVideoPlayerScreen> {
       _resetControlTimer();
       _startWatchTracking();
       _captureThumbnail();
-
-      // ⛔ PLAYER START AD TRIGGER REMOVED
     } catch (e) {
       debugPrint('❌ Video Player Error: $e');
       setState(() => _hasError = true);
@@ -7671,7 +7849,7 @@ class _NativeVideoPlayerScreenState extends State<NativeVideoPlayerScreen> {
     Haptic.medium();
     final uid = MayaJaalAccount.cachedUid;
     if (uid == null) return;
-    
+
     final prefs = await SharedPreferences.getInstance();
     final key = 'saved_videos_v1_$uid';
     final savedStr = prefs.getString(key);
@@ -8227,7 +8405,6 @@ class _NativeVideoPlayerScreenState extends State<NativeVideoPlayerScreen> {
                   padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
                   child: Column(
                     children: [
-                      // ⛔ AD REMOVED: PLAYER TOP (Slot 2)
                       const SizedBox(height: 6),
 
                       Container(
@@ -8331,10 +8508,7 @@ class _NativeVideoPlayerScreenState extends State<NativeVideoPlayerScreen> {
                           ],
                         ),
                       ),
-                      const SizedBox(height: 10),
-
-                      // ⛔ AD REMOVED: BELOW CONTROLS (Slot 5)
-                      // ⛔ AD REMOVED: ABOVE RELATED (Slot 6)
+                      const SizedBox(height: 14),
 
                       Row(
                         children: const [
@@ -8344,8 +8518,6 @@ class _NativeVideoPlayerScreenState extends State<NativeVideoPlayerScreen> {
                         ],
                       ),
                       const SizedBox(height: 8),
-
-                      // ⛔ AD REMOVED: RELATED MIDDLE (Slot 4)
 
                       _relatedLoading
                           ? const Center(child: Padding(padding: EdgeInsets.all(16), child: CircularProgressIndicator(color: AppThemes.kGreen, strokeWidth: 1.8)))
@@ -8366,10 +8538,7 @@ class _NativeVideoPlayerScreenState extends State<NativeVideoPlayerScreen> {
                                     },
                                   ),
                                 ),
-                      const SizedBox(height: 10),
-
-                      // ⛔ AD REMOVED: BELOW RELATED (Slot 0)
-                      const SizedBox(height: 12),
+                      const SizedBox(height: 16),
                     ],
                   ),
                 ),
@@ -8450,359 +8619,6 @@ class _NativeVideoPlayerScreenState extends State<NativeVideoPlayerScreen> {
               ),
             ],
           ),
-        ),
-      ),
-    );
-  }
-}
-
-// ═══════════════════════════════════════════════════════════════════════════════
-// WITHDRAW SCREEN
-// ═══════════════════════════════════════════════════════════════════════════════
-class WithdrawScreen extends StatefulWidget {
-  const WithdrawScreen({super.key});
-  @override
-  State<WithdrawScreen> createState() => _WithdrawScreenState();
-}
-
-class _WithdrawScreenState extends State<WithdrawScreen> {
-  bool _loading = true;
-  double _balance = 0.0;
-  bool _enabled = false;
-
-  final _upiCtrl = TextEditingController();
-  final _bankCtrl = TextEditingController();
-  final _ifscCtrl = TextEditingController();
-  final _gmailCtrl = TextEditingController();
-
-  @override
-  void initState() {
-    super.initState();
-    _loadInfo();
-  }
-
-  @override
-  void dispose() {
-    _upiCtrl.dispose();
-    _bankCtrl.dispose();
-    _ifscCtrl.dispose();
-    _gmailCtrl.dispose();
-    super.dispose();
-  }
-
-  Future<void> _loadInfo() async {
-    try {
-      final ok = await SecurityGuard.validateSession();
-      if (!ok) {
-        if (mounted) {
-          ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(
-              backgroundColor: AppThemes.kCardBg,
-              content: Text('🔒 Session expired. Please login again.', style: TextStyle(color: Colors.orangeAccent)),
-            ),
-          );
-        }
-        return;
-      }
-
-      final dash = await MayaJaalAccount.getDashboard();
-      final views = (dash['totalViews'] ?? 0) as int;
-      final balance = MayaJaalAccount.calcEarnings(views);
-      final info = await MayaJaalAccount.getWithdrawalInfo();
-
-      if (mounted) {
-        setState(() {
-          _balance = balance;
-          _enabled = (info['enabled'] ?? true) == true;
-          _upiCtrl.text = info['upi']?.toString() ?? '';
-          _bankCtrl.text = info['bank_account']?.toString() ?? '';
-          _ifscCtrl.text = info['ifsc']?.toString() ?? '';
-          _gmailCtrl.text = info['gmail']?.toString() ?? '';
-          _loading = false;
-        });
-      }
-    } catch (_) {
-      if (mounted) setState(() => _loading = false);
-    }
-  }
-
-  Future<void> _saveInfo() async {
-    SoundService.playClick();
-    Haptic.medium();
-    final ok = await SecurityGuard.validateSession();
-    if (!ok) {
-      if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          backgroundColor: AppThemes.kCardBg,
-          content: Text('🔒 Session expired', style: TextStyle(color: Colors.orangeAccent)),
-        ),
-      );
-      return;
-    }
-    await MayaJaalAccount.saveWithdrawalInfo({
-      'upi': _upiCtrl.text.trim(),
-      'bank_account': _bankCtrl.text.trim(),
-      'ifsc': _ifscCtrl.text.trim().toUpperCase(),
-      'gmail': _gmailCtrl.text.trim(),
-    });
-    if (!mounted) return;
-    ScaffoldMessenger.of(context).showSnackBar(
-      const SnackBar(backgroundColor: AppThemes.kCardBg, content: Text('✅ Withdrawal details saved', style: TextStyle(color: AppThemes.kGreen))),
-    );
-  }
-
-  Future<void> _requestWithdraw() async {
-    SoundService.playClick();
-    if (_balance < 5.0) {
-      Haptic.heavy();
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(backgroundColor: AppThemes.kCardBg, content: Text('❌ Minimum \$5 balance required to withdraw', style: TextStyle(color: Colors.orangeAccent))),
-      );
-      return;
-    }
-
-    if (_upiCtrl.text.trim().isEmpty && _bankCtrl.text.trim().isEmpty) {
-      Haptic.heavy();
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(backgroundColor: AppThemes.kCardBg, content: Text('⚠️ Please fill UPI ID or Bank Account first', style: TextStyle(color: Colors.orangeAccent))),
-      );
-      return;
-    }
-
-    final uid = MayaJaalAccount.cachedUid;
-    if (uid == null) return;
-
-    final ok = await SecurityGuard.validateSession();
-    if (!ok) {
-      if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(backgroundColor: AppThemes.kCardBg, content: Text('🔒 Session expired. Please login again.', style: TextStyle(color: Colors.orangeAccent))),
-      );
-      return;
-    }
-
-    Haptic.medium();
-
-    try {
-      final reqRef = FirebaseDatabase.instance.ref('withdrawals/$uid').push();
-      final reqId = reqRef.key ?? '${DateTime.now().millisecondsSinceEpoch}';
-
-      final method = _upiCtrl.text.trim().isNotEmpty ? 'UPI (${_upiCtrl.text.trim()})' : 'Bank (${_bankCtrl.text.trim()})';
-
-      await reqRef.set({
-        'id': reqId,
-        'amount': _balance,
-        'method': method,
-        'status': 'Pending',
-        'createdAt': DateTime.now().millisecondsSinceEpoch,
-        'upi': _upiCtrl.text.trim(),
-        'bank': _bankCtrl.text.trim(),
-        'ifsc': _ifscCtrl.text.trim().toUpperCase(),
-        'gmail': _gmailCtrl.text.trim(),
-      });
-
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(backgroundColor: AppThemes.kCardBg, content: Text('✅ Withdrawal request submitted! Verification in 24-48h.', style: TextStyle(color: AppThemes.kGreen))),
-        );
-      }
-    } catch (e) {
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(backgroundColor: AppThemes.kCardBg, content: Text('Error: $e', style: const TextStyle(color: Colors.redAccent))),
-        );
-      }
-    }
-  }
-
-  Widget _buildWithdrawalHistory() {
-    final uid = MayaJaalAccount.cachedUid;
-    if (uid == null) return const SizedBox.shrink();
-
-    return StreamBuilder<DatabaseEvent>(
-      stream: FirebaseDatabase.instance.ref('withdrawals/$uid').onValue,
-      builder: (context, snapshot) {
-        if (!snapshot.hasData || snapshot.data?.snapshot.value == null) {
-          return Container(
-            padding: const EdgeInsets.all(14),
-            decoration: BoxDecoration(color: AppThemes.kCardBg, borderRadius: BorderRadius.circular(10), border: Border.all(color: AppThemes.kBorder)),
-            child: const Center(child: Text('No withdrawal history yet', style: TextStyle(color: Colors.white38, fontSize: 11))),
-          );
-        }
-
-        final map = Map<String, dynamic>.from(snapshot.data!.snapshot.value as Map);
-        final list = map.values.map((e) => Map<String, dynamic>.from(e as Map)).toList();
-        list.sort((a, b) => (b['createdAt'] ?? 0).compareTo(a['createdAt'] ?? 0));
-
-        return ListView.builder(
-          shrinkWrap: true,
-          physics: const NeverScrollableScrollPhysics(),
-          itemCount: list.length,
-          itemBuilder: (c, i) {
-            final item = list[i];
-            final status = item['status'] ?? 'Pending';
-            final amt = item['amount'] ?? 0.0;
-            final method = item['method'] ?? 'Payout';
-            final time = item['createdAt'] as int? ?? 0;
-            final dt = DateTime.fromMillisecondsSinceEpoch(time);
-
-            final isAppr = status == 'Approved';
-
-            return Container(
-              margin: const EdgeInsets.only(bottom: 8),
-              padding: const EdgeInsets.all(10),
-              decoration: BoxDecoration(
-                color: AppThemes.kCardBg,
-                borderRadius: BorderRadius.circular(10),
-                border: Border.all(color: isAppr ? AppThemes.kGreen.withOpacity(0.6) : Colors.orangeAccent.withOpacity(0.5)),
-              ),
-              child: Row(
-                mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                children: [
-                  Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Text('\$${(amt is num ? amt.toDouble() : 0.0).toStringAsFixed(2)}', style: const TextStyle(color: Colors.white, fontWeight: FontWeight.w900, fontSize: 14)),
-                      const SizedBox(height: 1),
-                      Text(method, style: const TextStyle(color: Colors.white54, fontSize: 10.5)),
-                      Text('${dt.day}/${dt.month}/${dt.year}', style: TextStyle(color: Colors.white.withOpacity(0.3), fontSize: 9.0)),
-                    ],
-                  ),
-                  Container(
-                    padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
-                    decoration: BoxDecoration(
-                      color: isAppr ? AppThemes.kGreen.withOpacity(0.12) : Colors.orange.withOpacity(0.12),
-                      borderRadius: BorderRadius.circular(6),
-                      border: Border.all(color: isAppr ? AppThemes.kGreen : Colors.orangeAccent),
-                    ),
-                    child: Text(
-                      status,
-                      style: TextStyle(
-                        color: isAppr ? AppThemes.kGreen : Colors.orangeAccent,
-                        fontSize: 10.5,
-                        fontWeight: FontWeight.bold,
-                      ),
-                    ),
-                  ),
-                ],
-              ),
-            );
-          },
-        );
-      },
-    );
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    return Scaffold(
-      backgroundColor: AppThemes.kBg,
-      appBar: AppBar(title: const Text('WITHDRAW EARNINGS')),
-      body: _loading
-          ? const Center(child: CircularProgressIndicator(color: AppThemes.kGreen))
-          : SingleChildScrollView(
-              padding: const EdgeInsets.all(14),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Container(
-                    width: double.infinity,
-                    padding: const EdgeInsets.all(18),
-                    decoration: BoxDecoration(color: AppThemes.kCardBg, borderRadius: BorderRadius.circular(14), border: Border.all(color: AppThemes.kBorder)),
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        const Text('AVAILABLE BALANCE', style: TextStyle(color: Colors.white38, fontSize: 10, letterSpacing: 1.2)),
-                        const SizedBox(height: 6),
-                        Text('\$${_balance.toStringAsFixed(2)}', style: const TextStyle(color: AppThemes.kGreen, fontSize: 34, fontWeight: FontWeight.w900)),
-                        const SizedBox(height: 2),
-                        Text('≈ ₹${(_balance * 80).toStringAsFixed(0)} INR', style: TextStyle(color: Colors.white.withOpacity(0.4), fontSize: 11)),
-                        const SizedBox(height: 8),
-                        Container(
-                          padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-                          decoration: BoxDecoration(color: _balance >= 5 ? AppThemes.kGreen.withOpacity(0.12) : Colors.orange.withOpacity(0.12), borderRadius: BorderRadius.circular(6), border: Border.all(color: _balance >= 5 ? AppThemes.kGreen : Colors.orange, width: 0.8)),
-                          child: Text(
-                            _balance >= 5 ? '✅ Ready to withdraw' : '⚠️ Minimum \$5 to withdraw',
-                            style: TextStyle(color: _balance >= 5 ? AppThemes.kGreen : Colors.orange, fontSize: 10, fontWeight: FontWeight.bold),
-                          ),
-                        ),
-                      ],
-                    ),
-                  ),
-                  const SizedBox(height: 16),
-                  const Text('PAYMENT DETAILS', style: TextStyle(color: Colors.white, fontSize: 12, fontWeight: FontWeight.bold, letterSpacing: 1.2)),
-                  const SizedBox(height: 3),
-                  const Text('Save your details for instant processing', style: TextStyle(color: Colors.white38, fontSize: 10)),
-                  const SizedBox(height: 10),
-                  _field('UPI ID', _upiCtrl, 'yourname@upi'),
-                  const SizedBox(height: 8),
-                  _field('Bank Account Number', _bankCtrl, '1234567890'),
-                  const SizedBox(height: 8),
-                  _field('IFSC Code', _ifscCtrl, 'HDFC0001234'),
-                  const SizedBox(height: 8),
-                  _field('Gmail', _gmailCtrl, 'yourname@gmail.com'),
-                  const SizedBox(height: 14),
-                  SizedBox(
-                    width: double.infinity,
-                    height: 44,
-                    child: OutlinedButton(
-                      onPressed: _saveInfo,
-                      style: OutlinedButton.styleFrom(side: const BorderSide(color: AppThemes.kBorder, width: 1.2), shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10))),
-                      child: const Text('💾 SAVE DETAILS', style: TextStyle(color: AppThemes.kGreen, fontSize: 11.5, fontWeight: FontWeight.bold, letterSpacing: 1.2)),
-                    ),
-                  ),
-                  const SizedBox(height: 10),
-                  SizedBox(
-                    width: double.infinity,
-                    height: 48,
-                    child: ElevatedButton(
-                      onPressed: _requestWithdraw,
-                      style: ElevatedButton.styleFrom(backgroundColor: _balance >= 5 ? AppThemes.kGreen : Colors.white10, foregroundColor: Colors.black, shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10))),
-                      child: Text(
-                        _balance >= 5 ? '💸 REQUEST WITHDRAWAL' : 'EARN \$5 TO WITHDRAW',
-                        style: TextStyle(color: _balance >= 5 ? Colors.black : Colors.white38, fontSize: 12, fontWeight: FontWeight.w900, letterSpacing: 1.2),
-                      ),
-                    ),
-                  ),
-                  const SizedBox(height: 20),
-                  const Text('WITHDRAWAL HISTORY', style: TextStyle(color: Colors.white, fontSize: 12, fontWeight: FontWeight.bold, letterSpacing: 1.2)),
-                  const SizedBox(height: 8),
-                  _buildWithdrawalHistory(),
-                  const SizedBox(height: 16),
-                  Container(
-                    padding: const EdgeInsets.all(12),
-                    decoration: BoxDecoration(color: AppThemes.kCardBg, borderRadius: BorderRadius.circular(10), border: Border.all(color: AppThemes.kBorder)),
-                    child: const Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Row(children: [Icon(Icons.info_outline, color: AppThemes.kGreen, size: 14), SizedBox(width: 6), Text('INFO', style: TextStyle(color: Colors.white, fontSize: 10.5, fontWeight: FontWeight.bold, letterSpacing: 1.0))]),
-                        SizedBox(height: 6),
-                        Text('• Minimum withdrawal: \$5 (≈₹400)', style: TextStyle(color: Colors.white60, fontSize: 10.5)),
-                        Text('• Processing time: 24–48 hours', style: TextStyle(color: Colors.white60, fontSize: 10.5)),
-                        Text('• Methods: UPI · Bank Transfer', style: TextStyle(color: Colors.white60, fontSize: 10.5)),
-                      ],
-                    ),
-                  ),
-                ],
-              ),
-            ),
-    );
-  }
-
-  Widget _field(String label, TextEditingController ctrl, String hint) {
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 2),
-      decoration: BoxDecoration(color: AppThemes.kCardBg, borderRadius: BorderRadius.circular(10), border: Border.all(color: AppThemes.kBorder)),
-      child: TextField(
-        controller: ctrl,
-        style: const TextStyle(color: Colors.white, fontSize: 12, fontFamily: 'monospace'),
-        decoration: InputDecoration(
-          labelText: label,
-          labelStyle: TextStyle(color: Colors.white54, fontSize: 10.5, letterSpacing: 0.8),
-          hintText: hint,
-          hintStyle: TextStyle(color: Colors.white24, fontSize: 11),
-          border: InputBorder.none,
         ),
       ),
     );
@@ -9100,22 +8916,20 @@ class _UserProfileScreenState extends State<UserProfileScreen> {
 }
 
 // ═══════════════════════════════════════════════════════════════════════════════
-// EARNINGS SCREEN
+// STATS SCREEN (FORMERLY EARNINGS — NOW NO $, NO WITHDRAWAL)
 // ═══════════════════════════════════════════════════════════════════════════════
-class EarningsScreen extends StatefulWidget {
-  const EarningsScreen({super.key});
+class StatsScreen extends StatefulWidget {
+  const StatsScreen({super.key});
   @override
-  State<EarningsScreen> createState() => _EarningsScreenState();
+  State<StatsScreen> createState() => _StatsScreenState();
 }
 
-class _EarningsScreenState extends State<EarningsScreen>
+class _StatsScreenState extends State<StatsScreen>
     with SingleTickerProviderStateMixin {
   bool _loading = true;
   Map<String, dynamic> _dashboard = {};
   List<Map<String, dynamic>> _links = [];
-  double _totalIncome = 0.0;
   int _currentTier = 1;
-  double _currentRate = 1.0;
   int _nextBoost = 1000;
   int _rankIndex = 0;
 
@@ -9164,10 +8978,6 @@ class _EarningsScreenState extends State<EarningsScreen>
       final links = await MayaJaalAccount.getUserLinks(limit: 50);
 
       final totalViews = (dash['totalViews'] ?? 0) as int;
-      final double income = (dash['totalIncome'] is num)
-          ? (dash['totalIncome'] as num).toDouble()
-          : MayaJaalAccount.calcEarnings(totalViews);
-
       final tierInfo = MayaJaalAccount.getTierInfo(totalViews);
       final newRankIndex = CyberRank.getIndex(totalViews);
 
@@ -9179,16 +8989,14 @@ class _EarningsScreenState extends State<EarningsScreen>
         setState(() {
           _dashboard = dash;
           _links = links;
-          _totalIncome = income;
           _currentTier = (tierInfo['tier'] ?? 1) as int;
-          _currentRate = (tierInfo['rate'] ?? 1.0) as double;
           _nextBoost = (tierInfo['next'] ?? 0) as int;
           _rankIndex = newRankIndex;
           _loading = false;
         });
       }
     } catch (e) {
-      debugPrint('Earnings load error: $e');
+      debugPrint('Stats load error: $e');
       if (mounted) setState(() => _loading = false);
     }
   }
@@ -9198,7 +9006,7 @@ class _EarningsScreenState extends State<EarningsScreen>
     return Scaffold(
       backgroundColor: AppThemes.kBg,
       appBar: AppBar(
-        title: const Text('EARNINGS DASHBOARD', style: TextStyle(letterSpacing: 1.2, fontSize: 13, fontWeight: FontWeight.bold)),
+        title: const Text('CREATOR STATS', style: TextStyle(letterSpacing: 1.2, fontSize: 13, fontWeight: FontWeight.bold)),
         actions: [
           IconButton(
             icon: const Icon(Icons.refresh, color: AppThemes.kGreen),
@@ -9230,7 +9038,7 @@ class _EarningsScreenState extends State<EarningsScreen>
             SizedBox(height: 14),
             Text('NOT LOGGED IN', style: TextStyle(color: Colors.white, fontSize: 16, fontWeight: FontWeight.bold, letterSpacing: 1.2)),
             SizedBox(height: 8),
-            Text('Login karke earnings dekh sakte hain.', textAlign: TextAlign.center, style: TextStyle(color: Colors.white60, fontSize: 12)),
+            Text('Login karke stats dekh sakte hain.', textAlign: TextAlign.center, style: TextStyle(color: Colors.white60, fontSize: 12)),
           ],
         ),
       ),
@@ -9319,11 +9127,11 @@ class _EarningsScreenState extends State<EarningsScreen>
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  const Text('TOTAL BALANCE', style: TextStyle(color: Colors.white38, fontSize: 10, letterSpacing: 1.2)),
+                  const Text('TOTAL VIEWS', style: TextStyle(color: Colors.white38, fontSize: 10, letterSpacing: 1.2)),
                   const SizedBox(height: 6),
-                  Text('\$${_totalIncome.toStringAsFixed(2)}', style: const TextStyle(color: AppThemes.kGreen, fontSize: 34, fontWeight: FontWeight.w900)),
+                  Text('$totalViews', style: const TextStyle(color: AppThemes.kGreen, fontSize: 34, fontWeight: FontWeight.w900)),
                   const SizedBox(height: 2),
-                  Text('≈ ₹${(_totalIncome * 80).toStringAsFixed(0)} INR', style: TextStyle(color: Colors.white.withOpacity(0.4), fontSize: 11)),
+                  const Text('Verified platform views', style: TextStyle(color: Colors.white38, fontSize: 11)),
                   const Divider(color: Colors.white10, height: 22),
                   Row(
                     children: [
@@ -9354,13 +9162,13 @@ class _EarningsScreenState extends State<EarningsScreen>
                   const SizedBox(height: 10),
                   Row(
                     children: [
-                      Expanded(child: _tierStat('Current Rate', '\$${_currentRate.toStringAsFixed(2)}/1K')),
+                      Expanded(child: _tierStat('Current Tier', 'Tier $_currentTier')),
                       const SizedBox(width: 6),
                       Expanded(child: _tierStat('Next Boost', '$_nextBoost views')),
                     ],
                   ),
                   const SizedBox(height: 10),
-                  const Text('Rates: 1K views = \$1 · 2K views = \$2 · 10K views = \$25 · 1K App Shares = \$1.50\nMinimum withdrawal threshold: \$5.00', style: TextStyle(color: Colors.white38, fontSize: 9.5)),
+                  const Text('Keep sharing your videos to unlock higher ranks and recognition across the MayaJaal creator community.', style: TextStyle(color: Colors.white38, fontSize: 9.5)),
                 ],
               ),
             ),
@@ -9376,7 +9184,6 @@ class _EarningsScreenState extends State<EarningsScreen>
                 : Column(
                     children: _links.map((link) {
                       final views = (link['views'] ?? 0) as int;
-                      final earnings = MayaJaalAccount.calcEarnings(views);
                       final name = (link['filename'] ?? link['originalUrl'] ?? 'link').toString();
 
                       return Container(
@@ -9402,11 +9209,7 @@ class _EarningsScreenState extends State<EarningsScreen>
                                     children: [
                                       const Icon(Icons.visibility, color: Colors.white38, size: 10),
                                       const SizedBox(width: 3),
-                                      Text('$views', style: const TextStyle(color: Colors.white70, fontSize: 9.5, fontWeight: FontWeight.bold)),
-                                      const SizedBox(width: 8),
-                                      const Icon(Icons.attach_money, color: Colors.amberAccent, size: 10),
-                                      const SizedBox(width: 1),
-                                      Text('\$${earnings.toStringAsFixed(2)}', style: const TextStyle(color: Colors.amberAccent, fontSize: 9.5, fontWeight: FontWeight.bold)),
+                                      Text('$views views', style: const TextStyle(color: Colors.white70, fontSize: 9.5, fontWeight: FontWeight.bold)),
                                     ],
                                   ),
                                 ],
@@ -9424,11 +9227,11 @@ class _EarningsScreenState extends State<EarningsScreen>
               child: const Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  Row(children: [Icon(Icons.info_outline, color: AppThemes.kGreen, size: 14), SizedBox(width: 6), Text('WITHDRAWAL INFO', style: TextStyle(color: Colors.white, fontSize: 10.5, fontWeight: FontWeight.bold, letterSpacing: 1.0))]),
+                  Row(children: [Icon(Icons.info_outline, color: AppThemes.kGreen, size: 14), SizedBox(width: 6), Text('INFO', style: TextStyle(color: Colors.white, fontSize: 10.5, fontWeight: FontWeight.bold, letterSpacing: 1.0))]),
                   SizedBox(height: 6),
-                  Text('• Minimum: \$5 (≈₹400)', style: TextStyle(color: Colors.white60, fontSize: 10.5)),
-                  Text('• Methods: Bank Transfer · UPI · Any Bank', style: TextStyle(color: Colors.white60, fontSize: 10.5)),
-                  Text('• Processing: 24–48 hours', style: TextStyle(color: Colors.white60, fontSize: 10.5)),
+                  Text('• Views are validated after 10+ seconds of real playback', style: TextStyle(color: Colors.white60, fontSize: 10.5)),
+                  Text('• Cyber Rank is calculated from cumulative verified views', style: TextStyle(color: Colors.white60, fontSize: 10.5)),
+                  Text('• 28-day auto lifecycle on all stream links', style: TextStyle(color: Colors.white60, fontSize: 10.5)),
                 ],
               ),
             ),
@@ -9469,5 +9272,6 @@ class _EarningsScreenState extends State<EarningsScreen>
 }
 
 // ═══════════════════════════════════════════════════════════════════════════════
-// END OF COMPLETE FILE (PARTS 1 & 2 MERGED · ALL ADS REMOVED · REAL NAMES FIXED)
+// END OF COMPLETE FILE (PARTS 1 & 2 MERGED · PLAY STORE READY)
+// ✅ No Ads · ✅ No Withdrawal · ✅ No 18+ · ✅ Account Deletion · ✅ Soft Security
 // ═══════════════════════════════════════════════════════════════════════════════
