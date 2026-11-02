@@ -56,6 +56,8 @@ class AppThemes {
   static const Color kSilver = Color(0xFFCFD8DC);
   static const Color kBronze = Color(0xFFFFAB91);
   static const Color kRed = Color(0xFFFF5252);
+  static const Color kFireOrange = Color(0xFFFF6D00);
+  static const Color kFireYellow = Color(0xFFFFD600);
 }
 
 final ValueNotifier<String> themeNotifier = ValueNotifier<String>('Cyber Emerald');
@@ -362,7 +364,7 @@ Widget buildMediaThumbnail(
 }
 
 // ═══════════════════════════════════════════════════════════════════════════════
-// ⭐ REAL VIDEO NAME RESOLVER — FIREBASE RTDB BACKUP
+// REAL VIDEO NAME RESOLVER — FIREBASE RTDB BACKUP
 // ═══════════════════════════════════════════════════════════════════════════════
 class VideoNameResolver {
   static Future<String> resolve(String videoId) async {
@@ -403,6 +405,56 @@ class VideoNameResolver {
         t.toLowerCase() == 'null' ||
         t == videoId ||
         t.toLowerCase() == 'mayajaal video';
+  }
+}
+
+// ═══════════════════════════════════════════════════════════════════════════════
+// ⭐ NEW: REAL UPLOADER NAME RESOLVER (from ownerUid → users/{uid}/name)
+// ═══════════════════════════════════════════════════════════════════════════════
+class VideoOwnerResolver {
+  static Future<Map<String, String>> resolve(String videoId) async {
+    if (videoId.isEmpty) return {};
+    try {
+      final snap = await FirebaseDatabase.instance.ref('links/$videoId').once();
+      final val = snap.snapshot.value;
+      if (val == null || val is! Map) return {};
+      final data = Map<String, dynamic>.from(val);
+
+      String uploader = (data['uploader'] ?? '').toString().trim();
+      String ownerUid = (data['ownerUid'] ?? '').toString().trim();
+      String ownerName = '';
+
+      if (ownerUid.isNotEmpty) {
+        try {
+          final uSnap = await FirebaseDatabase.instance.ref('users/$ownerUid').once();
+          if (uSnap.snapshot.value != null && uSnap.snapshot.value is Map) {
+            final u = Map<String, dynamic>.from(uSnap.snapshot.value as Map);
+            final n = (u['name'] ?? '').toString().trim();
+            final e = (u['email'] ?? '').toString().trim();
+            if (n.isNotEmpty && n.toLowerCase() != 'null' && n.toLowerCase() != 'user') {
+              ownerName = n;
+            } else if (e.isNotEmpty) {
+              ownerName = e.split('@').first;
+            }
+          }
+        } catch (_) {}
+      }
+
+      if (ownerName.isEmpty && uploader.isNotEmpty && uploader.toLowerCase() != 'mayajaal' && uploader.toLowerCase() != 'null') {
+        ownerName = uploader.replaceAll('@', '').trim();
+      }
+
+      final display = ownerName.isNotEmpty
+          ? (ownerName.startsWith('@') ? ownerName : '@$ownerName')
+          : '@mayajaal';
+
+      return {
+        'display': display,
+        'name': ownerName,
+        'uid': ownerUid,
+      };
+    } catch (_) {}
+    return {};
   }
 }
 
@@ -455,7 +507,7 @@ class DeviceIdHelper {
 }
 
 // ═══════════════════════════════════════════════════════════════════════════════
-// IN-APP LEGAL & POLICY DIALOG (PLAY STORE COMPLIANT — NO 18+ / NO WITHDRAWAL)
+// IN-APP LEGAL & POLICY DIALOG (PLAY STORE COMPLIANT)
 // ═══════════════════════════════════════════════════════════════════════════════
 class LegalPolicyDialog {
   static void showPolicy(BuildContext context, String type) {
@@ -914,8 +966,6 @@ class SecurityGuard {
     return null;
   }
 
-  /// SOFT VERSION: Tracks device binding for security analytics but does NOT
-  /// block the user from logging in. Play Store friendly.
   static Future<Map<String, dynamic>> validateAndBindDevice(
     String uid,
     String email,
@@ -943,7 +993,6 @@ class SecurityGuard {
         return {'ok': true, 'firstBind': false};
       }
 
-      // Different account on this device — track for analytics, but allow login
       await ref.update({
         'uid': uid,
         'email': email,
@@ -1106,9 +1155,6 @@ class SecurityGuard {
     }
   }
 
-  /// SOFT GATE: Only user credential validation is strict.
-  /// Device/emulator/root checks are logged for security analytics but
-  /// do NOT block login — Play Store friendly.
   static Future<String?> fullGate(User user) async {
     final userErr = await validateUser(user);
     if (userErr != null) return userErr;
@@ -1320,7 +1366,7 @@ class MayaJaalAccount {
   }
 
   // ═══════════════════════════════════════════════════════════════════════════
-  // ⭐ ACCOUNT DELETION (PLAY STORE MANDATORY FEATURE)
+  // ⭐ DEEP ACCOUNT DELETION — WIPES EVERYTHING (like a brand new user)
   // ═══════════════════════════════════════════════════════════════════════════
   static Future<void> deleteAccount() async {
     final user = FirebaseAuth.instance.currentUser;
@@ -1332,15 +1378,15 @@ class MayaJaalAccount {
     final deviceId = await DeviceIdHelper.get();
 
     try {
-      // 1. Delete user profile data
+      // 1. Wipe user profile node (dashboard, apiKey, notifications, watchHistory, savedVideos all under /users/uid)
       await _rtdb.child('users/$uid').remove();
 
-      // 2. Delete device binding
+      // 2. Wipe device binding
       try {
         await _rtdb.child('deviceBindings/$deviceId').remove();
       } catch (_) {}
 
-      // 3. Delete user's video links
+      // 3. Wipe all video links owned by this user
       try {
         final linksSnap = await _rtdb
             .child('links')
@@ -1355,26 +1401,52 @@ class MayaJaalAccount {
         }
       } catch (_) {}
 
-      // 4. Delete user subscriptions & subs
+      // 4. Wipe subscriptions (both directions)
       try {
+        final subsSnap = await _rtdb.child('subscriptions/$uid').once();
+        if (subsSnap.snapshot.value != null && subsSnap.snapshot.value is Map) {
+          final subs = subsSnap.snapshot.value as Map;
+          for (final subscriberUid in subs.keys) {
+            await _rtdb.child('subscriptions/$uid/$subscriberUid').remove();
+          }
+        }
         await _rtdb.child('userSubs/$uid').remove();
-        await _rtdb.child('subscriptions/$uid').remove();
       } catch (_) {}
 
-      // 5. Delete local preferences
+      // 5. Wipe likes/unlikes/shares on other people's videos
+      try {
+        final linksSnap = await _rtdb.child('links').once();
+        if (linksSnap.snapshot.value != null && linksSnap.snapshot.value is Map) {
+          final allLinks = Map<String, dynamic>.from(linksSnap.snapshot.value as Map);
+          for (final vid in allLinks.keys) {
+            await _rtdb.child('links/$vid/likes/$uid').remove();
+            await _rtdb.child('links/$vid/unlikes/$uid').remove();
+          }
+        }
+      } catch (_) {}
+
+      // 6. Wipe local preferences
       try {
         final prefs = await SharedPreferences.getInstance();
         await prefs.remove('saved_videos_v1_$uid');
         await prefs.remove('watch_history_v2_$uid');
         await prefs.remove('mj_login_attempts');
+        await prefs.remove('mj_device_id');
+        await prefs.remove('liked_${uid}_');
+        // Clear all keys starting with user-related prefixes
+        final keys = prefs.getKeys().toList();
+        for (final k in keys) {
+          if (k.contains(uid)) {
+            await prefs.remove(k);
+          }
+        }
       } catch (_) {}
 
-      // 6. Delete Firebase Auth account
+      // 7. Delete Firebase Auth account
       try {
         await user.delete();
       } on FirebaseAuthException catch (e) {
         if (e.code == 'requires-recent-login') {
-          // Need fresh authentication — sign out, user must re-login to delete
           await signOut();
           throw FirebaseAuthException(
             code: 'requires-recent-login',
@@ -1477,11 +1549,6 @@ class MayaJaalAccount {
     }
   }
 
-  // ═══════════════════════════════════════════════════════════════════════════
-  // ⭐⭐⭐ CRITICAL FIX ADDED HERE — getTierInfo() METHOD ⭐⭐⭐
-  // This method was referenced in StatsScreen but missing from this class
-  // causing compilation error. Now fully implemented.
-  // ═══════════════════════════════════════════════════════════════════════════
   static Map<String, dynamic> getTierInfo(int views) {
     views = math.max(0, views);
     if (views < 1000) {
@@ -2343,9 +2410,8 @@ class WatchHistory {
 }
 
 // ═══════════════════════════════════════════════════════════════════════════════
-// END OF PART 1 OF 2 — CONTINUE WITH PART 2 (App Root & All Screens)
+// END OF PART 1 OF 2
 // ═══════════════════════════════════════════════════════════════════════════════
-
 // ═══════════════════════════════════════════════════════════════════════════════
 // MAIN APPLICATION ENTRY POINT
 // ═══════════════════════════════════════════════════════════════════════════════
@@ -4257,7 +4323,50 @@ class _HomeScreenState extends State<HomeScreen>
 }
 
 // ═══════════════════════════════════════════════════════════════════════════════
-// MORE DRAWER (NO WITHDRAW · + DELETE ACCOUNT)
+// FIRE PARTICLE PAINTER (For Delete Account Dialog)
+// ═══════════════════════════════════════════════════════════════════════════════
+class FireParticlePainter extends CustomPainter {
+  final double animationValue;
+  FireParticlePainter({required this.animationValue});
+
+  @override
+  void paint(Canvas canvas, Size size) {
+    final paint = Paint()..style = PaintingStyle.fill;
+
+    // Draw overlapping flame waves
+    for (int i = 0; i < 7; i++) {
+      final dx = size.width * (i / 6);
+      final waveOffset = math.sin(animationValue * math.pi * 2 + i) * 0.2;
+      final height = size.height * (0.4 + 0.5 * waveOffset);
+
+      final path = Path()
+        ..moveTo(dx - 20, size.height)
+        ..quadraticBezierTo(dx - 15, size.height - height * 0.6, dx + (i % 2 == 0 ? 8 : -8), size.height - height)
+        ..quadraticBezierTo(dx + 15, size.height - height * 0.6, dx + 20, size.height)
+        ..close();
+
+      // Gradient from yellow to red
+      final gradient = LinearGradient(
+        begin: Alignment.bottomCenter,
+        end: Alignment.topCenter,
+        colors: [
+          AppThemes.kRed.withOpacity(0.8),
+          AppThemes.kFireOrange.withOpacity(0.6),
+          AppThemes.kFireYellow.withOpacity(0.0),
+        ],
+      );
+
+      paint.shader = gradient.createShader(Rect.fromLTWH(dx - 20, size.height - height, 40, height));
+      canvas.drawPath(path, paint);
+    }
+  }
+
+  @override
+  bool shouldRepaint(covariant FireParticlePainter oldDelegate) => true;
+}
+
+// ═══════════════════════════════════════════════════════════════════════════════
+// MORE DRAWER (WITH ATTRACTIVE FIRE DELETE ACCOUNT DIALOG)
 // ═══════════════════════════════════════════════════════════════════════════════
 class MoreDrawer extends StatefulWidget {
   const MoreDrawer({super.key});
@@ -4637,213 +4746,308 @@ class _MoreDrawerState extends State<MoreDrawer>
       context: context,
       barrierDismissible: false,
       builder: (c) => StatefulBuilder(
-        builder: (ctx, setDialogState) => AlertDialog(
-          backgroundColor: AppThemes.kCardBg,
-          shape: RoundedRectangleBorder(
-            borderRadius: BorderRadius.circular(14),
-            side: BorderSide(color: AppThemes.kRed.withOpacity(0.6), width: 1.2),
-          ),
-          title: Row(
-            children: const [
-              Icon(Icons.warning_amber_rounded, color: AppThemes.kRed, size: 22),
-              SizedBox(width: 8),
-              Text(
-                'DELETE ACCOUNT',
-                style: TextStyle(
-                  color: AppThemes.kRed,
-                  fontSize: 14,
-                  fontWeight: FontWeight.bold,
-                  letterSpacing: 1.0,
+        builder: (ctx, setDialogState) {
+          return AlertDialog(
+            backgroundColor: Colors.black,
+            contentPadding: const EdgeInsets.all(0),
+            shape: RoundedRectangleBorder(
+              borderRadius: BorderRadius.circular(18),
+              side: BorderSide(color: AppThemes.kFireOrange.withOpacity(0.8), width: 1.5),
+            ),
+            content: Container(
+              width: double.maxFinite,
+              decoration: BoxDecoration(
+                borderRadius: BorderRadius.circular(18),
+                gradient: LinearGradient(
+                  begin: Alignment.topCenter,
+                  end: Alignment.bottomCenter,
+                  colors: [
+                    AppThemes.kCardBg,
+                    AppThemes.kBg,
+                    AppThemes.kRed.withOpacity(0.15),
+                  ],
                 ),
               ),
-            ],
-          ),
-          content: SingleChildScrollView(
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                const Text(
-                  'This action is PERMANENT and cannot be undone.',
-                  style: TextStyle(
-                    color: Colors.white,
-                    fontSize: 12,
-                    fontWeight: FontWeight.bold,
-                  ),
-                ),
-                const SizedBox(height: 10),
-                const Text(
-                  'All of the following will be permanently deleted:',
-                  style: TextStyle(color: Colors.white70, fontSize: 11.5),
-                ),
-                const SizedBox(height: 8),
-                _bullet('Your account and profile'),
-                _bullet('All your uploaded videos and links'),
-                _bullet('Watch history and saved videos'),
-                _bullet('Notifications and subscription data'),
-                _bullet('API key and device binding'),
-                const SizedBox(height: 14),
-                Text(
-                  'Type DELETE below to confirm:',
-                  style: TextStyle(
-                    color: Colors.white.withOpacity(0.7),
-                    fontSize: 11.5,
-                    fontWeight: FontWeight.bold,
-                  ),
-                ),
-                const SizedBox(height: 8),
-                Container(
-                  padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 2),
-                  decoration: BoxDecoration(
-                    color: Colors.black,
-                    borderRadius: BorderRadius.circular(8),
-                    border: Border.all(color: AppThemes.kBorder),
-                  ),
-                  child: TextField(
-                    controller: confirmCtrl,
-                    enabled: !isDeleting,
-                    textCapitalization: TextCapitalization.characters,
-                    style: const TextStyle(
-                      color: Colors.white,
-                      fontSize: 13,
-                      fontFamily: 'monospace',
-                      letterSpacing: 2,
-                      fontWeight: FontWeight.bold,
-                    ),
-                    decoration: const InputDecoration(
-                      hintText: 'DELETE',
-                      hintStyle: TextStyle(
-                        color: Colors.white24,
-                        fontSize: 12,
-                        fontFamily: 'monospace',
-                        letterSpacing: 2,
-                      ),
-                      border: InputBorder.none,
-                    ),
-                    onChanged: (_) => setDialogState(() {}),
-                  ),
-                ),
-                if (errorMsg != null) ...[
-                  const SizedBox(height: 10),
-                  Container(
-                    padding: const EdgeInsets.all(8),
-                    decoration: BoxDecoration(
-                      color: Colors.red.withOpacity(0.1),
-                      borderRadius: BorderRadius.circular(6),
-                      border: Border.all(color: Colors.redAccent.withOpacity(0.4)),
-                    ),
-                    child: Text(
-                      errorMsg!,
-                      style: const TextStyle(color: Colors.redAccent, fontSize: 10.5),
+              child: Stack(
+                children: [
+                  // Animated Fire Background Effect
+                  Positioned(
+                    bottom: 0,
+                    left: 0,
+                    right: 0,
+                    height: 120,
+                    child: TweenAnimationBuilder<double>(
+                      tween: Tween(begin: 0.0, end: 1.0),
+                      duration: const Duration(seconds: 1),
+                      builder: (context, value, child) {
+                        return CustomPaint(
+                          painter: FireParticlePainter(animationValue: value),
+                        );
+                      },
                     ),
                   ),
-                ],
-                if (isDeleting) ...[
-                  const SizedBox(height: 14),
-                  const Center(
-                    child: SizedBox(
-                      width: 24,
-                      height: 24,
-                      child: CircularProgressIndicator(
-                        color: AppThemes.kRed,
-                        strokeWidth: 2,
-                      ),
-                    ),
-                  ),
-                ],
-              ],
-            ),
-          ),
-          actions: [
-            TextButton(
-              onPressed: isDeleting ? null : () {
-                SoundService.playClick();
-                Navigator.pop(c);
-              },
-              child: const Text(
-                'CANCEL',
-                style: TextStyle(color: Colors.white54, fontWeight: FontWeight.bold),
-              ),
-            ),
-            ElevatedButton(
-              onPressed: (confirmCtrl.text == 'DELETE' && !isDeleting)
-                  ? () async {
-                      SoundService.playAlert();
-                      Haptic.heavy();
-                      setDialogState(() {
-                        isDeleting = true;
-                        errorMsg = null;
-                      });
-                      try {
-                        await MayaJaalAccount.deleteAccount();
-                        if (c.mounted) {
-                          Navigator.pop(c);
-                          Navigator.pop(context);
-                          Navigator.of(context).pushAndRemoveUntil(
-                            MaterialPageRoute(builder: (_) => const LoginScreen()),
-                            (route) => false,
-                          );
-                          ScaffoldMessenger.of(context).showSnackBar(
-                            const SnackBar(
-                              backgroundColor: AppThemes.kCardBg,
-                              content: Text(
-                                '✅ Account deleted successfully',
-                                style: TextStyle(color: AppThemes.kGreen),
+                  
+                  // Dialog Content
+                  Padding(
+                    padding: const EdgeInsets.all(18),
+                    child: Column(
+                      mainAxisSize: MainAxisSize.min,
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        // Header with Fire Icon
+                        Row(
+                          children: [
+                            Container(
+                              padding: const EdgeInsets.all(8),
+                              decoration: BoxDecoration(
+                                shape: BoxShape.circle,
+                                color: AppThemes.kRed.withOpacity(0.2),
+                                border: Border.all(color: AppThemes.kRed, width: 1.5),
+                                boxShadow: [
+                                  BoxShadow(color: AppThemes.kRed.withOpacity(0.5), blurRadius: 15),
+                                ],
+                              ),
+                              child: const Icon(Icons.local_fire_department, color: AppThemes.kFireOrange, size: 26),
+                            ),
+                            const SizedBox(width: 12),
+                            const Expanded(
+                              child: Text(
+                                'BURN & DELETE',
+                                style: TextStyle(
+                                  color: AppThemes.kRed,
+                                  fontSize: 16,
+                                  fontWeight: FontWeight.w900,
+                                  letterSpacing: 1.5,
+                                  fontFamily: 'monospace',
+                                ),
                               ),
                             ),
-                          );
-                        }
-                      } on FirebaseAuthException catch (e) {
-                        if (e.code == 'requires-recent-login') {
-                          setDialogState(() {
-                            isDeleting = false;
-                            errorMsg = 'For security, please re-login and try again.';
-                          });
-                        } else {
-                          setDialogState(() {
-                            isDeleting = false;
-                            errorMsg = e.message ?? 'Deletion failed. Try again.';
-                          });
-                        }
-                      } catch (e) {
-                        setDialogState(() {
-                          isDeleting = false;
-                          errorMsg = 'Deletion failed. Please try again.';
-                        });
-                      }
-                    }
-                  : null,
-              style: ElevatedButton.styleFrom(
-                backgroundColor: AppThemes.kRed,
-                foregroundColor: Colors.white,
-                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
-                disabledBackgroundColor: Colors.white12,
-              ),
-              child: const Text(
-                'DELETE FOREVER',
-                style: TextStyle(fontWeight: FontWeight.bold, letterSpacing: 1.0),
+                          ],
+                        ),
+                        const SizedBox(height: 16),
+                        
+                        const Text(
+                          '⚠️ WARNING: PERMANENT ACTION!',
+                          style: TextStyle(
+                            color: Colors.white,
+                            fontSize: 12.5,
+                            fontWeight: FontWeight.bold,
+                          ),
+                        ),
+                        const SizedBox(height: 8),
+                        const Text(
+                          'Iss account ko delete karte hi aapka poora data hamesha ke liye jal jayega. Dobara login karne par aap bilkul naye user ki tarah start karenge.',
+                          style: TextStyle(color: Colors.white70, fontSize: 11.5, height: 1.4),
+                        ),
+                        
+                        const SizedBox(height: 16),
+                        Container(
+                          padding: const EdgeInsets.all(10),
+                          decoration: BoxDecoration(
+                            color: Colors.black54,
+                            borderRadius: BorderRadius.circular(8),
+                            border: Border.all(color: Colors.white12),
+                          ),
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              _fireBullet('Saare Videos aur Links delete honge'),
+                              _fireBullet('Watch History & Saved Videos mit jayenge'),
+                              _fireBullet('Aapke saare Views aur Cyber Rank zero ho jayenge'),
+                              _fireBullet('Firebase Auth Account permanently delete hoga'),
+                            ],
+                          ),
+                        ),
+                        
+                        const SizedBox(height: 18),
+                        Text(
+                          'Confirm karne ke liye "DELETE" type karein:',
+                          style: TextStyle(color: AppThemes.kFireYellow.withOpacity(0.9), fontSize: 11.5, fontWeight: FontWeight.bold),
+                        ),
+                        const SizedBox(height: 8),
+                        Container(
+                          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
+                          decoration: BoxDecoration(
+                            color: Colors.black,
+                            borderRadius: BorderRadius.circular(8),
+                            border: Border.all(color: confirmCtrl.text == 'DELETE' ? AppThemes.kRed : AppThemes.kBorder, width: 1.5),
+                          ),
+                          child: TextField(
+                            controller: confirmCtrl,
+                            enabled: !isDeleting,
+                            textCapitalization: TextCapitalization.characters,
+                            style: const TextStyle(
+                              color: AppThemes.kRed,
+                              fontSize: 14,
+                              fontFamily: 'monospace',
+                              letterSpacing: 3,
+                              fontWeight: FontWeight.bold,
+                            ),
+                            decoration: const InputDecoration(
+                              hintText: 'DELETE',
+                              hintStyle: TextStyle(
+                                color: Colors.white24,
+                                fontSize: 13,
+                                fontFamily: 'monospace',
+                                letterSpacing: 3,
+                              ),
+                              border: InputBorder.none,
+                            ),
+                            onChanged: (_) => setDialogState(() {}),
+                          ),
+                        ),
+                        
+                        if (errorMsg != null) ...[
+                          const SizedBox(height: 12),
+                          Container(
+                            padding: const EdgeInsets.all(10),
+                            decoration: BoxDecoration(
+                              color: Colors.red.withOpacity(0.15),
+                              borderRadius: BorderRadius.circular(8),
+                              border: Border.all(color: Colors.redAccent),
+                            ),
+                            child: Row(
+                              children: [
+                                const Icon(Icons.error_outline, color: AppThemes.kRed, size: 16),
+                                const SizedBox(width: 8),
+                                Expanded(
+                                  child: Text(
+                                    errorMsg!,
+                                    style: const TextStyle(color: AppThemes.kRed, fontSize: 10.5, fontWeight: FontWeight.bold),
+                                  ),
+                                ),
+                              ],
+                            ),
+                          ),
+                        ],
+                        
+                        if (isDeleting) ...[
+                          const SizedBox(height: 16),
+                          const Center(
+                            child: Column(
+                              children: [
+                                SizedBox(
+                                  width: 28,
+                                  height: 28,
+                                  child: CircularProgressIndicator(color: AppThemes.kFireOrange, strokeWidth: 3),
+                                ),
+                                SizedBox(height: 8),
+                                Text(
+                                  'Burning your data...',
+                                  style: TextStyle(color: AppThemes.kFireOrange, fontSize: 10.5, fontFamily: 'monospace'),
+                                ),
+                              ],
+                            ),
+                          ),
+                        ],
+                        
+                        const SizedBox(height: 22),
+                        Row(
+                          children: [
+                            Expanded(
+                              child: TextButton(
+                                onPressed: isDeleting ? null : () {
+                                  SoundService.playClick();
+                                  Navigator.pop(c);
+                                },
+                                child: const Text(
+                                  'CANCEL',
+                                  style: TextStyle(color: Colors.white54, fontWeight: FontWeight.bold),
+                                ),
+                              ),
+                            ),
+                            const SizedBox(width: 10),
+                            Expanded(
+                              flex: 2,
+                              child: ElevatedButton(
+                                onPressed: (confirmCtrl.text == 'DELETE' && !isDeleting)
+                                    ? () async {
+                                        SoundService.playAlert();
+                                        Haptic.heavy();
+                                        setDialogState(() {
+                                          isDeleting = true;
+                                          errorMsg = null;
+                                        });
+                                        try {
+                                          await MayaJaalAccount.deleteAccount();
+                                          if (c.mounted) {
+                                            Navigator.pop(c);
+                                            Navigator.pop(context);
+                                            Navigator.of(context).pushAndRemoveUntil(
+                                              MaterialPageRoute(builder: (_) => const LoginScreen()),
+                                              (route) => false,
+                                            );
+                                            ScaffoldMessenger.of(context).showSnackBar(
+                                              const SnackBar(
+                                                backgroundColor: AppThemes.kCardBg,
+                                                content: Text(
+                                                  '🔥 Account burned successfully. You will start as a new user.',
+                                                  style: TextStyle(color: AppThemes.kFireOrange, fontWeight: FontWeight.bold),
+                                                ),
+                                              ),
+                                            );
+                                          }
+                                        } on FirebaseAuthException catch (e) {
+                                          if (e.code == 'requires-recent-login') {
+                                            setDialogState(() {
+                                              isDeleting = false;
+                                              errorMsg = 'Security: Please re-login and try again.';
+                                            });
+                                          } else {
+                                            setDialogState(() {
+                                              isDeleting = false;
+                                              errorMsg = e.message ?? 'Deletion failed. Try again.';
+                                            });
+                                          }
+                                        } catch (e) {
+                                          setDialogState(() {
+                                            isDeleting = false;
+                                            errorMsg = 'Deletion failed. Please try again.';
+                                          });
+                                        }
+                                      }
+                                    : null,
+                                style: ElevatedButton.styleFrom(
+                                  backgroundColor: AppThemes.kRed,
+                                  foregroundColor: Colors.white,
+                                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+                                  disabledBackgroundColor: Colors.white12,
+                                  padding: const EdgeInsets.symmetric(vertical: 12),
+                                ),
+                                child: const Text(
+                                  'DELETE FOREVER',
+                                  style: TextStyle(fontWeight: FontWeight.w900, letterSpacing: 1.0, fontSize: 12),
+                                ),
+                              ),
+                            ),
+                          ],
+                        ),
+                      ],
+                    ),
+                  ),
+                ],
               ),
             ),
-          ],
-        ),
+          );
+        },
       ),
     );
   }
 
-  Widget _bullet(String text) {
+  Widget _fireBullet(String text) {
     return Padding(
-      padding: const EdgeInsets.symmetric(vertical: 2),
+      padding: const EdgeInsets.symmetric(vertical: 3),
       child: Row(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           const Padding(
-            padding: EdgeInsets.only(top: 4, right: 6),
-            child: Icon(Icons.circle, size: 5, color: AppThemes.kRed),
+            padding: EdgeInsets.only(top: 2, right: 6),
+            child: Icon(Icons.local_fire_department, size: 12, color: AppThemes.kFireOrange),
           ),
           Expanded(
             child: Text(
               text,
-              style: const TextStyle(color: Colors.white60, fontSize: 11, height: 1.4),
+              style: const TextStyle(color: Colors.white70, fontSize: 11, height: 1.3),
             ),
           ),
         ],
@@ -5355,23 +5559,26 @@ class _MoreDrawerState extends State<MoreDrawer>
                       padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
                       child: Container(
                         decoration: BoxDecoration(
-                          color: AppThemes.kRed.withOpacity(0.05),
+                          color: AppThemes.kRed.withOpacity(0.1),
                           borderRadius: BorderRadius.circular(10),
-                          border: Border.all(color: AppThemes.kRed.withOpacity(0.5), width: 1.2),
+                          border: Border.all(color: AppThemes.kFireOrange.withOpacity(0.8), width: 1.5),
+                          boxShadow: [
+                            BoxShadow(color: AppThemes.kRed.withOpacity(0.2), blurRadius: 10, spreadRadius: 1),
+                          ],
                         ),
                         child: ListTile(
-                          leading: const Icon(Icons.delete_forever, color: AppThemes.kRed, size: 20),
+                          leading: const Icon(Icons.local_fire_department, color: AppThemes.kFireOrange, size: 22),
                           title: const Text(
                             'Delete My Account',
                             style: TextStyle(
                               color: AppThemes.kRed,
-                              fontWeight: FontWeight.bold,
-                              fontSize: 12.5,
+                              fontWeight: FontWeight.w900,
+                              fontSize: 13,
                             ),
                           ),
                           subtitle: const Text(
-                            'Permanently delete all data',
-                            style: TextStyle(color: Colors.white38, fontSize: 9.5),
+                            'Permanently erase all data & start fresh',
+                            style: TextStyle(color: Colors.white54, fontSize: 9.5),
                           ),
                           onTap: () {
                             _showDeleteAccountDialog(context);
@@ -5554,7 +5761,7 @@ class SnakeBorderPainter extends CustomPainter {
 }
 
 // ═══════════════════════════════════════════════════════════════════════════════
-// ⭐ NEW: VIDEO METADATA RESOLVER (SIZE + AGE)
+// VIDEO METADATA RESOLVER (SIZE + AGE)
 // ═══════════════════════════════════════════════════════════════════════════════
 class VideoMetaResolver {
   static Future<Map<String, dynamic>> resolveMeta(String videoId) async {
@@ -5565,7 +5772,6 @@ class VideoMetaResolver {
       if (val == null || val is! Map) return {};
       final data = Map<String, dynamic>.from(val);
 
-      // Try multiple possible size field names
       int sizeBytes = 0;
       final rawSize = data['size'] ??
           data['fileSize'] ??
@@ -5579,7 +5785,6 @@ class VideoMetaResolver {
         sizeBytes = int.tryParse(rawSize) ?? 0;
       }
 
-      // Try multiple possible createdAt field names
       int createdAtMs = 0;
       final rawCreated = data['createdAt'] ??
           data['uploadedAt'] ??
@@ -5634,7 +5839,7 @@ class VideoMetaResolver {
 }
 
 // ═══════════════════════════════════════════════════════════════════════════════
-// STREAM PREVIEW SCREEN (10-SEC COUNTDOWN · ADS REMOVED · SIZE + AGE ADDED)
+// ⭐ STREAM PREVIEW SCREEN (PROFESSIONAL REBUILD + SIDE-BY-SIDE INFO)
 // ═══════════════════════════════════════════════════════════════════════════════
 class StreamPreviewScreen extends StatefulWidget {
   final String targetUrl;
@@ -5648,10 +5853,12 @@ class _StreamPreviewScreenState extends State<StreamPreviewScreen>
   String _streamUrl = '';
   String _videoTitle = 'MayaJaal Video';
   String _uploaderName = '@mayajaal';
+  String _ownerUid = '';
+  bool _isOwnerVerified = false;
   String _rawId = '';
   String _token = '';
 
-  // ⭐ NEW: Size and Age fields
+  // Size and Age fields
   String _videoSize = '';
   String _videoAge = '';
 
@@ -5835,7 +6042,17 @@ class _StreamPreviewScreenState extends State<StreamPreviewScreen>
       }
     }
 
-    // ⭐ NEW: Fetch size + age metadata from Firebase
+    // Resolve Owner Name & Verification Status
+    final ownerData = await VideoOwnerResolver.resolve(_rawId);
+    if (ownerData.isNotEmpty && mounted) {
+      setState(() {
+        _uploaderName = ownerData['display'] ?? _uploaderName;
+        _ownerUid = ownerData['uid'] ?? '';
+        _isOwnerVerified = (ownerData['name'] ?? '').isNotEmpty && _ownerUid.isNotEmpty;
+      });
+    }
+
+    // Fetch size + age metadata from Firebase
     try {
       final meta = await VideoMetaResolver.resolveMeta(_rawId);
       if (meta.isNotEmpty && mounted) {
@@ -5913,7 +6130,6 @@ class _StreamPreviewScreenState extends State<StreamPreviewScreen>
       'id': _rawId,
       'thumbnail': finalThumb,
       'streamUrl': finalStreamUrl,
-      // ⭐ NEW: Save size and age with history item
       'size': _videoSize,
       'age': _videoAge,
       'time': DateTime.now().toIso8601String(),
@@ -5961,40 +6177,93 @@ class _StreamPreviewScreenState extends State<StreamPreviewScreen>
     );
   }
 
-  Widget _buildCountdownCircle() {
-    final progress = 1.0 - (_countdown / 10.0);
-    return SizedBox(
-      width: 90,
-      height: 90,
-      child: Stack(
-        alignment: Alignment.center,
-        children: [
-          SizedBox(
-            width: 90,
-            height: 90,
-            child: CircularProgressIndicator(
-              value: progress,
-              strokeWidth: 5,
-              backgroundColor: Colors.white12,
-              valueColor: const AlwaysStoppedAnimation<Color>(Colors.orangeAccent),
+  // ⭐ PROFESSIONAL COUNTDOWN OVERLAY
+  Widget _buildProfessionalCountdown() {
+    return Positioned.fill(
+      child: ClipRRect(
+        borderRadius: BorderRadius.circular(14),
+        child: BackdropFilter(
+          filter: ui.ImageFilter.blur(sigmaX: 4, sigmaY: 4),
+          child: Container(
+            color: Colors.black.withOpacity(0.4),
+            child: Column(
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: [
+                // Progress Ring
+                SizedBox(
+                  width: 90,
+                  height: 90,
+                  child: Stack(
+                    alignment: Alignment.center,
+                    children: [
+                      SizedBox(
+                        width: 90,
+                        height: 90,
+                        child: CircularProgressIndicator(
+                          value: 1.0 - (_countdown / 10.0),
+                          strokeWidth: 4,
+                          backgroundColor: Colors.white12,
+                          valueColor: const AlwaysStoppedAnimation<Color>(AppThemes.kNeonCyan),
+                        ),
+                      ),
+                      Column(
+                        mainAxisAlignment: MainAxisAlignment.center,
+                        children: [
+                          Text(
+                            '$_countdown',
+                            style: const TextStyle(
+                              color: Colors.white,
+                              fontSize: 32,
+                              fontWeight: FontWeight.w900,
+                              shadows: [Shadow(color: AppThemes.kNeonCyan, blurRadius: 10)],
+                            ),
+                          ),
+                          const Text(
+                            'SEC',
+                            style: TextStyle(color: Colors.white54, fontSize: 9, letterSpacing: 2, fontWeight: FontWeight.bold),
+                          ),
+                        ],
+                      ),
+                    ],
+                  ),
+                ),
+                const SizedBox(height: 24),
+                // Loading Badge
+                Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+                  decoration: BoxDecoration(
+                    color: Colors.black87,
+                    borderRadius: BorderRadius.circular(20),
+                    border: Border.all(color: AppThemes.kNeonCyan.withOpacity(0.5), width: 1),
+                    boxShadow: [
+                      BoxShadow(color: AppThemes.kNeonCyan.withOpacity(0.2), blurRadius: 15, spreadRadius: 2),
+                    ],
+                  ),
+                  child: Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      const SizedBox(
+                        width: 12,
+                        height: 12,
+                        child: CircularProgressIndicator(color: AppThemes.kNeonCyan, strokeWidth: 2),
+                      ),
+                      const SizedBox(width: 10),
+                      Text(
+                        _countdown > 3 ? 'PREPARING STREAM' : 'ALMOST READY',
+                        style: const TextStyle(
+                          color: AppThemes.kNeonCyan,
+                          fontSize: 11,
+                          fontWeight: FontWeight.w900,
+                          letterSpacing: 1.5,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ],
             ),
           ),
-          Column(
-            mainAxisAlignment: MainAxisAlignment.center,
-            children: [
-              const Icon(Icons.timer, color: Colors.orangeAccent, size: 26),
-              const SizedBox(height: 2),
-              Text(
-                '$_countdown',
-                style: const TextStyle(
-                  color: Colors.orangeAccent,
-                  fontSize: 24,
-                  fontWeight: FontWeight.w900,
-                ),
-              ),
-            ],
-          ),
-        ],
+        ),
       ),
     );
   }
@@ -6127,12 +6396,16 @@ class _StreamPreviewScreenState extends State<StreamPreviewScreen>
                   ),
                   const SizedBox(height: 10),
 
+                  // ⭐ VIDEO THUMBNAIL WITH PROFESSIONAL COUNTDOWN
                   Container(
                     padding: const EdgeInsets.all(4),
                     decoration: BoxDecoration(
                       color: AppThemes.kCardBg,
                       borderRadius: BorderRadius.circular(16),
-                      border: Border.all(color: _isReadyToPlay ? AppThemes.kGreen : Colors.orangeAccent.withOpacity(0.5), width: 1.5),
+                      border: Border.all(color: _isReadyToPlay ? AppThemes.kGreen : AppThemes.kNeonCyan.withOpacity(0.5), width: 1.5),
+                      boxShadow: [
+                        BoxShadow(color: (_isReadyToPlay ? AppThemes.kGreen : AppThemes.kNeonCyan).withOpacity(0.1), blurRadius: 20)
+                      ],
                     ),
                     child: ClipRRect(
                       borderRadius: BorderRadius.circular(14),
@@ -6153,8 +6426,7 @@ class _StreamPreviewScreenState extends State<StreamPreviewScreen>
                                 }
                               },
                             ),
-                            Container(color: Colors.black38),
-                            if (!_isReadyToPlay) _buildCountdownCircle(),
+                            if (!_isReadyToPlay) _buildProfessionalCountdown(),
                             Positioned(
                               top: 6,
                               left: 6,
@@ -6186,11 +6458,9 @@ class _StreamPreviewScreenState extends State<StreamPreviewScreen>
                       ),
                     ),
 
-                  const SizedBox(height: 12),
+                  const SizedBox(height: 14),
 
-                  // ═══════════════════════════════════════════════════════════
-                  // ⭐ INFO CARD with SIZE + AGE additions
-                  // ═══════════════════════════════════════════════════════════
+                  // ⭐ INFO CARD (SIDE-BY-SIDE LAYOUT)
                   Container(
                     padding: const EdgeInsets.all(12),
                     decoration: BoxDecoration(
@@ -6222,64 +6492,96 @@ class _StreamPreviewScreenState extends State<StreamPreviewScreen>
                           ],
                         ),
 
-                        // UPLOADER row
                         Padding(
-                          padding: const EdgeInsets.symmetric(vertical: 6),
+                          padding: const EdgeInsets.symmetric(vertical: 8),
                           child: Divider(color: Colors.white10, height: 1),
                         ),
+
+                        // ⭐ SIDE-BY-SIDE: UPLOADER (Left) vs FILE SIZE (Right)
                         Row(
                           children: [
-                            Container(
-                              padding: const EdgeInsets.all(8),
-                              decoration: BoxDecoration(shape: BoxShape.circle, color: Colors.black, border: Border.all(color: AppThemes.kBorder)),
-                              child: const Icon(Icons.person_outline, color: AppThemes.kGreen, size: 18),
-                            ),
-                            const SizedBox(width: 12),
+                            // Left: Uploader
                             Expanded(
-                              child: Column(
-                                crossAxisAlignment: CrossAxisAlignment.start,
+                              child: Row(
                                 children: [
-                                  Text('UPLOADER', style: TextStyle(color: Colors.white.withOpacity(0.4), fontSize: 8.5, letterSpacing: 0.8)),
-                                  const SizedBox(height: 1),
-                                  Text(_uploaderName, style: const TextStyle(color: AppThemes.kGreen, fontSize: 12.5, fontWeight: FontWeight.bold), maxLines: 1, overflow: TextOverflow.ellipsis),
+                                  Container(
+                                    padding: const EdgeInsets.all(8),
+                                    decoration: BoxDecoration(shape: BoxShape.circle, color: Colors.black, border: Border.all(color: AppThemes.kBorder)),
+                                    child: const Icon(Icons.person_outline, color: AppThemes.kGreen, size: 18),
+                                  ),
+                                  const SizedBox(width: 12),
+                                  Expanded(
+                                    child: Column(
+                                      crossAxisAlignment: CrossAxisAlignment.start,
+                                      children: [
+                                        Text('UPLOADER', style: TextStyle(color: Colors.white.withOpacity(0.4), fontSize: 8.5, letterSpacing: 0.8)),
+                                        const SizedBox(height: 2),
+                                        Row(
+                                          children: [
+                                            Flexible(
+                                              child: Text(
+                                                _uploaderName,
+                                                style: const TextStyle(color: AppThemes.kGreen, fontSize: 12, fontWeight: FontWeight.bold),
+                                                maxLines: 1,
+                                                overflow: TextOverflow.ellipsis,
+                                              ),
+                                            ),
+                                            if (_isOwnerVerified) ...[
+                                              const SizedBox(width: 4),
+                                              const Icon(Icons.verified, color: AppThemes.kGreen, size: 13),
+                                            ],
+                                          ],
+                                        ),
+                                      ],
+                                    ),
+                                  ),
+                                ],
+                              ),
+                            ),
+                            
+                            // Vertical Divider
+                            Container(
+                              height: 35,
+                              width: 1,
+                              color: Colors.white10,
+                              margin: const EdgeInsets.symmetric(horizontal: 10),
+                            ),
+
+                            // Right: File Size
+                            Expanded(
+                              child: Row(
+                                children: [
+                                  Container(
+                                    padding: const EdgeInsets.all(8),
+                                    decoration: BoxDecoration(shape: BoxShape.circle, color: Colors.black, border: Border.all(color: AppThemes.kBorder)),
+                                    child: const Icon(Icons.sd_storage_outlined, color: AppThemes.kNeonCyan, size: 18),
+                                  ),
+                                  const SizedBox(width: 12),
+                                  Expanded(
+                                    child: Column(
+                                      crossAxisAlignment: CrossAxisAlignment.start,
+                                      children: [
+                                        Text('FILE SIZE', style: TextStyle(color: Colors.white.withOpacity(0.4), fontSize: 8.5, letterSpacing: 0.8)),
+                                        const SizedBox(height: 2),
+                                        Text(
+                                          _videoSize.isNotEmpty ? _videoSize : 'N/A',
+                                          style: const TextStyle(color: AppThemes.kNeonCyan, fontSize: 12, fontWeight: FontWeight.bold),
+                                          maxLines: 1,
+                                          overflow: TextOverflow.ellipsis,
+                                        ),
+                                      ],
+                                    ),
+                                  ),
                                 ],
                               ),
                             ),
                           ],
                         ),
 
-                        // ⭐ NEW: FILE SIZE row (only if available)
-                        if (_videoSize.isNotEmpty) ...[
-                          Padding(
-                            padding: const EdgeInsets.symmetric(vertical: 6),
-                            child: Divider(color: Colors.white10, height: 1),
-                          ),
-                          Row(
-                            children: [
-                              Container(
-                                padding: const EdgeInsets.all(8),
-                                decoration: BoxDecoration(shape: BoxShape.circle, color: Colors.black, border: Border.all(color: AppThemes.kBorder)),
-                                child: const Icon(Icons.sd_storage_outlined, color: AppThemes.kNeonCyan, size: 18),
-                              ),
-                              const SizedBox(width: 12),
-                              Expanded(
-                                child: Column(
-                                  crossAxisAlignment: CrossAxisAlignment.start,
-                                  children: [
-                                    Text('FILE SIZE', style: TextStyle(color: Colors.white.withOpacity(0.4), fontSize: 8.5, letterSpacing: 0.8)),
-                                    const SizedBox(height: 1),
-                                    Text(_videoSize, style: const TextStyle(color: AppThemes.kNeonCyan, fontSize: 12.5, fontWeight: FontWeight.bold), maxLines: 1, overflow: TextOverflow.ellipsis),
-                                  ],
-                                ),
-                              ),
-                            ],
-                          ),
-                        ],
-
-                        // ⭐ NEW: UPLOAD AGE row (only if available)
+                        // UPLOADED AGE row (optional)
                         if (_videoAge.isNotEmpty) ...[
                           Padding(
-                            padding: const EdgeInsets.symmetric(vertical: 6),
+                            padding: const EdgeInsets.symmetric(vertical: 8),
                             child: Divider(color: Colors.white10, height: 1),
                           ),
                           Row(
@@ -7480,7 +7782,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
 }
 
 // ═══════════════════════════════════════════════════════════════════════════════
-// NATIVE VIDEO PLAYER SCREEN (SIZE + AGE DISPLAY ADDED)
+// NATIVE VIDEO PLAYER SCREEN
 // ═══════════════════════════════════════════════════════════════════════════════
 class NativeVideoPlayerScreen extends StatefulWidget {
   final String videoUrl;
@@ -7514,7 +7816,6 @@ class _NativeVideoPlayerScreenState extends State<NativeVideoPlayerScreen> {
   bool _isFullscreen = false;
   bool _isZoomed = false;
 
-  // ⭐ NEW: Size and Age fields
   String _videoSize = '';
   String _videoAge = '';
 
@@ -7566,11 +7867,9 @@ class _NativeVideoPlayerScreenState extends State<NativeVideoPlayerScreen> {
     _initVideo();
     _startStatsListeners();
     _fetchOwner().then((_) => _loadRelatedVideos());
-    // ⭐ NEW: Fetch size + age metadata
     _fetchVideoMeta();
   }
 
-  // ⭐ NEW METHOD: Fetch size + age from Firebase
   Future<void> _fetchVideoMeta() async {
     try {
       final meta = await VideoMetaResolver.resolveMeta(widget.videoId);
@@ -8067,7 +8366,6 @@ class _NativeVideoPlayerScreenState extends State<NativeVideoPlayerScreen> {
       'id': widget.videoId,
       'thumbnail': widget.thumbnailUrl,
       'streamUrl': widget.videoUrl,
-      // ⭐ NEW: Save size and age in saved item
       'size': _videoSize,
       'age': _videoAge,
     };
@@ -8641,7 +8939,6 @@ class _NativeVideoPlayerScreenState extends State<NativeVideoPlayerScreen> {
                               ],
                             ),
 
-                            // ⭐ NEW: Size + Age chips row in player
                             if (_videoSize.isNotEmpty || _videoAge.isNotEmpty) ...[
                               const SizedBox(height: 8),
                               Row(
@@ -9533,8 +9830,3 @@ class _StatsScreenState extends State<StatsScreen>
   }
 }
 
-// ═══════════════════════════════════════════════════════════════════════════════
-// END OF COMPLETE FILE (PART 1 + PART 2 · PLAY STORE READY · SIZE+AGE ADDED)
-// ✅ Real Video Name · ✅ File Size · ✅ Upload Age · ✅ No Ads · ✅ No Withdrawal
-// ✅ No 18+ · ✅ Account Deletion · ✅ Soft Security
-// ═══════════════════════════════════════════════════════════════════════════════
