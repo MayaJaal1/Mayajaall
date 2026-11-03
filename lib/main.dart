@@ -378,39 +378,23 @@ class TeraBoxResolver {
   }
 
   static Future<Map<String, String>> resolve(String teraboxUrl) async {
-    try {
-      // Using a public API for TeraBox link resolution
-      final apiUrl = 'https://terabox-api.vercel.app/api?url=${Uri.encodeComponent(teraboxUrl)}';
-      final response = await http.get(Uri.parse(apiUrl)).timeout(const Duration(seconds: 15));
+  try {
+    // Naya reliable API endpoint
+    final apiUrl = 'https://terabox-worker.robinkumarshakya103.workers.dev/api?url=${Uri.encodeComponent(teraboxUrl)}';
+    final response = await http.get(Uri.parse(apiUrl)).timeout(const Duration(seconds: 15));
 
-      if (response.statusCode == 200) {
-        final data = jsonDecode(response.body);
-        
-        // The API returns various formats. We'll try to extract the most common ones.
-        String videoUrl = '';
-        String fileName = '';
-        String thumbnail = '';
-
-        if (data['list'] != null && data['list'] is List && data['list'].isNotEmpty) {
-          final item = data['list'][0];
-          videoUrl = item['dlink'] ?? item['url'] ?? item['stream_url'] ?? '';
-          fileName = item['filename'] ?? item['name'] ?? '';
-          thumbnail = item['thumbnail'] ?? item['thumb'] ?? '';
-        } else if (data['url'] != null) {
-          videoUrl = data['url'];
-        } else if (data['data'] != null) {
-           final inner = data['data'];
-           videoUrl = inner['dlink'] ?? inner['url'] ?? inner['stream_url'] ?? '';
-           fileName = inner['filename'] ?? inner['name'] ?? '';
-           thumbnail = inner['thumbnail'] ?? inner['thumb'] ?? '';
-        }
+    if (response.statusCode == 200) {
+      final data = jsonDecode(response.body);
+      
+      // API ka response structure check karein
+      if (data['success'] == true && data['files'] != null && data['files'].isNotEmpty) {
+        final file = data['files'][0];
+        // Yahan 'streaming_url' use karein, 'download_url' nahi
+        final videoUrl = file['streaming_url'] ?? file['download_url'] ?? '';
+        final fileName = file['file_name'] ?? '';
+        final thumbnail = file['thumbnail'] ?? '';
 
         if (videoUrl.isNotEmpty) {
-          // Sometimes API returns escaped URLs, we need to decode them
-          videoUrl = videoUrl.replaceAll('\\/', '/');
-          if (videoUrl.contains('?')) {
-             // Remove unnecessary query params if needed
-          }
           return {
             'success': 'true',
             'videoUrl': videoUrl,
@@ -419,11 +403,11 @@ class TeraBoxResolver {
           };
         }
       }
-    } catch (e) {
-      debugPrint('TeraBox Resolver Error: $e');
     }
-    return {'success': 'false', 'videoUrl': '', 'fileName': '', 'thumbnail': ''};
+  } catch (e) {
+    debugPrint('TeraBox Resolver Error: $e');
   }
+  return {'success': 'false', 'videoUrl': '', 'fileName': '', 'thumbnail': ''};
 }
 
 // ═══════════════════════════════════════════════════════════════════════════════
