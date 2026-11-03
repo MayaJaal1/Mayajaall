@@ -6297,7 +6297,7 @@ class _StreamPreviewScreenState extends State<StreamPreviewScreen>
     
     if (_streamUrl.isEmpty) {
        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(backgroundColor: AppThemes.kCardBg, content: Text('Video URL not ready yet. Please wait.', style: TextStyle(color: AppThemes.kOrange))),
+          const SnackBar(backgroundColor: AppThemes.kCardBg, content: Text('Video URL not ready yet. Please wait.', style: TextStyle(color: AppThemes.kGold))),
        );
        return;
     }
