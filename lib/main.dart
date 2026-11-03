@@ -378,37 +378,38 @@ class TeraBoxResolver {
   }
 
   static Future<Map<String, String>> resolve(String teraboxUrl) async {
-  try {
-    // Naya reliable API endpoint
-    final apiUrl = 'https://terabox-worker.robinkumarshakya103.workers.dev/api?url=${Uri.encodeComponent(teraboxUrl)}';
-    final response = await http.get(Uri.parse(apiUrl)).timeout(const Duration(seconds: 15));
+    try {
+      // Naya reliable API endpoint
+      final apiUrl = 'https://terabox-worker.robinkumarshakya103.workers.dev/api?url=${Uri.encodeComponent(teraboxUrl)}';
+      final response = await http.get(Uri.parse(apiUrl)).timeout(const Duration(seconds: 15));
 
-    if (response.statusCode == 200) {
-      final data = jsonDecode(response.body);
-      
-      // API ka response structure check karein
-      if (data['success'] == true && data['files'] != null && data['files'].isNotEmpty) {
-        final file = data['files'][0];
-        // Yahan 'streaming_url' use karein, 'download_url' nahi
-        final videoUrl = file['streaming_url'] ?? file['download_url'] ?? '';
-        final fileName = file['file_name'] ?? '';
-        final thumbnail = file['thumbnail'] ?? '';
+      if (response.statusCode == 200) {
+        final data = jsonDecode(response.body);
+        
+        // API ka response structure check karein
+        if (data['success'] == true && data['files'] != null && data['files'].isNotEmpty) {
+          final file = data['files'][0];
+          // Yahan 'streaming_url' use karein, 'download_url' nahi
+          final videoUrl = file['streaming_url'] ?? file['download_url'] ?? '';
+          final fileName = file['file_name'] ?? '';
+          final thumbnail = file['thumbnail'] ?? '';
 
-        if (videoUrl.isNotEmpty) {
-          return {
-            'success': 'true',
-            'videoUrl': videoUrl,
-            'fileName': fileName,
-            'thumbnail': thumbnail,
-          };
+          if (videoUrl.isNotEmpty) {
+            return {
+              'success': 'true',
+              'videoUrl': videoUrl,
+              'fileName': fileName,
+              'thumbnail': thumbnail,
+            };
+          }
         }
       }
+    } catch (e) {
+      debugPrint('TeraBox Resolver Error: $e');
     }
-  } catch (e) {
-    debugPrint('TeraBox Resolver Error: $e');
+    return {'success': 'false', 'videoUrl': '', 'fileName': '', 'thumbnail': ''};
   }
-  return {'success': 'false', 'videoUrl': '', 'fileName': '', 'thumbnail': ''};
-}
+} 
 
 // ═══════════════════════════════════════════════════════════════════════════════
 // REAL VIDEO NAME RESOLVER — FIREBASE RTDB BACKUP
