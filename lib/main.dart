@@ -364,6 +364,69 @@ Widget buildMediaThumbnail(
 }
 
 // ═══════════════════════════════════════════════════════════════════════════════
+// 🆕 TERABOX API RESOLVER (Direct Video Link Extraction)
+// ═══════════════════════════════════════════════════════════════════════════════
+class TeraBoxResolver {
+  static bool isTeraBoxLink(String url) {
+    final lower = url.toLowerCase();
+    return lower.contains('terabox.com') ||
+        lower.contains('1024terabox.com') ||
+        lower.contains('freeterabox.com') ||
+        lower.contains('teraboxapp.com') ||
+        lower.contains('terabox.club') ||
+        lower.contains('terabox.link');
+  }
+
+  static Future<Map<String, String>> resolve(String teraboxUrl) async {
+    try {
+      // Using a public API for TeraBox link resolution
+      final apiUrl = 'https://terabox-api.vercel.app/api?url=${Uri.encodeComponent(teraboxUrl)}';
+      final response = await http.get(Uri.parse(apiUrl)).timeout(const Duration(seconds: 15));
+
+      if (response.statusCode == 200) {
+        final data = jsonDecode(response.body);
+        
+        // The API returns various formats. We'll try to extract the most common ones.
+        String videoUrl = '';
+        String fileName = '';
+        String thumbnail = '';
+
+        if (data['list'] != null && data['list'] is List && data['list'].isNotEmpty) {
+          final item = data['list'][0];
+          videoUrl = item['dlink'] ?? item['url'] ?? item['stream_url'] ?? '';
+          fileName = item['filename'] ?? item['name'] ?? '';
+          thumbnail = item['thumbnail'] ?? item['thumb'] ?? '';
+        } else if (data['url'] != null) {
+          videoUrl = data['url'];
+        } else if (data['data'] != null) {
+           final inner = data['data'];
+           videoUrl = inner['dlink'] ?? inner['url'] ?? inner['stream_url'] ?? '';
+           fileName = inner['filename'] ?? inner['name'] ?? '';
+           thumbnail = inner['thumbnail'] ?? inner['thumb'] ?? '';
+        }
+
+        if (videoUrl.isNotEmpty) {
+          // Sometimes API returns escaped URLs, we need to decode them
+          videoUrl = videoUrl.replaceAll('\\/', '/');
+          if (videoUrl.contains('?')) {
+             // Remove unnecessary query params if needed
+          }
+          return {
+            'success': 'true',
+            'videoUrl': videoUrl,
+            'fileName': fileName,
+            'thumbnail': thumbnail,
+          };
+        }
+      }
+    } catch (e) {
+      debugPrint('TeraBox Resolver Error: $e');
+    }
+    return {'success': 'false', 'videoUrl': '', 'fileName': '', 'thumbnail': ''};
+  }
+}
+
+// ═══════════════════════════════════════════════════════════════════════════════
 // REAL VIDEO NAME RESOLVER — FIREBASE RTDB BACKUP
 // ═══════════════════════════════════════════════════════════════════════════════
 class VideoNameResolver {
@@ -409,7 +472,7 @@ class VideoNameResolver {
 }
 
 // ═══════════════════════════════════════════════════════════════════════════════
-// ⭐ NEW: REAL UPLOADER NAME RESOLVER (from ownerUid → users/{uid}/name)
+// REAL UPLOADER NAME RESOLVER
 // ═══════════════════════════════════════════════════════════════════════════════
 class VideoOwnerResolver {
   static Future<Map<String, String>> resolve(String videoId) async {
@@ -459,7 +522,7 @@ class VideoOwnerResolver {
 }
 
 // ═══════════════════════════════════════════════════════════════════════════════
-// DEVICE ID HELPER (HARDWARE IDENTIFICATION & BINDING)
+// DEVICE ID HELPER
 // ═══════════════════════════════════════════════════════════════════════════════
 class DeviceIdHelper {
   static String? _cached;
@@ -507,7 +570,7 @@ class DeviceIdHelper {
 }
 
 // ═══════════════════════════════════════════════════════════════════════════════
-// IN-APP LEGAL & POLICY DIALOG (PLAY STORE COMPLIANT)
+// IN-APP LEGAL & POLICY DIALOG
 // ═══════════════════════════════════════════════════════════════════════════════
 class LegalPolicyDialog {
   static void showPolicy(BuildContext context, String type) {
@@ -919,7 +982,7 @@ class Haptic {
 }
 
 // ═══════════════════════════════════════════════════════════════════════════════
-// SECURITY GUARD & AUTHENTICATION PROTOCOLS (PLAY STORE FRIENDLY — SOFT CHECKS)
+// SECURITY GUARD & AUTHENTICATION PROTOCOLS
 // ═══════════════════════════════════════════════════════════════════════════════
 class SecurityGuard {
   static bool isGmailOnly(String? email) {
@@ -1366,7 +1429,7 @@ class MayaJaalAccount {
   }
 
   // ═══════════════════════════════════════════════════════════════════════════
-  // ⭐ DEEP ACCOUNT DELETION — WIPES EVERYTHING (like a brand new user)
+  // DEEP ACCOUNT DELETION — WIPES EVERYTHING
   // ═══════════════════════════════════════════════════════════════════════════
   static Future<void> deleteAccount() async {
     final user = FirebaseAuth.instance.currentUser;
@@ -1378,7 +1441,7 @@ class MayaJaalAccount {
     final deviceId = await DeviceIdHelper.get();
 
     try {
-      // 1. Wipe user profile node (dashboard, apiKey, notifications, watchHistory, savedVideos all under /users/uid)
+      // 1. Wipe user profile node
       await _rtdb.child('users/$uid').remove();
 
       // 2. Wipe device binding
@@ -1433,7 +1496,7 @@ class MayaJaalAccount {
         await prefs.remove('mj_login_attempts');
         await prefs.remove('mj_device_id');
         await prefs.remove('liked_${uid}_');
-        // Clear all keys starting with user-related prefixes
+        
         final keys = prefs.getKeys().toList();
         for (final k in keys) {
           if (k.contains(uid)) {
@@ -1934,7 +1997,6 @@ class FirebaseService {
     } catch (_) {}
   }
 }
-
 // ═══════════════════════════════════════════════════════════════════════════════
 // NOTIFICATION DETAILS SCREEN
 // ═══════════════════════════════════════════════════════════════════════════════
@@ -2409,9 +2471,6 @@ class WatchHistory {
   }
 }
 
-// ═══════════════════════════════════════════════════════════════════════════════
-// END OF PART 1 OF 2
-// ═══════════════════════════════════════════════════════════════════════════════
 // ═══════════════════════════════════════════════════════════════════════════════
 // MAIN APPLICATION ENTRY POINT
 // ═══════════════════════════════════════════════════════════════════════════════
@@ -3791,7 +3850,7 @@ class _HomeScreenState extends State<HomeScreen>
           const SnackBar(
             backgroundColor: AppThemes.kCardBg,
             content: Text(
-              '❌ Clipboard khaali hai',
+              '❌ Clipboard is empty',
               style: TextStyle(color: Colors.orangeAccent),
             ),
             duration: Duration(seconds: 2),
@@ -4161,7 +4220,7 @@ class _HomeScreenState extends State<HomeScreen>
                                       decoration: const InputDecoration(
                                         isDense: true,
                                         contentPadding: EdgeInsets.zero,
-                                        hintText: 'Paste Stream URL',
+                                        hintText: 'Paste Stream URL or TeraBox Link',
                                         hintStyle: TextStyle(
                                           color: Colors.white54,
                                           fontSize: 12.5,
@@ -4172,7 +4231,7 @@ class _HomeScreenState extends State<HomeScreen>
                                     ),
                                     const SizedBox(height: 2),
                                     Text(
-                                      'Tap paste or enter link',
+                                      'Tap paste or enter link (Supports TeraBox)',
                                       style: TextStyle(
                                         color: Colors.white.withOpacity(0.4),
                                         fontSize: 8.5,
@@ -4333,7 +4392,6 @@ class FireParticlePainter extends CustomPainter {
   void paint(Canvas canvas, Size size) {
     final paint = Paint()..style = PaintingStyle.fill;
 
-    // Draw overlapping flame waves
     for (int i = 0; i < 7; i++) {
       final dx = size.width * (i / 6);
       final waveOffset = math.sin(animationValue * math.pi * 2 + i) * 0.2;
@@ -4345,7 +4403,6 @@ class FireParticlePainter extends CustomPainter {
         ..quadraticBezierTo(dx + 15, size.height - height * 0.6, dx + 20, size.height)
         ..close();
 
-      // Gradient from yellow to red
       final gradient = LinearGradient(
         begin: Alignment.bottomCenter,
         end: Alignment.topCenter,
@@ -4549,7 +4606,7 @@ class _MoreDrawerState extends State<MoreDrawer>
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
               const Text(
-                'Ye API key Telegram bot me use karein — /api YOUR_KEY',
+                'Use this API key in the Telegram bot — /api YOUR_KEY',
                 style: TextStyle(color: Colors.white70, fontSize: 11.5, height: 1.4),
               ),
               const SizedBox(height: 12),
@@ -4770,7 +4827,6 @@ class _MoreDrawerState extends State<MoreDrawer>
               ),
               child: Stack(
                 children: [
-                  // Animated Fire Background Effect
                   Positioned(
                     bottom: 0,
                     left: 0,
@@ -4787,14 +4843,12 @@ class _MoreDrawerState extends State<MoreDrawer>
                     ),
                   ),
                   
-                  // Dialog Content
                   Padding(
                     padding: const EdgeInsets.all(18),
                     child: Column(
                       mainAxisSize: MainAxisSize.min,
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
-                        // Header with Fire Icon
                         Row(
                           children: [
                             Container(
@@ -4836,7 +4890,7 @@ class _MoreDrawerState extends State<MoreDrawer>
                         ),
                         const SizedBox(height: 8),
                         const Text(
-                          'Iss account ko delete karte hi aapka poora data hamesha ke liye jal jayega. Dobara login karne par aap bilkul naye user ki tarah start karenge.',
+                          'Deleting this account will permanently erase all your data. When you log in again, you will start fresh as a brand new user.',
                           style: TextStyle(color: Colors.white70, fontSize: 11.5, height: 1.4),
                         ),
                         
@@ -4851,17 +4905,17 @@ class _MoreDrawerState extends State<MoreDrawer>
                           child: Column(
                             crossAxisAlignment: CrossAxisAlignment.start,
                             children: [
-                              _fireBullet('Saare Videos aur Links delete honge'),
-                              _fireBullet('Watch History & Saved Videos mit jayenge'),
-                              _fireBullet('Aapke saare Views aur Cyber Rank zero ho jayenge'),
-                              _fireBullet('Firebase Auth Account permanently delete hoga'),
+                              _fireBullet('All your videos and links will be deleted'),
+                              _fireBullet('Watch history & saved videos will be wiped'),
+                              _fireBullet('All views and Cyber Rank will be reset to zero'),
+                              _fireBullet('Firebase Auth account will be permanently deleted'),
                             ],
                           ),
                         ),
                         
                         const SizedBox(height: 18),
                         Text(
-                          'Confirm karne ke liye "DELETE" type karein:',
+                          'Type "DELETE" to confirm:',
                           style: TextStyle(color: AppThemes.kFireYellow.withOpacity(0.9), fontSize: 11.5, fontWeight: FontWeight.bold),
                         ),
                         const SizedBox(height: 8),
@@ -5839,7 +5893,7 @@ class VideoMetaResolver {
 }
 
 // ═══════════════════════════════════════════════════════════════════════════════
-// ⭐ STREAM PREVIEW SCREEN (PROFESSIONAL REBUILD + SIDE-BY-SIDE INFO)
+// ⭐ STREAM PREVIEW SCREEN (PROFESSIONAL REBUILD + TERABOX SUPPORT)
 // ═══════════════════════════════════════════════════════════════════════════════
 class StreamPreviewScreen extends StatefulWidget {
   final String targetUrl;
@@ -5857,6 +5911,7 @@ class _StreamPreviewScreenState extends State<StreamPreviewScreen>
   bool _isOwnerVerified = false;
   String _rawId = '';
   String _token = '';
+  bool _isTeraBox = false;
 
   // Size and Age fields
   String _videoSize = '';
@@ -5868,6 +5923,8 @@ class _StreamPreviewScreenState extends State<StreamPreviewScreen>
   int _countdown = 10;
   Timer? _countdownTimer;
   bool _isReadyToPlay = false;
+  bool _isResolving = false;
+  String _resolveError = '';
 
   late AnimationController _snakeCtrl;
   late AnimationController _pulseController;
@@ -5891,19 +5948,105 @@ class _StreamPreviewScreenState extends State<StreamPreviewScreen>
       return;
     }
 
-    try {
-      final uri = Uri.parse(widget.targetUrl);
-      _rawId = uri.pathSegments.isNotEmpty ? uri.pathSegments.last : 'stream';
-      _token = uri.queryParameters['t'] ?? uri.queryParameters['s'] ?? '';
-      _videoTitle = _rawId;
-      _streamUrl = '$kBackendBaseUrl/stream/$_rawId';
-    } catch (_) {
-      _rawId = 'stream';
-      _streamUrl = '$kBackendBaseUrl/stream/$_rawId';
+    _isTeraBox = TeraBoxResolver.isTeraBoxLink(widget.targetUrl);
+
+    if (_isTeraBox) {
+      _rawId = 'terabox_stream_${DateTime.now().millisecondsSinceEpoch}';
+      _videoTitle = 'TeraBox Video';
+      _startCountdown();
+      _secureInitForTeraBox();
+    } else {
+      try {
+        final uri = Uri.parse(widget.targetUrl);
+        _rawId = uri.pathSegments.isNotEmpty ? uri.pathSegments.last : 'stream';
+        _token = uri.queryParameters['t'] ?? uri.queryParameters['s'] ?? '';
+        _videoTitle = _rawId;
+        _streamUrl = '$kBackendBaseUrl/stream/$_rawId';
+      } catch (_) {
+        _rawId = 'stream';
+        _streamUrl = '$kBackendBaseUrl/stream/$_rawId';
+      }
+      _startCountdown();
+      _secureInit();
+    }
+  }
+
+  Future<void> _secureInitForTeraBox() async {
+    setState(() {
+      _isResolving = true;
+      _resolveError = '';
+    });
+
+    final cachedThumb = await WatchHistory.getCachedThumbnail(widget.targetUrl);
+    final cachedUrl = await WatchHistory.getCachedStreamUrl(widget.targetUrl);
+    
+    if (cachedUrl.isNotEmpty) {
+       setState(() {
+         _streamUrl = cachedUrl;
+         _isResolving = false;
+       });
+       if (mounted) setState(() => _isReadyToPlay = true);
+       return;
     }
 
-    _startCountdown();
-    _secureInit();
+    if (mounted && cachedThumb.isNotEmpty) {
+      setState(() => _thumbnailUrl = cachedThumb);
+    }
+
+    final ok = await SecurityGuard.validateSession();
+    if (!ok) {
+      if (mounted) {
+        await MayaJaalAccount.signOut();
+        Navigator.pushReplacement(context, MaterialPageRoute(builder: (_) => const LoginScreen()));
+      }
+      return;
+    }
+
+    final result = await TeraBoxResolver.resolve(widget.targetUrl);
+    
+    if (mounted) {
+      setState(() {
+        _isResolving = false;
+        if (result['success'] == 'true') {
+          _streamUrl = result['videoUrl']!;
+          if (result['fileName']!.isNotEmpty) {
+            _videoTitle = Uri.decodeComponent(result['fileName']!);
+          }
+          if (result['thumbnail']!.isNotEmpty) {
+            _thumbnailUrl = result['thumbnail']!;
+          }
+          _videoSize = 'Unknown';
+          _videoAge = 'Just now';
+        } else {
+          _resolveError = 'Failed to resolve TeraBox link. It might be invalid or private.';
+        }
+      });
+      
+      if (result['success'] == 'true') {
+         final prefs = await SharedPreferences.getInstance();
+         final key = 'watch_history_v2_${MayaJaalAccount.cachedUid ?? 'guest'}';
+         final raw = prefs.getString(key);
+         List history = [];
+         if (raw != null) {
+           try { history = jsonDecode(raw); } catch(_) {}
+         }
+         history.removeWhere((h) => h['url'] == widget.targetUrl);
+         history.insert(0, {
+            'url': widget.targetUrl,
+            'title': _videoTitle,
+            'uploader': _uploaderName,
+            'id': _rawId,
+            'thumbnail': _thumbnailUrl,
+            'streamUrl': _streamUrl,
+            'size': _videoSize,
+            'age': _videoAge,
+            'time': DateTime.now().toIso8601String(),
+         });
+         if (history.length > 20) history = history.sublist(0, 20);
+         await prefs.setString(key, jsonEncode(history));
+         await WatchHistory.syncWatchRecordCloud(history[0]);
+      }
+    }
   }
 
   Future<void> _secureInit() async {
@@ -6042,7 +6185,6 @@ class _StreamPreviewScreenState extends State<StreamPreviewScreen>
       }
     }
 
-    // Resolve Owner Name & Verification Status
     final ownerData = await VideoOwnerResolver.resolve(_rawId);
     if (ownerData.isNotEmpty && mounted) {
       setState(() {
@@ -6052,7 +6194,6 @@ class _StreamPreviewScreenState extends State<StreamPreviewScreen>
       });
     }
 
-    // Fetch size + age metadata from Firebase
     try {
       final meta = await VideoMetaResolver.resolveMeta(_rawId);
       if (meta.isNotEmpty && mounted) {
@@ -6147,6 +6288,20 @@ class _StreamPreviewScreenState extends State<StreamPreviewScreen>
   }
 
   void _launchNativePlayer() {
+    if (_resolveError.isNotEmpty) {
+       ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(backgroundColor: AppThemes.kCardBg, content: Text(_resolveError, style: const TextStyle(color: AppThemes.kRed))),
+       );
+       return;
+    }
+    
+    if (_streamUrl.isEmpty) {
+       ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(backgroundColor: AppThemes.kCardBg, content: Text('Video URL not ready yet. Please wait.', style: TextStyle(color: AppThemes.kOrange))),
+       );
+       return;
+    }
+
     SoundService.playClick();
     _saveWatchRecord();
 
@@ -6177,7 +6332,6 @@ class _StreamPreviewScreenState extends State<StreamPreviewScreen>
     );
   }
 
-  // ⭐ PROFESSIONAL COUNTDOWN OVERLAY
   Widget _buildProfessionalCountdown() {
     return Positioned.fill(
       child: ClipRRect(
@@ -6189,7 +6343,6 @@ class _StreamPreviewScreenState extends State<StreamPreviewScreen>
             child: Column(
               mainAxisAlignment: MainAxisAlignment.center,
               children: [
-                // Progress Ring
                 SizedBox(
                   width: 90,
                   height: 90,
@@ -6228,7 +6381,6 @@ class _StreamPreviewScreenState extends State<StreamPreviewScreen>
                   ),
                 ),
                 const SizedBox(height: 24),
-                // Loading Badge
                 Container(
                   padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
                   decoration: BoxDecoration(
@@ -6396,7 +6548,6 @@ class _StreamPreviewScreenState extends State<StreamPreviewScreen>
                   ),
                   const SizedBox(height: 10),
 
-                  // ⭐ VIDEO THUMBNAIL WITH PROFESSIONAL COUNTDOWN
                   Container(
                     padding: const EdgeInsets.all(4),
                     decoration: BoxDecoration(
@@ -6415,18 +6566,28 @@ class _StreamPreviewScreenState extends State<StreamPreviewScreen>
                           fit: StackFit.expand,
                           alignment: Alignment.center,
                           children: [
-                            buildMediaThumbnail(
-                              _thumbnailUrl.isNotEmpty ? _thumbnailUrl : null,
-                              _videoTitle,
-                              _streamUrl,
-                              onFrameCaptured: (b64) {
-                                if (!mounted) return;
-                                if (_capturedThumbB64.isEmpty) {
-                                  setState(() => _capturedThumbB64 = b64);
-                                }
-                              },
-                            ),
-                            if (!_isReadyToPlay) _buildProfessionalCountdown(),
+                            if (_isResolving)
+                               const Center(child: ProfessionalLoader(message: 'RESOLVING TERABOX...'))
+                            else if (_resolveError.isNotEmpty)
+                               Center(
+                                  child: Padding(
+                                    padding: const EdgeInsets.all(16),
+                                    child: Text(_resolveError, textAlign: TextAlign.center, style: const TextStyle(color: AppThemes.kRed, fontSize: 12)),
+                                  ),
+                               )
+                            else
+                               buildMediaThumbnail(
+                                 _thumbnailUrl.isNotEmpty ? _thumbnailUrl : null,
+                                 _videoTitle,
+                                 _streamUrl,
+                                 onFrameCaptured: (b64) {
+                                   if (!mounted) return;
+                                   if (_capturedThumbB64.isEmpty) {
+                                     setState(() => _capturedThumbB64 = b64);
+                                   }
+                                 },
+                               ),
+                            if (!_isReadyToPlay && !_isResolving && _resolveError.isEmpty) _buildProfessionalCountdown(),
                             Positioned(
                               top: 6,
                               left: 6,
@@ -6443,9 +6604,9 @@ class _StreamPreviewScreenState extends State<StreamPreviewScreen>
                   ),
                   const SizedBox(height: 12),
 
-                  if (_isReadyToPlay)
+                  if (_isReadyToPlay && !_isResolving && _resolveError.isEmpty)
                     _buildRedSnakePlayButton()
-                  else
+                  else if (!_isResolving && _resolveError.isEmpty)
                     Container(
                       width: double.infinity,
                       height: 58,
@@ -6460,7 +6621,6 @@ class _StreamPreviewScreenState extends State<StreamPreviewScreen>
 
                   const SizedBox(height: 14),
 
-                  // ⭐ INFO CARD (SIDE-BY-SIDE LAYOUT)
                   Container(
                     padding: const EdgeInsets.all(12),
                     decoration: BoxDecoration(
@@ -6470,7 +6630,6 @@ class _StreamPreviewScreenState extends State<StreamPreviewScreen>
                     ),
                     child: Column(
                       children: [
-                        // FILE NAME row
                         Row(
                           children: [
                             Container(
@@ -6497,10 +6656,8 @@ class _StreamPreviewScreenState extends State<StreamPreviewScreen>
                           child: Divider(color: Colors.white10, height: 1),
                         ),
 
-                        // ⭐ SIDE-BY-SIDE: UPLOADER (Left) vs FILE SIZE (Right)
                         Row(
                           children: [
-                            // Left: Uploader
                             Expanded(
                               child: Row(
                                 children: [
@@ -6539,7 +6696,6 @@ class _StreamPreviewScreenState extends State<StreamPreviewScreen>
                               ),
                             ),
                             
-                            // Vertical Divider
                             Container(
                               height: 35,
                               width: 1,
@@ -6547,7 +6703,6 @@ class _StreamPreviewScreenState extends State<StreamPreviewScreen>
                               margin: const EdgeInsets.symmetric(horizontal: 10),
                             ),
 
-                            // Right: File Size
                             Expanded(
                               child: Row(
                                 children: [
@@ -6578,7 +6733,6 @@ class _StreamPreviewScreenState extends State<StreamPreviewScreen>
                           ],
                         ),
 
-                        // UPLOADED AGE row (optional)
                         if (_videoAge.isNotEmpty) ...[
                           Padding(
                             padding: const EdgeInsets.symmetric(vertical: 8),
@@ -6886,7 +7040,7 @@ class _GalleryScreenState extends State<GalleryScreen> {
           Icon(Icons.photo_library_outlined, color: Colors.white24, size: 60),
           const SizedBox(height: 10),
           Text(
-            'Koi ${_selectedTab == 'videos' ? 'video' : _selectedTab == 'images' ? 'photo' : 'media'} nahi mila',
+            'No ${_selectedTab == 'videos' ? 'videos' : _selectedTab == 'images' ? 'photos' : 'media'} found',
             style: const TextStyle(color: Colors.white54, fontSize: 12.5),
           ),
         ],
@@ -9597,7 +9751,7 @@ class _StatsScreenState extends State<StatsScreen>
             SizedBox(height: 14),
             Text('NOT LOGGED IN', style: TextStyle(color: Colors.white, fontSize: 16, fontWeight: FontWeight.bold, letterSpacing: 1.2)),
             SizedBox(height: 8),
-            Text('Login karke stats dekh sakte hain.', textAlign: TextAlign.center, style: TextStyle(color: Colors.white60, fontSize: 12)),
+            Text('Please login to view creator stats.', textAlign: TextAlign.center, style: TextStyle(color: Colors.white60, fontSize: 12)),
           ],
         ),
       ),
@@ -9738,7 +9892,7 @@ class _StatsScreenState extends State<StatsScreen>
                 ? Container(
                     padding: const EdgeInsets.all(16),
                     decoration: BoxDecoration(color: AppThemes.kCardBg, borderRadius: BorderRadius.circular(10), border: Border.all(color: AppThemes.kBorder)),
-                    child: const Center(child: Text('No links yet. Bot me video upload karke start karein.', textAlign: TextAlign.center, style: TextStyle(color: Colors.white38, fontSize: 11))),
+                    child: const Center(child: Text('No links yet. Use the bot to upload videos and start sharing.', textAlign: TextAlign.center, style: TextStyle(color: Colors.white38, fontSize: 11))),
                   )
                 : Column(
                     children: _links.map((link) {
@@ -9829,4 +9983,3 @@ class _StatsScreenState extends State<StatsScreen>
     );
   }
 }
-
