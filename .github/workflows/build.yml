@@ -73,7 +73,7 @@ jobs:
             shared_preferences: ^2.2.2
             url_launcher: ^6.2.2
             video_player: ^2.8.2
-            better_player: ^0.0.84  # 🔥 TERABOX HLS SUPPORT KE LIYE ADD KIYA
+            better_player: ^1.29.0  
             http: ^1.2.1
             share_plus: ^9.0.0
             onesignal_flutter: ^5.2.0
