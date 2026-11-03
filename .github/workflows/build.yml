@@ -408,29 +408,44 @@ jobs:
       - name: Generate launcher icons
         run: dart run flutter_launcher_icons
 
+      # ⭐ Yahan se APK aur AAB dono build honge
       - name: Build release APK
         run: flutter build apk --release
 
-      - name: Verify and rename APK
+      - name: Build release AAB
+        run: flutter build appbundle --release
+
+      - name: Verify and rename outputs
         shell: bash
         run: |
           set -euo pipefail
           APK="build/app/outputs/flutter-apk/app-release.apk"
-          if [ ! -f "$APK" ]; then
-            echo "::error::APK build output was not found"
-            exit 1
-          fi
-          mkdir -p release-apk
-          cp "$APK" release-apk/MayaJaal.apk
-          ls -lh release-apk/MayaJaal.apk
+          AAB="build/app/outputs/bundle/release/app-release.aab"
+          
+          if [ ! -f "$APK" ]; then echo "::error::APK missing"; exit 1; fi
+          if [ ! -f "$AAB" ]; then echo "::error::AAB missing"; exit 1; fi
+          
+          mkdir -p release-builds
+          cp "$APK" release-builds/MayaJaal.apk
+          cp "$AAB" release-builds/MayaJaal.aab
+          ls -lh release-builds/
 
+      # Dono files ko upload karo
       - name: Upload APK artifact
         uses: actions/upload-artifact@v4
         with:
           name: MayaJaal-APK
-          path: release-apk/MayaJaal.apk
+          path: release-builds/MayaJaal.apk
           if-no-files-found: error
 
+      - name: Upload AAB artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: MayaJaal-AAB
+          path: release-builds/MayaJaal.aab
+          if-no-files-found: error
+
+      # Github Release me dono ko dalo
       - name: Publish GitHub Release
         if: github.ref == 'refs/heads/main'
         uses: softprops/action-gh-release@v2
@@ -439,8 +454,11 @@ jobs:
           name: MayaJaal Release v1.3.0 Build ${{ github.run_number }}
           repository: MayaJaal1/MayaJaal-Downloads
           token: ${{ secrets.PAT_TOKEN }}
+          files: |
+            release-builds/MayaJaal.apk
+            release-builds/MayaJaal.aab
           body: |
-            MayaJaal Android APK — Play Store Compliant Build.
+            MayaJaal Android Release.
             Version: 1.3.0
             Version Code: ${{ github.run_number }}
             Features:
