@@ -73,6 +73,7 @@ jobs:
             shared_preferences: ^2.2.2
             url_launcher: ^6.2.2
             video_player: ^2.8.2
+            better_player: ^0.0.84  # 🔥 TERABOX HLS SUPPORT KE LIYE ADD KIYA
             http: ^1.2.1
             share_plus: ^9.0.0
             onesignal_flutter: ^5.2.0
@@ -150,12 +151,13 @@ jobs:
           cat > android/app/src/main/res/xml/network_security_config.xml <<'EOF'
           <?xml version="1.0" encoding="utf-8"?>
           <network-security-config>
-              <base-config cleartextTrafficPermitted="false">
+              <!-- TeraBox video streams ke liye cleartext allowed kiya gaya hai -->
+              <base-config cleartextTrafficPermitted="true">
                   <trust-anchors>
                       <certificates src="system" />
                   </trust-anchors>
               </base-config>
-              <domain-config cleartextTrafficPermitted="false">
+              <domain-config cleartextTrafficPermitted="true">
                   <domain includeSubdomains="true">mayajaal.online</domain>
                   <domain includeSubdomains="true">www.mayajaal.online</domain>
                   <domain includeSubdomains="true">m.mayajaal.online</domain>
@@ -171,6 +173,9 @@ jobs:
                   <domain includeSubdomains="true">telegram.org</domain>
                   <domain includeSubdomains="true">youtube.com</domain>
                   <domain includeSubdomains="true">instagram.com</domain>
+                  <domain includeSubdomains="true">terabox.com</domain>
+                  <domain includeSubdomains="true">1024terabox.com</domain>
+                  <domain includeSubdomains="true">freeterabox.com</domain>
                   <trust-anchors>
                       <certificates src="system" />
                   </trust-anchors>
@@ -201,8 +206,9 @@ jobs:
                   android:icon="@mipmap/ic_launcher"
                   android:hardwareAccelerated="true"
                   android:networkSecurityConfig="@xml/network_security_config"
-                  android:usesCleartextTraffic="false"
+                  android:usesCleartextTraffic="true" 
                   tools:targetApi="35">
+                  <!-- 🔥 Upar usesCleartextTraffic="true" kiya gaya hai taaki TeraBox links block na ho -->
 
                   <activity
                       android:name=".MainActivity"
@@ -333,6 +339,9 @@ jobs:
 
           dependencies {
               coreLibraryDesugaring 'com.android.tools:desugar_jdk_libs:2.1.5'
+              // ExoPlayer (HLS) dependency for Better Player
+              implementation 'com.google.android.exoplayer:exoplayer-hls:2.19.1'
+              implementation 'com.google.android.exoplayer:exoplayer-core:2.19.1'
           }
           EOF
 
