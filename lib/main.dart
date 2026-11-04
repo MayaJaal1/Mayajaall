@@ -11,7 +11,7 @@ import 'package:google_sign_in/google_sign_in.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:url_launcher/url_launcher.dart';
 import 'package:video_player/video_player.dart';
-import 'package:better_player/better_player.dart'; // 🔥 NEW IMPORT
+import 'package:better_player/better_player.dart'; 
 import 'package:share_plus/share_plus.dart';
 import 'package:http/http.dart' as http;
 import 'package:onesignal_flutter/onesignal_flutter.dart';
@@ -4991,65 +4991,82 @@ class _MoreDrawerState extends State<MoreDrawer>
                             const SizedBox(width: 10),
                             Expanded(
                               flex: 2,
-                              child: ElevatedButton(
-                                onPressed: (confirmCtrl.text == 'DELETE' && !isDeleting)
-                                    ? () async {
-                                        SoundService.playAlert();
-                                        Haptic.heavy();
-                                        setDialogState(() {
-                                          isDeleting = true;
-                                          errorMsg = null;
-                                        });
-                                        try {
-                                          await MayaJaalAccount.deleteAccount();
-                                          if (c.mounted) {
-                                            Navigator.pop(c);
-                                            Navigator.pop(context);
-                                            Navigator.of(context).pushAndRemoveUntil(
-                                              MaterialPageRoute(builder: (_) => const LoginScreen()),
-                                              (route) => false,
-                                            );
-                                            ScaffoldMessenger.of(context).showSnackBar(
-                                              const SnackBar(
-                                                backgroundColor: AppThemes.kCardBg,
-                                                content: Text(
-                                                  '🔥 Account burned successfully. You will start as a new user.',
-                                                  style: TextStyle(color: AppThemes.kFireOrange, fontWeight: FontWeight.bold),
-                                                ),
-                                              ),
-                                            );
-                                          }
-                                        } on FirebaseAuthException catch (e) {
-                                          if (e.code == 'requires-recent-login') {
-                                            setDialogState(() {
-                                              isDeleting = false;
-                                              errorMsg = 'Security: Please re-login and try again.';
-                                            });
-                                          } else {
-                                            setDialogState(() {
-                                              isDeleting = false;
-                                              errorMsg = e.message ?? 'Deletion failed. Try again.';
-                                            });
-                                          }
-                                        } catch (e) {
-                                          setDialogState(() {
-                                            isDeleting = false;
-                                            errorMsg = 'Deletion failed. Please try again.';
-                                          });
-                                        }
-                                      }
-                                    : null,
-                                style: ElevatedButton.styleFrom(
-                                  backgroundColor: AppThemes.kRed,
-                                  foregroundColor: Colors.white,
-                                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
-                                  disabledBackgroundColor: Colors.white12,
-                                  padding: const EdgeInsets.symmetric(vertical: 12),
-                                ),
-                                child: const Text(
-                                  'DELETE FOREVER',
-                                  style: TextStyle(fontWeight: FontWeight.w900, letterSpacing: 1.0, fontSize: 12),
-                                ),
+                              child: StatefulBuilder(
+                                builder: (context, setBtnState) {
+                                  Timer.periodic(const Duration(milliseconds: 50), (timer) {
+                                    if (confirmCtrl.text == 'DELETE' && !isDeleting && c.mounted) {
+                                      setBtnState(() {});
+                                    }
+                                  });
+
+                                  return Transform.scale(
+                                    scale: (confirmCtrl.text == 'DELETE' && !isDeleting) 
+                                        ? 1.0 + (math.sin(DateTime.now().millisecondsSinceEpoch / 200.0) * 0.03)
+                                        : 1.0,
+                                    child: ElevatedButton(
+                                      onPressed: (confirmCtrl.text == 'DELETE' && !isDeleting)
+                                          ? () async {
+                                              SoundService.playAlert();
+                                              Haptic.heavy();
+                                              setDialogState(() {
+                                                isDeleting = true;
+                                                errorMsg = null;
+                                              });
+                                              try {
+                                                await MayaJaalAccount.deleteAccount();
+                                                if (c.mounted) {
+                                                  Navigator.pop(c);
+                                                  Navigator.pop(context);
+                                                  Navigator.of(context).pushAndRemoveUntil(
+                                                    MaterialPageRoute(builder: (_) => const LoginScreen()),
+                                                    (route) => false,
+                                                  );
+                                                  ScaffoldMessenger.of(context).showSnackBar(
+                                                    const SnackBar(
+                                                      backgroundColor: AppThemes.kCardBg,
+                                                      content: Text(
+                                                        '🔥 Account burned successfully. You will start as a new user.',
+                                                        style: TextStyle(color: AppThemes.kFireOrange, fontWeight: FontWeight.bold),
+                                                      ),
+                                                    ),
+                                                  );
+                                                }
+                                              } on FirebaseAuthException catch (e) {
+                                                if (e.code == 'requires-recent-login') {
+                                                  setDialogState(() {
+                                                    isDeleting = false;
+                                                    errorMsg = 'Security: Please re-login and try again.';
+                                                  });
+                                                } else {
+                                                  setDialogState(() {
+                                                    isDeleting = false;
+                                                    errorMsg = e.message ?? 'Deletion failed. Try again.';
+                                                  });
+                                                }
+                                              } catch (e) {
+                                                setDialogState(() {
+                                                  isDeleting = false;
+                                                  errorMsg = 'Deletion failed. Please try again.';
+                                                });
+                                              }
+                                            }
+                                          : null,
+                                      style: ElevatedButton.styleFrom(
+                                        backgroundColor: AppThemes.kRed,
+                                        foregroundColor: Colors.white,
+                                        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+                                        disabledBackgroundColor: Colors.white12,
+                                        padding: const EdgeInsets.symmetric(vertical: 12),
+                                        elevation: confirmCtrl.text == 'DELETE' ? 12 : 0,
+                                        shadowColor: AppThemes.kRed,
+                                      ),
+                                      child: const Text(
+                                        'DELETE FOREVER',
+                                        style: TextStyle(fontWeight: FontWeight.w900, letterSpacing: 1.0, fontSize: 12),
+                                      ),
+                                    ),
+                                  );
+                                },
                               ),
                             ),
                           ],
@@ -8084,7 +8101,7 @@ class _NativeVideoPlayerScreenState extends State<NativeVideoPlayerScreen> {
     _watchTimer = Timer.periodic(const Duration(seconds: 1), (t) {
       if (!mounted) return;
       if (_betterPlayerController != null &&
-          _betterPlayerController!.isPlaying() &&
+          (_betterPlayerController!.isPlaying() ?? false) && // 🔥 Null Safety Fixed
           _watchedSeconds < 10) {
         _watchedSeconds++;
         if (_watchedSeconds == 10 && !_viewReported) {
@@ -8246,7 +8263,7 @@ class _NativeVideoPlayerScreenState extends State<NativeVideoPlayerScreen> {
   void _resetControlTimer() {
     _controlsTimer?.cancel();
     _controlsTimer = Timer(const Duration(seconds: 4), () {
-      if (mounted && _betterPlayerController != null && _betterPlayerController!.isPlaying()) {
+      if (mounted && _betterPlayerController != null && (_betterPlayerController!.isPlaying() ?? false)) { // 🔥 Null Safety Fixed
         setState(() => _showControls = false);
       }
     });
@@ -8293,7 +8310,7 @@ class _NativeVideoPlayerScreenState extends State<NativeVideoPlayerScreen> {
     } else {
       SoundService.playClick();
       if (_betterPlayerController != null) {
-        if (_betterPlayerController!.isPlaying()) {
+        if (_betterPlayerController!.isPlaying() ?? false) { // 🔥 Null Safety Fixed
           _betterPlayerController!.pause();
         } else {
           _betterPlayerController!.play();
@@ -8605,12 +8622,15 @@ class _NativeVideoPlayerScreenState extends State<NativeVideoPlayerScreen> {
 
   Widget _buildScaledVideo() {
     if (_betterPlayerController == null || !_isInitialized) return const SizedBox.shrink();
+    final size = _betterPlayerController!.videoPlayerController?.value.size;
+    if (size == null) return const SizedBox.shrink(); // 🔥 Null Safety Fixed
+
     return SizedBox.expand(
       child: FittedBox(
         fit: _isZoomed ? BoxFit.cover : BoxFit.contain,
         child: SizedBox(
-          width: _betterPlayerController!.videoPlayerController!.value.size.width,
-          height: _betterPlayerController!.videoPlayerController!.value.size.height,
+          width: size.width,
+          height: size.height,
           child: RepaintBoundary(
             key: _videoKey,
             child: BetterPlayer(controller: _betterPlayerController!),
@@ -8749,7 +8769,7 @@ class _NativeVideoPlayerScreenState extends State<NativeVideoPlayerScreen> {
                             SoundService.playClick();
                             Haptic.light();
                             if (_betterPlayerController != null) {
-                              if (_betterPlayerController!.isPlaying()) {
+                              if (_betterPlayerController!.isPlaying() ?? false) { // 🔥 Null Safety Fixed
                                 _betterPlayerController!.pause();
                               } else {
                                 _betterPlayerController!.play();
@@ -8761,7 +8781,7 @@ class _NativeVideoPlayerScreenState extends State<NativeVideoPlayerScreen> {
                             width: 60,
                             height: 60,
                             decoration: BoxDecoration(color: Colors.black54, shape: BoxShape.circle, border: Border.all(color: Colors.white60, width: 1.5)),
-                            child: Icon((_betterPlayerController?.isPlaying() ?? false) ? Icons.pause : Icons.play_arrow, color: Colors.white, size: 34),
+                            child: Icon((_betterPlayerController?.isPlaying() ?? false) ? Icons.pause : Icons.play_arrow, color: Colors.white, size: 34), // 🔥 Null Safety Fixed
                           ),
                         ),
                         const SizedBox(width: 24),
@@ -8787,9 +8807,9 @@ class _NativeVideoPlayerScreenState extends State<NativeVideoPlayerScreen> {
                             child: SliderTheme(
                               data: SliderTheme.of(context).copyWith(trackHeight: 2.5, activeTrackColor: AppThemes.kGreen, inactiveTrackColor: Colors.white24, thumbColor: AppThemes.kGreen, thumbShape: const RoundSliderThumbShape(enabledThumbRadius: 5)),
                               child: Slider(
-                                value: (_betterPlayerController?.videoPlayerController?.value.position.inSeconds.toDouble() ?? 0.0).clamp(0.0, (_betterPlayerController?.videoPlayerController?.value.duration.inSeconds.toDouble() ?? 1.0) <= 0 ? 1.0 : (_betterPlayerController?.videoPlayerController?.value.duration.inSeconds.toDouble() ?? 1.0)),
+                                value: (_betterPlayerController?.videoPlayerController?.value.position.inSeconds.toDouble() ?? 0.0).clamp(0.0, (_betterPlayerController?.videoPlayerController?.value.duration?.inSeconds.toDouble() ?? 1.0) <= 0 ? 1.0 : (_betterPlayerController?.videoPlayerController?.value.duration?.inSeconds.toDouble() ?? 1.0)), // 🔥 Null Safety Fixed
                                 min: 0.0,
-                                max: (_betterPlayerController?.videoPlayerController?.value.duration.inSeconds.toDouble() ?? 1.0) > 0 ? (_betterPlayerController?.videoPlayerController?.value.duration.inSeconds.toDouble() ?? 1.0) : 1.0,
+                                max: (_betterPlayerController?.videoPlayerController?.value.duration?.inSeconds.toDouble() ?? 1.0) > 0 ? (_betterPlayerController?.videoPlayerController?.value.duration?.inSeconds.toDouble() ?? 1.0) : 1.0, // 🔥 Null Safety Fixed
                                 onChanged: (val) => _betterPlayerController?.seekTo(Duration(seconds: val.toInt())),
                               ),
                             ),
@@ -8961,7 +8981,7 @@ class _NativeVideoPlayerScreenState extends State<NativeVideoPlayerScreen> {
                                                     SoundService.playClick();
                                                     Haptic.light();
                                                     if (_betterPlayerController != null) {
-                                                      if (_betterPlayerController!.isPlaying()) {
+                                                      if (_betterPlayerController!.isPlaying() ?? false) { // 🔥 Null Safety Fixed
                                                         _betterPlayerController!.pause();
                                                       } else {
                                                         _betterPlayerController!.play();
@@ -8973,7 +8993,7 @@ class _NativeVideoPlayerScreenState extends State<NativeVideoPlayerScreen> {
                                                     width: 56,
                                                     height: 56,
                                                     decoration: BoxDecoration(color: Colors.black54, shape: BoxShape.circle, border: Border.all(color: Colors.white70, width: 1.5)),
-                                                    child: Icon((_betterPlayerController?.isPlaying() ?? false) ? Icons.pause : Icons.play_arrow, color: Colors.white, size: 32),
+                                                    child: Icon((_betterPlayerController?.isPlaying() ?? false) ? Icons.pause : Icons.play_arrow, color: Colors.white, size: 32), // 🔥 Null Safety Fixed
                                                   ),
                                                 ),
                                                 const SizedBox(width: 18),
@@ -9008,9 +9028,9 @@ class _NativeVideoPlayerScreenState extends State<NativeVideoPlayerScreen> {
                                                     child: SliderTheme(
                                                       data: SliderTheme.of(context).copyWith(trackHeight: 2.0, activeTrackColor: AppThemes.kGreen, inactiveTrackColor: Colors.white24, thumbColor: AppThemes.kGreen, thumbShape: const RoundSliderThumbShape(enabledThumbRadius: 4)),
                                                       child: Slider(
-                                                        value: (_betterPlayerController?.videoPlayerController?.value.position.inSeconds.toDouble() ?? 0.0).clamp(0.0, (_betterPlayerController?.videoPlayerController?.value.duration.inSeconds.toDouble() ?? 1.0) <= 0 ? 1.0 : (_betterPlayerController?.videoPlayerController?.value.duration.inSeconds.toDouble() ?? 1.0)),
+                                                        value: (_betterPlayerController?.videoPlayerController?.value.position.inSeconds.toDouble() ?? 0.0).clamp(0.0, (_betterPlayerController?.videoPlayerController?.value.duration?.inSeconds.toDouble() ?? 1.0) <= 0 ? 1.0 : (_betterPlayerController?.videoPlayerController?.value.duration?.inSeconds.toDouble() ?? 1.0)), // 🔥 Null Safety Fixed
                                                         min: 0.0,
-                                                        max: (_betterPlayerController?.videoPlayerController?.value.duration.inSeconds.toDouble() ?? 1.0) > 0 ? (_betterPlayerController?.videoPlayerController?.value.duration.inSeconds.toDouble() ?? 1.0) : 1.0,
+                                                        max: (_betterPlayerController?.videoPlayerController?.value.duration?.inSeconds.toDouble() ?? 1.0) > 0 ? (_betterPlayerController?.videoPlayerController?.value.duration?.inSeconds.toDouble() ?? 1.0) : 1.0, // 🔥 Null Safety Fixed
                                                         onChanged: (val) => _betterPlayerController?.seekTo(Duration(seconds: val.toInt())),
                                                       ),
                                                     ),
