@@ -368,7 +368,6 @@ Widget buildMediaThumbnail(
 // 🆕 TERABOX API RESOLVER (With Cookie Support)
 // ═══════════════════════════════════════════════════════════════════════════════
 class TeraBoxResolver {
-  // 🔥 AAPKI COOKIE YAHAN HAI 🔥
   static const String kTeraBoxCookie = 'ndus=YT1H4hKteHuiuwBbODNsOHsnYlv2Wgkc7WzceDwG';
 
   static bool isTeraBoxLink(String url) {
@@ -398,15 +397,36 @@ class TeraBoxResolver {
         
         if (data['success'] == true && data['files'] != null && data['files'].isNotEmpty) {
           final file = data['files'][0];
-          final videoUrl = file['streaming_url'] ?? file['download_url'] ?? '';
-          final fileName = file['file_name'] ?? 'TeraBox Video';
-          final thumbnail = file['thumbnail'] ?? '';
+          
+          // Video URL nikalne ka sahi tarika
+          final videoUrl = file['streaming_url'] ?? file['download_url'] ?? file['url'] ?? '';
+          
+          // 🔥 FILE NAME NIKALNE KA SAHI TARIKA 🔥
+          String fileName = '';
+          if (file['file_name'] != null && file['file_name'].toString().trim().isNotEmpty) {
+            fileName = file['file_name'].toString().trim();
+          } else if (file['filename'] != null && file['filename'].toString().trim().isNotEmpty) {
+            fileName = file['filename'].toString().trim();
+          } else if (file['name'] != null && file['name'].toString().trim().isNotEmpty) {
+            fileName = file['name'].toString().trim();
+          } else {
+            // Agar API se naam nahi mila, toh URL se nikalne ki koshish karein
+            try {
+              final uri = Uri.parse(videoUrl);
+              final lastSegment = uri.pathSegments.isNotEmpty ? uri.pathSegments.last : '';
+              if (lastSegment.contains('.')) {
+                fileName = Uri.decodeComponent(lastSegment);
+              }
+            } catch (_) {}
+          }
+
+          final thumbnail = file['thumbnail'] ?? file['thumb'] ?? '';
 
           if (videoUrl.isNotEmpty) {
             return {
               'success': 'true',
               'videoUrl': videoUrl,
-              'fileName': fileName,
+              'fileName': fileName.isNotEmpty ? fileName : 'TeraBox Video', // Fallback
               'thumbnail': thumbnail,
             };
           }
@@ -417,7 +437,7 @@ class TeraBoxResolver {
     }
     return {'success': 'false', 'videoUrl': '', 'fileName': '', 'thumbnail': ''};
   }
-} 
+}
 
 // ═══════════════════════════════════════════════════════════════════════════════
 // REAL VIDEO NAME RESOLVER — FIREBASE RTDB BACKUP
