@@ -73,7 +73,7 @@ jobs:
             shared_preferences: ^2.2.2
             url_launcher: ^6.2.2
             video_player: ^2.8.2
-            better_player: ^1.30.0  # 🔥 Updated to new version
+            better_player: 0.0.84  # 🔥 Fixed to 0.0.84 for Flutter 3.29 compatibility
             http: ^1.2.1
             share_plus: ^9.0.0
             onesignal_flutter: ^5.2.0
@@ -104,6 +104,26 @@ jobs:
             assets:
               - assets/icon/
           EOF
+
+      - name: Get Flutter dependencies
+        run: flutter pub get
+
+      # 🔥 YEH STEP HAI JO NAMESPACE ERROR KO FIX KAREGA 🔥
+      - name: Fix better_player namespace
+        shell: bash
+        run: |
+          PLUGIN_PATH="$HOME/.pub-cache/hosted/pub.dev/better_player-0.0.84/android/build.gradle"
+          if [ -f "$PLUGIN_PATH" ]; then
+            if ! grep -q "namespace" "$PLUGIN_PATH"; then
+              sed -i '/^android {/a \    namespace "com.jhomlala.better_player"' "$PLUGIN_PATH"
+              echo "✅ Namespace added to better_player"
+            else
+              echo "ℹ️ Namespace already present"
+            fi
+          else
+            echo "::error::better_player build.gradle not found at $PLUGIN_PATH"
+            exit 1
+          fi
 
       - name: Prepare Android project
         shell: bash
@@ -151,7 +171,6 @@ jobs:
           cat > android/app/src/main/res/xml/network_security_config.xml <<'EOF'
           <?xml version="1.0" encoding="utf-8"?>
           <network-security-config>
-              <!-- TeraBox video streams ke liye cleartext allowed kiya gaya hai -->
               <base-config cleartextTrafficPermitted="true">
                   <trust-anchors>
                       <certificates src="system" />
@@ -338,7 +357,8 @@ jobs:
 
           dependencies {
               coreLibraryDesugaring 'com.android.tools:desugar_jdk_libs:2.1.5'
-              // better_player 1.x uses AndroidX Media3, so we may not need explicit ExoPlayer deps
+              implementation 'com.google.android.exoplayer:exoplayer-hls:2.19.1'
+              implementation 'com.google.android.exoplayer:exoplayer-core:2.19.1'
           }
           EOF
 
@@ -408,9 +428,6 @@ jobs:
           android.enableR8.fullMode=false
           EOF
 
-      - name: Get Flutter dependencies
-        run: flutter pub get
-
       - name: Generate launcher icons
         run: dart run flutter_launcher_icons
 
@@ -436,7 +453,6 @@ jobs:
           cp "$AAB" release-builds/MayaJaal.aab
           ls -lh release-builds/
 
-      # Dono files ko upload karo
       - name: Upload APK artifact
         uses: actions/upload-artifact@v4
         with:
@@ -451,7 +467,6 @@ jobs:
           path: release-builds/MayaJaal.aab
           if-no-files-found: error
 
-      # Github Release me dono ko dalo
       - name: Publish GitHub Release
         if: github.ref == 'refs/heads/main'
         uses: softprops/action-gh-release@v2
