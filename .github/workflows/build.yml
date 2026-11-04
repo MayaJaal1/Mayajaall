@@ -73,7 +73,7 @@ jobs:
             shared_preferences: ^2.2.2
             url_launcher: ^6.2.2
             video_player: ^2.8.2
-            better_player: 0.0.84  # 🔥 Fixed to 0.0.84 for Flutter 3.29 compatibility
+            better_player: 0.0.84
             http: ^1.2.1
             share_plus: ^9.0.0
             onesignal_flutter: ^5.2.0
@@ -108,22 +108,26 @@ jobs:
       - name: Get Flutter dependencies
         run: flutter pub get
 
-      # 🔥 YEH STEP HAI JO NAMESPACE ERROR KO FIX KAREGA 🔥
-      - name: Fix better_player namespace
+      - name: Fix better_player namespace and hashValues
         shell: bash
         run: |
-          PLUGIN_PATH="$HOME/.pub-cache/hosted/pub.dev/better_player-0.0.84/android/build.gradle"
-          if [ -f "$PLUGIN_PATH" ]; then
-            if ! grep -q "namespace" "$PLUGIN_PATH"; then
-              sed -i '/^android {/a \    namespace "com.jhomlala.better_player"' "$PLUGIN_PATH"
+          PLUGIN_PATH="$HOME/.pub-cache/hosted/pub.dev/better_player-0.0.84"
+          
+          # 1. Fix namespace in build.gradle
+          if [ -f "$PLUGIN_PATH/android/build.gradle" ]; then
+            if ! grep -q "namespace" "$PLUGIN_PATH/android/build.gradle"; then
+              sed -i '/^android {/a \    namespace "com.jhomlala.better_player"' "$PLUGIN_PATH/android/build.gradle"
               echo "✅ Namespace added to better_player"
-            else
-              echo "ℹ️ Namespace already present"
             fi
-          else
-            echo "::error::better_player build.gradle not found at $PLUGIN_PATH"
-            exit 1
           fi
+
+          # 2. Fix hashValues to Object.hash in all dart files
+          find "$PLUGIN_PATH/lib" -type f -name "*.dart" | while read file; do
+            if grep -q "hashValues" "$file"; then
+              sed -i 's/hashValues(/Object.hash(/g' "$file"
+              echo "✅ Fixed hashValues in $file"
+            fi
+          done
 
       - name: Prepare Android project
         shell: bash
