@@ -23,6 +23,7 @@ import 'package:permission_handler/permission_handler.dart';
 import 'package:photo_manager/photo_manager.dart';
 import 'package:photo_manager_image_provider/photo_manager_image_provider.dart';
 import 'package:crypto/crypto.dart' as crypto;
+import 'package:webview_flutter/webview_flutter.dart';
 
 // ═══════════════════════════════════════════════════════════════════════════════
 // CONFIG & NETWORK BASE URLS
@@ -244,7 +245,7 @@ class _VideoLoopThumbnailState extends State<VideoLoopThumbnail> {
       setState(() => _firstFrameReady = true);
     }
 
-    if (val.position.inMilliseconds >= 4000) {
+    if (val.position.inMilliseconds >= 5000) {
       _controller!.seekTo(Duration.zero);
     }
   }
@@ -3489,7 +3490,158 @@ class _LoginScreenState extends State<LoginScreen>
 }
 
 // ═══════════════════════════════════════════════════════════════════════════════
-// MAIN NAVIGATION HOLDER (4 TABS)
+// MAYAJAAL BUILT-IN BROWSER (Telegram Web + ordinary web links)
+// ═══════════════════════════════════════════════════════════════════════════════
+class MayaJaalBrowserScreen extends StatefulWidget {
+  final String initialUrl;
+  final bool showAppBar;
+  const MayaJaalBrowserScreen({
+    super.key,
+    this.initialUrl = 'https://web.telegram.org/k/',
+    this.showAppBar = true,
+  });
+
+  @override
+  State<MayaJaalBrowserScreen> createState() => _MayaJaalBrowserScreenState();
+}
+
+class _MayaJaalBrowserScreenState extends State<MayaJaalBrowserScreen> {
+  late final WebViewController _controller;
+  late final TextEditingController _addressController;
+  bool _loading = true;
+  bool _canGoBack = false;
+  bool _canGoForward = false;
+  String _pageTitle = 'Telegram Web';
+
+  @override
+  void initState() {
+    super.initState();
+    _addressController = TextEditingController(text: widget.initialUrl);
+    _controller = WebViewController()
+      ..setJavaScriptMode(JavaScriptMode.unrestricted)
+      ..setBackgroundColor(AppThemes.kBg)
+      ..setNavigationDelegate(NavigationDelegate(
+        onPageStarted: (url) {
+          if (!mounted) return;
+          setState(() {
+            _loading = true;
+            _addressController.text = url;
+          });
+          _refreshNavigation();
+        },
+        onPageFinished: (url) async {
+          if (!mounted) return;
+          final title = await _controller.getTitle();
+          setState(() {
+            _loading = false;
+            _addressController.text = url;
+            _pageTitle = (title == null || title.isEmpty) ? 'MayaJaal Browser' : title;
+          });
+          _refreshNavigation();
+        },
+        onWebResourceError: (error) {
+          debugPrint('MayaJaal Browser: ${error.description}');
+        },
+      ))
+      ..loadRequest(Uri.parse(widget.initialUrl));
+  }
+
+  Future<void> _refreshNavigation() async {
+    final back = await _controller.canGoBack();
+    final forward = await _controller.canGoForward();
+    if (mounted) setState(() {
+      _canGoBack = back;
+      _canGoForward = forward;
+    });
+  }
+
+  Future<void> _goToAddress() async {
+    var value = _addressController.text.trim();
+    if (value.isEmpty) return;
+    final hasScheme = value.startsWith('http://') || value.startsWith('https://');
+    if (!hasScheme) {
+      value = value.contains('.') && !value.contains(' ')
+          ? 'https://$value'
+          : 'https://www.google.com/search?q=${Uri.encodeComponent(value)}';
+    }
+    final uri = Uri.tryParse(value);
+    if (uri == null || !uri.hasAuthority) return;
+    await _controller.loadRequest(uri);
+    FocusScope.of(context).unfocus();
+  }
+
+  @override
+  void dispose() {
+    _addressController.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Scaffold(
+      backgroundColor: AppThemes.kBg,
+      appBar: widget.showAppBar ? AppBar(
+        backgroundColor: AppThemes.kCardBg,
+        foregroundColor: Colors.white,
+        titleSpacing: 8,
+        title: TextField(
+          controller: _addressController,
+          textInputAction: TextInputAction.go,
+          keyboardType: TextInputType.url,
+          style: const TextStyle(color: Colors.white, fontSize: 13),
+          decoration: InputDecoration(
+            hintText: 'Search or enter URL',
+            hintStyle: const TextStyle(color: Colors.white38),
+            filled: true,
+            fillColor: Colors.black,
+            contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 9),
+            border: OutlineInputBorder(borderRadius: BorderRadius.circular(22), borderSide: const BorderSide(color: AppThemes.kBorder)),
+            enabledBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(22), borderSide: const BorderSide(color: AppThemes.kBorder)),
+          ),
+          onSubmitted: (_) => _goToAddress(),
+        ),
+        actions: [
+          IconButton(onPressed: _goToAddress, icon: const Icon(Icons.search, color: AppThemes.kGreen)),
+          PopupMenuButton<String>(
+            icon: const Icon(Icons.more_vert, color: AppThemes.kGreen),
+            onSelected: (v) {
+              if (v == 'telegram') _controller.loadRequest(Uri.parse('https://web.telegram.org/k/'));
+              if (v == 'home') _controller.loadRequest(Uri.parse('https://www.google.com/'));
+              if (v == 'refresh') _controller.reload();
+            },
+            itemBuilder: (_) => const [
+              PopupMenuItem(value: 'telegram', child: Text('Telegram Web')),
+              PopupMenuItem(value: 'home', child: Text('Browser Home')),
+              PopupMenuItem(value: 'refresh', child: Text('Refresh')),
+            ],
+          ),
+        ],
+      ) : null,
+      body: Column(
+        children: [
+          if (_loading) const LinearProgressIndicator(minHeight: 2, color: AppThemes.kGreen, backgroundColor: AppThemes.kBorder),
+          Expanded(child: WebViewWidget(controller: _controller)),
+          Container(
+            height: 48,
+            decoration: const BoxDecoration(color: Colors.black, border: Border(top: BorderSide(color: AppThemes.kBorder))),
+            child: Row(
+              mainAxisAlignment: MainAxisAlignment.spaceEvenly,
+              children: [
+                IconButton(onPressed: _canGoBack ? () async { await _controller.goBack(); _refreshNavigation(); } : null, icon: const Icon(Icons.arrow_back_ios, size: 18)),
+                IconButton(onPressed: _canGoForward ? () async { await _controller.goForward(); _refreshNavigation(); } : null, icon: const Icon(Icons.arrow_forward_ios, size: 18)),
+                IconButton(onPressed: () => _controller.reload(), icon: const Icon(Icons.refresh)),
+                IconButton(onPressed: () => _controller.loadRequest(Uri.parse('https://web.telegram.org/k/')), icon: const Icon(Icons.send_rounded, color: Color(0xFF229ED9))),
+              ],
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+// ═══════════════════════════════════════════════════════════════════════════════
+// MAIN NAVIGATION HOLDER (5 TABS)
 // ═══════════════════════════════════════════════════════════════════════════════
 class MainNavigationHolder extends StatefulWidget {
   const MainNavigationHolder({super.key});
@@ -3512,6 +3664,7 @@ class _MainNavigationHolderState extends State<MainNavigationHolder> {
         children: [
           HomeScreen(onMenuTap: () => _scaffoldKey.currentState?.openDrawer()),
           const ChannelScreen(),
+          const MayaJaalBrowserScreen(initialUrl: 'https://web.telegram.org/k/', showAppBar: false),
           const GalleryScreen(),
           const HistoryScreen(),
         ],
@@ -3547,6 +3700,11 @@ class _MainNavigationHolderState extends State<MainNavigationHolder> {
               icon: Icon(Icons.ondemand_video_outlined),
               activeIcon: Icon(Icons.ondemand_video, color: AppThemes.kGreen),
               label: 'Channel',
+            ),
+            BottomNavigationBarItem(
+              icon: Icon(Icons.send_rounded, color: Color(0xFF229ED9)),
+              activeIcon: Icon(Icons.send_rounded, color: AppThemes.kGreen),
+              label: 'Telegram',
             ),
             BottomNavigationBarItem(
               icon: Icon(Icons.photo_library_outlined),
@@ -4475,13 +4633,12 @@ class _MoreDrawerState extends State<MoreDrawer>
     Haptic.light();
     try {
       final target = Uri.parse(url);
-      if (inApp) {
-        await launchUrl(target, mode: LaunchMode.inAppBrowserView);
-      } else {
-        if (!await launchUrl(target, mode: LaunchMode.externalApplication)) {
-          await launchUrl(target, mode: LaunchMode.platformDefault);
-        }
-      }
+      if (!mounted) return;
+      Navigator.of(context).push(
+        MaterialPageRoute(
+          builder: (_) => MayaJaalBrowserScreen(initialUrl: target.toString()),
+        ),
+      );
     } catch (e) {
       try { await launchUrl(Uri.parse(url)); } catch (_) {}
     }
@@ -4813,8 +4970,11 @@ class _MoreDrawerState extends State<MoreDrawer>
               borderRadius: BorderRadius.circular(18),
               side: BorderSide(color: AppThemes.kFireOrange.withOpacity(0.8), width: 1.5),
             ),
-            content: Container(
+            content: ConstrainedBox(
+              constraints: BoxConstraints(maxHeight: MediaQuery.of(ctx).size.height * 0.82),
+              child: Container(
               width: double.maxFinite,
+              clipBehavior: Clip.antiAlias,
               decoration: BoxDecoration(
                 borderRadius: BorderRadius.circular(18),
                 gradient: LinearGradient(
@@ -4834,16 +4994,18 @@ class _MoreDrawerState extends State<MoreDrawer>
                     bottom: 0,
                     left: 0,
                     right: 0,
-                    height: 250,
-                    child: RealFireParticles(
+                    height: 105,
+                    child: IgnorePointer(child: RealFireParticles(
                       width: MediaQuery.of(context).size.width,
-                      height: 250,
-                    ),
+                      height: 105,
+                    )),
                   ),
                   
                   Padding(
                     padding: const EdgeInsets.all(18),
-                    child: Column(
+                    child: SingleChildScrollView(
+                      physics: const BouncingScrollPhysics(),
+                      child: Column(
                       mainAxisSize: MainAxisSize.min,
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
@@ -5011,14 +5173,8 @@ class _MoreDrawerState extends State<MoreDrawer>
                             const SizedBox(width: 10),
                             Expanded(
                               flex: 2,
-                              child: StatefulBuilder(
-                                builder: (context, setBtnState) {
-                                  Timer.periodic(const Duration(milliseconds: 50), (timer) {
-                                    if (confirmCtrl.text == 'DELETE' && !isDeleting && c.mounted) {
-                                      setBtnState(() {});
-                                    }
-                                  });
-
+                              child: Builder(
+                                builder: (context) {
                                   return Transform.scale(
                                     scale: (confirmCtrl.text == 'DELETE' && !isDeleting) 
                                         ? 1.0 + (math.sin(DateTime.now().millisecondsSinceEpoch / 200.0) * 0.03)
@@ -5093,8 +5249,10 @@ class _MoreDrawerState extends State<MoreDrawer>
                         ),
                       ],
                     ),
+                    ),
                   ),
                 ],
+              ),
               ),
             ),
           );
@@ -6056,7 +6214,7 @@ class _StreamPreviewScreenState extends State<StreamPreviewScreen>
             'age': _videoAge,
             'time': DateTime.now().toIso8601String(),
          });
-         if (history.length > 20) history = history.sublist(0, 20);
+         if (history.length > 10) history = history.sublist(0, 10);
          await prefs.setString(key, jsonEncode(history));
          await WatchHistory.syncWatchRecordCloud(history[0]);
       }
@@ -6293,8 +6451,8 @@ class _StreamPreviewScreenState extends State<StreamPreviewScreen>
     history.removeWhere((h) => h['url'] == widget.targetUrl);
     history.insert(0, item);
 
-    if (history.length > 20) {
-      history = history.sublist(0, 20);
+    if (history.length > 10) {
+      history = history.sublist(0, 10);
     }
 
     await prefs.setString(key, jsonEncode(history));
