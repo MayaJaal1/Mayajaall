@@ -3509,6 +3509,7 @@ class _MayaJaalBrowserScreenState extends State<MayaJaalBrowserScreen> {
   late final WebViewController _controller;
   late final TextEditingController _addressController;
   bool _loading = true;
+  bool _openingTeraBox = false;
   bool _canGoBack = false;
   bool _canGoForward = false;
   String _pageTitle = 'Telegram Web';
@@ -3520,7 +3521,17 @@ class _MayaJaalBrowserScreenState extends State<MayaJaalBrowserScreen> {
     _controller = WebViewController()
       ..setJavaScriptMode(JavaScriptMode.unrestricted)
       ..setBackgroundColor(AppThemes.kBg)
+      ..addJavaScriptChannel(
+        'MayaJaalTelegramLink',
+        onMessageReceived: (message) => _openTeraBoxLink(message.message),
+      )
       ..setNavigationDelegate(NavigationDelegate(
+        onNavigationRequest: (request) {
+          if (request.isMainFrame && _openTeraBoxLink(request.url)) {
+            return NavigationDecision.prevent;
+          }
+          return NavigationDecision.navigate;
+        },
         onPageStarted: (url) {
           if (!mounted) return;
           setState(() {
@@ -3532,6 +3543,11 @@ class _MayaJaalBrowserScreenState extends State<MayaJaalBrowserScreen> {
         onPageFinished: (url) async {
           if (!mounted) return;
           final title = await _controller.getTitle();
+          if (!mounted) return;
+          if (Uri.tryParse(url)?.host == 'web.telegram.org') {
+            await _controller.runJavaScript(_telegramLinkHandler);
+          }
+          if (!mounted) return;
           setState(() {
             _loading = false;
             _addressController.text = url;
@@ -3544,6 +3560,86 @@ class _MayaJaalBrowserScreenState extends State<MayaJaalBrowserScreen> {
         },
       ))
       ..loadRequest(Uri.parse(widget.initialUrl));
+  }
+
+
+  static const _teraBoxHosts = {
+    'terabox.com', '1024terabox.com', 'freeterabox.com',
+    'teraboxapp.com', 'terabox.club', 'terabox.link',
+  };
+
+  static final _telegramLinkHandler = '''
+    (() => {
+      if (window.location.origin !== 'https://web.telegram.org') return;
+      if (window.mayaJaalTelegramLinkInstalled) return;
+      window.mayaJaalTelegramLinkInstalled = true;
+      const hosts = [${_teraBoxHosts.map((host) => "'$host'").join(',')}];
+      document.addEventListener('click', (event) => {
+        const anchor = event.target.closest?.('a[href]');
+        if (!anchor) return;
+        const url = new URL(anchor.href, location.href);
+        if (!['https:', 'http:'].includes(url.protocol)) return;
+        if (!hosts.some(host => url.hostname === host ||
+            url.hostname.endsWith('.' + host))) return;
+        if (!url.pathname.startsWith('/s/')) return;
+        event.preventDefault();
+        event.stopImmediatePropagation();
+        MayaJaalTelegramLink.postMessage(url.href);
+      }, true);
+    })();
+  ''';
+
+  bool _openTeraBoxLink(String url) {
+    final uri = Uri.tryParse(url);
+    if (!mounted || uri == null ||
+        (uri.scheme != 'https' && uri.scheme != 'http') ||
+        uri.userInfo.isNotEmpty || uri.pathSegments.length < 2 ||
+        uri.pathSegments.first != 's' || uri.pathSegments[1].isEmpty ||
+        !_teraBoxHosts.any(
+          (host) => uri.host == host || uri.host.endsWith('.$host'),
+        )) {
+      return false;
+    }
+    if (!_openingTeraBox) _playTeraBoxLink(uri);
+    return true;
+  }
+
+  Future<void> _playTeraBoxLink(Uri uri) async {
+    _openingTeraBox = true;
+    final messages = ScaffoldMessenger.of(context);
+    messages.showSnackBar(const SnackBar(content: Text('Opening TeraBox video…')));
+    try {
+      final result = await TeraBoxResolver.resolve(uri.toString())
+          .timeout(const Duration(seconds: 20));
+      if (!mounted) return;
+      messages.hideCurrentSnackBar();
+      final stream = Uri.tryParse(result['videoUrl'] ?? '');
+      if (result['success'] != 'true' || stream == null ||
+          stream.scheme != 'https' || stream.host.isEmpty) {
+        throw StateError('TeraBox stream unavailable');
+      }
+      await Navigator.of(context).push<void>(
+        MaterialPageRoute(
+          builder: (_) => NativeVideoPlayerScreen(
+            videoUrl: stream.toString(),
+            title: result['fileName'] ?? 'TeraBox Video',
+            uploader: 'TeraBox',
+            sourcePageUrl: uri.toString(),
+            videoId: 'terabox_${uri.pathSegments[1]}',
+            thumbnailUrl: result['thumbnail'] ?? '',
+          ),
+        ),
+      );
+    } catch (_) {
+      if (mounted) {
+        messages.hideCurrentSnackBar();
+        messages.showSnackBar(const SnackBar(
+          content: Text('Could not open this TeraBox video. Try again.'),
+        ));
+      }
+    } finally {
+      _openingTeraBox = false;
+    }
   }
 
   Future<void> _refreshNavigation() async {
