@@ -11,7 +11,7 @@ import 'package:google_sign_in/google_sign_in.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:url_launcher/url_launcher.dart';
 import 'package:video_player/video_player.dart';
-import 'package:better_player/better_player.dart'; 
+import 'package:better_player/better_player.dart' hide VideoPlayerValue; 
 import 'package:share_plus/share_plus.dart';
 import 'package:http/http.dart' as http;
 import 'package:onesignal_flutter/onesignal_flutter.dart';
@@ -631,8 +631,11 @@ class LegalPolicyDialog {
       ('6. Independent participation', 'Participation does not establish employment, agency, a franchise or a financial relationship with MayaJaal.'),
     ],
     'support': [
-      ('What you can do in MayaJaal', 'Paste a supported media link or choose MayaJaal from Android’s Share menu. Play supported videos, save favorites and revisit your watch history.'),
-      ('Downloads', 'Use Download on a supported file to see progress under Downloading. Open Completed to view a saved video, image or document, or delete it. Available quality options depend on the source.'),
+      ('About MayaJaal', 'MayaJaal brings media playback, downloads, public channels and your personal library together. Use Home to paste a link, Telegram to browse shared links, Channels to explore public posts, and History to find videos you watched.'),
+      ('Open a shared link', 'From YouTube, Instagram or Facebook, tap Share and choose MayaJaal. You can also paste the link in Home. The media page opens without a countdown. Use Play to watch, or choose a download quality when the source makes one available. Supported TeraBox links use the 10-second preview and Play flow.'),
+      ('Downloading and Completed', 'When a download starts, the Downloads screen shows its progress. Open Completed to play saved videos, view photos or open documents in a compatible viewer. Use Delete to remove a saved file. Signed-in download history syncs when connected.'),
+      ('Public channels', 'Browse channels and like posts when signed in. Channel owners can publish posts, manage admins, transfer ownership or delete their channel. Where media uploads are available, attached files are reviewed before they appear publicly.'),
+      ('Your account and policies', 'You can revisit watch history and saved videos in the app. Open the menu for Privacy Policy, Terms & Conditions, DMCA & Copyright Policy, Creator Program Terms or Help & Support. Use Delete My Account to request permanent account removal.'),
       ('Get help', 'Contact us for app troubleshooting, official Telegram bot setup, link renewal or account recovery. Include the affected feature and the error message, and avoid sending passwords or verification codes.'),
       ('Response times', 'Automated support is available 24/7. We aim to respond within 12–24 business hours.'),
     ],
@@ -10433,7 +10436,12 @@ class _MayaSocialMediaScreenState extends State<MayaSocialMediaScreen> {
   String? _mediaTitle;
 
   Future<List<({String label, Uri url})>> _loadFormats() async {
-    if (_fileExtension(widget.source) != null && !_isSocialLink(widget.source.toString())) {
+    final extension = _fileExtension(widget.source);
+    if (extension != null && !_isSocialLink(widget.source.toString())) {
+      if (const ['.mp4', '.webm', '.mkv', '.mov'].contains(extension)) {
+        _stream = widget.source;
+        _mediaTitle = widget.source.pathSegments.last;
+      }
       return [(label: 'Original file', url: widget.source)];
     }
     final api = _mediaLink(resolver);
@@ -10460,6 +10468,19 @@ class _MayaSocialMediaScreenState extends State<MayaSocialMediaScreen> {
   Future<void> _play() async {
     try { await _formats; } catch (_) {}
     if (!mounted) return;
+    if (const ['.jpg', '.png', '.webp', '.gif'].contains(_fileExtension(widget.source)) &&
+        !_isSocialLink(widget.source.toString())) {
+      await Navigator.of(context).push<void>(MaterialPageRoute(
+        builder: (_) => Scaffold(
+          appBar: AppBar(title: const Text('Image')),
+          body: Center(child: InteractiveViewer(child: Image.network(
+            widget.source.toString(),
+            errorBuilder: (_, __, ___) => const Text('Could not open this image.'),
+          ))),
+        ),
+      ));
+      return;
+    }
     final stream = _stream;
     if (stream != null) {
       await Navigator.of(context).push<void>(MaterialPageRoute(
@@ -10500,7 +10521,10 @@ class _MayaSocialMediaScreenState extends State<MayaSocialMediaScreen> {
           Text(widget.source.host),
           const SizedBox(height: 12),
           FilledButton.icon(onPressed: _play,
-            icon: const Icon(Icons.play_arrow), label: const Text('Play')),
+            icon: const Icon(Icons.play_arrow),
+            label: Text(const ['.jpg', '.png', '.webp', '.gif', '.pdf', '.doc', '.docx',
+              '.xlsx', '.txt', '.csv', '.zip'].contains(_fileExtension(widget.source))
+                ? 'View file' : 'Play')),
           FutureBuilder<List<({String label, Uri url})>>(
             future: _formats,
             builder: (context, snapshot) {
