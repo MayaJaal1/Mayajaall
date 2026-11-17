@@ -340,6 +340,16 @@ class _VideoLoopThumbnailState extends State<VideoLoopThumbnail> {
 // ═══════════════════════════════════════════════════════════════════════════════
 // GLOBAL MEDIA THUMBNAIL DISPATCHER
 // ═══════════════════════════════════════════════════════════════════════════════
+String _storedVideoThumbnail(Map<dynamic, dynamic> data) {
+  for (final key in const ['thumbnailUrl', 'thumbnail', 'thumbnail_url', 'thumbUrl', 'thumb', 'poster', 'posterUrl']) {
+    final value = data[key]?.toString().trim() ?? '';
+    if (value.isEmpty || value == 'null') continue;
+    if (value.startsWith('/') && !value.startsWith('//')) return '$kBackendBaseUrl$value';
+    return value;
+  }
+  return '';
+}
+
 Widget buildMediaThumbnail(
   String? thumb,
   String title,
@@ -347,34 +357,27 @@ Widget buildMediaThumbnail(
   bool isSmall = false,
   void Function(String base64Thumb)? onFrameCaptured,
 }) {
-  if (videoUrl.isNotEmpty && videoUrl.startsWith('http')) {
-    return VideoLoopThumbnail(
-      videoUrl: videoUrl,
-      title: title,
-      isSmall: isSmall,
-      fallbackThumb: thumb,
-      onFrameCaptured: onFrameCaptured,
-    );
-  }
-
-  if (thumb != null && thumb.isNotEmpty) {
-    if (thumb.startsWith('http')) {
-      return Image.network(
-        thumb,
-        fit: BoxFit.cover,
-        errorBuilder: (c, e, s) => buildAutoThumbnail(title, isSmall: isSmall),
+  Widget fallback() {
+    if (videoUrl.startsWith('http')) {
+      return VideoLoopThumbnail(
+        videoUrl: videoUrl, title: title, isSmall: isSmall,
+        onFrameCaptured: onFrameCaptured,
       );
     }
-    try {
-      return Image.memory(
-        base64Decode(thumb),
-        fit: BoxFit.cover,
-        errorBuilder: (c, e, s) => buildAutoThumbnail(title, isSmall: isSmall),
-      );
-    } catch (_) {}
+    return buildAutoThumbnail(title, isSmall: isSmall);
   }
 
-  return buildAutoThumbnail(title, isSmall: isSmall);
+  if (thumb == null || thumb.isEmpty) return fallback();
+  if (thumb.startsWith('http')) {
+    return Image.network(thumb, width: double.infinity, height: double.infinity,
+      fit: BoxFit.cover, errorBuilder: (_, __, ___) => fallback());
+  }
+  try {
+    return Image.memory(base64Decode(thumb), width: double.infinity, height: double.infinity,
+      fit: BoxFit.cover, errorBuilder: (_, __, ___) => fallback());
+  } catch (_) {
+    return fallback();
+  }
 }
 
 // ═══════════════════════════════════════════════════════════════════════════════
@@ -2244,11 +2247,61 @@ void showTopNotificationDropdown(BuildContext context) {
 // CLOUD-SYNCED WATCH HISTORY & SAVED VIDEOS
 // ═══════════════════════════════════════════════════════════════════════════════
 class WatchHistory {
-  static String get _uid => MayaJaalAccount.cachedUid ?? 'guest';
+  static String get _uid => FirebaseAuth.instance.currentUser?.uid ?? 'guest';
   static String get _historyKey => 'watch_history_v2_$_uid';
   static String get _savedKey => 'saved_videos_v1_$_uid';
 
   static DatabaseReference get _rtdb => FirebaseDatabase.instance.ref();
+
+  static String recordKey(Map<String, dynamic> item) {
+    final id = item['id']?.toString() ?? '';
+    return id.isNotEmpty ? id : (item['url']?.toString() ?? '');
+  }
+
+  static List<Map<String, dynamic>> localRecords(SharedPreferences prefs, String key) {
+    try {
+      final data = jsonDecode(prefs.getString(key) ?? '[]');
+      if (data is List) {
+        return data.whereType<Map>().map((item) => Map<String, dynamic>.from(item)).toList();
+      }
+    } catch (_) {}
+    return [];
+  }
+
+  static int recordedAt(Map<String, dynamic> item) =>
+      DateTime.tryParse(item['time']?.toString() ?? '')?.millisecondsSinceEpoch ??
+      (item['syncedAt'] is num ? (item['syncedAt'] as num).toInt() : 0);
+
+  static List<Map<String, dynamic>> mergeRecords(
+      Iterable<Map<String, dynamic>> records, {int limit = 30}) {
+    final sorted = records.toList()..sort((a, b) => recordedAt(b).compareTo(recordedAt(a)));
+    final byId = <String, Map<String, dynamic>>{};
+    for (final record in sorted) {
+      final key = recordKey(record);
+      if (key.isEmpty) continue;
+      final existing = byId.putIfAbsent(key, () => {...record});
+      if (_storedVideoThumbnail(existing).isEmpty) {
+        final thumb = _storedVideoThumbnail(record);
+        if (thumb.isNotEmpty) existing['thumbnail'] = thumb;
+      }
+    }
+    return byId.values.take(limit).toList();
+  }
+
+  static Future<void> recordPlayback(Map<String, dynamic> item) async {
+    final uid = _uid;
+    final key = 'watch_history_v2_$uid';
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      final records = mergeRecords([item, ...localRecords(prefs, key)]);
+      await prefs.setString(key, jsonEncode(records));
+      if (records.isNotEmpty && _uid == uid) {
+        unawaited(syncWatchRecordCloud(records.firstWhere(
+          (record) => recordKey(record) == recordKey(item), orElse: () => item,
+        )));
+      }
+    } catch (_) {}
+  }
 
   static Future<List<String>> getRecentIds({int limit = 10}) async {
     try {
@@ -2985,37 +3038,25 @@ class _AuthGateState extends State<AuthGate> {
   String? _blockingError;
   bool _gateChecked = false;
   bool _afterLogout = false;
-  bool _notificationOfferStarted = false;
+  bool _notificationRequestStarted = false;
 
-  Future<void> _offerNotificationPermission(String uid) async {
-    if (_notificationOfferStarted || !mounted) return;
-    _notificationOfferStarted = true;
+  Future<void> _requestNotificationPermission(String uid) async {
+    if (_notificationRequestStarted || !mounted) return;
+    _notificationRequestStarted = true;
     try {
       await _PermissionQueue.run(() async {
         if (!mounted || FirebaseAuth.instance.currentUser?.uid != uid) return;
         final prefs = await SharedPreferences.getInstance();
-        const key = 'maya_notification_permission_offer_shown';
+        const key = 'maya_native_notification_permission_requested';
         if (prefs.getBool(key) ?? false) return;
-        if (await Permission.notification.isGranted) return;
+        final status = await Permission.notification.status;
+        if (status.isGranted || status.isPermanentlyDenied) return;
         if (!mounted || FirebaseAuth.instance.currentUser?.uid != uid) return;
-        final allow = await showDialog<bool>(
-          context: context,
-          builder: (dialog) => AlertDialog(
-            title: const Text('Get notifications?'),
-            content: const Text('Allow MayaJaal to send updates. You can also choose Not now and keep using the app.'),
-            actions: [
-              TextButton(onPressed: () => Navigator.pop(dialog, false), child: const Text('Not now')),
-              FilledButton(onPressed: () => Navigator.pop(dialog, true), child: const Text('Allow')),
-            ],
-          ),
-        );
+        await OneSignal.Notifications.requestPermission(false);
         await prefs.setBool(key, true);
-        if (allow == true && mounted && FirebaseAuth.instance.currentUser?.uid == uid) {
-          await OneSignal.Notifications.requestPermission(false);
-        }
       });
     } catch (_) {
-      // Notifications are optional. Keep the signed-in app usable.
+      // Notifications are optional.
     }
   }
 
@@ -3095,10 +3136,9 @@ class _AuthGateState extends State<AuthGate> {
             MayaJaalAccount.cachedEmail = user.email;
             MayaJaalAccount.cachedName = user.displayName;
             MayaJaalAccount.cachedPhoto = user.photoURL;
+            unawaited(_requestNotificationPermission(user.uid));
             await MayaJaalAccount.syncUserToRTDB(user);
             await MayaJaalAccount.loadApiKey();
-
-            unawaited(_offerNotificationPermission(user.uid));
           });
 
           if (!_initialHandled &&
@@ -3746,7 +3786,7 @@ class _MainNavigationHolderState extends State<MainNavigationHolder> {
           const ChannelScreen(),
           const MayaJaalBrowserScreen(initialUrl: 'https://web.telegram.org/k/', showAppBar: false),
           const MayaDownloadsScreen(),
-          const HistoryScreen(),
+          if (_currentIndex == 4) const HistoryScreen() else const SizedBox.shrink(),
         ],
       ),
       bottomNavigationBar: Container(
@@ -5322,6 +5362,18 @@ class _MoreDrawerState extends State<MoreDrawer>
                       },
                     ),
                   ),
+                  _snakeItem(
+                    context,
+                    icon: Icons.photo_library_outlined,
+                    color: AppThemes.kGreen,
+                    title: 'Gallery',
+                    subtitle: 'Photos and videos on this device',
+                    onTap: () {
+                      final navigator = Navigator.of(context);
+                      navigator.pop();
+                      navigator.push(MaterialPageRoute(builder: (_) => const GalleryScreen()));
+                    },
+                  ),
                   _staggered(
                     index: 8,
                     child: Padding(
@@ -6084,9 +6136,9 @@ class _StreamPreviewScreenState extends State<StreamPreviewScreen>
               _streamUrl = newUrl;
               if (resolvedTitle.isNotEmpty) _videoTitle = resolvedTitle;
               _uploaderName = data['uploader']?.toString() ?? _uploaderName;
-              final apiThumb = data['thumbnailUrl'] ?? data['thumbnail'] ?? data['poster'] ?? '';
-              if (apiThumb.toString().isNotEmpty) {
-                _thumbnailUrl = apiThumb.toString();
+              final apiThumb = _storedVideoThumbnail(data);
+              if (apiThumb.isNotEmpty) {
+                _thumbnailUrl = apiThumb;
               }
             });
           }
@@ -6169,55 +6221,6 @@ class _StreamPreviewScreenState extends State<StreamPreviewScreen>
     Share.share('🚀 Watch this stream on MayaJaal:\n${widget.targetUrl}');
   }
 
-  Future<void> _saveWatchRecord() async {
-    final prefs = await SharedPreferences.getInstance();
-    final key = 'watch_history_v2_${MayaJaalAccount.cachedUid ?? 'guest'}';
-    final localJson = prefs.getString(key);
-    List<Map<String, dynamic>> history = [];
-    if (localJson != null) {
-      try {
-        final List decoded = jsonDecode(localJson);
-        history = decoded.cast<Map<String, dynamic>>();
-      } catch (_) {}
-    }
-
-    String finalThumb = _thumbnailUrl;
-    if (finalThumb.isEmpty && _capturedThumbB64.isNotEmpty) {
-      finalThumb = _capturedThumbB64;
-    }
-    if (finalThumb.isEmpty) {
-      final existing = await WatchHistory.getCachedThumbnail(widget.targetUrl);
-      if (existing.isNotEmpty) finalThumb = existing;
-    }
-
-    String finalStreamUrl = _streamUrl;
-    if (finalStreamUrl.isEmpty) {
-      finalStreamUrl = await WatchHistory.getCachedStreamUrl(widget.targetUrl);
-    }
-
-    final item = {
-      'url': widget.targetUrl,
-      'title': _videoTitle,
-      'uploader': _uploaderName,
-      'id': _rawId,
-      'thumbnail': finalThumb,
-      'streamUrl': finalStreamUrl,
-      'size': _videoSize,
-      'age': _videoAge,
-      'time': DateTime.now().toIso8601String(),
-    };
-
-    history.removeWhere((h) => h['url'] == widget.targetUrl);
-    history.insert(0, item);
-
-    if (history.length > 10) {
-      history = history.sublist(0, 10);
-    }
-
-    await prefs.setString(key, jsonEncode(history));
-    await WatchHistory.syncWatchRecordCloud(item);
-  }
-
   bool _loadingPlayback = false;
 
   Future<void> _launchNativePlayer() async {
@@ -6248,7 +6251,6 @@ class _StreamPreviewScreenState extends State<StreamPreviewScreen>
     }
 
     SoundService.playClick();
-    _saveWatchRecord();
 
     Navigator.of(context).push(
       MaterialPageRoute(
@@ -7491,7 +7493,9 @@ class _GalleryScreenState extends State<GalleryScreen> {
   @override
   void initState() {
     super.initState();
-    _loadGallery();
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (mounted) unawaited(_loadGallery(request: true));
+    });
   }
 
   Future<void> _loadGallery({bool request = false}) async {
@@ -7499,9 +7503,9 @@ class _GalleryScreenState extends State<GalleryScreen> {
       const options = PermissionRequestOption();
       final permission = await _PermissionQueue.run(() async {
         if (!mounted) return null;
-        return request
-            ? PhotoManager.requestPermissionExtend(requestOption: options)
-            : PhotoManager.getPermissionState(requestOption: options);
+        final current = await PhotoManager.getPermissionState(requestOption: options);
+        if (!mounted || !request || current.isAuth || current.hasAccess) return current;
+        return PhotoManager.requestPermissionExtend(requestOption: options);
       });
       if (!mounted || permission == null) return;
       if (!permission.isAuth && !permission.hasAccess) {
@@ -7627,13 +7631,6 @@ class _GalleryScreenState extends State<GalleryScreen> {
               style: TextStyle(color: Colors.white60, fontSize: 12, height: 1.5),
             ),
             const SizedBox(height: 18),
-            FilledButton(
-              onPressed: () {
-                setState(() => _loading = true);
-                unawaited(_loadGallery(request: true));
-              },
-              child: const Text('Allow photos and videos'),
-            ),
             ElevatedButton(
               onPressed: () {
                 SoundService.playClick();
@@ -8052,58 +8049,37 @@ class _HistoryScreenState extends State<HistoryScreen> {
   }
 
   Future<void> _loadHistory() async {
-    final uid = MayaJaalAccount.cachedUid;
+    final uid = FirebaseAuth.instance.currentUser?.uid;
     final prefs = await SharedPreferences.getInstance();
     final key = 'watch_history_v2_${uid ?? 'guest'}';
-    final localJson = prefs.getString(key);
 
-    if (localJson != null) {
-      try {
-        final List decoded = jsonDecode(localJson);
-        if (mounted) {
-          setState(() {
-            _history = decoded.cast<Map<String, dynamic>>();
-            _loading = false;
-          });
-        }
-      } catch (_) {}
-    }
+    if (!mounted || FirebaseAuth.instance.currentUser?.uid != uid) return;
+    setState(() {
+      _history = WatchHistory.localRecords(prefs, key);
+      _loading = false;
+    });
+    if (uid == null) return;
 
-    if (uid != null && uid != 'guest') {
-      try {
-        final snap = await FirebaseDatabase.instance.ref('users/$uid/watchHistory').limitToLast(30).once();
-        if (snap.snapshot.value != null && snap.snapshot.value is Map) {
-          final map = Map<String, dynamic>.from(snap.snapshot.value as Map);
-          final cloudList = map.values.map((v) => Map<String, dynamic>.from(v as Map)).toList();
-          cloudList.sort((a, b) => (b['syncedAt'] ?? 0).compareTo(a['syncedAt'] ?? 0));
-          if (mounted) {
-            setState(() {
-              _history = cloudList;
-              _loading = false;
-            });
-            await prefs.setString(key, jsonEncode(_history));
-
-            await WatchHistory.repairBadTitles(history: _history, saved: []);
-            if (mounted) setState(() {});
-          }
-          return;
-        }
-      } catch (_) {}
-    }
-
-    if (mounted) setState(() => _loading = false);
-
-    if (_history.isNotEmpty) {
-      await WatchHistory.repairBadTitles(history: _history, saved: []);
-      if (mounted) setState(() {});
-    }
+    try {
+      final snap = await FirebaseDatabase.instance.ref('users/$uid/watchHistory')
+          .orderByChild('syncedAt').limitToLast(30).once().timeout(const Duration(seconds: 8));
+      if (!mounted || FirebaseAuth.instance.currentUser?.uid != uid) return;
+      final cloud = snap.snapshot.children
+          .map((child) => child.value).whereType<Map>()
+          .map((item) => Map<String, dynamic>.from(item));
+      setState(() {
+        _history = WatchHistory.mergeRecords([
+          ...WatchHistory.localRecords(prefs, key), ...cloud,
+        ]);
+      });
+    } catch (_) {}
   }
 
   Future<void> _deleteItem(int index) async {
     SoundService.playClick();
     Haptic.light();
     final item = _history[index];
-    final uid = MayaJaalAccount.cachedUid;
+    final uid = FirebaseAuth.instance.currentUser?.uid;
     final prefs = await SharedPreferences.getInstance();
     final key = 'watch_history_v2_${uid ?? 'guest'}';
 
@@ -8121,7 +8097,7 @@ class _HistoryScreenState extends State<HistoryScreen> {
   Future<void> _clearAll() async {
     SoundService.playClick();
     Haptic.medium();
-    final uid = MayaJaalAccount.cachedUid;
+    final uid = FirebaseAuth.instance.currentUser?.uid;
     final prefs = await SharedPreferences.getInstance();
     final key = 'watch_history_v2_${uid ?? 'guest'}';
 
@@ -8136,7 +8112,7 @@ class _HistoryScreenState extends State<HistoryScreen> {
   Future<void> _saveItem(Map<String, dynamic> item) async {
     SoundService.playClick();
     Haptic.medium();
-    final uid = MayaJaalAccount.cachedUid;
+    final uid = FirebaseAuth.instance.currentUser?.uid;
     final prefs = await SharedPreferences.getInstance();
     final key = 'saved_videos_v1_${uid ?? 'guest'}';
     final savedStr = prefs.getString(key);
@@ -8199,7 +8175,7 @@ class _HistoryScreenState extends State<HistoryScreen> {
                   itemCount: _history.length,
                   itemBuilder: (c, i) {
                     final item = _history[i];
-                    final thumb = item['thumbnail']?.toString() ?? '';
+                    final thumb = _storedVideoThumbnail(item);
                     String title = item['title']?.toString().trim() ?? '';
                     if (title.isEmpty || title == 'null') {
                       title = item['id']?.toString() ?? 'MayaJaal Video';
@@ -8208,9 +8184,7 @@ class _HistoryScreenState extends State<HistoryScreen> {
                     final streamUrl = item['streamUrl']?.toString() ?? '';
                     final id = item['id']?.toString() ?? '';
 
-                    final thumbStreamUrl = streamUrl.isNotEmpty
-                        ? streamUrl
-                        : (id.isNotEmpty ? '$kBackendBaseUrl/stream/$id' : url);
+                    final thumbStreamUrl = streamUrl;
 
                     return Container(
                       margin: const EdgeInsets.only(bottom: 8),
@@ -8590,6 +8564,7 @@ class _NativeVideoPlayerScreenState extends State<NativeVideoPlayerScreen> {
 
   bool _isInitialized = false;
   bool _hasError = false;
+  String _streamError = 'Stream Connection Error';
 
   bool _isFullscreen = false;
   bool _isZoomed = false;
@@ -8640,6 +8615,15 @@ class _NativeVideoPlayerScreenState extends State<NativeVideoPlayerScreen> {
   void initState() {
     super.initState();
     _loadUserPrefs();
+    unawaited(WatchHistory.recordPlayback({
+      'url': widget.sourcePageUrl,
+      'id': widget.videoId,
+      'title': widget.title,
+      'uploader': widget.uploader,
+      'thumbnail': widget.thumbnailUrl,
+      'streamUrl': widget.videoUrl,
+      'time': DateTime.now().toIso8601String(),
+    }));
     _initVideo();
     _startStatsListeners();
     _fetchOwner().then((_) => _loadRelatedVideos());
@@ -8776,6 +8760,12 @@ class _NativeVideoPlayerScreenState extends State<NativeVideoPlayerScreen> {
   Future<void> _loadRelatedVideos() async {
     try {
       final recentIds = await WatchHistory.getRecentIds(limit: 5);
+      final uid = FirebaseAuth.instance.currentUser?.uid ?? 'guest';
+      final prefs = await SharedPreferences.getInstance();
+      final recentThumbs = {
+        for (final record in WatchHistory.localRecords(prefs, 'watch_history_v2_$uid'))
+          WatchHistory.recordKey(record): _storedVideoThumbnail(record),
+      };
       final related = await FirebaseService.getRelatedVideos(
         currentVideoId: widget.videoId,
         currentOwnerUid: _ownerUid,
@@ -8784,7 +8774,13 @@ class _NativeVideoPlayerScreenState extends State<NativeVideoPlayerScreen> {
       );
       if (mounted) {
         setState(() {
-          _relatedVideos = related;
+          _relatedVideos = [
+            for (final video in related)
+              if (_storedVideoThumbnail(video).isEmpty &&
+                  (recentThumbs[WatchHistory.recordKey(video)]?.isNotEmpty ?? false))
+                {...video, 'thumbnail': recentThumbs[WatchHistory.recordKey(video)]}
+              else video,
+          ];
           _relatedLoading = false;
         });
       }
@@ -8807,15 +8803,81 @@ class _NativeVideoPlayerScreenState extends State<NativeVideoPlayerScreen> {
     } catch (_) {}
   }
 
-  Future<void> _initVideo() async {
+  Future<void> _retryVideo() => _initVideo(refreshLink: true);
+
+  Future<Uri> _refreshPlaybackLink(Uri page) async {
+    final token = page.queryParameters['t'] ?? page.queryParameters['s'] ?? '';
+    final path = '/api/stream-info/${Uri.encodeComponent(widget.videoId)}';
+    final endpoint = Uri.parse('$kBackendBaseUrl$path').replace(
+      queryParameters: token.isEmpty ? null : {'t': token},
+    );
+    final deviceId = await DeviceIdHelper.get();
+    final response = await http.get(endpoint, headers: SecurityGuard.signedHeaders(
+      method: 'GET', path: path, body: '', deviceId: deviceId,
+      uid: MayaJaalAccount.cachedUid,
+    )).timeout(const Duration(seconds: 12));
+    if (response.statusCode != 200) throw HttpException('Video API HTTP ${response.statusCode}');
+    final data = jsonDecode(response.body);
+    if (data is! Map || data['success'] != true) {
+      throw const HttpException('Video API did not return playback information');
+    }
+    final url = _mediaLink((data['streamUrl'] ?? data['url'] ?? data['video_url'] ?? '').toString());
+    if (url == null) throw const HttpException('Video API did not return a stream URL');
+    return url;
+  }
+
+  Future<void> _checkStreamFailure(BetterPlayerController controller, Uri uri,
+      Map<String, String> headers) async {
+    final client = http.Client();
+    String message;
+    try {
+      final request = http.Request('GET', uri)
+        ..headers.addAll(headers)
+        ..headers['Range'] = 'bytes=0-0';
+      final response = await client.send(request).timeout(const Duration(seconds: 8));
+      final type = response.headers['content-type'] ?? '';
+      if (response.statusCode != 200 && response.statusCode != 206) {
+        message = 'Stream server returned HTTP ${response.statusCode}';
+      } else if (type.contains('text/html') || type.contains('application/json')) {
+        message = 'Stream URL returned a page (HTTP ${response.statusCode})';
+      } else {
+        message = 'Player could not initialize (stream HTTP ${response.statusCode})';
+      }
+    } on TimeoutException {
+      message = 'Stream request timed out on this phone';
+    } catch (_) {
+      message = 'Could not reach the stream server from this phone';
+    } finally {
+      client.close();
+    }
+    if (mounted && identical(_betterPlayerController, controller) && _hasError) {
+      setState(() => _streamError = message);
+    }
+  }
+
+  Future<void> _initVideo({bool refreshLink = false}) async {
     final oldController = _betterPlayerController;
     _betterPlayerController = null;
     oldController?.dispose();
     setState(() {
       _hasError = false;
+      _streamError = 'Stream Connection Error';
       _isInitialized = false;
     });
     String realVideoUrl = widget.videoUrl.trim();
+    final sourcePage = Uri.tryParse(widget.sourcePageUrl);
+    if (refreshLink && sourcePage != null && _isMayaVideoLink(sourcePage)) {
+      try {
+        realVideoUrl = (await _refreshPlaybackLink(sourcePage)).toString();
+      } catch (error) {
+        if (mounted) setState(() {
+          _hasError = true;
+          _streamError = error is HttpException ? error.message : 'Could not refresh the video URL';
+        });
+        return;
+      }
+      if (!mounted) return;
+    }
 
     if (realVideoUrl.isEmpty || !realVideoUrl.startsWith('http')) {
       realVideoUrl = '$kBackendBaseUrl/stream/${widget.videoId}';
@@ -8825,8 +8887,17 @@ class _NativeVideoPlayerScreenState extends State<NativeVideoPlayerScreen> {
       realVideoUrl = realVideoUrl.replaceFirst('https://mayajaal.online', kBackendBaseUrl);
     }
 
-    final isHls = TeraBoxResolver.isTeraBoxLink(widget.sourcePageUrl) ||
-        (Uri.tryParse(realVideoUrl)?.path.toLowerCase().endsWith('.m3u8') ?? false);
+    final stream = Uri.parse(realVideoUrl);
+    final isTeraBox = TeraBoxResolver.isTeraBoxLink(widget.sourcePageUrl);
+    final isHls = isTeraBox || stream.path.toLowerCase().endsWith('.m3u8');
+    final headers = <String, String>{
+      if (isTeraBox) ...{
+        'User-Agent': 'Mozilla/5.0 (Linux; Android 10) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Mobile Safari/537.36',
+        'Referer': 'https://www.terabox.com/',
+      },
+      'Accept': '*/*',
+      'Accept-Encoding': 'identity',
+    };
 
     final config = BetterPlayerConfiguration(
       autoPlay: true,
@@ -8839,8 +8910,8 @@ class _NativeVideoPlayerScreenState extends State<NativeVideoPlayerScreen> {
             children: [
               const Icon(Icons.error_outline, color: Colors.redAccent, size: 40),
               const SizedBox(height: 8),
-              const Text('Stream Connection Error', style: TextStyle(color: Colors.redAccent, fontSize: 12)),
-              TextButton(onPressed: _initVideo, child: const Text('RETRY', style: TextStyle(color: AppThemes.kGreen))),
+              Text(_streamError, textAlign: TextAlign.center, style: const TextStyle(color: Colors.redAccent, fontSize: 12)),
+              TextButton(onPressed: _retryVideo, child: const Text('RETRY', style: TextStyle(color: AppThemes.kGreen))),
             ],
           ),
         );
@@ -8850,24 +8921,23 @@ class _NativeVideoPlayerScreenState extends State<NativeVideoPlayerScreen> {
     final dataSource = BetterPlayerDataSource(
       BetterPlayerDataSourceType.network,
       realVideoUrl,
-      videoFormat: isHls ? BetterPlayerVideoFormat.hls : BetterPlayerVideoFormat.other,
-      headers: {
-        'User-Agent': 'Mozilla/5.0 (Linux; Android 10) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Mobile Safari/537.36',
-        'Referer': 'https://www.terabox.com/',
-        'Accept': '*/*',
-        'Accept-Encoding': 'identity',
-        'Connection': 'keep-alive',
-      },
+      videoFormat: isHls ? BetterPlayerVideoFormat.hls : null,
+      headers: headers,
     );
 
     final controller = BetterPlayerController(config);
     _betterPlayerController = controller;
     final initialized = Completer<void>();
+    void showFailure() {
+      if (!mounted || !identical(_betterPlayerController, controller) || _hasError) return;
+      setState(() => _hasError = true);
+      if (!initialized.isCompleted) initialized.complete();
+      unawaited(_checkStreamFailure(controller, stream, headers));
+    }
     controller.addEventsListener((event) {
       if (!mounted || !identical(_betterPlayerController, controller)) return;
       if (event.betterPlayerEventType == BetterPlayerEventType.exception) {
-        setState(() => _hasError = true);
-        if (!initialized.isCompleted) initialized.complete();
+        showFailure();
       } else if (event.betterPlayerEventType == BetterPlayerEventType.initialized &&
           !initialized.isCompleted) {
         initialized.complete();
@@ -8881,9 +8951,7 @@ class _NativeVideoPlayerScreenState extends State<NativeVideoPlayerScreen> {
       await controller.setupDataSource(dataSource).timeout(const Duration(seconds: 15));
       await initialized.future.timeout(const Duration(seconds: 15));
     } catch (_) {
-      if (mounted && identical(_betterPlayerController, controller)) {
-        setState(() => _hasError = true);
-      }
+      showFailure();
     }
   }
 
@@ -9509,8 +9577,8 @@ class _NativeVideoPlayerScreenState extends State<NativeVideoPlayerScreen> {
                                 children: [
                                   const Icon(Icons.error_outline, color: Colors.redAccent, size: 40),
                                   const SizedBox(height: 8),
-                                  const Text('Stream Connection Error', style: TextStyle(color: Colors.redAccent, fontSize: 12)),
-                                  TextButton(onPressed: _initVideo, child: const Text('RETRY', style: TextStyle(color: AppThemes.kGreen))),
+                                  Text(_streamError, textAlign: TextAlign.center, style: const TextStyle(color: Colors.redAccent, fontSize: 12)),
+                                  TextButton(onPressed: _retryVideo, child: const Text('RETRY', style: TextStyle(color: AppThemes.kGreen))),
                                 ],
                               ),
                             )
@@ -9887,9 +9955,8 @@ class _NativeVideoPlayerScreenState extends State<NativeVideoPlayerScreen> {
     }
     final uploader = (v['uploader'] ?? '@mayajaal').toString();
     final views = (v['views'] ?? 0) as int;
-    final thumb = v['thumbnail']?.toString() ?? '';
-
-    final String streamUrl = id.isNotEmpty ? '$kBackendBaseUrl/stream/$id' : '';
+    final thumb = _storedVideoThumbnail(v);
+    final streamUrl = v['streamUrl']?.toString() ?? '';
 
     return Padding(
       padding: const EdgeInsets.only(right: 8),
@@ -9913,6 +9980,7 @@ class _NativeVideoPlayerScreenState extends State<NativeVideoPlayerScreen> {
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
               Container(
+                width: double.infinity,
                 height: 82,
                 decoration: const BoxDecoration(
                   borderRadius: BorderRadius.vertical(top: Radius.circular(9)),
