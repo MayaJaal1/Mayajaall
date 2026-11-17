@@ -86,6 +86,7 @@
                 <data android:scheme="https" android:host="www.mayajaal.online" android:pathPrefix="/api/v/" />
                 <data android:scheme="https" android:host="www.mayajaal.online" android:pathPrefix="/tb/" />
                 <data android:scheme="https" android:host="www.mayajaal.online" android:pathPrefix="/s/" />
+                <data android:scheme="https" android:host="www.mayajaal.online" android:pathPrefix="/channel/" />
             </intent-filter>
 
             <!-- 🔗 Custom scheme fallback -->
@@ -94,12 +95,6 @@
                 <category android:name="android.intent.category.DEFAULT" />
                 <category android:name="android.intent.category.BROWSABLE" />
                 <data android:scheme="mayajaall" />
-            </intent-filter>
-            <!-- Receive shared links from the Android share sheet. -->
-            <intent-filter>
-                <action android:name="android.intent.action.SEND"/>
-                <category android:name="android.intent.category.DEFAULT"/>
-                <data android:mimeType="text/plain"/>
             </intent-filter>
         </activity>
 
