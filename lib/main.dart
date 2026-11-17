@@ -6689,19 +6689,51 @@ class ChannelScreen extends StatelessWidget {
       ? value.map((key, value) => MapEntry(key.toString(), value))
       : {};
 
+  static String normalizedName(String value) =>
+      value.trim().replaceAll(RegExp(r'\s+'), ' ').toLowerCase();
+
   Future<void> _create(BuildContext context) async {
     final uid = FirebaseAuth.instance.currentUser?.uid;
     if (uid == null) return;
     final name = await _channelInput(context, 'Create channel', 'Channel name', limit: 80);
     if (name == null || !context.mounted) return;
-    final channel = channels.push();
-    if (await _channelWrite(context, () => channel.set({
-      'name': name, 'ownerUid': uid, 'createdAt': ServerValue.timestamp,
-    })) && context.mounted) {
+    final normalized = normalizedName(name);
+    final id = crypto.sha256.convert(utf8.encode(normalized)).toString();
+    final channel = channels.child(id);
+    try {
+      final existing = await channels.get();
+      if (existing.children.any((item) =>
+          normalizedName(fields(item.value)['name']?.toString() ?? '') == normalized)) {
+        if (context.mounted) _nameTaken(context);
+        return;
+      }
+      final result = await channel.runTransaction((current) {
+        if (current != null) return Transaction.abort();
+        return Transaction.success({
+          'name': name,
+          'ownerUid': uid,
+          'createdAt': ServerValue.timestamp,
+        });
+      }, applyLocally: false);
+      if (!context.mounted) return;
+      if (!result.committed) {
+        _nameTaken(context);
+        return;
+      }
       Navigator.of(context).push<void>(
         MaterialPageRoute(builder: (_) => MayaChannelPage(channel: channel)),
       );
+    } catch (_) {
+      if (context.mounted) ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Could not create the channel. Please try again.')),
+      );
     }
+  }
+
+  void _nameTaken(BuildContext context) {
+    ScaffoldMessenger.of(context).showSnackBar(
+      const SnackBar(content: Text('That channel name is already taken. Choose another name.')),
+    );
   }
 
   @override
@@ -6718,7 +6750,9 @@ class ChannelScreen extends StatelessWidget {
         builder: (context, snapshot) {
           if (snapshot.hasError) return const Center(child: Text('Channels are unavailable right now.'));
           if (!snapshot.hasData) return const Center(child: CircularProgressIndicator());
-          final entries = snapshot.data!.snapshot.children.toList().reversed.toList();
+          final entries = snapshot.data!.snapshot.children
+              .where((entry) => fields(entry.value)['deletedAt'] == null)
+              .toList().reversed.toList();
           if (entries.isEmpty) return const Center(child: Text('No public channels yet.'));
           return ListView.builder(
             itemCount: entries.length,
@@ -6788,9 +6822,88 @@ Widget _channelAvatar(Object? raw) {
   );
 }
 
-class MayaChannelPage extends StatelessWidget {
+class MayaChannelPage extends StatefulWidget {
   const MayaChannelPage({super.key, required this.channel});
   final DatabaseReference channel;
+
+  @override
+  State<MayaChannelPage> createState() => _MayaChannelPageState();
+}
+
+class _MayaChannelPageState extends State<MayaChannelPage> {
+  DatabaseReference get channel => widget.channel;
+  String _search = '';
+  late final Stream<DatabaseEvent> _updates = channel.onValue;
+
+  late final DatabaseReference _followers = FirebaseDatabase.instance
+      .ref('publicChannelFollowers/${channel.key}');
+  late final Stream<DatabaseEvent> _followerUpdates = _followers.onValue;
+
+  Widget _followButton(String? uid) => StreamBuilder<DatabaseEvent>(
+    stream: _followerUpdates,
+    builder: (context, snapshot) {
+      if (snapshot.hasError || !snapshot.hasData) return const SizedBox.shrink();
+      final followers = ChannelScreen.fields(snapshot.data!.snapshot.value);
+      final following = uid != null && followers[uid] == true;
+      return Row(mainAxisAlignment: MainAxisAlignment.spaceBetween, children: [
+        Text('${followers.length} followers'),
+        if (uid != null) OutlinedButton.icon(
+          icon: Icon(following ? Icons.check : Icons.add),
+          label: Text(following ? 'Unfollow' : 'Follow'),
+          onPressed: () {
+            final entry = _followers.child(uid);
+            _channelWrite(context, () => following ? entry.remove() : entry.set(true));
+          },
+        ),
+      ]);
+    },
+  );
+
+  Future<void> _channelInfo(String name, Object? photo, int count, Object? date) async {
+    await showModalBottomSheet<void>(
+      context: context,
+      isScrollControlled: true,
+      builder: (sheet) => SafeArea(child: SingleChildScrollView(
+        padding: const EdgeInsets.all(24),
+        child: Column(mainAxisSize: MainAxisSize.min, children: [
+          SizedBox(width: 92, height: 92, child: _channelAvatar(photo)),
+          const SizedBox(height: 14),
+          Text(name, textAlign: TextAlign.center, style: Theme.of(sheet).textTheme.headlineSmall),
+          const SizedBox(height: 8),
+          const Text('Public channel'),
+          _followButton(FirebaseAuth.instance.currentUser?.uid),
+          if (date is num) Padding(
+            padding: const EdgeInsets.only(top: 6),
+            child: Text('Created on ${MaterialLocalizations.of(sheet).formatMediumDate(
+              DateTime.fromMillisecondsSinceEpoch(date.toInt()),
+            )}'),
+          ),
+          const Divider(height: 30),
+          ListTile(leading: const Icon(Icons.perm_media_outlined),
+            title: const Text('Updates'), trailing: Text('$count')),
+          const ListTile(leading: Icon(Icons.public),
+            title: Text('Public visibility'), subtitle: Text('Anyone can view channel updates.')),
+          TextButton(onPressed: () => Navigator.pop(sheet), child: const Text('Close')),
+        ]),
+      )),
+    );
+  }
+
+  Future<void> _searchUpdates() async {
+    final value = await _channelInput(context, 'Search updates', 'Keyword', limit: 100);
+    if (value != null && mounted) setState(() => _search = value.toLowerCase());
+  }
+
+  Future<void> _report(String name) async {
+    final uri = Uri(scheme: 'mailto', path: 'mayajaalsupport@gmail.com', query:
+      'subject=${Uri.encodeComponent('Report MayaJaal channel: $name')}&body=${Uri.encodeComponent('Channel ID: ${channel.key}\nExplain what you are reporting:')}');
+    try {
+      if (await launchUrl(uri, mode: LaunchMode.externalApplication)) return;
+    } catch (_) {}
+    if (mounted) ScaffoldMessenger.of(context).showSnackBar(
+      const SnackBar(content: Text('Send your report to mayajaalsupport@gmail.com.')),
+    );
+  }
 
 
   static const _uploadEndpoint = String.fromEnvironment('MAYAJAAL_CHANNEL_UPLOAD');
@@ -6832,27 +6945,6 @@ class MayaChannelPage extends StatelessWidget {
     }
   }
 
-  Future<void> _choosePost(BuildContext context) async {
-    final upload = await showModalBottomSheet<bool>(
-      context: context,
-      builder: (sheet) => SafeArea(child: Column(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          ListTile(leading: const Icon(Icons.edit_outlined), title: const Text('Text or link'),
-            onTap: () => Navigator.pop(sheet, false)),
-          ListTile(leading: const Icon(Icons.attach_file), title: const Text('Photo, video or document'),
-            onTap: () => Navigator.pop(sheet, true)),
-        ],
-      )),
-    );
-    if (!context.mounted || upload == null) return;
-    if (upload) {
-      await _upload(context);
-    } else {
-      await _post(context);
-    }
-  }
-
   Future<void> _post(BuildContext context) async {
     final text = await _channelInput(context, 'New post', 'Text or HTTPS link', limit: 1000);
     if (text == null || !context.mounted) return;
@@ -6872,7 +6964,9 @@ class MayaChannelPage extends StatelessWidget {
         ],
       ));
       if (answer == true && context.mounted &&
-          await _channelWrite(context, channel.remove) && context.mounted) {
+          await _channelWrite(context, () => channel.update({
+            'deletedAt': ServerValue.timestamp, 'posts': null, 'admins': null, 'photoUrl': null,
+          })) && context.mounted) {
         Navigator.of(context).pop();
       }
       return;
@@ -6900,34 +6994,84 @@ class MayaChannelPage extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return StreamBuilder<DatabaseEvent>(
-      stream: channel.onValue,
+      stream: _updates,
       builder: (context, snapshot) {
         final fields = ChannelScreen.fields(snapshot.data?.snapshot.value);
-        final owner = fields['ownerUid']?.toString();
+        final owner = fields['deletedAt'] == null ? fields['ownerUid']?.toString() : null;
         final uid = FirebaseAuth.instance.currentUser?.uid;
         final canPost = uid != null && uid == owner;
         final admin = uid != null && ChannelScreen.fields(fields['admins'])[uid] == true;
-        final posts = ChannelScreen.fields(fields['posts']).entries.toList()
+        final name = fields['name']?.toString() ?? 'Channel';
+        final allPosts = ChannelScreen.fields(fields['posts']);
+        final posts = allPosts.entries.where((entry) => _search.isEmpty ||
+          (ChannelScreen.fields(entry.value)['text']?.toString() ?? '')
+              .toLowerCase().contains(_search)).toList()
           ..sort((a, b) => b.key.compareTo(a.key));
         return Scaffold(
           backgroundColor: AppThemes.kBg,
           appBar: AppBar(
-            title: Text(fields['name']?.toString() ?? 'Channel'),
+            titleSpacing: 0,
+            title: InkWell(
+              onTap: owner == null ? null :
+                () => _channelInfo(name, fields['photoUrl'], allPosts.length, fields['createdAt']),
+              child: Row(children: [
+                _channelAvatar(fields['photoUrl']),
+                const SizedBox(width: 10),
+                Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+                  Text(name, maxLines: 1, overflow: TextOverflow.ellipsis,
+                    style: const TextStyle(fontSize: 17)),
+                  Text(canPost ? 'Owner' : admin ? 'Admin' : 'Public channel',
+                    style: const TextStyle(fontSize: 12, color: Colors.white70)),
+                ])),
+              ]),
+            ),
             actions: [
-              if (canPost) PopupMenuButton<String>(
-                onSelected: (action) => _manage(context, action, owner!),
-                itemBuilder: (_) => const [
-                  PopupMenuItem(value: 'photo', child: Text('Set channel photo')),
-                  PopupMenuItem(value: 'admin', child: Text('Add admin')),
-                  PopupMenuItem(value: 'removeAdmin', child: Text('Remove admin')),
-                  PopupMenuItem(value: 'transfer', child: Text('Transfer ownership')),
-                  PopupMenuItem(value: 'delete', child: Text('Delete channel')),
+              if (owner != null) PopupMenuButton<String>(
+                onSelected: (action) {
+                  switch (action) {
+                    case 'info':
+                      _channelInfo(name, fields['photoUrl'], allPosts.length, fields['createdAt']);
+                      break;
+                    case 'search':
+                      _searchUpdates();
+                      break;
+                    case 'report':
+                      _report(name);
+                      break;
+                    default:
+                      if (canPost) _manage(context, action, owner!);
+                  }
+                },
+                itemBuilder: (_) => [
+                  const PopupMenuItem(value: 'info', child: Text('Channel info')),
+                  const PopupMenuItem(value: 'search', child: Text('Search updates')),
+                  const PopupMenuItem(value: 'report', child: Text('Report channel')),
+                  if (canPost) ...const [
+                    PopupMenuItem(value: 'photo', child: Text('Set channel photo')),
+                    PopupMenuItem(value: 'admin', child: Text('Add admin')),
+                    PopupMenuItem(value: 'removeAdmin', child: Text('Remove admin')),
+                    PopupMenuItem(value: 'transfer', child: Text('Transfer ownership')),
+                    PopupMenuItem(value: 'delete', child: Text('Delete channel')),
+                  ],
                 ],
               ),
             ],
           ),
-          floatingActionButton: canPost ? FloatingActionButton(
-            onPressed: () => _choosePost(context), tooltip: 'New post', child: const Icon(Icons.edit_outlined),
+          bottomNavigationBar: canPost ? SafeArea(
+            child: Padding(
+              padding: const EdgeInsets.fromLTRB(12, 6, 12, 10),
+              child: Row(children: [
+                Expanded(child: OutlinedButton.icon(
+                  onPressed: () => _post(context),
+                  icon: const Icon(Icons.edit_outlined),
+                  label: const Text('Write an update'),
+                )),
+                IconButton(
+                  tooltip: 'Attach file', icon: const Icon(Icons.attach_file),
+                  onPressed: () => _upload(context),
+                ),
+              ]),
+            ),
           ) : null,
           body: snapshot.hasError ? const Center(child: Text('This channel is unavailable.'))
               : !snapshot.hasData ? const Center(child: CircularProgressIndicator())
@@ -6936,11 +7080,22 @@ class MayaChannelPage extends StatelessWidget {
                 padding: const EdgeInsets.fromLTRB(12, 8, 12, 86),
                 itemCount: posts.length + 1,
                 itemBuilder: (context, index) {
-                  if (index == 0) return ListTile(
-                    leading: _channelAvatar(fields['photoUrl']),
-                    title: Text(fields['name']?.toString() ?? 'Channel'),
-                    subtitle: Text(canPost ? 'Owner' : admin ? 'Admin' : 'Public channel'),
-                  );
+                  if (index == 0) {
+                    return Column(children: [
+                      if (_search.isEmpty) Padding(
+                        padding: const EdgeInsets.symmetric(horizontal: 16),
+                        child: _followButton(uid),
+                      ),
+                      ListTile(
+                      title: Text(_search.isNotEmpty ? 'Search: $_search'
+                          : posts.isEmpty ? 'No updates yet' : 'Channel updates'),
+                      trailing: _search.isNotEmpty ? IconButton(
+                        tooltip: 'Clear search', icon: const Icon(Icons.close),
+                        onPressed: () => setState(() => _search = ''),
+                      ) : null,
+                      ),
+                    ]);
+                  }
                   final entry = posts[index - 1];
                   final post = ChannelScreen.fields(entry.value);
                   final text = post['text']?.toString() ?? '';
@@ -10175,7 +10330,9 @@ class MayaDownloads {
       final response = await request.close().timeout(const Duration(seconds: 30));
       final mime = response.headers.contentType?.mimeType ?? '';
       final extension = _fileTypes[mime] ??
-          (mime == 'application/octet-stream' ? _fileExtension(source) : null);
+          (mime == 'application/octet-stream' || mime == 'binary/octet-stream'
+              ? _fileExtension(source) ?? _fileExtension(Uri(path: name))
+              : null);
       if (response.statusCode != HttpStatus.ok || extension == null ||
           source.path.toLowerCase().endsWith('.m3u8')) {
         throw const FormatException('This link does not return a supported file.');
@@ -10430,7 +10587,7 @@ class MayaSocialMediaScreen extends StatefulWidget {
 
 class _MayaSocialMediaScreenState extends State<MayaSocialMediaScreen> {
   static const resolver = String.fromEnvironment('MAYAJAAL_SOCIAL_RESOLVER');
-  late final Future<List<({String label, Uri url})>> _formats = _loadFormats();
+  late Future<List<({String label, Uri url})>> _formats = _loadFormats();
 
   Uri? _stream;
   String? _mediaTitle;
@@ -10446,6 +10603,8 @@ class _MayaSocialMediaScreenState extends State<MayaSocialMediaScreen> {
     }
     final api = _mediaLink(resolver);
     if (api == null) return [];
+    _stream = null;
+    _mediaTitle = null;
     final response = await http.post(api,
       headers: {'Content-Type': 'application/json'},
       body: jsonEncode({'url': widget.source.toString()}),
@@ -10494,7 +10653,20 @@ class _MayaSocialMediaScreenState extends State<MayaSocialMediaScreen> {
       ));
       return;
     }
-    final opened = await launchUrl(widget.source, mode: LaunchMode.externalApplication);
+    if (_isSocialLink(widget.source.toString())) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('This post has no playable video in MayaJaal right now.')),
+      );
+      return;
+    }
+    await _openOriginal();
+  }
+
+  Future<void> _openOriginal() async {
+    var opened = false;
+    try {
+      opened = await launchUrl(widget.source, mode: LaunchMode.externalApplication);
+    } catch (_) {}
     if (!opened && mounted) {
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(content: Text('Could not open the original post.')),
@@ -10525,6 +10697,10 @@ class _MayaSocialMediaScreenState extends State<MayaSocialMediaScreen> {
             label: Text(const ['.jpg', '.png', '.webp', '.gif', '.pdf', '.doc', '.docx',
               '.xlsx', '.txt', '.csv', '.zip'].contains(_fileExtension(widget.source))
                 ? 'View file' : 'Play')),
+          if (_isSocialLink(widget.source.toString()))
+            TextButton(onPressed: _openOriginal, child: const Text('Open original post')),
+          const SizedBox(height: 12),
+          Text('Download options', style: Theme.of(context).textTheme.titleMedium),
           FutureBuilder<List<({String label, Uri url})>>(
             future: _formats,
             builder: (context, snapshot) {
@@ -10532,9 +10708,18 @@ class _MayaSocialMediaScreenState extends State<MayaSocialMediaScreen> {
                 return const Center(child: CircularProgressIndicator());
               }
               final formats = snapshot.data ?? [];
-              if (formats.isEmpty) return const Padding(
-                padding: EdgeInsets.only(top: 16),
-                child: Text('Downloads are unavailable for this link.'),
+              if (formats.isEmpty) return Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  const SizedBox(height: 10),
+                  Text(snapshot.hasError
+                    ? 'Could not load download options.'
+                    : 'No downloadable versions were provided for this post.'),
+                  if (snapshot.hasError) TextButton(
+                    onPressed: () => setState(() => _formats = _loadFormats()),
+                    child: const Text('Retry'),
+                  ),
+                ],
               );
               return Column(children: [
                 for (final format in formats)
