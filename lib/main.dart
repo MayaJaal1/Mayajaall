@@ -446,7 +446,7 @@ class VideoNameResolver {
       ];
 
       for (final c in candidates) {
-        if (c.isNotEmpty && c.toLowerCase() != 'null' && c != videoId) {
+        if (!isBadTitle(c, videoId)) {
           return c;
         }
       }
@@ -468,7 +468,8 @@ class VideoNameResolver {
     return t.isEmpty ||
         t.toLowerCase() == 'null' ||
         t == videoId ||
-        t.toLowerCase() == 'mayajaal video';
+        t.toLowerCase() == 'mayajaal video' ||
+        t.toLowerCase() == 'video';
   }
 }
 
@@ -2836,10 +2837,13 @@ class _MyAppState extends State<MyApp> {
   }
 
   String _buildUrlFromLink(Uri uri) {
+    final channelId = _mayaChannelId(uri);
+    if (channelId != null) return '$kBackendBaseUrl/channel/$channelId';
     String videoId = '';
     final token = uri.queryParameters['t'] ?? uri.queryParameters['s'] ?? '';
 
-    if (uri.path.startsWith('/v/') || uri.path.startsWith('/s/')) {
+    if (uri.path.startsWith('/v/') || uri.path.startsWith('/s/') ||
+        uri.path.startsWith('/stream/') || uri.path.startsWith('/api/v/')) {
       videoId = uri.pathSegments.isNotEmpty ? uri.pathSegments.last : '';
     } else if (uri.queryParameters['v'] != null) {
       videoId = uri.queryParameters['v']!;
@@ -2866,7 +2870,7 @@ class _MyAppState extends State<MyApp> {
             _pendingVideoTargetUrl = null;
             if (pending != null && pending.isNotEmpty) {
               navigatorKey.currentState?.pushReplacement(
-                MaterialPageRoute(builder: (_) => StreamPreviewScreen(targetUrl: pending)),
+                MaterialPageRoute(builder: (_) => _mayaLinkScreen(pending)),
               );
             }
           },
@@ -2876,7 +2880,7 @@ class _MyAppState extends State<MyApp> {
     }
 
     navigatorKey.currentState?.push(MaterialPageRoute(
-      builder: (_) => StreamPreviewScreen(targetUrl: target),
+      builder: (_) => _mayaLinkScreen(target),
     ));
   }
 
@@ -2951,6 +2955,23 @@ class _MyAppState extends State<MyApp> {
 // ═══════════════════════════════════════════════════════════════════════════════
 // AUTH GATE
 // ═══════════════════════════════════════════════════════════════════════════════
+// Keep permission explanations and native pickers from overlapping system prompts.
+class _PermissionQueue {
+  static Future<void> _previous = Future<void>.value();
+
+  static Future<T> run<T>(Future<T> Function() action) async {
+    final previous = _previous;
+    final completed = Completer<void>();
+    _previous = completed.future;
+    try {
+      await previous;
+      return await action();
+    } finally {
+      completed.complete();
+    }
+  }
+}
+
 class AuthGate extends StatefulWidget {
   const AuthGate({super.key});
   @override
@@ -2964,6 +2985,39 @@ class _AuthGateState extends State<AuthGate> {
   String? _blockingError;
   bool _gateChecked = false;
   bool _afterLogout = false;
+  bool _notificationOfferStarted = false;
+
+  Future<void> _offerNotificationPermission(String uid) async {
+    if (_notificationOfferStarted || !mounted) return;
+    _notificationOfferStarted = true;
+    try {
+      await _PermissionQueue.run(() async {
+        if (!mounted || FirebaseAuth.instance.currentUser?.uid != uid) return;
+        final prefs = await SharedPreferences.getInstance();
+        const key = 'maya_notification_permission_offer_shown';
+        if (prefs.getBool(key) ?? false) return;
+        if (await Permission.notification.isGranted) return;
+        if (!mounted || FirebaseAuth.instance.currentUser?.uid != uid) return;
+        final allow = await showDialog<bool>(
+          context: context,
+          builder: (dialog) => AlertDialog(
+            title: const Text('Get notifications?'),
+            content: const Text('Allow MayaJaal to send updates. You can also choose Not now and keep using the app.'),
+            actions: [
+              TextButton(onPressed: () => Navigator.pop(dialog, false), child: const Text('Not now')),
+              FilledButton(onPressed: () => Navigator.pop(dialog, true), child: const Text('Allow')),
+            ],
+          ),
+        );
+        await prefs.setBool(key, true);
+        if (allow == true && mounted && FirebaseAuth.instance.currentUser?.uid == uid) {
+          await OneSignal.Notifications.requestPermission(false);
+        }
+      });
+    } catch (_) {
+      // Notifications are optional. Keep the signed-in app usable.
+    }
+  }
 
   @override
   void initState() {
@@ -3044,9 +3098,7 @@ class _AuthGateState extends State<AuthGate> {
             await MayaJaalAccount.syncUserToRTDB(user);
             await MayaJaalAccount.loadApiKey();
 
-            try {
-              OneSignal.Notifications.requestPermission(true);
-            } catch (_) {}
+            unawaited(_offerNotificationPermission(user.uid));
           });
 
           if (!_initialHandled &&
@@ -3056,7 +3108,7 @@ class _AuthGateState extends State<AuthGate> {
             final url = _initialPendingUrl!;
             _initialPendingUrl = null;
             _MyAppState.instance?.clearPending();
-            return StreamPreviewScreen(targetUrl: url);
+            return _mayaLinkScreen(url);
           }
 
           return const MainNavigationHolder();
@@ -4129,7 +4181,7 @@ class _HomeScreenState extends State<HomeScreen>
       MaterialPageRoute(
         builder: (_) => uri != null && (_isSocialLink(input) || _fileExtension(uri) != null)
             ? MayaSocialMediaScreen(source: uri)
-            : StreamPreviewScreen(targetUrl: input),
+            : _mayaLinkScreen(input),
       ),
     );
   }
@@ -5847,10 +5899,10 @@ class _StreamPreviewScreenState extends State<StreamPreviewScreen>
         _rawId = uri.pathSegments.isNotEmpty ? uri.pathSegments.last : 'stream';
         _token = uri.queryParameters['t'] ?? uri.queryParameters['s'] ?? '';
         _videoTitle = _rawId;
-        _streamUrl = '$kBackendBaseUrl/stream/$_rawId';
+        _streamUrl = '';
       } catch (_) {
         _rawId = 'stream';
-        _streamUrl = '$kBackendBaseUrl/stream/$_rawId';
+        _streamUrl = '';
       }
       _startCountdown();
       _secureInit();
@@ -5938,12 +5990,9 @@ class _StreamPreviewScreenState extends State<StreamPreviewScreen>
 
   Future<void> _secureInit() async {
     final cachedThumb = await WatchHistory.getCachedThumbnail(widget.targetUrl);
-    final cachedUrl = await WatchHistory.getCachedStreamUrl(widget.targetUrl);
-
     if (mounted) {
       setState(() {
         if (cachedThumb.isNotEmpty) _thumbnailUrl = cachedThumb;
-        if (cachedUrl.isNotEmpty) _streamUrl = cachedUrl;
       });
     }
 
@@ -6009,7 +6058,7 @@ class _StreamPreviewScreenState extends State<StreamPreviewScreen>
         uid: MayaJaalAccount.cachedUid,
       );
 
-      final res = await http.get(Uri.parse(apiUrl), headers: headers).timeout(const Duration(seconds: 4));
+      final res = await http.get(Uri.parse(apiUrl), headers: headers).timeout(const Duration(seconds: 12));
 
       if (res.statusCode == 200) {
         final data = jsonDecode(res.body);
@@ -6020,26 +6069,21 @@ class _StreamPreviewScreenState extends State<StreamPreviewScreen>
             newUrl = newUrl.replaceFirst('https://mayajaal.online', kBackendBaseUrl);
           }
           if (newUrl.isEmpty) {
-            newUrl = '$kBackendBaseUrl/stream/$_rawId';
+            newUrl = '';
           }
 
-          String apiTitle = (data['title'] ?? '').toString().trim();
-          String apiFilename = (data['filename'] ?? '').toString().trim();
-          String apiFileName = (data['file_name'] ?? '').toString().trim();
-          String resolvedTitle = '';
-          if (apiTitle.isNotEmpty && apiTitle != 'null') {
-            resolvedTitle = apiTitle;
-          } else if (apiFilename.isNotEmpty && apiFilename != 'null') {
-            resolvedTitle = apiFilename;
-          } else if (apiFileName.isNotEmpty && apiFileName != 'null') {
-            resolvedTitle = apiFileName;
-          }
+          final resolvedTitle = [
+            data['title'], data['filename'], data['file_name'], data['fileName'],
+          ].map((value) => value?.toString().trim() ?? '').firstWhere(
+            (value) => !VideoNameResolver.isBadTitle(value, _rawId),
+            orElse: () => '',
+          );
 
           if (mounted) {
             setState(() {
               _streamUrl = newUrl;
               if (resolvedTitle.isNotEmpty) _videoTitle = resolvedTitle;
-              _uploaderName = data['uploader'] ?? _uploaderName;
+              _uploaderName = data['uploader']?.toString() ?? _uploaderName;
               final apiThumb = data['thumbnailUrl'] ?? data['thumbnail'] ?? data['poster'] ?? '';
               if (apiThumb.toString().isNotEmpty) {
                 _thumbnailUrl = apiThumb.toString();
@@ -6174,7 +6218,21 @@ class _StreamPreviewScreenState extends State<StreamPreviewScreen>
     await WatchHistory.syncWatchRecordCloud(item);
   }
 
-  void _launchNativePlayer() {
+  bool _loadingPlayback = false;
+
+  Future<void> _launchNativePlayer() async {
+    if (_loadingPlayback) return;
+    if (!_isTeraBox && _streamUrl.isEmpty) {
+      _loadingPlayback = true;
+      try {
+        if (await SecurityGuard.validateSession()) {
+          await _fetchStreamMetadata();
+        }
+      } finally {
+        _loadingPlayback = false;
+      }
+      if (!mounted) return;
+    }
     if (_resolveError.isNotEmpty) {
        ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(backgroundColor: AppThemes.kCardBg, content: Text(_resolveError, style: const TextStyle(color: AppThemes.kRed))),
@@ -6680,6 +6738,24 @@ class _StreamPreviewScreenState extends State<StreamPreviewScreen>
 // ═══════════════════════════════════════════════════════════════════════════════
 // CHANNEL SCREEN
 // ═══════════════════════════════════════════════════════════════════════════════
+bool _isMayaVideoLink(Uri uri) =>
+    const {'mayajaal.online', 'www.mayajaal.online'}.contains(uri.host) &&
+    uri.pathSegments.length == 2 && const {'v', 's', 'stream'}.contains(uri.pathSegments.first);
+
+String? _mayaChannelId(Uri uri) {
+  if (uri.scheme != 'https' || !const {'mayajaal.online', 'www.mayajaal.online'}.contains(uri.host) ||
+      uri.pathSegments.length != 2 || uri.pathSegments.first != 'channel') return null;
+  final id = uri.pathSegments.last;
+  return RegExp(r'^[A-Za-z0-9_-]{1,128}$').hasMatch(id) ? id : null;
+}
+
+Widget _mayaLinkScreen(String target) {
+  final uri = Uri.tryParse(target);
+  final id = uri == null ? null : _mayaChannelId(uri);
+  return id == null ? StreamPreviewScreen(targetUrl: target)
+      : MayaChannelPage(channel: ChannelScreen.channels.child(id));
+}
+
 class ChannelScreen extends StatelessWidget {
   const ChannelScreen({super.key});
 
@@ -6833,6 +6909,8 @@ class MayaChannelPage extends StatefulWidget {
 class _MayaChannelPageState extends State<MayaChannelPage> {
   DatabaseReference get channel => widget.channel;
   String _search = '';
+  String? _owner;
+  static const _font = 'sans-serif';
   late final Stream<DatabaseEvent> _updates = channel.onValue;
 
   late final DatabaseReference _followers = FirebaseDatabase.instance
@@ -6846,8 +6924,8 @@ class _MayaChannelPageState extends State<MayaChannelPage> {
       final followers = ChannelScreen.fields(snapshot.data!.snapshot.value);
       final following = uid != null && followers[uid] == true;
       return Row(mainAxisAlignment: MainAxisAlignment.spaceBetween, children: [
-        Text('${followers.length} followers'),
-        if (uid != null) OutlinedButton.icon(
+        Text('${followers.length} ${followers.length == 1 ? 'follower' : 'followers'}'),
+        if (uid != null && uid != _owner) OutlinedButton.icon(
           icon: Icon(following ? Icons.check : Icons.add),
           label: Text(following ? 'Unfollow' : 'Follow'),
           onPressed: () {
@@ -6859,7 +6937,7 @@ class _MayaChannelPageState extends State<MayaChannelPage> {
     },
   );
 
-  Future<void> _channelInfo(String name, Object? photo, int count, Object? date) async {
+  Future<void> _channelInfo(String name, Object? photo, int count, Object? date, String description) async {
     await showModalBottomSheet<void>(
       context: context,
       isScrollControlled: true,
@@ -6871,6 +6949,11 @@ class _MayaChannelPageState extends State<MayaChannelPage> {
           Text(name, textAlign: TextAlign.center, style: Theme.of(sheet).textTheme.headlineSmall),
           const SizedBox(height: 8),
           const Text('Public channel'),
+          if (description.isNotEmpty) Padding(
+            padding: const EdgeInsets.symmetric(vertical: 12), child: Text(description)),
+          ListTile(leading: const Icon(Icons.link), title: const Text('Channel link'),
+            subtitle: Text(_channelUrl, maxLines: 1, overflow: TextOverflow.ellipsis),
+            onTap: () => Share.share(_channelUrl)),
           _followButton(FirebaseAuth.instance.currentUser?.uid),
           if (date is num) Padding(
             padding: const EdgeInsets.only(top: 6),
@@ -6919,13 +7002,16 @@ class _MayaChannelPageState extends State<MayaChannelPage> {
       return;
     }
     try {
-      final result = await FilePicker.platform.pickFiles(
-        type: avatar ? FileType.image : FileType.custom,
-        allowedExtensions: avatar ? null : const [
-          'jpg', 'jpeg', 'png', 'webp', 'mp4', 'mov', 'webm', 'mkv',
-          'pdf', 'doc', 'docx', 'xlsx', 'txt', 'csv', 'zip',
-        ],
-      );
+      final result = await _PermissionQueue.run(() async {
+        if (!context.mounted) return null;
+        return FilePicker.platform.pickFiles(
+          type: avatar ? FileType.image : FileType.custom,
+          allowedExtensions: avatar ? null : const [
+            'jpg', 'jpeg', 'png', 'webp', 'mp4', 'mov', 'webm', 'mkv',
+            'pdf', 'doc', 'docx', 'xlsx', 'txt', 'csv', 'zip',
+          ],
+        );
+      });
       if (!context.mounted || result == null) return;
       final file = result.files.single;
       final path = file.path;
@@ -6943,6 +7029,254 @@ class _MayaChannelPageState extends State<MayaChannelPage> {
         const SnackBar(content: Text('Could not open the selected file.')),
       );
     }
+  }
+
+  String get _channelUrl => '$kBackendBaseUrl/channel/${channel.key}';
+
+  Future<void> _editChannel(Map<String, Object?> fields) async {
+    var name = fields['name']?.toString() ?? '';
+    var description = fields['description']?.toString() ?? '';
+    var allowSharing = fields['allowSharing'] != false;
+    final values = await showDialog<Map<String, Object?>>(context: context, builder: (dialog) =>
+      StatefulBuilder(builder: (context, update) => AlertDialog(
+        title: const Text('Edit channel'),
+        content: SingleChildScrollView(child: Column(mainAxisSize: MainAxisSize.min, children: [
+          TextFormField(initialValue: name, maxLength: 80,
+            decoration: const InputDecoration(labelText: 'Channel name'),
+            onChanged: (value) => name = value.trim()),
+          TextFormField(initialValue: description, maxLength: 500, maxLines: 3,
+            decoration: const InputDecoration(labelText: 'Description'),
+            onChanged: (value) => description = value.trim()),
+          SwitchListTile(contentPadding: EdgeInsets.zero, title: const Text('Allow post sharing'),
+            subtitle: const Text('Includes forwarding to other channels'),
+            value: allowSharing, onChanged: (value) => update(() => allowSharing = value)),
+        ])),
+        actions: [
+          TextButton(onPressed: () => Navigator.pop(dialog), child: const Text('Cancel')),
+          TextButton(onPressed: () {
+            if (name.isEmpty) return;
+            Navigator.pop(dialog, {'name': name, 'description': description, 'allowSharing': allowSharing});
+          }, child: const Text('Save')),
+        ],
+      )));
+    if (values != null && mounted) await _channelWrite(context, () => channel.update(values));
+  }
+
+  Future<void> _forward(String sourceChannel, String postId) async {
+    final uid = FirebaseAuth.instance.currentUser?.uid;
+    if (uid == null) return;
+    try {
+      final channels = await ChannelScreen.channels.get();
+      if (!mounted) return;
+      final choices = channels.children.where((child) {
+        final data = ChannelScreen.fields(child.value);
+        return child.key != channel.key && child.key != sourceChannel &&
+            data['ownerUid'] == uid && data['deletedAt'] == null;
+      }).toList();
+      if (choices.isEmpty) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Create another channel to forward this post.')));
+        return;
+      }
+      final target = await showModalBottomSheet<String>(context: context, builder: (sheet) =>
+        SafeArea(child: Column(mainAxisSize: MainAxisSize.min, children: [
+          const ListTile(title: Text('Forward to your channel')),
+          Flexible(child: ListView(shrinkWrap: true, children: [
+            for (final choice in choices)
+              ListTile(title: Text(ChannelScreen.fields(choice.value)['name']?.toString() ?? 'Channel'),
+                onTap: () => Navigator.pop(sheet, choice.key)),
+          ])),
+        ])));
+      if (target != null && mounted) {
+        final saved = await _channelWrite(context, () => ChannelScreen.channels
+            .child('$target/posts').push().set({
+          'forwardedChannel': sourceChannel, 'forwardedPost': postId,
+          'createdAt': ServerValue.timestamp,
+        }));
+        if (saved && mounted) ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Post forwarded.')));
+      }
+    } catch (_) {
+      if (mounted) ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Could not open your channels.')));
+    }
+  }
+
+  Future<void> _sharePost(String sourceChannel, String postId, String text) async {
+    try {
+      final source = ChannelScreen.fields((await ChannelScreen.channels.child(sourceChannel).get()).value);
+      final posts = ChannelScreen.fields(source['posts']);
+      if (!mounted) return;
+      if (source['allowSharing'] == false || source['deletedAt'] != null || !posts.containsKey(postId)) {
+        ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Post sharing is off.')));
+        return;
+      }
+      await Share.share([if (text.isNotEmpty) text, '$kBackendBaseUrl/channel/$sourceChannel'].join('\n'));
+    } catch (_) {
+      if (mounted) ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Could not share this post.')));
+    }
+  }
+
+  Future<void> _openPostLink(Uri uri, {String? title, String? postId, Uri? thumbnail}) async {
+    if (_mayaChannelId(uri) case final String id) {
+      if (id != channel.key) await Navigator.of(context).push<void>(MaterialPageRoute(
+        builder: (_) => MayaChannelPage(channel: ChannelScreen.channels.child(id))));
+      return;
+    }
+    if (_isMayaVideoLink(uri) || TeraBoxResolver.isTeraBoxLink(uri.toString())) {
+      await Navigator.of(context).push<void>(MaterialPageRoute(
+        builder: (_) => StreamPreviewScreen(targetUrl: uri.toString())));
+      return;
+    }
+    if (postId != null) {
+      await Navigator.of(context).push<void>(MaterialPageRoute(builder: (_) => NativeVideoPlayerScreen(
+        videoUrl: uri.toString(), title: title ?? 'Video', videoId: postId,
+        uploader: 'Channel', sourcePageUrl: uri.toString(), thumbnailUrl: thumbnail?.toString() ?? '',
+      )));
+      return;
+    }
+    if (_isSocialLink(uri.toString()) || _fileExtension(uri) != null) {
+      await Navigator.of(context).push<void>(MaterialPageRoute(
+        builder: (_) => MayaSocialMediaScreen(source: uri)));
+      return;
+    }
+    try {
+      if (await launchUrl(uri, mode: LaunchMode.externalApplication)) return;
+    } catch (_) {}
+    if (mounted) ScaffoldMessenger.of(context).showSnackBar(
+      const SnackBar(content: Text('Could not open this link.')));
+  }
+
+  DateTime? _postDate(Object? timestamp) =>
+      timestamp is num ? DateTime.fromMillisecondsSinceEpoch(timestamp.toInt()) : null;
+
+  String _dayLabel(BuildContext context, DateTime date) {
+    final now = DateTime.now();
+    final offset = DateTime.utc(date.year, date.month, date.day)
+        .difference(DateTime.utc(now.year, now.month, now.day)).inDays;
+    return switch (offset) {
+      0 => 'Today', -1 => 'Yesterday', 1 => 'Tomorrow',
+      _ => MaterialLocalizations.of(context).formatFullDate(date),
+    };
+  }
+
+  Widget _postBody(Map<String, Object?> post, String id, String? uid,
+      bool sharing, String sourceChannel, String sourceId, {bool forwarded = false}) {
+    final text = post['text']?.toString() ?? '';
+    final kind = post['mediaType'];
+    final media = post['moderationStatus'] == 'approved'
+        ? _mediaLink(post['mediaUrl']?.toString() ?? '') : null;
+    final thumb = _mediaLink(post['thumbnailUrl']?.toString() ?? '');
+    final likes = FirebaseDatabase.instance.ref('publicChannelLikes/${channel.key}/$id');
+    final date = _postDate(post['createdAt']);
+    final link = RegExp(r'^https://[^\s<>]+$').hasMatch(text.trim()) ? _mediaLink(text) : null;
+    final parts = RegExp(r'https://[^\s<>]+').allMatches(text);
+    const textStyle = TextStyle(fontSize: 15, height: 1.3, color: Colors.white);
+    final time = date == null ? '' : MaterialLocalizations.of(context)
+        .formatTimeOfDay(TimeOfDay.fromDateTime(date));
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(4, 8, 4, 2),
+      child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+        if (forwarded) const Text('Forwarded', style: TextStyle(fontSize: 11, color: Colors.white54)),
+        if (media != null && (kind == 'image' || kind == 'video'))
+          Align(alignment: Alignment.centerLeft, child: SizedBox(
+            width: 190, height: 105, child: InkWell(
+              onTap: () => kind == 'video'
+                  ? _openPostLink(media, title: text, postId: id, thumbnail: thumb)
+                  : _openPostLink(media),
+              child: kind == 'video'
+                  ? buildMediaThumbnail(thumb?.toString(), text, media.toString())
+                  : Image.network(media.toString(), fit: BoxFit.cover,
+                      errorBuilder: (_, __, ___) => const Icon(Icons.broken_image_outlined)),
+            ))),
+        if (link != null)
+          _postLink(link)
+        else if (text.isNotEmpty && parts.isEmpty)
+          Text(text, style: textStyle)
+        else if (parts.isNotEmpty)
+          for (final segment in _postSegments(text, parts))
+            if (segment.$2 == null) Text(segment.$1, style: textStyle)
+            else _postLink(segment.$2!),
+        if (media != null && kind != 'image' && kind != 'video')
+          _postLink(media, label: 'Open attachment'),
+        Row(children: [
+          StreamBuilder<DatabaseEvent>(
+            stream: likes.onValue,
+            builder: (context, snapshot) {
+              final current = ChannelScreen.fields(snapshot.data?.snapshot.value);
+              final liked = uid != null && current[uid] == true;
+              return TextButton.icon(
+                style: TextButton.styleFrom(visualDensity: VisualDensity.compact,
+                    padding: const EdgeInsets.symmetric(horizontal: 6)),
+                icon: Icon(liked ? Icons.favorite : Icons.favorite_border, size: 16),
+                label: Text('${current.length}'),
+                onPressed: uid == null ? null : () {
+                  final vote = likes.child(uid);
+                  _channelWrite(context, () => liked ? vote.remove() : vote.set(true));
+                },
+              );
+            },
+          ),
+          const Spacer(),
+          Text(time, style: const TextStyle(fontSize: 11, color: Colors.white54)),
+          if (sharing) IconButton(tooltip: 'Share post', visualDensity: VisualDensity.compact,
+            icon: const Icon(Icons.share_outlined, size: 17),
+            onPressed: () => _sharePost(sourceChannel, sourceId, text.isEmpty ? media?.toString() ?? '' : text)),
+          if (sharing && uid != null) IconButton(tooltip: 'Forward post', visualDensity: VisualDensity.compact,
+            icon: const Icon(Icons.forward_outlined, size: 19),
+            onPressed: () => _forward(sourceChannel, sourceId)),
+        ]),
+        const Divider(height: 1, color: Colors.white12),
+      ]),
+    );
+  }
+
+  Iterable<(String, Uri?)> _postSegments(String text, Iterable<RegExpMatch> matches) sync* {
+    var offset = 0;
+    for (final match in matches) {
+      if (offset < match.start) yield (text.substring(offset, match.start), null);
+      final raw = match.group(0)!;
+      final link = raw.replaceFirst(RegExp(r'[.,!?;)]+$'), '');
+      yield (link, _mediaLink(link));
+      if (link.length < raw.length) yield (raw.substring(link.length), null);
+      offset = match.end;
+    }
+    if (offset < text.length) yield (text.substring(offset), null);
+  }
+
+  Widget _postLink(Uri uri, {String? label}) => Align(
+    alignment: Alignment.centerLeft,
+    child: InkWell(
+      onTap: () => _openPostLink(uri),
+      child: Padding(
+        padding: const EdgeInsets.symmetric(vertical: 3),
+        child: Text(label ?? '${uri.host}${uri.path}', maxLines: 1, overflow: TextOverflow.ellipsis,
+          style: const TextStyle(fontSize: 15, color: AppThemes.kGreen,
+            decoration: TextDecoration.underline, decorationColor: AppThemes.kGreen)),
+      ),
+    ),
+  );
+
+  Widget _update(Map<String, Object?> post, String id, String? uid, bool sharing) {
+    final sourceChannel = post['forwardedChannel'];
+    final sourceId = post['forwardedPost'];
+    if (sourceChannel is! String || sourceId is! String) {
+      return _postBody(post, id, uid, sharing, channel.key!, id);
+    }
+    return StreamBuilder<DatabaseEvent>(
+      stream: ChannelScreen.channels.child(sourceChannel).onValue,
+      builder: (context, snapshot) {
+        if (!snapshot.hasData) return const SizedBox(height: 35);
+        final source = ChannelScreen.fields(snapshot.data!.snapshot.value);
+        final original = ChannelScreen.fields(ChannelScreen.fields(source['posts'])[sourceId]);
+        if (original.isEmpty || source['deletedAt'] != null) {
+          return const Padding(padding: EdgeInsets.all(8), child: Text('Original post unavailable.'));
+        }
+        return _postBody({...original, 'createdAt': post['createdAt']}, id, uid,
+          sharing && source['allowSharing'] != false, sourceChannel, sourceId, forwarded: true);
+      },
+    );
   }
 
   Future<void> _post(BuildContext context) async {
@@ -6999,21 +7333,33 @@ class _MayaChannelPageState extends State<MayaChannelPage> {
         final fields = ChannelScreen.fields(snapshot.data?.snapshot.value);
         final owner = fields['deletedAt'] == null ? fields['ownerUid']?.toString() : null;
         final uid = FirebaseAuth.instance.currentUser?.uid;
+        _owner = owner;
         final canPost = uid != null && uid == owner;
+        final description = fields['description']?.toString() ?? '';
+        final sharing = fields['allowSharing'] != false;
         final admin = uid != null && ChannelScreen.fields(fields['admins'])[uid] == true;
         final name = fields['name']?.toString() ?? 'Channel';
         final allPosts = ChannelScreen.fields(fields['posts']);
         final posts = allPosts.entries.where((entry) => _search.isEmpty ||
           (ChannelScreen.fields(entry.value)['text']?.toString() ?? '')
               .toLowerCase().contains(_search)).toList()
-          ..sort((a, b) => b.key.compareTo(a.key));
-        return Scaffold(
+          ..sort((a, b) {
+            final aTime = _postDate(ChannelScreen.fields(a.value)['createdAt']);
+            final bTime = _postDate(ChannelScreen.fields(b.value)['createdAt']);
+            final order = (bTime?.millisecondsSinceEpoch ?? 0)
+                .compareTo(aTime?.millisecondsSinceEpoch ?? 0);
+            return order == 0 ? b.key.compareTo(a.key) : order;
+          });
+        final theme = Theme.of(context);
+        return Theme(
+          data: theme.copyWith(textTheme: theme.textTheme.apply(fontFamily: _font)),
+          child: Scaffold(
           backgroundColor: AppThemes.kBg,
           appBar: AppBar(
             titleSpacing: 0,
             title: InkWell(
               onTap: owner == null ? null :
-                () => _channelInfo(name, fields['photoUrl'], allPosts.length, fields['createdAt']),
+                () => _channelInfo(name, fields['photoUrl'], allPosts.length, fields['createdAt'], description),
               child: Row(children: [
                 _channelAvatar(fields['photoUrl']),
                 const SizedBox(width: 10),
@@ -7030,13 +7376,19 @@ class _MayaChannelPageState extends State<MayaChannelPage> {
                 onSelected: (action) {
                   switch (action) {
                     case 'info':
-                      _channelInfo(name, fields['photoUrl'], allPosts.length, fields['createdAt']);
+                      _channelInfo(name, fields['photoUrl'], allPosts.length, fields['createdAt'], description);
                       break;
                     case 'search':
                       _searchUpdates();
                       break;
                     case 'report':
                       _report(name);
+                      break;
+                    case 'edit':
+                      if (canPost) _editChannel(fields);
+                      break;
+                    case 'share':
+                      Share.share(_channelUrl);
                       break;
                     default:
                       if (canPost) _manage(context, action, owner!);
@@ -7045,8 +7397,10 @@ class _MayaChannelPageState extends State<MayaChannelPage> {
                 itemBuilder: (_) => [
                   const PopupMenuItem(value: 'info', child: Text('Channel info')),
                   const PopupMenuItem(value: 'search', child: Text('Search updates')),
+                  const PopupMenuItem(value: 'share', child: Text('Share channel link')),
                   const PopupMenuItem(value: 'report', child: Text('Report channel')),
                   if (canPost) ...const [
+                    PopupMenuItem(value: 'edit', child: Text('Edit channel')),
                     PopupMenuItem(value: 'photo', child: Text('Set channel photo')),
                     PopupMenuItem(value: 'admin', child: Text('Add admin')),
                     PopupMenuItem(value: 'removeAdmin', child: Text('Remove admin')),
@@ -7076,82 +7430,42 @@ class _MayaChannelPageState extends State<MayaChannelPage> {
           body: snapshot.hasError ? const Center(child: Text('This channel is unavailable.'))
               : !snapshot.hasData ? const Center(child: CircularProgressIndicator())
               : owner == null ? const Center(child: Text('This channel was removed.'))
-              : ListView.builder(
-                padding: const EdgeInsets.fromLTRB(12, 8, 12, 86),
-                itemCount: posts.length + 1,
-                itemBuilder: (context, index) {
-                  if (index == 0) {
-                    return Column(children: [
-                      if (_search.isEmpty) Padding(
-                        padding: const EdgeInsets.symmetric(horizontal: 16),
-                        child: _followButton(uid),
-                      ),
-                      ListTile(
-                      title: Text(_search.isNotEmpty ? 'Search: $_search'
-                          : posts.isEmpty ? 'No updates yet' : 'Channel updates'),
-                      trailing: _search.isNotEmpty ? IconButton(
-                        tooltip: 'Clear search', icon: const Icon(Icons.close),
-                        onPressed: () => setState(() => _search = ''),
-                      ) : null,
-                      ),
-                    ]);
-                  }
-                  final entry = posts[index - 1];
-                  final post = ChannelScreen.fields(entry.value);
-                  final text = post['text']?.toString() ?? '';
-                  final kind = post['mediaType'];
-                  final media = post['moderationStatus'] == 'approved'
-                      ? _mediaLink(post['mediaUrl']?.toString() ?? '') : null;
-                  final thumb = _mediaLink(post['thumbnailUrl']?.toString() ?? '');
-                  final uri = media ?? _mediaLink(text);
-                  final likes = FirebaseDatabase.instance
-                      .ref('publicChannelLikes/${channel.key}/${entry.key}');
-                  return Card(
-                    color: AppThemes.kCardBg,
-                    child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-                      if (media != null && (kind == 'image' || kind == 'video'))
-                        AspectRatio(
-                          aspectRatio: 16 / 9,
-                          child: kind == 'video'
-                              ? buildMediaThumbnail(thumb?.toString(), text, media.toString())
-                              : Image.network(media.toString(), fit: BoxFit.cover,
-                                  errorBuilder: (_, __, ___) => const Icon(Icons.broken_image_outlined)),
-                        ),
-                      ListTile(title: Text(text.isEmpty ? 'Attachment' : text), onTap: uri == null ? null : () async {
-                        if (media != null && kind == 'video') {
-                          await Navigator.of(context).push<void>(MaterialPageRoute(
-                            builder: (_) => NativeVideoPlayerScreen(
-                              videoUrl: media.toString(), title: text,
-                              videoId: entry.key, uploader: fields['name']?.toString() ?? 'Channel',
-                              sourcePageUrl: media.toString(), thumbnailUrl: thumb?.toString() ?? '',
-                            ),
-                          ));
-                          return;
-                        }
-                        try {
-                          await launchUrl(uri, mode: LaunchMode.externalApplication);
-                        } catch (_) {}
-                      }),
-                      StreamBuilder<DatabaseEvent>(
-                        stream: likes.onValue,
-                        builder: (context, snapshot) {
-                          final current = ChannelScreen.fields(snapshot.data?.snapshot.value);
-                          final liked = uid != null && current[uid] == true;
-                          return TextButton.icon(
-                            icon: Icon(liked ? Icons.favorite : Icons.favorite_border),
-                            label: Text('${current.length}'),
-                            onPressed: uid == null ? null : () {
-                              final vote = likes.child(uid);
-                              _channelWrite(context, () => liked ? vote.remove() : vote.set(true));
-                            },
-                          );
-                        },
-                      ),
-                    ]),
-                  );
-                },
-              ),
-        );
+              : Column(children: [
+                  if (!canPost) Padding(
+                    padding: const EdgeInsets.symmetric(horizontal: 16),
+                    child: _followButton(uid),
+                  ),
+                  if (_search.isNotEmpty) ListTile(
+                    title: Text('Search: $_search'),
+                    trailing: IconButton(tooltip: 'Clear search', icon: const Icon(Icons.close),
+                      onPressed: () => setState(() => _search = '')),
+                  ),
+                  Expanded(child: posts.isEmpty
+                      ? Center(child: Text(_search.isEmpty ? 'No updates yet' : 'No matching updates'))
+                      : ListView.builder(
+                          reverse: true,
+                          padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 6),
+                          itemCount: posts.length,
+                          itemBuilder: (context, index) {
+                            final entry = posts[index];
+                            final post = ChannelScreen.fields(entry.value);
+                            final date = _postDate(post['createdAt']);
+                            final older = index + 1 < posts.length
+                                ? _postDate(ChannelScreen.fields(posts[index + 1].value)['createdAt']) : null;
+                            final showDate = date != null &&
+                                (older == null || !DateUtils.isSameDay(date, older));
+                            return Column(children: [
+                              if (showDate && date != null) Padding(
+                                padding: const EdgeInsets.only(top: 12, bottom: 4),
+                                child: Text(_dayLabel(context, date),
+                                  style: const TextStyle(fontSize: 12, color: Colors.white70)),
+                              ),
+                              _update(post, entry.key, uid, sharing),
+                            ]);
+                          },
+                        )),
+                ]),
+        ));
       },
     );
   }
@@ -7180,9 +7494,16 @@ class _GalleryScreenState extends State<GalleryScreen> {
     _loadGallery();
   }
 
-  Future<void> _loadGallery() async {
+  Future<void> _loadGallery({bool request = false}) async {
     try {
-      final permission = await PhotoManager.requestPermissionExtend();
+      const options = PermissionRequestOption();
+      final permission = await _PermissionQueue.run(() async {
+        if (!mounted) return null;
+        return request
+            ? PhotoManager.requestPermissionExtend(permission: options)
+            : PhotoManager.getPermissionState(requestOption: options);
+      });
+      if (!mounted || permission == null) return;
       if (!permission.isAuth && !permission.hasAccess) {
         setState(() {
           _loading = false;
@@ -7196,8 +7517,12 @@ class _GalleryScreenState extends State<GalleryScreen> {
         onlyAll: true,
       );
 
+      if (!mounted) return;
       if (albums.isEmpty) {
-        setState(() => _loading = false);
+        setState(() {
+          _permissionDenied = false;
+          _loading = false;
+        });
         return;
       }
 
@@ -7217,6 +7542,7 @@ class _GalleryScreenState extends State<GalleryScreen> {
 
       if (mounted) {
         setState(() {
+          _permissionDenied = false;
           _allAssets = assets;
           _videos = videos;
           _images = images;
@@ -7301,10 +7627,20 @@ class _GalleryScreenState extends State<GalleryScreen> {
               style: TextStyle(color: Colors.white60, fontSize: 12, height: 1.5),
             ),
             const SizedBox(height: 18),
+            FilledButton(
+              onPressed: () {
+                setState(() => _loading = true);
+                unawaited(_loadGallery(request: true));
+              },
+              child: const Text('Allow photos and videos'),
+            ),
             ElevatedButton(
               onPressed: () {
                 SoundService.playClick();
-                PhotoManager.openSetting();
+                unawaited(_PermissionQueue.run(() async {
+                  if (!mounted) return;
+                  await PhotoManager.openSetting();
+                }));
               },
               style: ElevatedButton.styleFrom(
                 backgroundColor: AppThemes.kGreen,
@@ -8472,6 +8808,13 @@ class _NativeVideoPlayerScreenState extends State<NativeVideoPlayerScreen> {
   }
 
   Future<void> _initVideo() async {
+    final oldController = _betterPlayerController;
+    _betterPlayerController = null;
+    oldController?.dispose();
+    setState(() {
+      _hasError = false;
+      _isInitialized = false;
+    });
     String realVideoUrl = widget.videoUrl.trim();
 
     if (realVideoUrl.isEmpty || !realVideoUrl.startsWith('http')) {
@@ -8490,7 +8833,6 @@ class _NativeVideoPlayerScreenState extends State<NativeVideoPlayerScreen> {
       aspectRatio: 16 / 9,
       fit: BoxFit.contain,
       errorBuilder: (context, errorMessage) {
-        setState(() => _hasError = true);
         return Center(
           child: Column(
             mainAxisAlignment: MainAxisAlignment.center,
@@ -8518,21 +8860,30 @@ class _NativeVideoPlayerScreenState extends State<NativeVideoPlayerScreen> {
       },
     );
 
+    final controller = BetterPlayerController(config);
+    _betterPlayerController = controller;
+    final initialized = Completer<void>();
+    controller.addEventsListener((event) {
+      if (!mounted || !identical(_betterPlayerController, controller)) return;
+      if (event.betterPlayerEventType == BetterPlayerEventType.exception) {
+        setState(() => _hasError = true);
+        if (!initialized.isCompleted) initialized.complete();
+      } else if (event.betterPlayerEventType == BetterPlayerEventType.initialized &&
+          !initialized.isCompleted) {
+        initialized.complete();
+        setState(() => _isInitialized = true);
+        _resetControlTimer();
+        _startWatchTracking();
+        _captureThumbnail();
+      }
+    });
     try {
-      _betterPlayerController = BetterPlayerController(config, betterPlayerDataSource: dataSource);
-      _betterPlayerController!.addEventsListener((event) {
-        if (event.betterPlayerEventType == BetterPlayerEventType.initialized) {
-          if (mounted) {
-            setState(() => _isInitialized = true);
-            _resetControlTimer();
-            _startWatchTracking();
-            _captureThumbnail();
-          }
-        }
-      });
-    } catch (e) {
-      debugPrint('❌ BetterPlayer Error: $e');
-      setState(() => _hasError = true);
+      await controller.setupDataSource(dataSource).timeout(const Duration(seconds: 15));
+      await initialized.future.timeout(const Duration(seconds: 15));
+    } catch (_) {
+      if (mounted && identical(_betterPlayerController, controller)) {
+        setState(() => _hasError = true);
+      }
     }
   }
 
@@ -10602,7 +10953,7 @@ class _MayaSocialMediaScreenState extends State<MayaSocialMediaScreen> {
       return [(label: 'Original file', url: widget.source)];
     }
     final api = _mediaLink(resolver);
-    if (api == null) return [];
+    if (api == null) throw StateError('Social resolver is not configured');
     _stream = null;
     _mediaTitle = null;
     final response = await http.post(api,
@@ -10611,15 +10962,20 @@ class _MayaSocialMediaScreenState extends State<MayaSocialMediaScreen> {
     ).timeout(const Duration(seconds: 15));
     if (response.statusCode != 200) throw StateError('Unavailable');
     final data = jsonDecode(response.body);
-    _stream = _mediaLink(data['stream_url']?.toString() ?? '');
+    if (data is! Map) throw const FormatException('Invalid media response');
+    _stream = _mediaLink((data['stream_url'] ?? data['streamUrl'])?.toString() ?? '');
     _mediaTitle = data['title'] is String ? data['title'] as String : null;
     final rawFormats = data['formats'];
-    if (rawFormats is! List) return [];
     final formats = <({String label, Uri url})>[];
-    for (final item in rawFormats) {
+    for (final item in rawFormats is List ? rawFormats : const []) {
       if (item is! Map || item['label'] is! String) continue;
       final url = _mediaLink(item['download_url']?.toString() ?? '');
       if (url != null) formats.add((label: item['label'] as String, url: url));
+    }
+    final stream = _stream;
+    if (stream != null && formats.isEmpty &&
+        const ['.mp4', '.webm', '.mkv', '.mov'].contains(_fileExtension(stream))) {
+      formats.add((label: 'Original video', url: stream));
     }
     return formats;
   }
