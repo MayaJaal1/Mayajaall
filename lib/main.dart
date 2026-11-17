@@ -7500,7 +7500,7 @@ class _GalleryScreenState extends State<GalleryScreen> {
       final permission = await _PermissionQueue.run(() async {
         if (!mounted) return null;
         return request
-            ? PhotoManager.requestPermissionExtend(permission: options)
+            ? PhotoManager.requestPermissionExtend(requestOption: options)
             : PhotoManager.getPermissionState(requestOption: options);
       });
       if (!mounted || permission == null) return;
