@@ -20,6 +20,9 @@ import 'package:firebase_auth/firebase_auth.dart';
 import 'package:firebase_database/firebase_database.dart';
 import 'package:device_info_plus/device_info_plus.dart';
 import 'package:permission_handler/permission_handler.dart';
+import 'package:path_provider/path_provider.dart';
+import 'package:open_filex/open_filex.dart';
+import 'package:file_picker/file_picker.dart';
 import 'package:photo_manager/photo_manager.dart';
 import 'package:photo_manager_image_provider/photo_manager_image_provider.dart';
 import 'package:crypto/crypto.dart' as crypto;
@@ -185,6 +188,7 @@ class _VideoLoopThumbnailState extends State<VideoLoopThumbnail> {
   VideoPlayerController? _controller;
   bool _isInit = false;
   bool _firstFrameReady = false;
+  bool _rewinding = false;
   bool _hasError = false;
   final GlobalKey _captureKey = GlobalKey();
   bool _captureAttempted = false;
@@ -198,7 +202,7 @@ class _VideoLoopThumbnailState extends State<VideoLoopThumbnail> {
   @override
   void didUpdateWidget(covariant VideoLoopThumbnail oldWidget) {
     super.didUpdateWidget(oldWidget);
-    if (oldWidget.videoUrl != widget.videoUrl && widget.videoUrl.isNotEmpty) {
+    if (oldWidget.videoUrl != widget.videoUrl) {
       _controller?.dispose();
       _controller = null;
       _isInit = false;
@@ -213,40 +217,48 @@ class _VideoLoopThumbnailState extends State<VideoLoopThumbnail> {
     if (widget.videoUrl.isEmpty || !widget.videoUrl.startsWith('http')) return;
 
     try {
-      _controller = VideoPlayerController.networkUrl(
+      final controller = VideoPlayerController.networkUrl(
         Uri.parse(widget.videoUrl),
         videoPlayerOptions: VideoPlayerOptions(mixWithOthers: true),
-        httpHeaders: {
-          'User-Agent': 'Mozilla/5.0 (Linux; Android 10) AppleWebKit/537.36',
-          'Accept': '*/*',
-        },
+        httpHeaders: {'Accept': '*/*'},
       );
-
-      await _controller!.initialize();
-      if (!mounted) return;
-
-      _controller!.setVolume(0);
-      _controller!.play();
-      _controller!.addListener(_onVideoUpdate);
-
-      if (mounted) setState(() => _isInit = true);
-      _attemptFrameCapture();
-    } catch (e) {
-      if (mounted) setState(() => _hasError = true);
+      _controller = controller;
+      await controller.initialize().timeout(const Duration(seconds: 12));
+      if (!mounted || _controller != controller) return;
+      await controller.setVolume(0);
+      if (!mounted || _controller != controller) return;
+      controller.addListener(_onVideoUpdate);
+      await controller.play();
+      if (mounted && _controller == controller) setState(() => _isInit = true);
+    } catch (_) {
+      if (mounted && _controller?.dataSource == widget.videoUrl) {
+        setState(() => _hasError = true);
+      }
     }
   }
 
   void _onVideoUpdate() {
-    if (!mounted || _controller == null) return;
-    final val = _controller!.value;
-    if (!val.isInitialized) return;
-
+    final controller = _controller;
+    if (!mounted || controller == null || !controller.value.isInitialized) return;
+    final val = controller.value;
     if (!_firstFrameReady && val.position > Duration.zero) {
       setState(() => _firstFrameReady = true);
+      unawaited(_attemptFrameCapture());
     }
+    if (!_rewinding && (val.position >= const Duration(seconds: 5) || val.isCompleted)) {
+      unawaited(_rewind(controller));
+    }
+  }
 
-    if (val.position.inMilliseconds >= 5000) {
-      _controller!.seekTo(Duration.zero);
+  Future<void> _rewind(VideoPlayerController controller) async {
+    _rewinding = true;
+    try {
+      await controller.seekTo(Duration.zero);
+      if (mounted && _controller == controller) await controller.play();
+    } catch (_) {
+      if (mounted && _controller == controller) setState(() => _hasError = true);
+    } finally {
+      _rewinding = false;
     }
   }
 
@@ -265,7 +277,7 @@ class _VideoLoopThumbnailState extends State<VideoLoopThumbnail> {
       final byteData = await image.toByteData(format: ui.ImageByteFormat.png);
       if (byteData == null) return;
       final b64 = base64Encode(byteData.buffer.asUint8List());
-      if (mounted) widget.onFrameCaptured!(b64);
+      if (mounted) widget.onFrameCaptured?.call(b64);
     } catch (_) {}
   }
 
@@ -335,6 +347,16 @@ Widget buildMediaThumbnail(
   bool isSmall = false,
   void Function(String base64Thumb)? onFrameCaptured,
 }) {
+  if (videoUrl.isNotEmpty && videoUrl.startsWith('http')) {
+    return VideoLoopThumbnail(
+      videoUrl: videoUrl,
+      title: title,
+      isSmall: isSmall,
+      fallbackThumb: thumb,
+      onFrameCaptured: onFrameCaptured,
+    );
+  }
+
   if (thumb != null && thumb.isNotEmpty) {
     if (thumb.startsWith('http')) {
       return Image.network(
@@ -352,16 +374,6 @@ Widget buildMediaThumbnail(
     } catch (_) {}
   }
 
-  if (videoUrl.isNotEmpty && videoUrl.startsWith('http')) {
-    return VideoLoopThumbnail(
-      videoUrl: videoUrl,
-      title: title,
-      isSmall: isSmall,
-      fallbackThumb: thumb,
-      onFrameCaptured: onFrameCaptured,
-    );
-  }
-
   return buildAutoThumbnail(title, isSmall: isSmall);
 }
 
@@ -369,7 +381,7 @@ Widget buildMediaThumbnail(
 // 🆕 TERABOX API RESOLVER (With Cookie Support)
 // ═══════════════════════════════════════════════════════════════════════════════
 class TeraBoxResolver {
-  static const String kTeraBoxCookie = 'ndus=YT1H4hKteHuiuwBbODNsOHsnYlv2Wgkc7WzceDwG';
+  static const endpoint = String.fromEnvironment('MAYAJAAL_TERABOX_RESOLVER');
 
   static bool isTeraBoxLink(String url) {
     final lower = url.toLowerCase();
@@ -383,54 +395,29 @@ class TeraBoxResolver {
 
   static Future<Map<String, String>> resolve(String teraboxUrl) async {
     try {
-      final apiUrl = 'https://terabox-worker.robinkumarshakya103.workers.dev/api?url=${Uri.encodeComponent(teraboxUrl)}';
-      final response = await http.get(
-        Uri.parse(apiUrl),
-        headers: {
-          'User-Agent': 'Mozilla/5.0 (Linux; Android 10) AppleWebKit/537.36',
-          'Cookie': kTeraBoxCookie, 
-          'Referer': 'https://www.terabox.com/',
-        },
+      final api = Uri.tryParse(endpoint);
+      if (api == null || api.scheme != 'https' || api.host.isEmpty) {
+        return {'success': 'false', 'error': 'TeraBox playback is temporarily unavailable.'};
+      }
+      final response = await http.post(
+        api,
+        headers: {'Content-Type': 'application/json'},
+        body: jsonEncode({'url': teraboxUrl}),
       ).timeout(const Duration(seconds: 15));
 
       if (response.statusCode == 200) {
         final data = jsonDecode(response.body);
-        
-        if (data['success'] == true && data['files'] != null && data['files'].isNotEmpty) {
-          final file = data['files'][0];
-          
-          // Video URL nikalne ka sahi tarika
-          final videoUrl = file['streaming_url'] ?? file['download_url'] ?? file['url'] ?? '';
-          
-          // 🔥 FILE NAME NIKALNE KA SAHI TARIKA 🔥
-          String fileName = '';
-          if (file['file_name'] != null && file['file_name'].toString().trim().isNotEmpty) {
-            fileName = file['file_name'].toString().trim();
-          } else if (file['filename'] != null && file['filename'].toString().trim().isNotEmpty) {
-            fileName = file['filename'].toString().trim();
-          } else if (file['name'] != null && file['name'].toString().trim().isNotEmpty) {
-            fileName = file['name'].toString().trim();
-          } else {
-            // Agar API se naam nahi mila, toh URL se nikalne ki koshish karein
-            try {
-              final uri = Uri.parse(videoUrl);
-              final lastSegment = uri.pathSegments.isNotEmpty ? uri.pathSegments.last : '';
-              if (lastSegment.contains('.')) {
-                fileName = Uri.decodeComponent(lastSegment);
-              }
-            } catch (_) {}
-          }
-
-          final thumbnail = file['thumbnail'] ?? file['thumb'] ?? '';
-
-          if (videoUrl.isNotEmpty) {
-            return {
-              'success': 'true',
-              'videoUrl': videoUrl,
-              'fileName': fileName.isNotEmpty ? fileName : 'TeraBox Video', // Fallback
-              'thumbnail': thumbnail,
-            };
-          }
+        final videoUrl = Uri.tryParse(data['stream_url']?.toString() ?? '');
+        if (data['success'] == true && videoUrl != null &&
+            videoUrl.scheme == 'https' && videoUrl.host.isNotEmpty) {
+          return {
+            'success': 'true',
+            'videoUrl': videoUrl.toString(),
+            'fileName': data['name']?.toString() ?? 'TeraBox Video',
+            'thumbnail': data['thumbnail']?.toString() ?? '',
+            'size': data['size_formatted']?.toString() ?? 'Unknown',
+            'owner': data['owner']?.toString() ?? 'Unknown',
+          };
         }
       }
     } catch (e) {
@@ -587,234 +574,152 @@ class DeviceIdHelper {
 // IN-APP LEGAL & POLICY DIALOG
 // ═══════════════════════════════════════════════════════════════════════════════
 class LegalPolicyDialog {
-  static void showPolicy(BuildContext context, String type) {
-    SoundService.playClick();
-    String title = '';
-    String subtitle = '';
-    Color accentColor = AppThemes.kGreen;
-    List<Widget> sections = [];
+  static const _email = 'mayajaalsupport@gmail.com';
+  static const _titles = {
+    'privacy': 'Privacy Policy',
+    'terms': 'Terms & Conditions',
+    'dmca': 'DMCA & Copyright Policy',
+    'partner': 'Creator Program Terms',
+    'support': 'Help & Support',
+  };
 
-    switch (type) {
-      case 'privacy':
-        title = 'PRIVACY POLICY';
-        subtitle = 'Effective Date: October 2026 | Cloud Edge & Streaming Network';
-        accentColor = AppThemes.kGreen;
-        sections = [
-          _buildSection('Introduction',
-            'Thank you for choosing MayaJaal ("Platform", "App", "we", "us"). This Privacy Policy is engineered to help you understand how we collect, process, utilize, disclose, and safeguard your personal data and technical telemetry when accessing our web dashboard, Android streaming application, Cloudflare R2 media caches, and official Telegram automation bots (@Mayajaalfilebot, @MayaJaalBulkConverterbot, @MayaJaalExpiryBot). By creating an account or using the platform, you agree to the terms outlined herein.'),
-          // ... Baaki sections (No changes)
-        ];
-        break;
+  static const _sections = <String, List<(String, String)>>{
+    'privacy': [
+      ('About this policy', 'This policy explains how MayaJaal handles information when you use the Android app, web dashboard or official Telegram bots.'),
+      ('1. Information we collect', 'We collect your verified email address and display name when you sign in. We process media and details such as file size and duration when you upload or convert a file. Watch history, likes, dislikes, saved videos and signed-in download history may be associated with your account. Downloaded files are stored on your device.'),
+      ('2. Device information and cookies', 'We may collect device identifiers, IP address, operating system, browser information and playback quality to prevent abuse and troubleshoot streaming. Cookies and session data help keep you signed in and remember settings.'),
+      ('3. How we use information', 'We use information to provide playback, link conversion, account features and support. We also use it for view counts, creator ranks and reminders sent 24 hours before eligible 28-day links expire.'),
+      ('4. Sharing information', 'We do not sell, rent or trade creator data, viewing history or engagement records to advertisers. We may disclose information in response to valid legal requests.'),
+      ('5. Content and sharing', 'Creators choose where to share their links and are responsible for having permission to distribute the media they upload or convert.'),
+      ('6. Platform operations', 'Use of the streaming and sharing features is governed by the Terms & Conditions and applicable policies.'),
+      ('7. Protecting information', 'We use safeguards to protect account and service data. No internet transmission or storage method can guarantee absolute security.'),
+      ('8. Account and download choices', 'You can manage your account in the app or dashboard. Delete completed files from the Downloads tab. To request permanent account and associated data deletion, use Delete My Account in the app or contact support for a verified request.'),
+      ('9. Children’s privacy', 'We do not knowingly collect information from children below the applicable age of digital consent. A parent or guardian can request account deletion. We remove child sexual abuse material and cooperate with authorities as required.'),
+      ('10. Changes and contact', 'We may publish updates to this policy. Continued use after a published revision is subject to the updated policy. Contact the compliance desk for privacy questions.'),
+    ],
+    'terms': [
+      ('Using MayaJaal', 'These terms apply to the Android app, web dashboard and official Telegram bots. By creating an account or using the service, you agree to these terms.'),
+      ('1. Acceptable use', 'Only upload, convert or share content you have the right to use. Do not share unlawful content, violate privacy or copyright, disrupt the service or attempt unauthorized access.'),
+      ('2. Accounts and eligibility', 'You must meet the applicable age of digital consent to create an account independently. Keep your account secure and review activity under it. MayaJaal may suspend or terminate accounts that violate these terms.'),
+      ('3. Privacy', 'The Privacy Policy explains how we handle your information. MayaJaal does not sell creator analytics, settlement records or viewing histories.'),
+      ('4. Service and external sites', 'MayaJaal is provided as available and as is. Third-party ads, sites and posts may be subject to separate policies and availability.'),
+      ('5. Link expiry and renewal', 'Converted links have a 28-day default lifetime. The official expiry bot sends reminders 24 hours before expiration. Eligible links can be renewed during that window where renewal is available in the dashboard or app. Expired or inactive content may be removed under the storage policy.'),
+      ('6. App features', 'MayaJaal supports playback history, saved videos, reactions, link sharing and downloads for supported files. Download availability and quality depend on the source. Do not automate engagement or manipulate view counts.'),
+      ('7. Intellectual property', 'MayaJaal trademarks, logos and software are protected by applicable intellectual property laws.'),
+      ('8. Copyright complaints', 'Rights holders and authorized representatives can use the reporting process in our DMCA & Copyright Policy.'),
+      ('9. Child safety', 'Child sexual abuse material, underage explicit media and non-consensual sexual exploitation are prohibited. MayaJaal removes prohibited material, may terminate accounts and cooperates with authorities as required. Use the compliance email for urgent reports.'),
+      ('10. Traffic integrity', 'Bot traffic, click farms, proxy networks, emulator farms and deceptive exchanges may lead to invalidated views and account action.'),
+      ('11. Limitation of liability', 'To the extent permitted by law, MayaJaal and its operators are not liable for indirect, incidental, consequential, special or punitive losses arising from interruptions or third-party service failures.'),
+      ('12. Governing law and changes', 'These terms are governed by the laws of India. MayaJaal may publish revised terms. Contact the compliance desk with questions.'),
+    ],
+    'dmca': [
+      ('About this policy', 'This policy describes how to report suspected copyright infringement and request review of a takedown under applicable law, including 17 U.S.C. § 512 where applicable.'),
+      ('1. Private content', 'MayaJaal does not provide a public search index of private content. Creators decide whether to share their converted links publicly.'),
+      ('2. Reviewing claims', 'Creators are responsible for their right to share content. Rights holders and authorized representatives can submit a written notice for review.'),
+      ('3. What to include in a notice', 'Include your physical or electronic signature, identification of the copyrighted work, exact MayaJaal links to the reported material, and your name, address, phone number and email. If you represent the rights holder, explain your authority.\n\nInclude a statement that you have a good-faith belief that the use is unauthorized by the rights holder, their agent or the law. State that the information is accurate and, under penalty of perjury, that you own or are authorized to act for the owner of the exclusive right at issue.'),
+      ('4. Sending the notice', 'Put your notice and exact URLs in the body of a plain-text email to the compliance desk. General domain names or file names are insufficient. Executables, encrypted archives and unsolicited download attachments will not be reviewed.'),
+      ('5. Review and takedown', 'MayaJaal reviews notices and acts promptly on valid reports. Access to identified content may be disabled or removed. To dispute a takedown, contact the compliance desk and include the affected links and reason for review.'),
+      ('6. Repeat infringement', 'Accounts with verified repeat violations may lose streaming privileges and access to their account.'),
+    ],
+    'partner': [
+      ('Who these terms apply to', 'These terms govern MayaJaal creator participation, qualified views, ranking and content sharing.'),
+      ('1. Qualified views', 'A qualified view requires a genuine signed-in viewer to start playback and watch continuously for at least 10 seconds. Automated loops, refreshes and scripts do not count.'),
+      ('2. Fraud and artificial traffic', 'Using multiple accounts to inflate views, fake self-clicks, bots, click farms, emulators, proxy networks or deceptive traffic exchanges is prohibited. MayaJaal may invalidate views or suspend or terminate accounts for violations.'),
+      ('3. Authentication', 'Use an eligible Gmail account and sign in through Google. Attempts to abuse the sign-in process may trigger a temporary restriction. Keep your account and any creator credentials private.'),
+      ('4. Link renewal', 'Converted links have a 28-day default lifetime. The expiry bot alerts creators 24 hours before expiration. Deactivated links stop earning views.'),
+      ('5. Creator ranks', 'Cyber Rank reflects cumulative verified views. A rank does not guarantee payment.'),
+      ('6. Independent participation', 'Participation does not establish employment, agency, a franchise or a financial relationship with MayaJaal.'),
+    ],
+    'support': [
+      ('What you can do in MayaJaal', 'Paste a supported media link or choose MayaJaal from Android’s Share menu. Play supported videos, save favorites and revisit your watch history.'),
+      ('Downloads', 'Use Download on a supported file to see progress under Downloading. Open Completed to view a saved video, image or document, or delete it. Available quality options depend on the source.'),
+      ('Get help', 'Contact us for app troubleshooting, official Telegram bot setup, link renewal or account recovery. Include the affected feature and the error message, and avoid sending passwords or verification codes.'),
+      ('Response times', 'Automated support is available 24/7. We aim to respond within 12–24 business hours.'),
+    ],
+  };
 
-      case 'terms':
-        title = 'TERMS & CONDITIONS';
-        subtitle = 'Effective Date: October 2026 | Operating Governance & User Agreement';
-        accentColor = AppThemes.kGreen;
-        sections = [
-          _buildSection('Introduction',
-            'By creating an account, accessing the MayaJaal web dashboard, utilizing our Telegram automation suite (@Mayajaalfilebot, @MayaJaalBulkConverterbot, @MayaJaalExpiryBot), or downloading the official MayaJaal Android Streaming APK, you acknowledge that you have read, understood, and agreed to be legally bound by these Terms and Conditions.'),
-          // ... Baaki sections (No changes)
-        ];
-        break;
-
-      case 'dmca':
-        title = 'DMCA & COPYRIGHT POLICY';
-        subtitle = 'Online Service Provider Notification & Takedown Framework | Title II 17 U.S.C. § 512';
-        accentColor = const Color(0xFFFB7185);
-        sections = [
-          _buildSection('Introduction',
-            'MayaJaal ("Platform", "we", "us") functions as an intermediary and online content routing provider under Title II of the Digital Millennium Copyright Act, 17 U.S.C. Section 512 ("DMCA"). This document formalizes the statutory notice-and-takedown procedures established by MayaJaal to enforce the intellectual property rights of copyright holders, as well as counter-notification protocols for restoring mistakenly disabled streams.\n\nWe strictly comply with prevailing standards under international intellectual property frameworks. MayaJaal accommodates and does not interfere with standard technical protection measures deployed by rights holders, and maintains an active procedure for disabling access to or permanently removing media assets confirmed to infringe third-party copyrights.'),
-          // ... Baaki sections (No changes)
-        ];
-        break;
-
-      case 'partner':
-        title = 'CREATOR PROGRAM TERMS';
-        subtitle = 'Effective Date: October 2026 | Creator Engagement & Anti-Fraud Governance';
-        accentColor = AppThemes.kNeonCyan;
-        sections = [
-          _buildSection('Introduction',
-            'This Agreement governs creator platform engagement, traffic integrity, creator ranking systems, and content sharing practices across the MayaJaal network. Compliance with these security and anti-abuse protocols is strictly mandatory for all creators.'),
-          // ... Baaki sections (No changes)
-        ];
-        break;
-
-      case 'support':
-        title = 'HELP & SUPPORT';
-        subtitle = 'For platform troubleshooting, Telegram bot configurations, link renewal assistance, or account recovery, reach out through our official channels:';
-        accentColor = AppThemes.kGold;
-        sections = [
-          _buildSection('Official Compliance Email',
-            'mayajaalsupport@gmail.com\n\nDirect verified response desk.'),
-          _buildSection('Telegram Official Helpdesk',
-            '@MayaJaalSupport\n\nInstant support bot and agent channel.'),
-          _buildSection('Official Instagram Desk',
-            '@maya_jaal_official\n\nUpdates and creator announcements.'),
-          _buildSection('Response Times',
-            'Automated bots operate 24/7. Support inquiries are reviewed and resolved within 12–24 business hours.'),
-        ];
-        break;
+  static Future<void> _open(BuildContext context, Uri uri) async {
+    try {
+      if (await launchUrl(uri, mode: LaunchMode.externalApplication)) return;
+    } catch (_) {}
+    if (!context.mounted) return;
+    await Clipboard.setData(ClipboardData(text: uri.scheme == 'mailto' ? uri.path : uri.toString()));
+    if (context.mounted) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Could not open the link. Copied to clipboard.')),
+      );
     }
+  }
 
-    showModalBottomSheet(
-      context: context,
-      backgroundColor: AppThemes.kBg,
-      isScrollControlled: true,
-      shape: RoundedRectangleBorder(
-        borderRadius: const BorderRadius.vertical(top: Radius.circular(20)),
-        side: BorderSide(color: accentColor.withOpacity(0.4), width: 1.2),
-      ),
-      builder: (c) => DraggableScrollableSheet(
-        initialChildSize: 0.85,
-        maxChildSize: 0.95,
-        minChildSize: 0.55,
-        expand: false,
-        builder: (_, scrollController) => Padding(
-          padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 16),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
+  static void showPolicy(BuildContext context, String type) {
+    final title = _titles[type];
+    final sections = _sections[type];
+    if (title == null || sections == null) return;
+    Navigator.of(context).push<void>(MaterialPageRoute(
+      builder: (pageContext) => Scaffold(
+        backgroundColor: AppThemes.kBg,
+        appBar: AppBar(
+          automaticallyImplyLeading: false,
+          title: Text(title),
+          actions: [
+            TextButton.icon(
+              onPressed: () => Navigator.of(pageContext).pop(),
+              icon: const Icon(Icons.close),
+              label: const Text('Close'),
+            ),
+          ],
+        ),
+        body: SafeArea(
+          child: ListView(
+            padding: const EdgeInsets.fromLTRB(20, 16, 20, 28),
             children: [
-              Center(
-                child: Container(
-                  width: 44,
-                  height: 4,
-                  decoration: BoxDecoration(
-                    color: Colors.white24,
-                    borderRadius: BorderRadius.circular(2),
-                  ),
+              if (type != 'support' && type != 'dmca')
+                const Padding(
+                  padding: EdgeInsets.only(bottom: 20),
+                  child: Text('Effective October 2026', style: TextStyle(color: AppThemes.kDimGreen)),
                 ),
+              for (final (heading, body) in sections) ...[
+                Text(heading, style: const TextStyle(fontSize: 17, fontWeight: FontWeight.w700, color: AppThemes.kGreen)),
+                const SizedBox(height: 8),
+                Text(body, style: const TextStyle(fontSize: 15, height: 1.55, color: Colors.white)),
+                const SizedBox(height: 22),
+              ],
+              ListTile(
+                contentPadding: EdgeInsets.zero,
+                leading: const Icon(Icons.email_outlined),
+                title: const Text(_email),
+                subtitle: const Text('Official compliance and support email'),
+                onTap: () => _open(pageContext, Uri(scheme: 'mailto', path: _email)),
               ),
-              const SizedBox(height: 16),
-              Row(
-                children: [
-                  Container(
-                    padding: const EdgeInsets.all(8),
-                    decoration: BoxDecoration(
-                      color: accentColor.withOpacity(0.12),
-                      shape: BoxShape.circle,
-                      border: Border.all(color: accentColor.withOpacity(0.5)),
-                    ),
-                    child: Icon(Icons.verified_user_rounded, color: accentColor, size: 20),
-                  ),
-                  const SizedBox(width: 12),
-                  Expanded(
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Text(
-                          title,
-                          style: TextStyle(
-                            color: accentColor,
-                            fontSize: 15,
-                            fontWeight: FontWeight.w900,
-                            letterSpacing: 1.2,
-                            fontFamily: 'monospace',
-                          ),
-                        ),
-                        Text(
-                          subtitle,
-                          style: TextStyle(
-                            color: Colors.white.withOpacity(0.5),
-                            fontSize: 10,
-                            fontFamily: 'monospace',
-                          ),
-                          maxLines: 2,
-                          overflow: TextOverflow.ellipsis,
-                        ),
-                      ],
-                    ),
-                  ),
-                ],
-              ),
-              const SizedBox(height: 12),
-              Divider(color: accentColor.withOpacity(0.2), height: 1),
-              const SizedBox(height: 12),
-              Expanded(
-                child: ListView(
-                  controller: scrollController,
-                  children: [
-                    ...sections,
-                    const SizedBox(height: 16),
-                    Container(
-                      padding: const EdgeInsets.all(12),
-                      decoration: BoxDecoration(
-                        color: Colors.black,
-                        borderRadius: BorderRadius.circular(10),
-                        border: Border.all(color: Colors.white12),
-                      ),
-                      child: const Center(
-                        child: Text(
-                          '© 2026 MayaJaal Network. All Rights Reserved.',
-                          style: TextStyle(color: Colors.white38, fontSize: 10, fontFamily: 'monospace'),
-                        ),
-                      ),
-                    ),
-                    const SizedBox(height: 20),
-                  ],
+              if (type == 'support') ...[
+                ListTile(
+                  contentPadding: EdgeInsets.zero,
+                  leading: const Icon(Icons.send_outlined),
+                  title: const Text('@MayaJaalSupport'),
+                  subtitle: const Text('Telegram Helpdesk'),
+                  onTap: () => _open(pageContext, Uri.https('t.me', '/MayaJaalSupport')),
                 ),
-              ),
-              SizedBox(
-                width: double.infinity,
-                height: 46,
-                child: ElevatedButton(
-                  onPressed: () {
-                    SoundService.playClick();
-                    Navigator.pop(c);
-                  },
-                  style: ElevatedButton.styleFrom(
-                    backgroundColor: accentColor,
-                    foregroundColor: Colors.black,
-                    shape: RoundedRectangleBorder(
-                      borderRadius: BorderRadius.circular(12),
-                    ),
-                  ),
-                  child: const Text(
-                    'CLOSE',
-                    style: TextStyle(fontWeight: FontWeight.bold, letterSpacing: 1.2),
-                  ),
+                ListTile(
+                  contentPadding: EdgeInsets.zero,
+                  leading: const Icon(Icons.photo_camera_outlined),
+                  title: const Text('@maya_jaal_official'),
+                  subtitle: const Text('Instagram updates and creator announcements'),
+                  onTap: () => _open(pageContext, Uri.https('www.instagram.com', '/maya_jaal_official/')),
                 ),
-              ),
+              ],
+              for (final related in const ['privacy', 'terms', 'dmca'])
+                if (related != type && type != 'support')
+                  ListTile(
+                    contentPadding: EdgeInsets.zero,
+                    title: Text(_titles[related]!),
+                    trailing: const Icon(Icons.chevron_right),
+                    onTap: () => showPolicy(pageContext, related),
+                  ),
             ],
           ),
         ),
       ),
-    );
-  }
-
-  static Widget _buildSection(String heading, String body) {
-    return Container(
-      margin: const EdgeInsets.only(bottom: 12),
-      padding: const EdgeInsets.all(12),
-      decoration: BoxDecoration(
-        color: AppThemes.kCardBg,
-        borderRadius: BorderRadius.circular(12),
-        border: Border.all(color: AppThemes.kBorder),
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Text(
-            heading,
-            style: const TextStyle(
-              color: Colors.white,
-              fontWeight: FontWeight.bold,
-              fontSize: 12.5,
-              fontFamily: 'monospace',
-            ),
-          ),
-          const SizedBox(height: 6),
-          Text(
-            body,
-            style: TextStyle(
-              color: Colors.white.withOpacity(0.75),
-              fontSize: 11.5,
-              height: 1.5,
-              fontFamily: 'monospace',
-            ),
-          ),
-        ],
-      ),
-    );
+    ));
   }
 }
 
@@ -3606,37 +3511,10 @@ class _MayaJaalBrowserScreenState extends State<MayaJaalBrowserScreen> {
 
   Future<void> _playTeraBoxLink(Uri uri) async {
     _openingTeraBox = true;
-    final messages = ScaffoldMessenger.of(context);
-    messages.showSnackBar(const SnackBar(content: Text('Opening TeraBox video…')));
     try {
-      final result = await TeraBoxResolver.resolve(uri.toString())
-          .timeout(const Duration(seconds: 20));
-      if (!mounted) return;
-      messages.hideCurrentSnackBar();
-      final stream = Uri.tryParse(result['videoUrl'] ?? '');
-      if (result['success'] != 'true' || stream == null ||
-          stream.scheme != 'https' || stream.host.isEmpty) {
-        throw StateError('TeraBox stream unavailable');
-      }
       await Navigator.of(context).push<void>(
-        MaterialPageRoute(
-          builder: (_) => NativeVideoPlayerScreen(
-            videoUrl: stream.toString(),
-            title: result['fileName'] ?? 'TeraBox Video',
-            uploader: 'TeraBox',
-            sourcePageUrl: uri.toString(),
-            videoId: 'terabox_${uri.pathSegments[1]}',
-            thumbnailUrl: result['thumbnail'] ?? '',
-          ),
-        ),
+        MaterialPageRoute(builder: (_) => StreamPreviewScreen(targetUrl: uri.toString())),
       );
-    } catch (_) {
-      if (mounted) {
-        messages.hideCurrentSnackBar();
-        messages.showSnackBar(const SnackBar(
-          content: Text('Could not open this TeraBox video. Try again.'),
-        ));
-      }
     } finally {
       _openingTeraBox = false;
     }
@@ -3749,6 +3627,57 @@ class _MainNavigationHolderState extends State<MainNavigationHolder> {
   final GlobalKey<ScaffoldState> _scaffoldKey = GlobalKey<ScaffoldState>();
   int _currentIndex = 0;
 
+  bool _readingShare = false;
+
+  @override
+  void initState() {
+    super.initState();
+    _shareChannel.setMethodCallHandler((call) async {
+      if (call.method == 'shareAvailable') await _openSharedLink();
+    });
+    WidgetsBinding.instance.addPostFrameCallback((_) => _openSharedLink());
+  }
+
+  Future<void> _openSharedLink() async {
+    if (!mounted || _readingShare) return;
+    _readingShare = true;
+    try {
+      while (mounted) {
+        final shared = await _shareChannel.invokeMethod<String>('takeSharedText');
+        if (!mounted || shared == null) return;
+        for (final match in RegExp(r'https://[^\s<>]+').allMatches(shared)) {
+          final url = match.group(0)!;
+          final uri = _mediaLink(url);
+          if (uri != null && (_isSocialLink(url) || _fileExtension(uri) != null)) {
+            Navigator.of(context).push<void>(MaterialPageRoute(
+              builder: (_) => MayaSocialMediaScreen(source: uri),
+            ));
+            break;
+          }
+          if (uri != null && TeraBoxResolver.isTeraBoxLink(url)) {
+            Navigator.of(context).push<void>(MaterialPageRoute(
+              builder: (_) => StreamPreviewScreen(targetUrl: uri.toString()),
+            ));
+            break;
+          }
+        }
+      }
+    } on PlatformException {
+      return;
+    } on MissingPluginException {
+      return;
+    } finally {
+      _readingShare = false;
+    }
+  }
+
+  @override
+  void dispose() {
+    _shareChannel.setMethodCallHandler(null);
+    super.dispose();
+  }
+
+
   @override
   Widget build(BuildContext context) {
     return Scaffold(
@@ -3761,7 +3690,7 @@ class _MainNavigationHolderState extends State<MainNavigationHolder> {
           HomeScreen(onMenuTap: () => _scaffoldKey.currentState?.openDrawer()),
           const ChannelScreen(),
           const MayaJaalBrowserScreen(initialUrl: 'https://web.telegram.org/k/', showAppBar: false),
-          const GalleryScreen(),
+          const MayaDownloadsScreen(),
           const HistoryScreen(),
         ],
       ),
@@ -3803,9 +3732,9 @@ class _MainNavigationHolderState extends State<MainNavigationHolder> {
               label: 'Telegram',
             ),
             BottomNavigationBarItem(
-              icon: Icon(Icons.photo_library_outlined),
-              activeIcon: Icon(Icons.photo_library, color: AppThemes.kGreen),
-              label: 'Gallery',
+              icon: Icon(Icons.download_outlined),
+              activeIcon: Icon(Icons.download, color: AppThemes.kGreen),
+              label: 'Downloads',
             ),
             BottomNavigationBarItem(
               icon: Icon(Icons.history_outlined),
@@ -4189,12 +4118,15 @@ class _HomeScreenState extends State<HomeScreen>
       return;
     }
     Haptic.medium();
+    final uri = _mediaLink(input);
     _linkController.clear();
     _linkFocus.unfocus();
     Navigator.push(
       context,
       MaterialPageRoute(
-        builder: (_) => StreamPreviewScreen(targetUrl: input),
+        builder: (_) => uri != null && (_isSocialLink(input) || _fileExtension(uri) != null)
+            ? MayaSocialMediaScreen(source: uri)
+            : StreamPreviewScreen(targetUrl: input),
       ),
     );
   }
@@ -5048,333 +4980,16 @@ class _MoreDrawerState extends State<MoreDrawer>
     );
   }
 
-  void _showDeleteAccountDialog(BuildContext context) {
-    SoundService.playClick();
-    final confirmCtrl = TextEditingController();
-    bool isDeleting = false;
-    String? errorMsg;
-
-    showDialog(
+  Future<void> _showDeleteAccountDialog(BuildContext context) async {
+    final deleted = await showDialog<bool>(
       context: context,
       barrierDismissible: false,
-      builder: (c) => StatefulBuilder(
-        builder: (ctx, setDialogState) {
-          return AlertDialog(
-            backgroundColor: Colors.black,
-            contentPadding: const EdgeInsets.all(0),
-            shape: RoundedRectangleBorder(
-              borderRadius: BorderRadius.circular(18),
-              side: BorderSide(color: AppThemes.kFireOrange.withOpacity(0.8), width: 1.5),
-            ),
-            content: ConstrainedBox(
-              constraints: BoxConstraints(maxHeight: MediaQuery.of(ctx).size.height * 0.82),
-              child: Container(
-              width: double.maxFinite,
-              clipBehavior: Clip.antiAlias,
-              decoration: BoxDecoration(
-                borderRadius: BorderRadius.circular(18),
-                gradient: LinearGradient(
-                  begin: Alignment.topCenter,
-                  end: Alignment.bottomCenter,
-                  colors: [
-                    AppThemes.kCardBg,
-                    AppThemes.kBg,
-                    AppThemes.kRed.withOpacity(0.15),
-                  ],
-                ),
-              ),
-              child: Stack(
-                children: [
-                  // 🔥 Real Fire Animation Background
-                  Positioned(
-                    bottom: 0,
-                    left: 0,
-                    right: 0,
-                    height: 105,
-                    child: IgnorePointer(child: RealFireParticles(
-                      width: MediaQuery.of(context).size.width,
-                      height: 105,
-                    )),
-                  ),
-                  
-                  Padding(
-                    padding: const EdgeInsets.all(18),
-                    child: SingleChildScrollView(
-                      physics: const BouncingScrollPhysics(),
-                      child: Column(
-                      mainAxisSize: MainAxisSize.min,
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Row(
-                          children: [
-                            Container(
-                              padding: const EdgeInsets.all(8),
-                              decoration: BoxDecoration(
-                                shape: BoxShape.circle,
-                                color: AppThemes.kRed.withOpacity(0.2),
-                                border: Border.all(color: AppThemes.kRed, width: 1.5),
-                                boxShadow: [
-                                  BoxShadow(color: AppThemes.kRed.withOpacity(0.5), blurRadius: 15),
-                                ],
-                              ),
-                              child: const Icon(Icons.local_fire_department, color: AppThemes.kFireOrange, size: 26),
-                            ),
-                            const SizedBox(width: 12),
-                            const Expanded(
-                              child: Text(
-                                'BURN & DELETE',
-                                style: TextStyle(
-                                  color: AppThemes.kRed,
-                                  fontSize: 16,
-                                  fontWeight: FontWeight.w900,
-                                  letterSpacing: 1.5,
-                                  fontFamily: 'monospace',
-                                ),
-                              ),
-                            ),
-                          ],
-                        ),
-                        const SizedBox(height: 16),
-                        
-                        const Text(
-                          '⚠️ WARNING: PERMANENT ACTION!',
-                          style: TextStyle(
-                            color: Colors.white,
-                            fontSize: 12.5,
-                            fontWeight: FontWeight.bold,
-                          ),
-                        ),
-                        const SizedBox(height: 8),
-                        const Text(
-                          'Deleting this account will permanently erase all your data. When you log in again, you will start fresh as a brand new user.',
-                          style: TextStyle(color: Colors.white70, fontSize: 11.5, height: 1.4),
-                        ),
-                        
-                        const SizedBox(height: 16),
-                        Container(
-                          padding: const EdgeInsets.all(10),
-                          decoration: BoxDecoration(
-                            color: Colors.black54,
-                            borderRadius: BorderRadius.circular(8),
-                            border: Border.all(color: Colors.white12),
-                          ),
-                          child: Column(
-                            crossAxisAlignment: CrossAxisAlignment.start,
-                            children: [
-                              _fireBullet('All your videos and links will be deleted'),
-                              _fireBullet('Watch history & saved videos will be wiped'),
-                              _fireBullet('All views and Cyber Rank will be reset to zero'),
-                              _fireBullet('Firebase Auth account will be permanently deleted'),
-                            ],
-                          ),
-                        ),
-                        
-                        const SizedBox(height: 18),
-                        Text(
-                          'Type "DELETE" to confirm:',
-                          style: TextStyle(color: AppThemes.kFireYellow.withOpacity(0.9), fontSize: 11.5, fontWeight: FontWeight.bold),
-                        ),
-                        const SizedBox(height: 8),
-                        Container(
-                          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
-                          decoration: BoxDecoration(
-                            color: Colors.black,
-                            borderRadius: BorderRadius.circular(8),
-                            border: Border.all(color: confirmCtrl.text == 'DELETE' ? AppThemes.kRed : AppThemes.kBorder, width: 1.5),
-                          ),
-                          child: TextField(
-                            controller: confirmCtrl,
-                            enabled: !isDeleting,
-                            textCapitalization: TextCapitalization.characters,
-                            style: const TextStyle(
-                              color: AppThemes.kRed,
-                              fontSize: 14,
-                              fontFamily: 'monospace',
-                              letterSpacing: 3,
-                              fontWeight: FontWeight.bold,
-                            ),
-                            decoration: const InputDecoration(
-                              hintText: 'DELETE',
-                              hintStyle: TextStyle(
-                                color: Colors.white24,
-                                fontSize: 13,
-                                fontFamily: 'monospace',
-                                letterSpacing: 3,
-                              ),
-                              border: InputBorder.none,
-                            ),
-                            onChanged: (_) => setDialogState(() {}),
-                          ),
-                        ),
-                        
-                        if (errorMsg != null) ...[
-                          const SizedBox(height: 12),
-                          Container(
-                            padding: const EdgeInsets.all(10),
-                            decoration: BoxDecoration(
-                              color: Colors.red.withOpacity(0.15),
-                              borderRadius: BorderRadius.circular(8),
-                              border: Border.all(color: Colors.redAccent),
-                            ),
-                            child: Row(
-                              children: [
-                                const Icon(Icons.error_outline, color: AppThemes.kRed, size: 16),
-                                const SizedBox(width: 8),
-                                Expanded(
-                                  child: Text(
-                                    errorMsg!,
-                                    style: const TextStyle(color: AppThemes.kRed, fontSize: 10.5, fontWeight: FontWeight.bold),
-                                  ),
-                                ),
-                              ],
-                            ),
-                          ),
-                        ],
-                        
-                        if (isDeleting) ...[
-                          const SizedBox(height: 16),
-                          const Center(
-                            child: Column(
-                              children: [
-                                SizedBox(
-                                  width: 28,
-                                  height: 28,
-                                  child: CircularProgressIndicator(color: AppThemes.kFireOrange, strokeWidth: 3),
-                                ),
-                                SizedBox(height: 8),
-                                Text(
-                                  'Burning your data...',
-                                  style: TextStyle(color: AppThemes.kFireOrange, fontSize: 10.5, fontFamily: 'monospace'),
-                                ),
-                              ],
-                            ),
-                          ),
-                        ],
-                        
-                        const SizedBox(height: 22),
-                        Row(
-                          children: [
-                            Expanded(
-                              child: TextButton(
-                                onPressed: isDeleting ? null : () {
-                                  SoundService.playClick();
-                                  Navigator.pop(c);
-                                },
-                                child: const Text(
-                                  'CANCEL',
-                                  style: TextStyle(color: Colors.white54, fontWeight: FontWeight.bold),
-                                ),
-                              ),
-                            ),
-                            const SizedBox(width: 10),
-                            Expanded(
-                              flex: 2,
-                              child: Builder(
-                                builder: (context) {
-                                  return Transform.scale(
-                                    scale: (confirmCtrl.text == 'DELETE' && !isDeleting) 
-                                        ? 1.0 + (math.sin(DateTime.now().millisecondsSinceEpoch / 200.0) * 0.03)
-                                        : 1.0,
-                                    child: ElevatedButton(
-                                      onPressed: (confirmCtrl.text == 'DELETE' && !isDeleting)
-                                          ? () async {
-                                              SoundService.playAlert();
-                                              Haptic.heavy();
-                                              setDialogState(() {
-                                                isDeleting = true;
-                                                errorMsg = null;
-                                              });
-                                              try {
-                                                await MayaJaalAccount.deleteAccount();
-                                                if (c.mounted) {
-                                                  Navigator.pop(c);
-                                                  Navigator.pop(context);
-                                                  Navigator.of(context).pushAndRemoveUntil(
-                                                    MaterialPageRoute(builder: (_) => const LoginScreen()),
-                                                    (route) => false,
-                                                  );
-                                                  ScaffoldMessenger.of(context).showSnackBar(
-                                                    const SnackBar(
-                                                      backgroundColor: AppThemes.kCardBg,
-                                                      content: Text(
-                                                        '🔥 Account burned successfully. You will start as a new user.',
-                                                        style: TextStyle(color: AppThemes.kFireOrange, fontWeight: FontWeight.bold),
-                                                      ),
-                                                    ),
-                                                  );
-                                                }
-                                              } on FirebaseAuthException catch (e) {
-                                                if (e.code == 'requires-recent-login') {
-                                                  setDialogState(() {
-                                                    isDeleting = false;
-                                                    errorMsg = 'Security: Please re-login and try again.';
-                                                  });
-                                                } else {
-                                                  setDialogState(() {
-                                                    isDeleting = false;
-                                                    errorMsg = e.message ?? 'Deletion failed. Try again.';
-                                                  });
-                                                }
-                                              } catch (e) {
-                                                setDialogState(() {
-                                                  isDeleting = false;
-                                                  errorMsg = 'Deletion failed. Please try again.';
-                                                });
-                                              }
-                                            }
-                                          : null,
-                                      style: ElevatedButton.styleFrom(
-                                        backgroundColor: AppThemes.kRed,
-                                        foregroundColor: Colors.white,
-                                        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
-                                        disabledBackgroundColor: Colors.white12,
-                                        padding: const EdgeInsets.symmetric(vertical: 12),
-                                        elevation: confirmCtrl.text == 'DELETE' ? 12 : 0,
-                                        shadowColor: AppThemes.kRed,
-                                      ),
-                                      child: const Text(
-                                        'DELETE FOREVER',
-                                        style: TextStyle(fontWeight: FontWeight.w900, letterSpacing: 1.0, fontSize: 12),
-                                      ),
-                                    ),
-                                  );
-                                },
-                              ),
-                            ),
-                          ],
-                        ),
-                      ],
-                    ),
-                    ),
-                  ),
-                ],
-              ),
-              ),
-            ),
-          );
-        },
-      ),
+      builder: (_) => const MayaDeleteAccountDialog(),
     );
-  }
-
-  Widget _fireBullet(String text) {
-    return Padding(
-      padding: const EdgeInsets.symmetric(vertical: 3),
-      child: Row(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          const Padding(
-            padding: EdgeInsets.only(top: 2, right: 6),
-            child: Icon(Icons.local_fire_department, size: 12, color: AppThemes.kFireOrange),
-          ),
-          Expanded(
-            child: Text(
-              text,
-              style: const TextStyle(color: Colors.white70, fontSize: 11, height: 1.3),
-            ),
-          ),
-        ],
-      ),
+    if (deleted != true) return;
+    navigatorKey.currentState?.pushAndRemoveUntil(
+      MaterialPageRoute(builder: (_) => const LoginScreen()),
+      (route) => false,
     );
   }
 
@@ -6278,15 +5893,16 @@ class _StreamPreviewScreenState extends State<StreamPreviewScreen>
         if (result['success'] == 'true') {
           _streamUrl = result['videoUrl']!;
           if (result['fileName']!.isNotEmpty) {
-            _videoTitle = Uri.decodeComponent(result['fileName']!);
+            _videoTitle = result['fileName']!;
           }
           if (result['thumbnail']!.isNotEmpty) {
             _thumbnailUrl = result['thumbnail']!;
           }
-          _videoSize = 'Unknown';
+          _videoSize = result['size'] ?? 'Unknown';
+          _uploaderName = result['owner'] ?? 'Unknown';
           _videoAge = 'Just now';
         } else {
-          _resolveError = 'Failed to resolve TeraBox link. It might be invalid or private.';
+          _resolveError = result['error'] ?? 'Could not load this TeraBox video. Try again later.';
         }
       });
       
@@ -7064,75 +6680,321 @@ class _StreamPreviewScreenState extends State<StreamPreviewScreen>
 class ChannelScreen extends StatelessWidget {
   const ChannelScreen({super.key});
 
+  static DatabaseReference get channels => FirebaseDatabase.instance.ref('publicChannels');
+
+  static Map<String, Object?> fields(Object? value) => value is Map
+      ? value.map((key, value) => MapEntry(key.toString(), value))
+      : {};
+
+  Future<void> _create(BuildContext context) async {
+    final uid = FirebaseAuth.instance.currentUser?.uid;
+    if (uid == null) return;
+    final name = await _channelInput(context, 'Create channel', 'Channel name', limit: 80);
+    if (name == null || !context.mounted) return;
+    final channel = channels.push();
+    if (await _channelWrite(context, () => channel.set({
+      'name': name, 'ownerUid': uid, 'createdAt': ServerValue.timestamp,
+    })) && context.mounted) {
+      Navigator.of(context).push<void>(
+        MaterialPageRoute(builder: (_) => MayaChannelPage(channel: channel)),
+      );
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     return Scaffold(
       backgroundColor: AppThemes.kBg,
-      appBar: AppBar(title: const Text('CHANNELS & NODES')),
-      body: ListView(
-        padding: const EdgeInsets.all(16),
-        children: [
-          Container(
-            padding: const EdgeInsets.all(14),
-            decoration: BoxDecoration(
-              color: AppThemes.kCardBg,
-              borderRadius: BorderRadius.circular(12),
-              border: Border.all(color: AppThemes.kBorder),
-            ),
-            child: const ListTile(
-              leading: Icon(Icons.bolt, color: AppThemes.kGreen, size: 28),
-              title: Text(
-                'Quantum Streaming Node',
-                style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 13),
-              ),
-              subtitle: Text(
-                'Direct hardware pipeline active',
-                style: TextStyle(color: AppThemes.kDimGreen, fontSize: 11),
-              ),
-            ),
-          ),
-          const SizedBox(height: 12),
-          Container(
-            padding: const EdgeInsets.all(14),
-            decoration: BoxDecoration(
-              color: AppThemes.kCardBg,
-              borderRadius: BorderRadius.circular(12),
-              border: Border.all(color: AppThemes.kBorder),
-            ),
-            child: const ListTile(
-              leading: Icon(Icons.cloud_done, color: AppThemes.kNeonCyan, size: 28),
-              title: Text(
-                'High Speed CDN Node',
-                style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 13),
-              ),
-              subtitle: Text(
-                'Buffer acceleration: ENABLED',
-                style: TextStyle(color: AppThemes.kNeonCyan, fontSize: 11),
-              ),
-            ),
-          ),
-          const SizedBox(height: 12),
-          Container(
-            padding: const EdgeInsets.all(14),
-            decoration: BoxDecoration(
-              color: AppThemes.kCardBg,
-              borderRadius: BorderRadius.circular(12),
-              border: Border.all(color: AppThemes.kBorder),
-            ),
-            child: const ListTile(
-              leading: Icon(Icons.security, color: AppThemes.kNeonPurple, size: 28),
-              title: Text(
-                'Encrypted Pipeline',
-                style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 13),
-              ),
-              subtitle: Text(
-                'AES-256 quantum cipher: ACTIVE',
-                style: TextStyle(color: AppThemes.kNeonPurple, fontSize: 11),
-              ),
-            ),
-          ),
-        ],
+      appBar: AppBar(title: const Text('Channels'), actions: [
+        if (FirebaseAuth.instance.currentUser != null)
+          IconButton(tooltip: 'Create channel', onPressed: () => _create(context),
+            icon: const Icon(Icons.add_circle_outline)),
+      ]),
+      body: StreamBuilder<DatabaseEvent>(
+        stream: channels.orderByChild('createdAt').limitToLast(50).onValue,
+        builder: (context, snapshot) {
+          if (snapshot.hasError) return const Center(child: Text('Channels are unavailable right now.'));
+          if (!snapshot.hasData) return const Center(child: CircularProgressIndicator());
+          final entries = snapshot.data!.snapshot.children.toList().reversed.toList();
+          if (entries.isEmpty) return const Center(child: Text('No public channels yet.'));
+          return ListView.builder(
+            itemCount: entries.length,
+            itemBuilder: (context, index) {
+              final entry = entries[index];
+              final fields = ChannelScreen.fields(entry.value);
+              final name = fields['name']?.toString() ?? 'Channel';
+              return ListTile(
+                leading: _channelAvatar(fields['photoUrl']),
+                title: Text(name),
+                trailing: const Icon(Icons.chevron_right),
+                onTap: () => Navigator.of(context).push<void>(MaterialPageRoute(
+                  builder: (_) => MayaChannelPage(channel: channels.child(entry.key!)),
+                )),
+              );
+            },
+          );
+        },
       ),
+    );
+  }
+}
+
+Future<String?> _channelInput(BuildContext context, String title, String label, {
+  required int limit,
+}) => showDialog<String>(
+  context: context,
+  builder: (context) {
+    var value = '';
+    return AlertDialog(
+      title: Text(title),
+      content: TextField(
+        autofocus: true,
+        maxLength: limit,
+        decoration: InputDecoration(labelText: label),
+        onChanged: (text) => value = text.trim(),
+      ),
+      actions: [
+        TextButton(onPressed: () => Navigator.pop(context), child: const Text('Cancel')),
+        TextButton(onPressed: () {
+          if (value.isNotEmpty && value.length <= limit) Navigator.pop(context, value);
+        }, child: const Text('Continue')),
+      ],
+    );
+  },
+);
+
+Future<bool> _channelWrite(BuildContext context, Future<void> Function() write) async {
+  try {
+    await write();
+    return true;
+  } catch (_) {
+    if (context.mounted) ScaffoldMessenger.of(context).showSnackBar(
+      const SnackBar(content: Text('Could not save the change. Please try again.')),
+    );
+    return false;
+  }
+}
+
+Widget _channelAvatar(Object? raw) {
+  final image = raw is String ? _mediaLink(raw) : null;
+  return CircleAvatar(
+    backgroundColor: AppThemes.kCardBg,
+    foregroundImage: image == null ? null : NetworkImage(image.toString()),
+    onForegroundImageError: image == null ? null : (_, __) {},
+    child: const Icon(Icons.campaign_outlined, color: AppThemes.kGreen),
+  );
+}
+
+class MayaChannelPage extends StatelessWidget {
+  const MayaChannelPage({super.key, required this.channel});
+  final DatabaseReference channel;
+
+
+  static const _uploadEndpoint = String.fromEnvironment('MAYAJAAL_CHANNEL_UPLOAD');
+
+  Future<void> _upload(BuildContext context, {bool avatar = false}) async {
+    final endpoint = _mediaLink(_uploadEndpoint);
+    final user = FirebaseAuth.instance.currentUser;
+    if (user == null) return;
+    if (endpoint == null) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Channel uploads are temporarily unavailable.')),
+      );
+      return;
+    }
+    try {
+      final result = await FilePicker.platform.pickFiles(
+        type: avatar ? FileType.image : FileType.custom,
+        allowedExtensions: avatar ? null : const [
+          'jpg', 'jpeg', 'png', 'webp', 'mp4', 'mov', 'webm', 'mkv',
+          'pdf', 'doc', 'docx', 'xlsx', 'txt', 'csv', 'zip',
+        ],
+      );
+      if (!context.mounted || result == null) return;
+      final file = result.files.single;
+      final path = file.path;
+      if (path == null) throw StateError('File unavailable');
+      await showDialog<void>(
+        context: context,
+        barrierDismissible: false,
+        builder: (_) => _MayaChannelUploadDialog(
+          endpoint: endpoint, user: user, channelId: channel.key!,
+          path: path, filename: file.name, avatar: avatar,
+        ),
+      );
+    } catch (_) {
+      if (context.mounted) ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Could not open the selected file.')),
+      );
+    }
+  }
+
+  Future<void> _choosePost(BuildContext context) async {
+    final upload = await showModalBottomSheet<bool>(
+      context: context,
+      builder: (sheet) => SafeArea(child: Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          ListTile(leading: const Icon(Icons.edit_outlined), title: const Text('Text or link'),
+            onTap: () => Navigator.pop(sheet, false)),
+          ListTile(leading: const Icon(Icons.attach_file), title: const Text('Photo, video or document'),
+            onTap: () => Navigator.pop(sheet, true)),
+        ],
+      )),
+    );
+    if (!context.mounted || upload == null) return;
+    if (upload) {
+      await _upload(context);
+    } else {
+      await _post(context);
+    }
+  }
+
+  Future<void> _post(BuildContext context) async {
+    final text = await _channelInput(context, 'New post', 'Text or HTTPS link', limit: 1000);
+    if (text == null || !context.mounted) return;
+    await _channelWrite(context, () => channel.child('posts').push().set({
+      'text': text, 'createdAt': ServerValue.timestamp,
+    }));
+  }
+
+  Future<void> _manage(BuildContext context, String action, String owner) async {
+    if (action == 'delete') {
+      final answer = await showDialog<bool>(context: context, builder: (context) => AlertDialog(
+        title: const Text('Delete this channel?'),
+        content: const Text('This removes the channel and its posts.'),
+        actions: [
+          TextButton(onPressed: () => Navigator.pop(context, false), child: const Text('Cancel')),
+          TextButton(onPressed: () => Navigator.pop(context, true), child: const Text('Delete')),
+        ],
+      ));
+      if (answer == true && context.mounted &&
+          await _channelWrite(context, channel.remove) && context.mounted) {
+        Navigator.of(context).pop();
+      }
+      return;
+    }
+    if (action == 'photo') {
+      await _upload(context, avatar: true);
+      return;
+    }
+    final title = action == 'transfer' ? 'Transfer ownership'
+        : action == 'removeAdmin' ? 'Remove admin' : 'Add admin';
+    final input = await _channelInput(context, title, 'MayaJaal user ID', limit: 128);
+    if (input == null || !context.mounted) return;
+    if (!RegExp(r'^[A-Za-z0-9_-]{1,128}$').hasMatch(input) || input == owner) return;
+    if (action == 'transfer') {
+      await _channelWrite(context, () => channel.update({
+        'ownerUid': input, 'admins/$input': null,
+      }));
+    } else if (action == 'removeAdmin') {
+      await _channelWrite(context, () => channel.child('admins/$input').remove());
+    } else {
+      await _channelWrite(context, () => channel.child('admins/$input').set(true));
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return StreamBuilder<DatabaseEvent>(
+      stream: channel.onValue,
+      builder: (context, snapshot) {
+        final fields = ChannelScreen.fields(snapshot.data?.snapshot.value);
+        final owner = fields['ownerUid']?.toString();
+        final uid = FirebaseAuth.instance.currentUser?.uid;
+        final canPost = uid != null && uid == owner;
+        final admin = uid != null && ChannelScreen.fields(fields['admins'])[uid] == true;
+        final posts = ChannelScreen.fields(fields['posts']).entries.toList()
+          ..sort((a, b) => b.key.compareTo(a.key));
+        return Scaffold(
+          backgroundColor: AppThemes.kBg,
+          appBar: AppBar(
+            title: Text(fields['name']?.toString() ?? 'Channel'),
+            actions: [
+              if (canPost) PopupMenuButton<String>(
+                onSelected: (action) => _manage(context, action, owner!),
+                itemBuilder: (_) => const [
+                  PopupMenuItem(value: 'photo', child: Text('Set channel photo')),
+                  PopupMenuItem(value: 'admin', child: Text('Add admin')),
+                  PopupMenuItem(value: 'removeAdmin', child: Text('Remove admin')),
+                  PopupMenuItem(value: 'transfer', child: Text('Transfer ownership')),
+                  PopupMenuItem(value: 'delete', child: Text('Delete channel')),
+                ],
+              ),
+            ],
+          ),
+          floatingActionButton: canPost ? FloatingActionButton(
+            onPressed: () => _choosePost(context), tooltip: 'New post', child: const Icon(Icons.edit_outlined),
+          ) : null,
+          body: snapshot.hasError ? const Center(child: Text('This channel is unavailable.'))
+              : !snapshot.hasData ? const Center(child: CircularProgressIndicator())
+              : owner == null ? const Center(child: Text('This channel was removed.'))
+              : ListView.builder(
+                padding: const EdgeInsets.fromLTRB(12, 8, 12, 86),
+                itemCount: posts.length + 1,
+                itemBuilder: (context, index) {
+                  if (index == 0) return ListTile(
+                    leading: _channelAvatar(fields['photoUrl']),
+                    title: Text(fields['name']?.toString() ?? 'Channel'),
+                    subtitle: Text(canPost ? 'Owner' : admin ? 'Admin' : 'Public channel'),
+                  );
+                  final entry = posts[index - 1];
+                  final post = ChannelScreen.fields(entry.value);
+                  final text = post['text']?.toString() ?? '';
+                  final kind = post['mediaType'];
+                  final media = post['moderationStatus'] == 'approved'
+                      ? _mediaLink(post['mediaUrl']?.toString() ?? '') : null;
+                  final thumb = _mediaLink(post['thumbnailUrl']?.toString() ?? '');
+                  final uri = media ?? _mediaLink(text);
+                  final likes = FirebaseDatabase.instance
+                      .ref('publicChannelLikes/${channel.key}/${entry.key}');
+                  return Card(
+                    color: AppThemes.kCardBg,
+                    child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+                      if (media != null && (kind == 'image' || kind == 'video'))
+                        AspectRatio(
+                          aspectRatio: 16 / 9,
+                          child: kind == 'video'
+                              ? buildMediaThumbnail(thumb?.toString(), text, media.toString())
+                              : Image.network(media.toString(), fit: BoxFit.cover,
+                                  errorBuilder: (_, __, ___) => const Icon(Icons.broken_image_outlined)),
+                        ),
+                      ListTile(title: Text(text.isEmpty ? 'Attachment' : text), onTap: uri == null ? null : () async {
+                        if (media != null && kind == 'video') {
+                          await Navigator.of(context).push<void>(MaterialPageRoute(
+                            builder: (_) => NativeVideoPlayerScreen(
+                              videoUrl: media.toString(), title: text,
+                              videoId: entry.key, uploader: fields['name']?.toString() ?? 'Channel',
+                              sourcePageUrl: media.toString(), thumbnailUrl: thumb?.toString() ?? '',
+                            ),
+                          ));
+                          return;
+                        }
+                        try {
+                          await launchUrl(uri, mode: LaunchMode.externalApplication);
+                        } catch (_) {}
+                      }),
+                      StreamBuilder<DatabaseEvent>(
+                        stream: likes.onValue,
+                        builder: (context, snapshot) {
+                          final current = ChannelScreen.fields(snapshot.data?.snapshot.value);
+                          final liked = uid != null && current[uid] == true;
+                          return TextButton.icon(
+                            icon: Icon(liked ? Icons.favorite : Icons.favorite_border),
+                            label: Text('${current.length}'),
+                            onPressed: uid == null ? null : () {
+                              final vote = likes.child(uid);
+                              _channelWrite(context, () => liked ? vote.remove() : vote.set(true));
+                            },
+                          );
+                        },
+                      ),
+                    ]),
+                  );
+                },
+              ),
+        );
+      },
     );
   }
 }
@@ -8254,8 +8116,6 @@ class _NativeVideoPlayerScreenState extends State<NativeVideoPlayerScreen> {
   String _selectedQuality = 'Auto (1080p)';
   final List<String> _qualities = ['Auto (1080p)', '1080p FHD', '720p HD', '480p SD', '360p Low'];
 
-  bool _isDownloading = false;
-  double _downloadProgress = 0.0;
 
   double _volume = 1.0;
   double _brightness = 1.0;
@@ -8464,9 +8324,8 @@ class _NativeVideoPlayerScreenState extends State<NativeVideoPlayerScreen> {
       realVideoUrl = realVideoUrl.replaceFirst('https://mayajaal.online', kBackendBaseUrl);
     }
 
-    debugPrint('🎬 Initializing BetterPlayer with URL: $realVideoUrl');
-
-    final isHls = realVideoUrl.contains('.m3u8');
+    final isHls = TeraBoxResolver.isTeraBoxLink(widget.sourcePageUrl) ||
+        (Uri.tryParse(realVideoUrl)?.path.toLowerCase().endsWith('.m3u8') ?? false);
 
     final config = BetterPlayerConfiguration(
       autoPlay: true,
@@ -8494,7 +8353,6 @@ class _NativeVideoPlayerScreenState extends State<NativeVideoPlayerScreen> {
       videoFormat: isHls ? BetterPlayerVideoFormat.hls : BetterPlayerVideoFormat.other,
       headers: {
         'User-Agent': 'Mozilla/5.0 (Linux; Android 10) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Mobile Safari/537.36',
-        'Cookie': TeraBoxResolver.kTeraBoxCookie,
         'Referer': 'https://www.terabox.com/',
         'Accept': '*/*',
         'Accept-Encoding': 'identity',
@@ -8732,56 +8590,23 @@ class _NativeVideoPlayerScreenState extends State<NativeVideoPlayerScreen> {
   }
 
   Future<void> _startInAppDownload() async {
-    if (_isDownloading) return;
     SoundService.playClick();
     Haptic.medium();
 
-    setState(() {
-      _isDownloading = true;
-      _downloadProgress = 0.0;
-    });
-
-    try {
-      final client = HttpClient();
-      final request = await client.getUrl(Uri.parse(widget.videoUrl));
-      request.headers.set('User-Agent', 'Mozilla/5.0');
-      final response = await request.close();
-
-      final totalBytes = response.contentLength;
-      int receivedBytes = 0;
-
-      Directory baseDir = Directory('/storage/emulated/0/Download');
-      if (!baseDir.existsSync()) baseDir = Directory('/storage/emulated/0/Movies');
-      if (!baseDir.existsSync()) baseDir = Directory.systemTemp;
-
-      final safeName = widget.title.replaceAll(RegExp(r'[^a-zA-Z0-9._-]'), '_');
-      final savePath = '${baseDir.path}/${safeName}_${DateTime.now().millisecondsSinceEpoch}.mp4';
-      final file = File(savePath);
-      final sink = file.openWrite();
-
-      await response.listen((List<int> chunk) {
-        sink.add(chunk);
-        receivedBytes += chunk.length;
-        if (totalBytes > 0 && mounted) {
-          setState(() => _downloadProgress = receivedBytes / totalBytes);
-        }
-      }).asFuture();
-
-      await sink.flush();
-      await sink.close();
-
-      if (mounted) {
-        setState(() => _isDownloading = false);
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(backgroundColor: AppThemes.kCardBg, content: Text('✅ Video saved to:\n$savePath', style: const TextStyle(color: AppThemes.kGreen, fontSize: 10.5))),
-        );
-      }
-    } catch (e) {
-      if (mounted) {
-        setState(() => _isDownloading = false);
-        ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Download status: $e')));
-      }
+    final url = Uri.tryParse(widget.videoUrl);
+    if (url == null || url.scheme != 'https' || url.host.isEmpty ||
+        TeraBoxResolver.isTeraBoxLink(widget.sourcePageUrl)) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('A downloadable video file is unavailable.')),
+      );
+      return;
     }
+    final uid = FirebaseAuth.instance.currentUser?.uid ?? 'guest';
+    final transfer = MayaDownloads.start(uid, url, widget.title);
+    Navigator.of(context).push<void>(
+      MaterialPageRoute(builder: (_) => const MayaDownloadsScreen()),
+    );
+    await transfer;
   }
 
   Future<void> _toggleSave() async {
@@ -8951,32 +8776,21 @@ class _NativeVideoPlayerScreenState extends State<NativeVideoPlayerScreen> {
 
   Widget _buildWaterFillDownloadButton() {
     return GestureDetector(
-      onTap: _isDownloading ? null : _startInAppDownload,
+      onTap: _startInAppDownload,
       child: Container(
         width: 96,
         height: 38,
         decoration: BoxDecoration(color: Colors.black, borderRadius: BorderRadius.circular(8), border: Border.all(color: AppThemes.kBorder)),
         child: Stack(
           children: [
-            if (_isDownloading)
-              Positioned(
-                bottom: 0,
-                left: 0,
-                right: 0,
-                child: AnimatedContainer(
-                  duration: const Duration(milliseconds: 300),
-                  height: 38 * _downloadProgress,
-                  decoration: BoxDecoration(color: AppThemes.kGreen.withOpacity(0.35), borderRadius: const BorderRadius.vertical(bottom: Radius.circular(7))),
-                ),
-              ),
             Center(
               child: Row(
                 mainAxisAlignment: MainAxisAlignment.center,
                 children: [
-                  Icon(_isDownloading ? Icons.downloading : Icons.download_rounded, color: AppThemes.kGreen, size: 14),
+                  Icon(Icons.download_rounded, color: AppThemes.kGreen, size: 14),
                   const SizedBox(width: 4),
                   Text(
-                    _isDownloading ? '${(_downloadProgress * 100).toInt()}%' : 'Download',
+                    'Download',
                     style: const TextStyle(color: Colors.white, fontSize: 10, fontWeight: FontWeight.bold),
                   ),
                 ],
@@ -10269,4 +10083,658 @@ class _StatsScreenState extends State<StatsScreen>
       ),
     );
   }
+}
+
+class MayaDownload extends ChangeNotifier {
+  MayaDownload(this.uid, this.id, this.title);
+
+  final String uid;
+  final String id;
+  final String title;
+  double? progress;
+  bool failed = false;
+
+  void update(double? value, {bool failed = false}) {
+    progress = value;
+    this.failed = failed;
+    notifyListeners();
+  }
+}
+
+class MayaDownloadHistory {
+  static final _syncing = <String>{};
+
+  static DatabaseReference ref(String uid) =>
+      FirebaseDatabase.instance.ref('users/$uid/downloadHistory');
+
+  static Future<void> record(String uid, String id, Map<String, Object?>? item) async {
+    if (uid == 'guest') return;
+    final prefs = await SharedPreferences.getInstance();
+    final key = 'downloadSync:$uid:$id';
+    await prefs.setString(key, jsonEncode(item));
+    unawaited(sync(uid));
+  }
+
+  static Future<void> sync(String uid) async {
+    if (FirebaseAuth.instance.currentUser?.uid != uid || !_syncing.add(uid)) return;
+    final prefix = 'downloadSync:$uid:';
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      while (FirebaseAuth.instance.currentUser?.uid == uid) {
+        final keys = prefs.getKeys().where((key) => key.startsWith(prefix)).toList();
+        if (keys.isEmpty) return;
+        for (final key in keys) {
+          if (FirebaseAuth.instance.currentUser?.uid != uid) return;
+          final raw = prefs.getString(key);
+          if (raw == null) continue;
+          final entry = ref(uid).child(key.substring(prefix.length));
+          final data = jsonDecode(raw);
+          if (data == null) {
+            await entry.remove().timeout(const Duration(seconds: 12));
+          } else {
+            await entry.set(data).timeout(const Duration(seconds: 12));
+          }
+          if (prefs.getString(key) == raw) await prefs.remove(key);
+        }
+      }
+    } catch (_) {
+      // Retain pending changes for the next sync.
+    } finally {
+      _syncing.remove(uid);
+    }
+  }
+}
+
+class MayaDownloads {
+  static final jobs = ValueNotifier<List<MayaDownload>>([]);
+
+  static Future<Directory> directory(String uid) async {
+    final root = await getApplicationSupportDirectory();
+    final folder = Uri.encodeComponent(uid);
+    return Directory('${root.path}/downloads/$folder').create(recursive: true);
+  }
+
+  static Future<void> start(String uid, Uri source, String title) async {
+    final id = DateTime.now().microsecondsSinceEpoch.toString();
+    final safeTitle = title.replaceAll(RegExp(r'[^a-zA-Z0-9._ -]'), '_').trim();
+    final name = safeTitle.isEmpty ? 'Video' :
+        safeTitle.substring(0, math.min(safeTitle.length, 120));
+    final job = MayaDownload(uid, id, name);
+    jobs.value = [...jobs.value, job];
+    final client = HttpClient()..connectionTimeout = const Duration(seconds: 20);
+    File? partial;
+    IOSink? sink;
+
+    try {
+      final folder = await directory(uid);
+      partial = File('${folder.path}/$id.part');
+      final request = await client.getUrl(source);
+      final response = await request.close().timeout(const Duration(seconds: 30));
+      final mime = response.headers.contentType?.mimeType ?? '';
+      final extension = _fileTypes[mime] ??
+          (mime == 'application/octet-stream' ? _fileExtension(source) : null);
+      if (response.statusCode != HttpStatus.ok || extension == null ||
+          source.path.toLowerCase().endsWith('.m3u8')) {
+        throw const FormatException('This link does not return a supported file.');
+      }
+      final filename = name.toLowerCase().endsWith(extension) ? name : '$name$extension';
+      sink = partial.openWrite();
+      var received = 0;
+      await for (final chunk in response.timeout(const Duration(seconds: 30))) {
+        sink.add(chunk);
+        received += chunk.length;
+        if (response.contentLength > 0) {
+          job.update((received / response.contentLength).clamp(0.0, 1.0).toDouble());
+        }
+      }
+      await sink.flush();
+      await sink.close();
+      sink = null;
+      if (received == 0 || (response.contentLength >= 0 && received != response.contentLength)) {
+        throw const FormatException('Incomplete download.');
+      }
+      await partial.rename('${folder.path}/${id}_$filename');
+      dismiss(job);
+      await MayaDownloadHistory.record(uid, id, {
+        'name': filename,
+        'size': received,
+        'completedAt': DateTime.now().millisecondsSinceEpoch,
+      }).catchError((Object _) {});
+    } catch (_) {
+      job.update(null, failed: true);
+      try {
+        await sink?.close();
+        if (partial != null && await partial.exists()) await partial.delete();
+      } catch (_) {}
+    } finally {
+      client.close(force: true);
+    }
+  }
+
+  static void dismiss(MayaDownload job) {
+    jobs.value = jobs.value.where((item) => item != job).toList();
+  }
+
+  static Future<List<File>> files(String uid) async {
+    final folder = await directory(uid);
+    final items = await folder.list().where(
+      (entry) => entry is File && !entry.path.endsWith('.part'),
+    ).cast<File>().toList();
+    return items..sort((a, b) => b.path.compareTo(a.path));
+  }
+}
+
+class MayaDownloadsScreen extends StatefulWidget {
+  const MayaDownloadsScreen({super.key});
+
+  @override
+  State<MayaDownloadsScreen> createState() => _MayaDownloadsScreenState();
+}
+
+class _MayaDownloadsScreenState extends State<MayaDownloadsScreen> {
+  int _refresh = 0;
+  Timer? _historyRetry;
+
+  @override
+  void initState() {
+    super.initState();
+    _retryHistory();
+    _historyRetry = Timer.periodic(const Duration(seconds: 30), (_) => _retryHistory());
+  }
+
+  void _retryHistory() {
+    final uid = FirebaseAuth.instance.currentUser?.uid;
+    if (uid != null) unawaited(MayaDownloadHistory.sync(uid));
+  }
+
+  @override
+  void dispose() {
+    _historyRetry?.cancel();
+    super.dispose();
+  }
+
+
+  Future<void> _delete(File file, String name, String uid) async {
+    final confirm = await showDialog<bool>(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text('Delete download?'),
+        content: Text(name),
+        actions: [
+          TextButton(onPressed: () => Navigator.pop(context, false), child: const Text('Cancel')),
+          TextButton(onPressed: () => Navigator.pop(context, true), child: const Text('Delete')),
+        ],
+      ),
+    );
+    if (confirm != true || !mounted) return;
+    try {
+      await file.delete();
+      final id = file.uri.pathSegments.last.split('_').first;
+      await MayaDownloadHistory.record(uid, id, null);
+      if (mounted) setState(() => _refresh++);
+    } on FileSystemException {
+      if (mounted) ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Could not delete this download.')),
+      );
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final uid = FirebaseAuth.instance.currentUser?.uid ?? 'guest';
+    return DefaultTabController(
+      length: 2,
+      child: Scaffold(
+        backgroundColor: AppThemes.kBg,
+        appBar: AppBar(
+          title: const Text('Downloads'),
+          bottom: const TabBar(tabs: [Tab(text: 'Downloading'), Tab(text: 'Completed')]),
+        ),
+        body: ValueListenableBuilder<List<MayaDownload>>(
+          valueListenable: MayaDownloads.jobs,
+          builder: (context, jobs, _) {
+            final current = jobs.where((job) => job.uid == uid).toList();
+            return TabBarView(children: [
+              if (current.isEmpty) const Center(child: Text('No active downloads.'))
+              else ListView(
+                children: current.map((job) => ListenableBuilder(
+                  listenable: job,
+                  builder: (context, _) => ListTile(
+                    title: Text(job.title),
+                    subtitle: job.failed ? const Text('Download failed. Try again from the player.')
+                        : LinearProgressIndicator(value: job.progress),
+                    trailing: job.failed ? IconButton(
+                      tooltip: 'Dismiss', icon: const Icon(Icons.close),
+                      onPressed: () => MayaDownloads.dismiss(job),
+                    ) : null,
+                  ),
+                )).toList(),
+              ),
+              FutureBuilder<List<File>>(
+                key: ValueKey(_refresh),
+                future: MayaDownloads.files(uid),
+                builder: (context, snapshot) {
+                  if (snapshot.hasError) return const Center(child: Text('Could not load downloads.'));
+                  final files = snapshot.data;
+                  if (files == null) return const Center(child: CircularProgressIndicator());
+                  if (files.isEmpty) return const Center(child: Text('No completed downloads.'));
+                  return ListView(
+                    children: files.map((file) {
+                      final filename = file.uri.pathSegments.last;
+                      final name = filename.substring(filename.indexOf('_') + 1);
+                      return ListTile(
+                        leading: const Icon(Icons.insert_drive_file_outlined, color: AppThemes.kGreen),
+                        title: Text(name),
+                        onTap: () => _openDownloadedFile(context, file, name),
+                        trailing: IconButton(
+                          tooltip: 'Delete download', icon: const Icon(Icons.delete_outline),
+                          onPressed: () => _delete(file, name, uid),
+                        ),
+                      );
+                    }).toList(),
+                  );
+                },
+              ),
+            ]);
+          },
+        ),
+      ),
+    );
+  }
+}
+
+class MayaOfflineVideo extends StatefulWidget {
+  const MayaOfflineVideo({super.key, required this.file, required this.name});
+  final File file;
+  final String name;
+
+  @override
+  State<MayaOfflineVideo> createState() => _MayaOfflineVideoState();
+}
+
+class _MayaOfflineVideoState extends State<MayaOfflineVideo> {
+  late final VideoPlayerController controller;
+  late final Future<void> ready;
+
+  @override
+  void initState() {
+    super.initState();
+    controller = VideoPlayerController.file(widget.file);
+    ready = controller.initialize();
+  }
+
+  @override
+  void dispose() {
+    controller.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Scaffold(
+      appBar: AppBar(title: Text(widget.name)),
+      body: FutureBuilder<void>(
+        future: ready,
+        builder: (context, snapshot) {
+          if (snapshot.hasError) return const Center(child: Text('This video could not be opened.'));
+          if (snapshot.connectionState != ConnectionState.done) {
+            return const Center(child: CircularProgressIndicator());
+          }
+          return Center(child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              AspectRatio(aspectRatio: controller.value.aspectRatio, child: VideoPlayer(controller)),
+              VideoProgressIndicator(controller, allowScrubbing: true),
+              ValueListenableBuilder<VideoPlayerValue>(
+                valueListenable: controller,
+                builder: (context, value, _) => IconButton(
+                  tooltip: value.isPlaying ? 'Pause' : 'Play',
+                  icon: Icon(value.isPlaying ? Icons.pause : Icons.play_arrow),
+                  onPressed: () => value.isPlaying ? controller.pause() : controller.play(),
+                ),
+              ),
+            ],
+          ));
+        },
+      ),
+    );
+  }
+}
+
+const _shareChannel = MethodChannel('mayajaal/share');
+
+Uri? _mediaLink(String value) {
+  final uri = Uri.tryParse(value.trim());
+  if (uri == null || uri.scheme != 'https' || uri.host.isEmpty ||
+      uri.userInfo.isNotEmpty) return null;
+  return uri;
+}
+
+bool _isSocialLink(String value) {
+  final host = _mediaLink(value)?.host;
+  return host != null && const [
+    'youtube.com', 'youtu.be', 'instagram.com', 'facebook.com', 'fb.watch',
+  ].any((domain) => host == domain || host.endsWith('.$domain'));
+}
+
+class MayaSocialMediaScreen extends StatefulWidget {
+  const MayaSocialMediaScreen({super.key, required this.source});
+  final Uri source;
+
+  @override
+  State<MayaSocialMediaScreen> createState() => _MayaSocialMediaScreenState();
+}
+
+class _MayaSocialMediaScreenState extends State<MayaSocialMediaScreen> {
+  static const resolver = String.fromEnvironment('MAYAJAAL_SOCIAL_RESOLVER');
+  late final Future<List<({String label, Uri url})>> _formats = _loadFormats();
+
+  Uri? _stream;
+  String? _mediaTitle;
+
+  Future<List<({String label, Uri url})>> _loadFormats() async {
+    if (_fileExtension(widget.source) != null && !_isSocialLink(widget.source.toString())) {
+      return [(label: 'Original file', url: widget.source)];
+    }
+    final api = _mediaLink(resolver);
+    if (api == null) return [];
+    final response = await http.post(api,
+      headers: {'Content-Type': 'application/json'},
+      body: jsonEncode({'url': widget.source.toString()}),
+    ).timeout(const Duration(seconds: 15));
+    if (response.statusCode != 200) throw StateError('Unavailable');
+    final data = jsonDecode(response.body);
+    _stream = _mediaLink(data['stream_url']?.toString() ?? '');
+    _mediaTitle = data['title'] is String ? data['title'] as String : null;
+    final rawFormats = data['formats'];
+    if (rawFormats is! List) return [];
+    final formats = <({String label, Uri url})>[];
+    for (final item in rawFormats) {
+      if (item is! Map || item['label'] is! String) continue;
+      final url = _mediaLink(item['download_url']?.toString() ?? '');
+      if (url != null) formats.add((label: item['label'] as String, url: url));
+    }
+    return formats;
+  }
+
+  Future<void> _play() async {
+    try { await _formats; } catch (_) {}
+    if (!mounted) return;
+    final stream = _stream;
+    if (stream != null) {
+      await Navigator.of(context).push<void>(MaterialPageRoute(
+        builder: (_) => NativeVideoPlayerScreen(
+          videoUrl: stream.toString(),
+          title: _mediaTitle ?? widget.source.host,
+          uploader: widget.source.host,
+          sourcePageUrl: widget.source.toString(),
+          videoId: crypto.sha256.convert(utf8.encode(widget.source.toString())).toString(),
+        ),
+      ));
+      return;
+    }
+    final opened = await launchUrl(widget.source, mode: LaunchMode.externalApplication);
+    if (!opened && mounted) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Could not open the original post.')),
+      );
+    }
+  }
+
+  void _download(Uri url, String label) {
+    final uid = FirebaseAuth.instance.currentUser?.uid ?? 'guest';
+    unawaited(MayaDownloads.start(uid, url, '${widget.source.host} · $label'));
+    Navigator.of(context).push<void>(
+      MaterialPageRoute(builder: (_) => const MayaDownloadsScreen()),
+    );
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Scaffold(
+      backgroundColor: AppThemes.kBg,
+      appBar: AppBar(title: const Text('Media')),
+      body: ListView(
+        padding: const EdgeInsets.all(16),
+        children: [
+          Text(widget.source.host),
+          const SizedBox(height: 12),
+          FilledButton.icon(onPressed: _play,
+            icon: const Icon(Icons.play_arrow), label: const Text('Play')),
+          FutureBuilder<List<({String label, Uri url})>>(
+            future: _formats,
+            builder: (context, snapshot) {
+              if (snapshot.connectionState != ConnectionState.done) {
+                return const Center(child: CircularProgressIndicator());
+              }
+              final formats = snapshot.data ?? [];
+              if (formats.isEmpty) return const Padding(
+                padding: EdgeInsets.only(top: 16),
+                child: Text('Downloads are unavailable for this link.'),
+              );
+              return Column(children: [
+                for (final format in formats)
+                  ListTile(
+                    title: Text(format.label),
+                    trailing: IconButton(
+                      tooltip: 'Download',
+                      icon: const Icon(Icons.download),
+                      onPressed: () => _download(format.url, format.label),
+                    ),
+                  ),
+              ]);
+            },
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+
+const _fileTypes = {
+  'video/mp4': '.mp4', 'video/webm': '.webm', 'video/x-matroska': '.mkv',
+  'video/quicktime': '.mov', 'image/jpeg': '.jpg', 'image/png': '.png',
+  'image/webp': '.webp', 'image/gif': '.gif', 'application/pdf': '.pdf',
+  'text/plain': '.txt', 'text/csv': '.csv', 'application/zip': '.zip',
+  'application/msword': '.doc',
+  'application/vnd.openxmlformats-officedocument.wordprocessingml.document': '.docx',
+  'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet': '.xlsx',
+};
+
+String? _fileExtension(Uri url) {
+  final path = url.path.toLowerCase();
+  if (path.endsWith('.jpeg')) return '.jpg';
+  for (final extension in _fileTypes.values) {
+    if (path.endsWith(extension)) return extension;
+  }
+  return null;
+}
+
+Future<void> _openDownloadedFile(BuildContext context, File file, String name) async {
+  final type = _fileExtension(file.uri);
+  if (const ['.mp4', '.webm', '.mkv', '.mov'].contains(type)) {
+    await Navigator.of(context).push<void>(
+      MaterialPageRoute(builder: (_) => MayaOfflineVideo(file: file, name: name)),
+    );
+  } else if (const ['.jpg', '.png', '.webp', '.gif'].contains(type)) {
+    await Navigator.of(context).push<void>(MaterialPageRoute(
+      builder: (_) => Scaffold(
+        appBar: AppBar(title: Text(name)),
+        body: Center(child: InteractiveViewer(child: Image.file(file))),
+      ),
+    ));
+  } else {
+    final result = await OpenFilex.open(file.path);
+    if (context.mounted && result.type != ResultType.done) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('No compatible app could open this file.')),
+      );
+    }
+  }
+}
+
+class MayaDeleteAccountDialog extends StatefulWidget {
+  const MayaDeleteAccountDialog({super.key});
+
+  @override
+  State<MayaDeleteAccountDialog> createState() => _MayaDeleteAccountDialogState();
+}
+
+class _MayaDeleteAccountDialogState extends State<MayaDeleteAccountDialog> {
+  bool _confirmed = false;
+  bool _deleting = false;
+  String? _error;
+
+  Future<void> _delete() async {
+    setState(() {
+      _deleting = true;
+      _error = null;
+    });
+    try {
+      await MayaJaalAccount.deleteAccount();
+      if (mounted) Navigator.of(context).pop(true);
+    } on FirebaseAuthException catch (error) {
+      _showError(error.code == 'requires-recent-login'
+          ? 'Sign in again, then retry account deletion.'
+          : 'Could not delete your account. Please try again.');
+    } catch (_) {
+      _showError('Could not delete your account. Please try again.');
+    }
+  }
+
+  void _showError(String message) {
+    if (!mounted) return;
+    setState(() {
+      _deleting = false;
+      _error = message;
+    });
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return PopScope(
+      canPop: !_deleting,
+      child: AlertDialog(
+        backgroundColor: AppThemes.kCardBg,
+        title: const Text('Delete your account?'),
+        content: SingleChildScrollView(child: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            const Text('This permanently deletes your MayaJaal account and its associated data. You cannot undo this.'),
+            const SizedBox(height: 12),
+            CheckboxListTile(
+              contentPadding: EdgeInsets.zero,
+              controlAffinity: ListTileControlAffinity.leading,
+              title: const Text('I understand this is permanent.'),
+              value: _confirmed,
+              onChanged: _deleting ? null : (value) => setState(() => _confirmed = value == true),
+            ),
+            if (_error != null) Text(_error!, style: const TextStyle(color: AppThemes.kRed)),
+            if (_deleting) const LinearProgressIndicator(),
+          ],
+        )),
+        actions: [
+          TextButton(onPressed: _deleting ? null : () => Navigator.of(context).pop(false),
+            child: const Text('Cancel')),
+          FilledButton(
+            style: FilledButton.styleFrom(backgroundColor: AppThemes.kRed, foregroundColor: Colors.black),
+            onPressed: _confirmed && !_deleting ? _delete : null,
+            child: const Text('Delete account'),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _MayaChannelUploadDialog extends StatefulWidget {
+  const _MayaChannelUploadDialog({
+    required this.endpoint, required this.user, required this.channelId,
+    required this.path, required this.filename, required this.avatar,
+  });
+  final Uri endpoint;
+  final User user;
+  final String channelId;
+  final String path;
+  final String filename;
+  final bool avatar;
+
+  @override
+  State<_MayaChannelUploadDialog> createState() => _MayaChannelUploadDialogState();
+}
+
+class _MayaChannelUploadDialogState extends State<_MayaChannelUploadDialog> {
+  late final Future<String> _result;
+
+  @override
+  void initState() {
+    super.initState();
+    _result = _send();
+  }
+
+  Future<String> _send() async {
+    final client = http.Client();
+    try {
+      final token = await widget.user.getIdToken();
+      if (token == null) throw StateError('Sign-in expired');
+      final request = http.MultipartRequest('POST', widget.endpoint)
+        ..followRedirects = false
+        ..headers['Authorization'] = 'Bearer $token'
+        ..fields['channelId'] = widget.channelId
+        ..fields['purpose'] = widget.avatar ? 'avatar' : 'post'
+        ..files.add(await http.MultipartFile.fromPath(
+          'file', widget.path, filename: widget.filename,
+        ));
+      final response = await client.send(request).timeout(const Duration(minutes: 3));
+      final body = await response.stream.bytesToString().timeout(const Duration(seconds: 20));
+      if (response.statusCode == 413) return 'This file is too large to upload.';
+      if (response.statusCode == 422) return 'This file did not pass the content review.';
+      if (response.statusCode < 200 || response.statusCode >= 300) {
+        return 'Could not upload this file. Please try again.';
+      }
+      final data = jsonDecode(body);
+      if (data is! Map) return 'Could not confirm the upload.';
+      switch (data['status']) {
+        case 'published':
+          return widget.avatar ? 'Channel photo updated.' : 'Post published.';
+        case 'pending':
+          return 'Upload received. It will appear after content review.';
+        case 'rejected':
+          return 'This file did not pass the content review.';
+        default:
+          return 'Could not confirm the upload.';
+      }
+    } catch (_) {
+      return 'Could not confirm the upload. Check your channel before retrying.';
+    } finally {
+      client.close();
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) => FutureBuilder<String>(
+    future: _result,
+    builder: (context, snapshot) {
+      final finished = snapshot.connectionState == ConnectionState.done;
+      return PopScope(
+        canPop: finished,
+        child: AlertDialog(
+          title: Text(finished ? 'Channel upload' : 'Uploading…'),
+          content: finished ? Text(snapshot.data ?? 'Could not upload this file.')
+              : const Column(mainAxisSize: MainAxisSize.min, children: [
+                  LinearProgressIndicator(),
+                  SizedBox(height: 12),
+                  Text('The file is submitted for content review before it appears publicly.'),
+                ]),
+          actions: [
+            if (finished) TextButton(
+              onPressed: () => Navigator.of(context).pop(), child: const Text('Close'),
+            ),
+          ],
+        ),
+      );
+    },
+  );
 }
