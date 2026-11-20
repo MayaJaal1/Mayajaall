@@ -221,8 +221,11 @@ class _VideoLoopThumbnailState extends State<VideoLoopThumbnail> with WidgetsBin
       // Also respect nested scroll views, not just the full phone screen.
       context.visitAncestorElements((element) {
         final render = element.renderObject;
-        if (render is RenderAbstractViewport && render is RenderBox && render.hasSize) {
-          clip = clip.intersect(render.localToGlobal(Offset.zero) & render.size);
+        if (render is RenderAbstractViewport && render is RenderBox) {
+          final RenderBox viewportBox = render as RenderBox;
+          if (viewportBox.hasSize) {
+            clip = clip.intersect(viewportBox.localToGlobal(Offset.zero) & viewportBox.size);
+          }
         }
         return true;
       });
@@ -356,8 +359,13 @@ class _MayaPosterState extends State<_MayaPoster> {
   void _read() {
     final thumb = widget.thumb ?? '';
     try {
-      _image = thumb.isEmpty ? null : thumb.startsWith('http')
-          ? NetworkImage(thumb) : MemoryImage(base64Decode(thumb));
+      if (thumb.isEmpty) {
+        _image = null;
+      } else if (thumb.startsWith('http')) {
+        _image = NetworkImage(thumb);
+      } else {
+        _image = MemoryImage(base64Decode(thumb));
+      }
     } catch (_) { _image = null; }
   }
   @override
