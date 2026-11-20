@@ -4719,13 +4719,11 @@ class _HomeScreenState extends State<HomeScreen>
                     ),
                     const SizedBox(width: 8),
                     Expanded(
-                      child: _catCard(Icons.star_rounded, 'Favorites', 'Saved'),
+                      child: const MayaFavoritesTile(),
                     ),
                   ],
                 ),
               ),
-
-              const MayaFavoritesStrip(),
 
               Padding(
                 padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 6),
@@ -9359,7 +9357,7 @@ class _NativeVideoPlayerScreenState extends State<NativeVideoPlayerScreen> with 
     return '$count';
   }
   Widget _playerAction(IconData icon, String label, VoidCallback action, {bool active = false}) => Expanded(
-    child: TextButton(onPressed: action, style: TextButton.styleFrom(foregroundColor: active ? _mayaMint : Colors.white70,
+    child: TextButton(onPressed: action, style: TextButton.styleFrom(foregroundColor: active ? _mayaMint : _mayaMint.withOpacity(.85),
       minimumSize: const Size(0, 44), padding: const EdgeInsets.symmetric(horizontal: 2)),
       child: FittedBox(fit: BoxFit.scaleDown, child: Row(mainAxisSize: MainAxisSize.min, children: [
         Icon(icon, size: 19), const SizedBox(width: 5), Text(label, style: const TextStyle(fontFamily: 'Roboto', fontSize: 12, fontWeight: FontWeight.w600)),
@@ -9717,15 +9715,14 @@ class _NativeVideoPlayerScreenState extends State<NativeVideoPlayerScreen> with 
           if (_videoSize.isNotEmpty || _videoAge.isNotEmpty) Padding(padding: const EdgeInsets.only(top: 6),
             child: Text('$_videoSize  $_videoAge', style: const TextStyle(fontFamily: 'Roboto', color: Colors.white38, fontSize: 12))),
           const SizedBox(height: 12),
-          DecoratedBox(decoration: BoxDecoration(color: Colors.white.withOpacity(.035), borderRadius: BorderRadius.circular(14),
-            border: Border.all(color: _mayaMint.withOpacity(.2))), child: Row(children: [
+          Row(children: [
             _playerAction((_social ? _community['reaction'] == 1 : _isLiked) ? Icons.thumb_up : Icons.thumb_up_outlined,
               _compactCount(_social ? _community['likes'] : _stats['likes']), _handleLike, active: _social ? _community['reaction'] == 1 : _isLiked),
             _playerAction((_social ? _community['reaction'] == -1 : _isUnliked) ? Icons.thumb_down : Icons.thumb_down_outlined,
               _compactCount(_social ? _community['dislikes'] : _stats['unlikes']), _handleDislike, active: _social ? _community['reaction'] == -1 : _isUnliked),
             _playerAction(_isSaved ? Icons.bookmark : Icons.bookmark_outline, tr('save'), _toggleSave, active: _isSaved),
             _playerAction(Icons.download_outlined, tr('download'), _startInAppDownload),
-          ])),
+          ]),
           const SizedBox(height: 10),
           InkWell(borderRadius: BorderRadius.circular(14), onTap: () => showMayaComments(context, _communityKey),
             child: Container(padding: const EdgeInsets.all(14), decoration: BoxDecoration(color: AppThemes.kCardBg,
@@ -11653,12 +11650,12 @@ class _MayaCommentSettingsState extends State<MayaCommentSettings> {
     ]));
 }
 
-class MayaFavoritesStrip extends StatefulWidget {
-  const MayaFavoritesStrip({super.key});
+class MayaFavoritesTile extends StatefulWidget {
+  const MayaFavoritesTile({super.key});
   @override
-  State<MayaFavoritesStrip> createState() => _MayaFavoritesStripState();
+  State<MayaFavoritesTile> createState() => _MayaFavoritesTileState();
 }
-class _MayaFavoritesStripState extends State<MayaFavoritesStrip> {
+class _MayaFavoritesTileState extends State<MayaFavoritesTile> {
   List<Map<String, dynamic>> _saved = [];
   int _index = 0;
   Timer? _rotate;
@@ -11699,27 +11696,37 @@ class _MayaFavoritesStripState extends State<MayaFavoritesStrip> {
   @override
   Widget build(BuildContext context) {
     final item = _saved.isEmpty ? null : _saved[_index % _saved.length];
-    return Padding(padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8), child: InkWell(
-      borderRadius: BorderRadius.circular(16), onTap: () => Navigator.of(context).push(
-        MaterialPageRoute(builder: (_) => const SavedVideosScreen())).then((_) => _load()),
-      child: Container(padding: const EdgeInsets.all(12), decoration: BoxDecoration(color: AppThemes.kCardBg,
-        borderRadius: BorderRadius.circular(16), border: Border.all(color: _mayaMint.withOpacity(.3))),
-        child: Row(children: [
-          ClipRRect(borderRadius: BorderRadius.circular(10), child: SizedBox(width: 104, height: 64,
-            child: item == null ? const ColoredBox(color: Colors.black26, child: Icon(Icons.bookmark_outline_rounded, color: _mayaMint, size: 28))
-              : KeyedSubtree(key: ValueKey(WatchHistory.recordKey(item)), child: buildMediaThumbnail(
-                  _storedVideoThumbnail(item), '${item['title'] ?? 'Saved video'}', '${item['streamUrl'] ?? ''}', loopPreview: true)))),
-          const SizedBox(width: 14), Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-            Row(children: [const Icon(Icons.bookmark_rounded, size: 15, color: _mayaMint), const SizedBox(width: 5),
-              Text(tr('favorites'), style: const TextStyle(fontFamily: 'Roboto', fontWeight: FontWeight.w700, fontSize: 15)),
-              const Spacer(), Text('${_saved.length}', style: const TextStyle(color: _mayaMint, fontFamily: 'Roboto', fontWeight: FontWeight.w700))]),
-            const SizedBox(height: 6), Text(item == null ? 'Save a video to keep it here' : '${item['title'] ?? 'Saved video'}',
-              maxLines: 2, overflow: TextOverflow.ellipsis, style: const TextStyle(fontFamily: 'Roboto', fontSize: 12, color: Colors.white60)),
-          ])), const SizedBox(width: 6), const Icon(Icons.chevron_right, color: Colors.white38),
-        ])),
-    ));
+    return GestureDetector(
+      onTap: () {
+        SoundService.playClick();
+        Haptic.light();
+        Navigator.of(context).push(MaterialPageRoute(builder: (_) => const SavedVideosScreen()))
+            .then((_) => _load());
+      },
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 10),
+        decoration: BoxDecoration(color: AppThemes.kCardBg,
+          borderRadius: BorderRadius.circular(12), border: Border.all(color: AppThemes.kBorder)),
+        child: Column(mainAxisSize: MainAxisSize.min, children: [
+          SizedBox(width: 48, height: 24, child: item == null
+            ? const Icon(Icons.star_rounded, color: AppThemes.kGreen, size: 24)
+            : ClipRRect(borderRadius: BorderRadius.circular(5),
+                child: KeyedSubtree(key: ValueKey(WatchHistory.recordKey(item)),
+                  child: buildMediaThumbnail(_storedVideoThumbnail(item), '${item['title'] ?? 'Saved video'}',
+                    '${item['streamUrl'] ?? ''}', loopPreview: true)))),
+          const SizedBox(height: 5),
+          Text(tr('favorites'), maxLines: 1, overflow: TextOverflow.ellipsis,
+            style: const TextStyle(color: Colors.white, fontSize: 11, fontWeight: FontWeight.bold)),
+          const SizedBox(height: 2),
+          Text(_saved.isEmpty ? 'Saved' : '${_saved.length} saved', maxLines: 1,
+            overflow: TextOverflow.ellipsis, textAlign: TextAlign.center,
+            style: TextStyle(color: Colors.white.withOpacity(.5), fontSize: 8.5)),
+        ]),
+      ),
+    );
   }
 }
+
 
 final Map<String, Map<String, String>> mayaCoreLocales = {"English": {"settings": "Settings", "dark_theme": "Theme", "language": "Language", "downloads": "Downloads", "watch_history": "Recent videos", "favorites": "Favorites", "play": "Play", "save": "Save", "download": "Download", "comments": "Comments", "reply": "Reply", "add_comment": "Add a comment…", "comment_settings": "Comment controls", "save_changes": "Save changes", "views": "views"}, "Hindi": {"settings": "सेटिंग्स", "dark_theme": "थीम", "language": "भाषा", "downloads": "डाउनलोड", "watch_history": "हाल के वीडियो", "favorites": "पसंदीदा", "play": "चलाएँ", "save": "सहेजें", "download": "डाउनलोड", "comments": "टिप्पणियाँ", "reply": "जवाब दें", "add_comment": "टिप्पणी लिखें…", "comment_settings": "टिप्पणी नियंत्रण", "save_changes": "बदलाव सहेजें", "views": "व्यूज़"}, "Bengali": {"settings": "সেটিংস", "dark_theme": "থিম", "language": "ভাষা", "downloads": "ডাউনলোড", "watch_history": "সাম্প্রতিক ভিডিও", "favorites": "পছন্দের", "play": "চালান", "save": "সংরক্ষণ", "download": "ডাউনলোড", "comments": "মন্তব্য", "reply": "উত্তর", "add_comment": "মন্তব্য লিখুন…", "comment_settings": "মন্তব্য নিয়ন্ত্রণ", "save_changes": "পরিবর্তন সংরক্ষণ", "views": "বার দেখা"}, "Tamil": {"settings": "அமைப்புகள்", "dark_theme": "தீம்", "language": "மொழி", "downloads": "பதிவிறக்கங்கள்", "watch_history": "சமீபத்திய காணொளிகள்", "favorites": "பிடித்தவை", "play": "இயக்கு", "save": "சேமி", "download": "பதிவிறக்கு", "comments": "கருத்துகள்", "reply": "பதில்", "add_comment": "கருத்தைச் சேர்க்கவும்…", "comment_settings": "கருத்துக் கட்டுப்பாடுகள்", "save_changes": "மாற்றங்களைச் சேமி", "views": "பார்வைகள்"}, "Telugu": {"settings": "సెట్టింగ్‌లు", "dark_theme": "థీమ్", "language": "భాష", "downloads": "డౌన్‌లోడ్‌లు", "watch_history": "ఇటీవలి వీడియోలు", "favorites": "ఇష్టమైనవి", "play": "ప్లే", "save": "సేవ్", "download": "డౌన్‌లోడ్", "comments": "వ్యాఖ్యలు", "reply": "ప్రత్యుత్తరం", "add_comment": "వ్యాఖ్య రాయండి…", "comment_settings": "వ్యాఖ్య నియంత్రణలు", "save_changes": "మార్పులు సేవ్ చేయి", "views": "వీక్షణలు"}, "Marathi": {"settings": "सेटिंग्ज", "dark_theme": "थीम", "language": "भाषा", "downloads": "डाउनलोड", "watch_history": "अलीकडील व्हिडिओ", "favorites": "आवडते", "play": "प्ले करा", "save": "जतन करा", "download": "डाउनलोड", "comments": "टिप्पण्या", "reply": "उत्तर द्या", "add_comment": "टिप्पणी लिहा…", "comment_settings": "टिप्पणी नियंत्रण", "save_changes": "बदल जतन करा", "views": "दृश्ये"}, "Gujarati": {"settings": "સેટિંગ્સ", "dark_theme": "થીમ", "language": "ભાષા", "downloads": "ડાઉનલોડ્સ", "watch_history": "તાજેતરના વિડિઓ", "favorites": "મનપસંદ", "play": "ચલાવો", "save": "સાચવો", "download": "ડાઉનલોડ", "comments": "ટિપ્પણીઓ", "reply": "જવાબ", "add_comment": "ટિપ્પણી લખો…", "comment_settings": "ટિપ્પણી નિયંત્રણ", "save_changes": "ફેરફારો સાચવો", "views": "વ્યૂઝ"}, "Kannada": {"settings": "ಸೆಟ್ಟಿಂಗ್‌ಗಳು", "dark_theme": "ಥೀಮ್", "language": "ಭಾಷೆ", "downloads": "ಡೌನ್‌ಲೋಡ್‌ಗಳು", "watch_history": "ಇತ್ತೀಚಿನ ವೀಡಿಯೊಗಳು", "favorites": "ಮೆಚ್ಚಿನವುಗಳು", "play": "ಪ್ಲೇ ಮಾಡಿ", "save": "ಉಳಿಸಿ", "download": "ಡೌನ್‌ಲೋಡ್", "comments": "ಕಾಮೆಂಟ್‌ಗಳು", "reply": "ಪ್ರತ್ಯುತ್ತರ", "add_comment": "ಕಾಮೆಂಟ್ ಬರೆಯಿರಿ…", "comment_settings": "ಕಾಮೆಂಟ್ ನಿಯಂತ್ರಣಗಳು", "save_changes": "ಬದಲಾವಣೆಗಳನ್ನು ಉಳಿಸಿ", "views": "ವೀಕ್ಷಣೆಗಳು"}, "Malayalam": {"settings": "ക്രമീകരണങ്ങൾ", "dark_theme": "തീം", "language": "ഭാഷ", "downloads": "ഡൗൺലോഡുകൾ", "watch_history": "സമീപകാല വീഡിയോകൾ", "favorites": "പ്രിയപ്പെട്ടവ", "play": "പ്ലേ ചെയ്യുക", "save": "സംരക്ഷിക്കുക", "download": "ഡൗൺലോഡ്", "comments": "അഭിപ്രായങ്ങൾ", "reply": "മറുപടി", "add_comment": "അഭിപ്രായം എഴുതുക…", "comment_settings": "അഭിപ്രായ നിയന്ത്രണങ്ങൾ", "save_changes": "മാറ്റങ്ങൾ സംരക്ഷിക്കുക", "views": "കാഴ്ചകൾ"}, "Punjabi": {"settings": "ਸੈਟਿੰਗਾਂ", "dark_theme": "ਥੀਮ", "language": "ਭਾਸ਼ਾ", "downloads": "ਡਾਊਨਲੋਡ", "watch_history": "ਹਾਲੀਆ ਵੀਡੀਓ", "favorites": "ਮਨਪਸੰਦ", "play": "ਚਲਾਓ", "save": "ਸੰਭਾਲੋ", "download": "ਡਾਊਨਲੋਡ", "comments": "ਟਿੱਪਣੀਆਂ", "reply": "ਜਵਾਬ", "add_comment": "ਟਿੱਪਣੀ ਲਿਖੋ…", "comment_settings": "ਟਿੱਪਣੀ ਨਿਯੰਤਰਣ", "save_changes": "ਬਦਲਾਅ ਸੰਭਾਲੋ", "views": "ਵਿਊਜ਼"}, "Urdu": {"settings": "ترتیبات", "dark_theme": "تھیم", "language": "زبان", "downloads": "ڈاؤن لوڈز", "watch_history": "حالیہ ویڈیوز", "favorites": "پسندیدہ", "play": "چلائیں", "save": "محفوظ کریں", "download": "ڈاؤن لوڈ", "comments": "تبصرے", "reply": "جواب دیں", "add_comment": "تبصرہ لکھیں…", "comment_settings": "تبصرے کے اختیارات", "save_changes": "تبدیلیاں محفوظ کریں", "views": "مناظر"}, "Nepali": {"settings": "सेटिङहरू", "dark_theme": "थिम", "language": "भाषा", "downloads": "डाउनलोडहरू", "watch_history": "हालका भिडियोहरू", "favorites": "मनपर्ने", "play": "चलाउनुहोस्", "save": "सुरक्षित गर्नुहोस्", "download": "डाउनलोड", "comments": "टिप्पणीहरू", "reply": "जवाफ", "add_comment": "टिप्पणी लेख्नुहोस्…", "comment_settings": "टिप्पणी नियन्त्रण", "save_changes": "परिवर्तन सुरक्षित गर्नुहोस्", "views": "हेराइहरू"}, "Arabic": {"settings": "الإعدادات", "dark_theme": "المظهر", "language": "اللغة", "downloads": "التنزيلات", "watch_history": "الفيديوهات الأخيرة", "favorites": "المفضلة", "play": "تشغيل", "save": "حفظ", "download": "تنزيل", "comments": "التعليقات", "reply": "رد", "add_comment": "أضف تعليقًا…", "comment_settings": "إعدادات التعليقات", "save_changes": "حفظ التغييرات", "views": "مشاهدة"}, "Persian": {"settings": "تنظیمات", "dark_theme": "پوسته", "language": "زبان", "downloads": "دانلودها", "watch_history": "ویدیوهای اخیر", "favorites": "علاقه‌مندی‌ها", "play": "پخش", "save": "ذخیره", "download": "دانلود", "comments": "دیدگاه‌ها", "reply": "پاسخ", "add_comment": "دیدگاه بنویسید…", "comment_settings": "کنترل دیدگاه‌ها", "save_changes": "ذخیره تغییرات", "views": "بازدید"}, "Spanish": {"settings": "Ajustes", "dark_theme": "Tema", "language": "Idioma", "downloads": "Descargas", "watch_history": "Vídeos recientes", "favorites": "Favoritos", "play": "Reproducir", "save": "Guardar", "download": "Descargar", "comments": "Comentarios", "reply": "Responder", "add_comment": "Añade un comentario…", "comment_settings": "Controles de comentarios", "save_changes": "Guardar cambios", "views": "vistas"}, "French": {"settings": "Paramètres", "dark_theme": "Thème", "language": "Langue", "downloads": "Téléchargements", "watch_history": "Vidéos récentes", "favorites": "Favoris", "play": "Lire", "save": "Enregistrer", "download": "Télécharger", "comments": "Commentaires", "reply": "Répondre", "add_comment": "Ajouter un commentaire…", "comment_settings": "Contrôle des commentaires", "save_changes": "Enregistrer", "views": "vues"}, "Portuguese": {"settings": "Configurações", "dark_theme": "Tema", "language": "Idioma", "downloads": "Downloads", "watch_history": "Vídeos recentes", "favorites": "Favoritos", "play": "Reproduzir", "save": "Salvar", "download": "Baixar", "comments": "Comentários", "reply": "Responder", "add_comment": "Adicione um comentário…", "comment_settings": "Controles de comentários", "save_changes": "Salvar alterações", "views": "visualizações"}, "German": {"settings": "Einstellungen", "dark_theme": "Design", "language": "Sprache", "downloads": "Downloads", "watch_history": "Letzte Videos", "favorites": "Favoriten", "play": "Abspielen", "save": "Speichern", "download": "Herunterladen", "comments": "Kommentare", "reply": "Antworten", "add_comment": "Kommentar schreiben…", "comment_settings": "Kommentareinstellungen", "save_changes": "Änderungen speichern", "views": "Aufrufe"}, "Italian": {"settings": "Impostazioni", "dark_theme": "Tema", "language": "Lingua", "downloads": "Download", "watch_history": "Video recenti", "favorites": "Preferiti", "play": "Riproduci", "save": "Salva", "download": "Scarica", "comments": "Commenti", "reply": "Rispondi", "add_comment": "Aggiungi un commento…", "comment_settings": "Controlli dei commenti", "save_changes": "Salva modifiche", "views": "visualizzazioni"}, "Russian": {"settings": "Настройки", "dark_theme": "Тема", "language": "Язык", "downloads": "Загрузки", "watch_history": "Недавние видео", "favorites": "Избранное", "play": "Смотреть", "save": "Сохранить", "download": "Скачать", "comments": "Комментарии", "reply": "Ответить", "add_comment": "Добавьте комментарий…", "comment_settings": "Управление комментариями", "save_changes": "Сохранить изменения", "views": "просмотров"}, "Ukrainian": {"settings": "Налаштування", "dark_theme": "Тема", "language": "Мова", "downloads": "Завантаження", "watch_history": "Нещодавні відео", "favorites": "Обране", "play": "Відтворити", "save": "Зберегти", "download": "Завантажити", "comments": "Коментарі", "reply": "Відповісти", "add_comment": "Додайте коментар…", "comment_settings": "Керування коментарями", "save_changes": "Зберегти зміни", "views": "переглядів"}, "Turkish": {"settings": "Ayarlar", "dark_theme": "Tema", "language": "Dil", "downloads": "İndirilenler", "watch_history": "Son videolar", "favorites": "Favoriler", "play": "Oynat", "save": "Kaydet", "download": "İndir", "comments": "Yorumlar", "reply": "Yanıtla", "add_comment": "Yorum ekleyin…", "comment_settings": "Yorum kontrolleri", "save_changes": "Değişiklikleri kaydet", "views": "görüntüleme"}, "Indonesian": {"settings": "Setelan", "dark_theme": "Tema", "language": "Bahasa", "downloads": "Unduhan", "watch_history": "Video terbaru", "favorites": "Favorit", "play": "Putar", "save": "Simpan", "download": "Unduh", "comments": "Komentar", "reply": "Balas", "add_comment": "Tambahkan komentar…", "comment_settings": "Kontrol komentar", "save_changes": "Simpan perubahan", "views": "penayangan"}, "Malay": {"settings": "Tetapan", "dark_theme": "Tema", "language": "Bahasa", "downloads": "Muat turun", "watch_history": "Video terkini", "favorites": "Kegemaran", "play": "Main", "save": "Simpan", "download": "Muat turun", "comments": "Komen", "reply": "Balas", "add_comment": "Tambah komen…", "comment_settings": "Kawalan komen", "save_changes": "Simpan perubahan", "views": "tontonan"}, "Vietnamese": {"settings": "Cài đặt", "dark_theme": "Giao diện", "language": "Ngôn ngữ", "downloads": "Tệp tải xuống", "watch_history": "Video gần đây", "favorites": "Yêu thích", "play": "Phát", "save": "Lưu", "download": "Tải xuống", "comments": "Bình luận", "reply": "Trả lời", "add_comment": "Thêm bình luận…", "comment_settings": "Kiểm soát bình luận", "save_changes": "Lưu thay đổi", "views": "lượt xem"}, "Thai": {"settings": "การตั้งค่า", "dark_theme": "ธีม", "language": "ภาษา", "downloads": "ดาวน์โหลด", "watch_history": "วิดีโอล่าสุด", "favorites": "รายการโปรด", "play": "เล่น", "save": "บันทึก", "download": "ดาวน์โหลด", "comments": "ความคิดเห็น", "reply": "ตอบกลับ", "add_comment": "เพิ่มความคิดเห็น…", "comment_settings": "การควบคุมความคิดเห็น", "save_changes": "บันทึกการเปลี่ยนแปลง", "views": "ครั้ง"}, "Chinese": {"settings": "设置", "dark_theme": "主题", "language": "语言", "downloads": "下载内容", "watch_history": "最近的视频", "favorites": "收藏", "play": "播放", "save": "保存", "download": "下载", "comments": "评论", "reply": "回复", "add_comment": "添加评论…", "comment_settings": "评论管理", "save_changes": "保存更改", "views": "次观看"}, "Japanese": {"settings": "設定", "dark_theme": "テーマ", "language": "言語", "downloads": "ダウンロード", "watch_history": "最近の動画", "favorites": "お気に入り", "play": "再生", "save": "保存", "download": "ダウンロード", "comments": "コメント", "reply": "返信", "add_comment": "コメントを追加…", "comment_settings": "コメント管理", "save_changes": "変更を保存", "views": "回視聴"}, "Korean": {"settings": "설정", "dark_theme": "테마", "language": "언어", "downloads": "다운로드", "watch_history": "최근 동영상", "favorites": "즐겨찾기", "play": "재생", "save": "저장", "download": "다운로드", "comments": "댓글", "reply": "답글", "add_comment": "댓글 추가…", "comment_settings": "댓글 관리", "save_changes": "변경사항 저장", "views": "조회"}, "Swahili": {"settings": "Mipangilio", "dark_theme": "Mandhari", "language": "Lugha", "downloads": "Vipakuliwa", "watch_history": "Video za karibuni", "favorites": "Vipendwa", "play": "Cheza", "save": "Hifadhi", "download": "Pakua", "comments": "Maoni", "reply": "Jibu", "add_comment": "Ongeza maoni…", "comment_settings": "Udhibiti wa maoni", "save_changes": "Hifadhi mabadiliko", "views": "mitazamo"}};
 final Map<String, String> mayaLanguageNames = {"English": "English", "Hindi": "हिन्दी", "Bengali": "বাংলা", "Tamil": "தமிழ்", "Telugu": "తెలుగు", "Marathi": "मराठी", "Gujarati": "ગુજરાતી", "Kannada": "ಕನ್ನಡ", "Malayalam": "മലയാളം", "Punjabi": "ਪੰਜਾਬੀ", "Urdu": "اردو", "Nepali": "नेपाली", "Arabic": "العربية", "Persian": "فارسی", "Spanish": "Español", "French": "Français", "Portuguese": "Português", "German": "Deutsch", "Italian": "Italiano", "Russian": "Русский", "Ukrainian": "Українська", "Turkish": "Türkçe", "Indonesian": "Bahasa Indonesia", "Malay": "Bahasa Melayu", "Vietnamese": "Tiếng Việt", "Thai": "ไทย", "Chinese": "中文", "Japanese": "日本語", "Korean": "한국어", "Swahili": "Kiswahili"};
