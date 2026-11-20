@@ -164,178 +164,240 @@ Widget buildAutoThumbnail(String title, {bool isSmall = false}) {
 // ═══════════════════════════════════════════════════════════════════════════════
 // INSTANT LOOPING VIDEO THUMBNAIL
 // ═══════════════════════════════════════════════════════════════════════════════
+// Muted, visible-only previews. Keep posters mounted while a decoder starts.
 class VideoLoopThumbnail extends StatefulWidget {
   final String videoUrl;
   final String title;
   final bool isSmall;
   final String? fallbackThumb;
   final void Function(String base64Thumb)? onFrameCaptured;
-
-  const VideoLoopThumbnail({
-    super.key,
-    required this.videoUrl,
-    required this.title,
-    this.isSmall = false,
-    this.fallbackThumb,
-    this.onFrameCaptured,
-  });
-
+  const VideoLoopThumbnail({super.key, required this.videoUrl, required this.title,
+    this.isSmall = false, this.fallbackThumb, this.onFrameCaptured});
   @override
   State<VideoLoopThumbnail> createState() => _VideoLoopThumbnailState();
 }
 
-class _VideoLoopThumbnailState extends State<VideoLoopThumbnail> {
+class _VideoLoopThumbnailState extends State<VideoLoopThumbnail> with WidgetsBindingObserver {
+  static final _active = <_VideoLoopThumbnailState>{};
   VideoPlayerController? _controller;
-  bool _isInit = false;
-  bool _firstFrameReady = false;
-  bool _rewinding = false;
-  bool _hasError = false;
-  final GlobalKey _captureKey = GlobalKey();
-  bool _captureAttempted = false;
+  Timer? _visibilityTimer;
+  bool _foreground = true, _visible = false, _failed = false;
+  bool _ready = false, _rewinding = false, _captured = false;
+  int _generation = 0;
+  final _captureKey = GlobalKey();
 
   @override
   void initState() {
     super.initState();
-    _initPlayer();
+    WidgetsBinding.instance.addObserver(this);
+    WidgetsBinding.instance.addPostFrameCallback((_) => _checkVisibility());
+    _visibilityTimer = Timer.periodic(const Duration(milliseconds: 500), (_) => _checkVisibility());
   }
 
   @override
   void didUpdateWidget(covariant VideoLoopThumbnail oldWidget) {
     super.didUpdateWidget(oldWidget);
     if (oldWidget.videoUrl != widget.videoUrl) {
-      _controller?.dispose();
-      _controller = null;
-      _isInit = false;
-      _firstFrameReady = false;
-      _captureAttempted = false;
-      _hasError = false;
-      _initPlayer();
+      _stop();
+      _failed = false;
+      _captured = false;
+      WidgetsBinding.instance.addPostFrameCallback((_) => _checkVisibility());
     }
   }
 
-  Future<void> _initPlayer() async {
-    if (widget.videoUrl.isEmpty || !widget.videoUrl.startsWith('http')) return;
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    _foreground = state == AppLifecycleState.resumed;
+    _checkVisibility();
+  }
 
+  void _checkVisibility() {
+    if (!mounted) return;
+    final box = context.findRenderObject();
+    var visible = false;
+    if (_foreground && TickerMode.of(context) && (ModalRoute.of(context)?.isCurrent ?? true) &&
+        box is RenderBox && box.attached && box.hasSize && box.size.shortestSide > 0) {
+      var clip = Offset.zero & MediaQuery.sizeOf(context);
+      // Also respect nested scroll views, not just the full phone screen.
+      context.visitAncestorElements((element) {
+        final render = element.renderObject;
+        if (render is RenderAbstractViewport && render is RenderBox && render.hasSize) {
+          clip = clip.intersect(render.localToGlobal(Offset.zero) & render.size);
+        }
+        return true;
+      });
+      final rect = box.localToGlobal(Offset.zero) & box.size;
+      final overlap = rect.intersect(clip);
+      visible = overlap.width > 0 && overlap.height > 0 &&
+          overlap.width * overlap.height >= rect.width * rect.height * .55;
+    }
+    _visible = visible;
+    if (!visible) {
+      if (_controller != null) { _stop(); if (mounted) setState(() {}); }
+    } else if (!_failed && _controller == null && _active.length < 3 && widget.videoUrl.isNotEmpty) {
+      _active.add(this);
+      unawaited(_start());
+    }
+  }
+
+  Future<void> _start() async {
+    final generation = ++_generation;
+    VideoPlayerController? controller;
     try {
-      final controller = VideoPlayerController.networkUrl(
-        Uri.parse(widget.videoUrl),
-        videoPlayerOptions: VideoPlayerOptions(mixWithOthers: true),
-        httpHeaders: {'Accept': '*/*'},
-      );
+      final uri = Uri.tryParse(widget.videoUrl);
+      final options = VideoPlayerOptions(mixWithOthers: true);
+      if (uri != null && (uri.scheme == 'https' || uri.scheme == 'http')) {
+        controller = VideoPlayerController.networkUrl(uri, videoPlayerOptions: options);
+      } else if (widget.videoUrl.startsWith('/') || uri?.scheme == 'file') {
+        controller = VideoPlayerController.file(
+          uri?.scheme == 'file' ? File.fromUri(uri!) : File(widget.videoUrl), videoPlayerOptions: options);
+      } else {
+        throw const FormatException('No playable preview');
+      }
       _controller = controller;
       await controller.initialize().timeout(const Duration(seconds: 12));
-      if (!mounted || _controller != controller) return;
+      if (!mounted || generation != _generation) return;
       await controller.setVolume(0);
-      if (!mounted || _controller != controller) return;
-      controller.addListener(_onVideoUpdate);
-      await controller.play();
-      if (mounted && _controller == controller) setState(() => _isInit = true);
+      await controller.setLooping(true);
+      if (!mounted || generation != _generation) return;
+      controller.addListener(_onFrame);
+      if (_visible) await controller.play();
     } catch (_) {
-      if (mounted && _controller?.dataSource == widget.videoUrl) {
-        setState(() => _hasError = true);
+      if (mounted && generation == _generation) {
+        _stop();
+        setState(() => _failed = true);
       }
     }
   }
 
-  void _onVideoUpdate() {
+  void _onFrame() {
     final controller = _controller;
     if (!mounted || controller == null || !controller.value.isInitialized) return;
-    final val = controller.value;
-    if (!_firstFrameReady && val.position > Duration.zero) {
-      setState(() => _firstFrameReady = true);
-      unawaited(_attemptFrameCapture());
+    if (controller.value.hasError) {
+      _stop();
+      setState(() => _failed = true);
+      return;
     }
-    if (!_rewinding && (val.position >= const Duration(seconds: 5) || val.isCompleted)) {
-      unawaited(_rewind(controller));
+    if (!_ready && controller.value.position > Duration.zero) {
+      setState(() => _ready = true);
+      unawaited(_capture());
+    }
+    if (!_rewinding && controller.value.position >= const Duration(seconds: 5)) {
+      _rewinding = true;
+      unawaited(controller.seekTo(Duration.zero).then((_) async {
+        if (mounted && _controller == controller && _visible) await controller.play();
+      }).catchError((Object _) {}).whenComplete(() => _rewinding = false));
     }
   }
 
-  Future<void> _rewind(VideoPlayerController controller) async {
-    _rewinding = true;
+  Future<void> _capture() async {
+    if (_captured || widget.onFrameCaptured == null) return;
+    _captured = true;
+    await Future<void>.delayed(const Duration(milliseconds: 700));
+    if (!mounted || !_ready) return;
+    ui.Image? image;
     try {
-      await controller.seekTo(Duration.zero);
-      if (mounted && _controller == controller) await controller.play();
-    } catch (_) {
-      if (mounted && _controller == controller) setState(() => _hasError = true);
-    } finally {
-      _rewinding = false;
-    }
+      final boundary = _captureKey.currentContext?.findRenderObject();
+      if (boundary is! RenderRepaintBoundary || boundary.debugNeedsPaint) return;
+      image = await boundary.toImage(pixelRatio: .5);
+      final bytes = await image.toByteData(format: ui.ImageByteFormat.png);
+      if (mounted && bytes != null) widget.onFrameCaptured?.call(base64Encode(bytes.buffer.asUint8List()));
+    } catch (_) {} finally { image?.dispose(); }
   }
 
-  Future<void> _attemptFrameCapture() async {
-    if (_captureAttempted || widget.onFrameCaptured == null) return;
-    await Future.delayed(const Duration(milliseconds: 600));
-    if (!mounted || _captureAttempted || !_firstFrameReady) return;
-    _captureAttempted = true;
-
-    try {
-      final ctx = _captureKey.currentContext;
-      if (ctx == null) return;
-      final boundary = ctx.findRenderObject();
-      if (boundary is! RenderRepaintBoundary) return;
-      final image = await boundary.toImage(pixelRatio: 0.5);
-      final byteData = await image.toByteData(format: ui.ImageByteFormat.png);
-      if (byteData == null) return;
-      final b64 = base64Encode(byteData.buffer.asUint8List());
-      if (mounted) widget.onFrameCaptured?.call(b64);
-    } catch (_) {}
-  }
-
-  Widget _buildFallback() {
-    if (widget.fallbackThumb != null && widget.fallbackThumb!.isNotEmpty) {
-      if (widget.fallbackThumb!.startsWith('http')) {
-        return Image.network(
-          widget.fallbackThumb!,
-          fit: BoxFit.cover,
-          errorBuilder: (c, e, s) => buildAutoThumbnail(widget.title, isSmall: widget.isSmall),
-        );
-      }
-      try {
-        return Image.memory(
-          base64Decode(widget.fallbackThumb!),
-          fit: BoxFit.cover,
-          errorBuilder: (c, e, s) => buildAutoThumbnail(widget.title, isSmall: widget.isSmall),
-        );
-      } catch (_) {}
-    }
-    return buildAutoThumbnail(widget.title, isSmall: widget.isSmall);
+  void _stop() {
+    _generation++;
+    final old = _controller;
+    _controller = null;
+    _ready = false;
+    _rewinding = false;
+    _active.remove(this);
+    old?.removeListener(_onFrame);
+    if (old != null) unawaited(old.dispose());
   }
 
   @override
   void dispose() {
-    _controller?.removeListener(_onVideoUpdate);
-    _controller?.dispose();
+    _visibilityTimer?.cancel();
+    WidgetsBinding.instance.removeObserver(this);
+    _stop();
     super.dispose();
   }
 
   @override
-  Widget build(BuildContext context) {
-    if (_hasError || (!_isInit && _controller == null)) {
-      return _buildFallback();
-    }
-
-    return Stack(
-      fit: StackFit.expand,
-      children: [
-        if (_isInit && _controller != null)
-          RepaintBoundary(
-            key: _captureKey,
-            child: SizedBox.expand(
-              child: FittedBox(
-                fit: BoxFit.cover,
-                child: SizedBox(
-                  width: _controller!.value.size.width,
-                  height: _controller!.value.size.height,
-                  child: VideoPlayer(_controller!),
-                ),
-              ),
-            ),
-          ),
-        if (!_firstFrameReady) _buildFallback(),
-      ],
-    );
-  }
+  Widget build(BuildContext context) => Stack(fit: StackFit.expand, children: [
+    _MayaPoster(thumb: widget.fallbackThumb, title: widget.title, isSmall: widget.isSmall),
+    if (_ready && _controller != null) Positioned.fill(child: RepaintBoundary(key: _captureKey,
+      child: ClipRect(child: FittedBox(fit: BoxFit.cover, child: SizedBox(
+        width: _controller!.value.size.width, height: _controller!.value.size.height,
+        child: VideoPlayer(_controller!)))))),
+  ]);
 }
+
+// ImageProvider is retained across player timer/progress rebuilds. In particular,
+// don't base64Decode into a new MemoryImage every 350 ms.
+class _MayaPoster extends StatefulWidget {
+  const _MayaPoster({required this.thumb, required this.title, this.isSmall = false});
+  final String? thumb;
+  final String title;
+  final bool isSmall;
+  @override
+  State<_MayaPoster> createState() => _MayaPosterState();
+}
+class _MayaPosterState extends State<_MayaPoster> {
+  ImageProvider? _image;
+  @override
+  void initState() { super.initState(); _read(); }
+  @override
+  void didUpdateWidget(covariant _MayaPoster oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (oldWidget.thumb != widget.thumb) _read();
+  }
+  void _read() {
+    final thumb = widget.thumb ?? '';
+    try {
+      _image = thumb.isEmpty ? null : thumb.startsWith('http')
+          ? NetworkImage(thumb) : MemoryImage(base64Decode(thumb));
+    } catch (_) { _image = null; }
+  }
+  @override
+  Widget build(BuildContext context) => _image == null
+      ? buildAutoThumbnail(widget.title, isSmall: widget.isSmall)
+      : Image(image: _image!, fit: BoxFit.cover, width: double.infinity, height: double.infinity,
+          gaplessPlayback: true, errorBuilder: (_, __, ___) => buildAutoThumbnail(widget.title, isSmall: widget.isSmall));
+}
+
+const _mayaMint = Color(0xFF9FE3BD);
+class MayaBrandTitle extends StatelessWidget {
+  const MayaBrandTitle({super.key, this.section});
+  final String? section;
+  @override
+  Widget build(BuildContext context) => FittedBox(fit: BoxFit.scaleDown, alignment: Alignment.centerLeft,
+    child: Row(mainAxisSize: MainAxisSize.min, children: [
+      Container(width: 34, height: 34, decoration: BoxDecoration(color: Colors.black,
+        borderRadius: BorderRadius.circular(9), border: Border.all(color: AppThemes.kGreen, width: 1.5)),
+        child: ClipRRect(borderRadius: BorderRadius.circular(7), child: Image.asset('assets/icon/logo.png',
+          fit: BoxFit.cover, errorBuilder: (_, __, ___) => const Icon(Icons.change_history, color: AppThemes.kGreen, size: 18)))),
+      const SizedBox(width: 8),
+      const Text('Maya', style: TextStyle(fontFamily: 'sans-serif', fontSize: 22, fontWeight: FontWeight.w900, color: Colors.white)),
+      const Text('Jaal', style: TextStyle(fontFamily: 'sans-serif', fontSize: 22, fontWeight: FontWeight.w900, color: AppThemes.kGreen)),
+      if (section != null) ...[const SizedBox(width: 10),
+        Text(section!, style: const TextStyle(fontFamily: 'Roboto', fontSize: 13, fontWeight: FontWeight.w500, color: _mayaMint))],
+    ]));
+}
+
+class MayaSectionTitle extends StatelessWidget {
+  const MayaSectionTitle(this.label, this.icon, {super.key});
+  final String label;
+  final IconData icon;
+  @override
+  Widget build(BuildContext context) => Row(mainAxisSize: MainAxisSize.min, children: [
+    Icon(icon, color: _mayaMint, size: 23), const SizedBox(width: 10),
+    Flexible(child: Text(label, overflow: TextOverflow.ellipsis, style: const TextStyle(
+      fontFamily: 'Roboto', color: Colors.white, fontSize: 20, letterSpacing: .15, fontWeight: FontWeight.w700))),
+  ]);
+}
+
 
 // ═══════════════════════════════════════════════════════════════════════════════
 // GLOBAL MEDIA THUMBNAIL DISPATCHER
@@ -351,33 +413,15 @@ String _storedVideoThumbnail(Map<dynamic, dynamic> data) {
 }
 
 Widget buildMediaThumbnail(
-  String? thumb,
-  String title,
-  String videoUrl, {
-  bool isSmall = false,
+  String? thumb, String title, String videoUrl, {
+  bool isSmall = false, bool loopPreview = false,
   void Function(String base64Thumb)? onFrameCaptured,
 }) {
-  Widget fallback() {
-    if (videoUrl.startsWith('http')) {
-      return VideoLoopThumbnail(
-        videoUrl: videoUrl, title: title, isSmall: isSmall,
-        onFrameCaptured: onFrameCaptured,
-      );
-    }
-    return buildAutoThumbnail(title, isSmall: isSmall);
+  if (videoUrl.isNotEmpty && (loopPreview || thumb == null || thumb.isEmpty)) {
+    return VideoLoopThumbnail(videoUrl: videoUrl, title: title, isSmall: isSmall,
+      fallbackThumb: thumb, onFrameCaptured: onFrameCaptured);
   }
-
-  if (thumb == null || thumb.isEmpty) return fallback();
-  if (thumb.startsWith('http')) {
-    return Image.network(thumb, width: double.infinity, height: double.infinity,
-      fit: BoxFit.cover, errorBuilder: (_, __, ___) => fallback());
-  }
-  try {
-    return Image.memory(base64Decode(thumb), width: double.infinity, height: double.infinity,
-      fit: BoxFit.cover, errorBuilder: (_, __, ___) => fallback());
-  } catch (_) {
-    return fallback();
-  }
+  return _MayaPoster(thumb: thumb, title: title, isSmall: isSmall);
 }
 
 // ═══════════════════════════════════════════════════════════════════════════════
@@ -4588,11 +4632,11 @@ class _HomeScreenState extends State<HomeScreen>
                                   width: 40,
                                   height: 40,
                                   decoration: BoxDecoration(
-                                    color: AppThemes.kGreen,
+                                    color: _mayaMint,
                                     shape: BoxShape.circle,
                                     boxShadow: [
                                       BoxShadow(
-                                        color: AppThemes.kGreen.withOpacity(0.4),
+                                        color: _mayaMint.withOpacity(0.4),
                                         blurRadius: 10,
                                       ),
                                     ],
@@ -5358,18 +5402,6 @@ class _MoreDrawerState extends State<MoreDrawer>
                         );
                       },
                     ),
-                  ),
-                  _snakeItem(
-                    context,
-                    icon: Icons.photo_library_outlined,
-                    color: AppThemes.kGreen,
-                    title: 'Gallery',
-                    subtitle: 'Photos and videos on this device',
-                    onTap: () {
-                      final navigator = Navigator.of(context);
-                      navigator.pop();
-                      navigator.push(MaterialPageRoute(builder: (_) => const GalleryScreen()));
-                    },
                   ),
                   _staggered(
                     index: 8,
@@ -6377,22 +6409,22 @@ class _StreamPreviewScreenState extends State<StreamPreviewScreen>
             decoration: BoxDecoration(
               color: Colors.black,
               borderRadius: BorderRadius.circular(29),
-              boxShadow: [BoxShadow(color: AppThemes.kRed.withOpacity(0.4), blurRadius: 18)],
+              boxShadow: [BoxShadow(color: _mayaMint.withOpacity(0.4), blurRadius: 18)],
             ),
             child: Stack(
               alignment: Alignment.center,
               children: [
                 Positioned.fill(
-                  child: CustomPaint(painter: SnakeBorderPainter(progress: _snakeCtrl.value, color: AppThemes.kRed)),
+                  child: CustomPaint(painter: SnakeBorderPainter(progress: _snakeCtrl.value, color: _mayaMint)),
                 ),
                 Row(
                   mainAxisAlignment: MainAxisAlignment.center,
                   children: const [
-                    Icon(Icons.play_arrow_rounded, color: AppThemes.kRed, size: 30),
+                    Icon(Icons.play_arrow_rounded, color: _mayaMint, size: 30),
                     SizedBox(width: 8),
                     Text(
                       'PLAY NOW',
-                      style: TextStyle(color: AppThemes.kRed, fontSize: 14, fontWeight: FontWeight.w900, letterSpacing: 2.0),
+                      style: TextStyle(color: _mayaMint, fontSize: 14, fontWeight: FontWeight.w900, letterSpacing: 2.0),
                     ),
                   ],
                 ),
@@ -6524,6 +6556,7 @@ class _StreamPreviewScreenState extends State<StreamPreviewScreen>
                                  _thumbnailUrl.isNotEmpty ? _thumbnailUrl : null,
                                  _videoTitle,
                                  _streamUrl,
+                                 loopPreview: true,
                                  onFrameCaptured: (b64) {
                                    if (!mounted) return;
                                    if (_capturedThumbB64.isEmpty) {
@@ -7986,6 +8019,7 @@ class _SavedVideosScreenState extends State<SavedVideosScreen> {
                               thumb,
                               title,
                               thumbStreamUrl,
+                              loopPreview: true,
                               isSmall: true,
                               onFrameCaptured: (b64) async {
                                 await WatchHistory.saveThumbnail(url, b64);
@@ -8214,6 +8248,7 @@ class _HistoryScreenState extends State<HistoryScreen> {
                               thumb,
                               title,
                               thumbStreamUrl,
+                              loopPreview: true,
                               isSmall: true,
                               onFrameCaptured: (b64) async {
                                 await WatchHistory.saveThumbnail(url, b64);
@@ -9420,7 +9455,7 @@ class _NativeVideoPlayerScreenState extends State<NativeVideoPlayerScreen> with 
       ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('This source does not provide a downloadable file.')));
       return;
     }
-    unawaited(MayaDownloads.start(FirebaseAuth.instance.currentUser?.uid ?? 'guest', url, widget.title));
+    unawaited(MayaDownloads.start(FirebaseAuth.instance.currentUser?.uid ?? 'guest', url, widget.title, thumbnail: widget.thumbnailUrl));
     await Navigator.of(context).push(MaterialPageRoute(builder: (_) => const MayaDownloadsScreen()));
   }
 
@@ -9644,7 +9679,7 @@ class _NativeVideoPlayerScreenState extends State<NativeVideoPlayerScreen> with 
       child: Scaffold(backgroundColor: Colors.black, body: SafeArea(child: _buildUnifiedPlayback())),
     );
     return Scaffold(backgroundColor: AppThemes.kBg,
-      appBar: AppBar(title: const Text('MayaJaal Player', style: TextStyle(fontFamily: 'Roboto', fontWeight: FontWeight.w700)),
+      appBar: AppBar(title: const MayaBrandTitle(section: 'Player'),
         actions: [IconButton(onPressed: _shareVideoLink, icon: const Icon(Icons.share_outlined))]),
       body: Column(children: [
         SizedBox(height: MediaQuery.of(context).size.height * .32, width: double.infinity, child: _buildUnifiedPlayback()),
@@ -9664,9 +9699,11 @@ class _NativeVideoPlayerScreenState extends State<NativeVideoPlayerScreen> with 
           const SizedBox(height: 20),
           const Text('Recent & related', style: TextStyle(fontFamily: 'Roboto', fontSize: 16, fontWeight: FontWeight.w600)),
           for (final item in _relatedVideos) ListTile(
+            key: ValueKey(WatchHistory.recordKey(item)),
             contentPadding: EdgeInsets.zero,
             leading: SizedBox(width: 96, height: 54, child: ClipRRect(borderRadius: BorderRadius.circular(8),
-              child: buildMediaThumbnail(_storedVideoThumbnail(item), '${item['title'] ?? 'Video'}', ''))),
+              child: buildMediaThumbnail(_storedVideoThumbnail(item), '${item['title'] ?? 'Video'}',
+                '${item['streamUrl'] ?? ''}', loopPreview: true))),
             title: Text('${item['title'] ?? 'Video'}', maxLines: 2, overflow: TextOverflow.ellipsis),
             subtitle: Text('${item['uploader'] ?? ''}', maxLines: 1),
             onTap: () {
@@ -9726,7 +9763,7 @@ class _NativeVideoPlayerScreenState extends State<NativeVideoPlayerScreen> with 
                 ),
                 child: ClipRRect(
                   borderRadius: const BorderRadius.vertical(top: Radius.circular(9)),
-                  child: buildMediaThumbnail(thumb, title, streamUrl, isSmall: true),
+                  child: buildMediaThumbnail(thumb, title, streamUrl, isSmall: true, loopPreview: true),
                 ),
               ),
               Padding(
@@ -10402,7 +10439,9 @@ class _StatsScreenState extends State<StatsScreen>
 }
 
 class MayaDownload extends ChangeNotifier {
-  MayaDownload(this.uid, this.id, this.title);
+  MayaDownload(this.uid, this.id, this.title, this.thumbnail);
+
+  final String thumbnail;
 
   final String uid;
   final String id;
@@ -10470,12 +10509,25 @@ class MayaDownloads {
     return Directory('${root.path}/downloads/$folder').create(recursive: true);
   }
 
-  static Future<void> start(String uid, Uri source, String title) async {
+  static Future<String> _cachePoster(String thumbnail) async {
+    if (!thumbnail.startsWith('http')) return thumbnail;
+    try {
+      final response = await http.get(Uri.parse(thumbnail)).timeout(const Duration(seconds: 8));
+      if (response.statusCode == 200 && response.bodyBytes.isNotEmpty && response.bodyBytes.length < 600000 &&
+          (response.headers['content-type'] ?? '').startsWith('image/')) {
+        return base64Encode(response.bodyBytes);
+      }
+    } catch (_) {}
+    return thumbnail;
+  }
+
+  static Future<void> start(String uid, Uri source, String title, {String thumbnail = ''}) async {
     final id = DateTime.now().microsecondsSinceEpoch.toString();
     final safeTitle = title.replaceAll(RegExp(r'[^a-zA-Z0-9._ -]'), '_').trim();
     final name = safeTitle.isEmpty ? 'Video' :
         safeTitle.substring(0, math.min(safeTitle.length, 120));
-    final job = MayaDownload(uid, id, name);
+    final poster = _cachePoster(thumbnail);
+    final job = MayaDownload(uid, id, name, thumbnail);
     jobs.value = [...jobs.value, job];
     final client = HttpClient()..connectionTimeout = const Duration(seconds: 20);
     File? partial;
@@ -10512,9 +10564,14 @@ class MayaDownloads {
         throw const FormatException('Incomplete download.');
       }
       await partial.rename('${folder.path}/${id}_$filename');
+      // Private, per-account poster metadata survives restarts and cloud sync.
+      final prefs = await SharedPreferences.getInstance();
+      final savedPoster = await poster;
+      await prefs.setString('downloadPoster:$uid:$id', savedPoster);
       dismiss(job);
       await MayaDownloadHistory.record(uid, id, {
         'name': filename,
+        'thumbnail': savedPoster,
         'size': received,
         'completedAt': DateTime.now().millisecondsSinceEpoch,
       }).catchError((Object _) {});
@@ -10551,6 +10608,7 @@ class MayaDownloadsScreen extends StatefulWidget {
 
 class _MayaDownloadsScreenState extends State<MayaDownloadsScreen> {
   int _refresh = 0;
+  Future<List<File>>? _files;
   Timer? _historyRetry;
 
   @override
@@ -10588,8 +10646,10 @@ class _MayaDownloadsScreenState extends State<MayaDownloadsScreen> {
     try {
       await file.delete();
       final id = file.uri.pathSegments.last.split('_').first;
+      final prefs = await SharedPreferences.getInstance();
+      await prefs.remove('downloadPoster:$uid:$id');
       await MayaDownloadHistory.record(uid, id, null);
-      if (mounted) setState(() => _refresh++);
+      if (mounted) setState(() { _refresh++; _files = null; });
     } on FileSystemException {
       if (mounted) ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(content: Text('Could not delete this download.')),
@@ -10600,27 +10660,42 @@ class _MayaDownloadsScreenState extends State<MayaDownloadsScreen> {
   @override
   Widget build(BuildContext context) {
     final uid = FirebaseAuth.instance.currentUser?.uid ?? 'guest';
+    _files ??= MayaDownloads.files(uid);
     return DefaultTabController(
       length: 2,
       child: Scaffold(
         backgroundColor: AppThemes.kBg,
         appBar: AppBar(
-          title: const Text('Downloads'),
+          title: const MayaSectionTitle('Downloads', Icons.download_rounded),
           bottom: const TabBar(tabs: [Tab(text: 'Downloading'), Tab(text: 'Completed')]),
         ),
         body: ValueListenableBuilder<List<MayaDownload>>(
           valueListenable: MayaDownloads.jobs,
           builder: (context, jobs, _) {
             final current = jobs.where((job) => job.uid == uid).toList();
+            // Refresh once per job-list mutation, not per incoming byte chunk.
+            _files = MayaDownloads.files(uid);
             return TabBarView(children: [
               if (current.isEmpty) const Center(child: Text('No active downloads.'))
               else ListView(
                 children: current.map((job) => ListenableBuilder(
+                  key: ValueKey(job.id),
                   listenable: job,
                   builder: (context, _) => ListTile(
-                    title: Text(job.title),
+                    contentPadding: const EdgeInsets.symmetric(horizontal: 18, vertical: 10),
+                    leading: SizedBox(width: 96, height: 60, child: ClipRRect(
+                      borderRadius: BorderRadius.circular(10),
+                      child: _MayaPoster(thumb: job.thumbnail, title: job.title))),
+                    title: Text(job.title, maxLines: 2, overflow: TextOverflow.ellipsis,
+                      style: const TextStyle(fontFamily: 'Roboto', fontWeight: FontWeight.w600, fontSize: 14)),
                     subtitle: job.failed ? const Text('Download failed. Try again from the player.')
-                        : LinearProgressIndicator(value: job.progress),
+                        : Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+                            const SizedBox(height: 8),
+                            LinearProgressIndicator(value: job.progress, color: _mayaMint),
+                            const SizedBox(height: 5),
+                            Text(job.progress == null ? 'Downloading…' : '${(job.progress! * 100).toStringAsFixed(0)}% · Downloading',
+                              style: const TextStyle(fontFamily: 'Roboto', fontSize: 12, color: _mayaMint)),
+                          ]),
                     trailing: job.failed ? IconButton(
                       tooltip: 'Dismiss', icon: const Icon(Icons.close),
                       onPressed: () => MayaDownloads.dismiss(job),
@@ -10630,7 +10705,7 @@ class _MayaDownloadsScreenState extends State<MayaDownloadsScreen> {
               ),
               FutureBuilder<List<File>>(
                 key: ValueKey(_refresh),
-                future: MayaDownloads.files(uid),
+                future: _files,
                 builder: (context, snapshot) {
                   if (snapshot.hasError) return const Center(child: Text('Could not load downloads.'));
                   final files = snapshot.data;
@@ -10641,8 +10716,15 @@ class _MayaDownloadsScreenState extends State<MayaDownloadsScreen> {
                       final filename = file.uri.pathSegments.last;
                       final name = filename.substring(filename.indexOf('_') + 1);
                       return ListTile(
-                        leading: const Icon(Icons.insert_drive_file_outlined, color: AppThemes.kGreen),
-                        title: Text(name),
+                        key: ValueKey(file.path),
+                        contentPadding: const EdgeInsets.symmetric(horizontal: 18, vertical: 10),
+                        leading: SizedBox(width: 96, height: 60, child: ClipRRect(
+                          borderRadius: BorderRadius.circular(10),
+                          child: _MayaDownloadPoster(file: file, name: name, uid: uid))),
+                        title: Text(name, maxLines: 2, overflow: TextOverflow.ellipsis,
+                          style: const TextStyle(fontFamily: 'Roboto', fontWeight: FontWeight.w600, fontSize: 14)),
+                        subtitle: const Text('Completed · Tap to open',
+                          style: TextStyle(fontFamily: 'Roboto', fontSize: 12, color: _mayaMint)),
                         onTap: () => _openDownloadedFile(context, file, name),
                         trailing: IconButton(
                           tooltip: 'Delete download', icon: const Icon(Icons.delete_outline),
@@ -10658,6 +10740,55 @@ class _MayaDownloadsScreenState extends State<MayaDownloadsScreen> {
         ),
       ),
     );
+  }
+}
+
+class _MayaDownloadPoster extends StatefulWidget {
+  const _MayaDownloadPoster({required this.file, required this.name, required this.uid});
+  final File file;
+  final String name, uid;
+  @override
+  State<_MayaDownloadPoster> createState() => _MayaDownloadPosterState();
+}
+class _MayaDownloadPosterState extends State<_MayaDownloadPoster> {
+  String _poster = '';
+  @override
+  void initState() { super.initState(); unawaited(_load()); }
+  @override
+  void didUpdateWidget(covariant _MayaDownloadPoster oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (oldWidget.file.path != widget.file.path || oldWidget.uid != widget.uid) {
+      _poster = ''; unawaited(_load());
+    }
+  }
+  Future<void> _load() async {
+    final path = widget.file.path;
+    final uid = widget.uid;
+    final id = widget.file.uri.pathSegments.last.split('_').first;
+    final prefs = await SharedPreferences.getInstance();
+    final value = prefs.getString('downloadPoster:$uid:$id') ?? '';
+    if (mounted && path == widget.file.path && uid == widget.uid) setState(() => _poster = value);
+  }
+  @override
+  Widget build(BuildContext context) {
+    final ext = widget.file.path.toLowerCase();
+    final video = const ['.mp4', '.webm', '.mkv', '.mov'].any(ext.endsWith);
+    if (video) return VideoLoopThumbnail(key: ValueKey(widget.file.path), videoUrl: widget.file.path,
+      title: widget.name, fallbackThumb: _poster, onFrameCaptured: (frame) async {
+        if (!mounted || _poster.isNotEmpty) return;
+        final id = widget.file.uri.pathSegments.last.split('_').first;
+        final prefs = await SharedPreferences.getInstance();
+        await prefs.setString('downloadPoster:${widget.uid}:$id', frame);
+        if (mounted) setState(() => _poster = frame);
+      });
+    if (const ['.jpg', '.png', '.webp', '.gif'].any(ext.endsWith)) {
+      return Image.file(widget.file, fit: BoxFit.cover, gaplessPlayback: true,
+        errorBuilder: (_, __, ___) => _MayaPoster(thumb: _poster, title: widget.name));
+    }
+    return Stack(fit: StackFit.expand, children: [
+      _MayaPoster(thumb: _poster, title: widget.name),
+      const Center(child: Icon(Icons.headphones_rounded, color: _mayaMint)),
+    ]);
   }
 }
 
@@ -10923,7 +11054,7 @@ class _MayaSocialMediaScreenState extends State<MayaSocialMediaScreen> {
         url = _mediaLink('${job['download_url'] ?? ''}');
       }
       if (url == null || !mounted || generation != _downloadGeneration) return;
-      unawaited(MayaDownloads.start(FirebaseAuth.instance.currentUser?.uid ?? 'guest', url, '${media.title} ${option.label}'));
+      unawaited(MayaDownloads.start(FirebaseAuth.instance.currentUser?.uid ?? 'guest', url, '${media.title} ${option.label}', thumbnail: media.thumbnail));
       await Navigator.of(context).push(MaterialPageRoute(builder: (_) => const MayaDownloadsScreen()));
     } catch (error) {
       if (mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(_error(error))));
@@ -10937,15 +11068,19 @@ class _MayaSocialMediaScreenState extends State<MayaSocialMediaScreen> {
 
   @override
   Widget build(BuildContext context) => Theme(
-    data: Theme.of(context).copyWith(textTheme: Theme.of(context).textTheme.apply(fontFamily: 'Roboto')),
+    data: Theme.of(context).copyWith(
+      colorScheme: Theme.of(context).colorScheme.copyWith(primary: _mayaMint, onPrimary: const Color(0xFF10271B)),
+      textTheme: Theme.of(context).textTheme.apply(fontFamily: 'Roboto')), 
     child: Scaffold(backgroundColor: AppThemes.kBg,
-      appBar: AppBar(title: Text('$_platform Preview', style: const TextStyle(fontFamily: 'Roboto', fontWeight: FontWeight.w700))),
+      appBar: AppBar(title: MayaSectionTitle('$_platform Preview', Icons.play_circle_outline_rounded)),
       body: FutureBuilder<MayaResolvedMedia>(future: _media, builder: (context, snapshot) {
         if (!snapshot.hasData) {
           if (snapshot.hasError) return Center(child: Padding(padding: const EdgeInsets.all(24), child: Column(mainAxisSize: MainAxisSize.min, children: [
             const Icon(Icons.cloud_off_outlined, size: 48, color: AppThemes.kGreen),
             const SizedBox(height: 16), Text(_error(snapshot.error), textAlign: TextAlign.center),
             const SizedBox(height: 12), FilledButton(onPressed: () => setState(() => _media = _load()), child: const Text('Retry')),
+            TextButton.icon(onPressed: () => launchUrl(widget.source, mode: LaunchMode.externalApplication),
+              icon: const Icon(Icons.open_in_new, size: 16), label: const Text('Open original post')),
           ])));
           return const Center(child: CircularProgressIndicator());
         }
