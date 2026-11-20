@@ -34,7 +34,7 @@ import 'package:webview_flutter/webview_flutter.dart';
 const String webClientId = '96139047750-5ooi0pbvch98qu447somuurh6k6fmhcj.apps.googleusercontent.com';
 const String oneSignalAppId = '06b99c2b-b3b4-413b-b6cc-480a624f4e25';
 const String kBackendBaseUrl = 'https://www.mayajaal.online';
-const int kAppCurrentVersionCode = 5;
+const int kAppCurrentVersionCode = 7;
 
 const List<String> kAllowedEmailDomains = [
   '@gmail.com',
@@ -2247,6 +2247,13 @@ void showTopNotificationDropdown(BuildContext context) {
 // CLOUD-SYNCED WATCH HISTORY & SAVED VIDEOS
 // ═══════════════════════════════════════════════════════════════════════════════
 class WatchHistory {
+  static final changes = ValueNotifier<int>(0);
+  static Future<void> _writeChain = Future<void>.value();
+  static Future<void> _exclusive(Future<void> Function() action) {
+    final next = _writeChain.then((_) => action());
+    _writeChain = next.catchError((Object _) {});
+    return next;
+  }
   static String get _uid => FirebaseAuth.instance.currentUser?.uid ?? 'guest';
   static String get _historyKey => 'watch_history_v2_$_uid';
   static String get _savedKey => 'saved_videos_v1_$_uid';
@@ -2288,19 +2295,21 @@ class WatchHistory {
     return byId.values.take(limit).toList();
   }
 
-  static Future<void> recordPlayback(Map<String, dynamic> item) async {
+  static Future<void> recordPlayback(Map<String, dynamic> item) {
     final uid = _uid;
-    final key = 'watch_history_v2_$uid';
-    try {
-      final prefs = await SharedPreferences.getInstance();
-      final records = mergeRecords([item, ...localRecords(prefs, key)]);
-      await prefs.setString(key, jsonEncode(records));
-      if (records.isNotEmpty && _uid == uid) {
-        unawaited(syncWatchRecordCloud(records.firstWhere(
-          (record) => recordKey(record) == recordKey(item), orElse: () => item,
-        )));
-      }
-    } catch (_) {}
+    return _exclusive(() async {
+      final key = 'watch_history_v2_$uid';
+      try {
+        final prefs = await SharedPreferences.getInstance();
+        final records = mergeRecords([item, ...localRecords(prefs, key)]);
+        await prefs.setString(key, jsonEncode(records));
+        changes.value++;
+        if (_uid == uid) {
+          unawaited(syncWatchRecordCloud(records.firstWhere(
+            (record) => recordKey(record) == recordKey(item), orElse: () => item)));
+        }
+      } catch (_) {}
+    });
   }
 
   static Future<List<String>> getRecentIds({int limit = 10}) async {
@@ -2363,47 +2372,29 @@ class WatchHistory {
     return '';
   }
 
-  static Future<void> saveThumbnail(String url, String base64Thumb) async {
-    if (url.isEmpty || base64Thumb.isEmpty) return;
-    try {
-      final prefs = await SharedPreferences.getInstance();
-
-      final raw = prefs.getString(_historyKey);
-      if (raw != null) {
-        final List decoded = jsonDecode(raw);
-        bool updated = false;
-        for (final item in decoded) {
-          if (item is Map && item['url'] == url) {
-            final existing = (item['thumbnail'] ?? '').toString();
-            if (existing.isEmpty) {
+  static Future<void> saveThumbnail(String url, String base64Thumb) {
+    final uid = _uid;
+    if (url.isEmpty || base64Thumb.isEmpty) return Future<void>.value();
+    return _exclusive(() async {
+      try {
+        final prefs = await SharedPreferences.getInstance();
+        for (final key in ['watch_history_v2_$uid', 'saved_videos_v1_$uid']) {
+          final records = localRecords(prefs, key);
+          Map<String, dynamic>? changed;
+          for (final item in records) {
+            if (item['url'] == url && (_storedVideoThumbnail(item).isEmpty || _storedVideoThumbnail(item).startsWith('https://'))) {
               item['thumbnail'] = base64Thumb;
-              updated = true;
+              changed = item;
             }
           }
-        }
-        if (updated) {
-          await prefs.setString(_historyKey, jsonEncode(decoded));
-        }
-      }
-
-      final rawSaved = prefs.getString(_savedKey);
-      if (rawSaved != null) {
-        final List decoded = jsonDecode(rawSaved);
-        bool updated = false;
-        for (final item in decoded) {
-          if (item is Map && item['url'] == url) {
-            final existing = (item['thumbnail'] ?? '').toString();
-            if (existing.isEmpty) {
-              item['thumbnail'] = base64Thumb;
-              updated = true;
-            }
+          if (changed != null) {
+            await prefs.setString(key, jsonEncode(records));
+            if (key.startsWith('watch_history') && _uid == uid) unawaited(syncWatchRecordCloud(changed));
           }
         }
-        if (updated) {
-          await prefs.setString(_savedKey, jsonEncode(decoded));
-        }
-      }
-    } catch (_) {}
+        changes.value++;
+      } catch (_) {}
+    });
   }
 
   static Future<void> syncWatchRecordCloud(Map<String, dynamic> item) async {
@@ -8023,7 +8014,7 @@ class _SavedVideosScreenState extends State<SavedVideosScreen> {
                           Navigator.push(
                             context,
                             MaterialPageRoute(
-                              builder: (_) => StreamPreviewScreen(targetUrl: url),
+                              builder: (_) => _mayaPlaybackEntry(url),
                             ),
                           ).then((_) => _loadSaved());
                         },
@@ -8051,7 +8042,16 @@ class _HistoryScreenState extends State<HistoryScreen> {
   @override
   void initState() {
     super.initState();
+    WatchHistory.changes.addListener(_historyChanged);
     _loadHistory();
+  }
+
+  void _historyChanged() { if (mounted) unawaited(_loadHistory()); }
+
+  @override
+  void dispose() {
+    WatchHistory.changes.removeListener(_historyChanged);
+    super.dispose();
   }
 
   Future<void> _loadHistory() async {
@@ -8251,7 +8251,7 @@ class _HistoryScreenState extends State<HistoryScreen> {
                           Navigator.push(
                             context,
                             MaterialPageRoute(
-                              builder: (_) => StreamPreviewScreen(targetUrl: url),
+                              builder: (_) => _mayaPlaybackEntry(url),
                             ),
                           ).then((_) => _loadHistory());
                         },
@@ -8542,6 +8542,26 @@ class _SettingsScreenState extends State<SettingsScreen> {
 // ═══════════════════════════════════════════════════════════════════════════════
 // NATIVE VIDEO PLAYER SCREEN (With Better Player for TeraBox)
 // ═══════════════════════════════════════════════════════════════════════════════
+
+class MayaPlaybackVariant {
+  final String label;
+  final Uri url;
+  final String codec;
+  const MayaPlaybackVariant(this.label, this.url, {this.codec = ''});
+}
+
+Widget _mayaPlaybackEntry(String source) {
+  final uri = Uri.tryParse(source);
+  if (uri != null && _isSocialLink(source)) return MayaSocialMediaScreen(source: uri);
+  return StreamPreviewScreen(targetUrl: source);
+}
+
+Future<void> _mayaKeepAwake(bool enabled) async {
+  try {
+    await const MethodChannel('mayajaal/share').invokeMethod<void>('keepScreenOn', enabled);
+  } catch (_) {}
+}
+
 class NativeVideoPlayerScreen extends StatefulWidget {
   final String videoUrl;
   final String title;
@@ -8549,6 +8569,7 @@ class NativeVideoPlayerScreen extends StatefulWidget {
   final String sourcePageUrl;
   final String videoId;
   final String thumbnailUrl;
+  final List<MayaPlaybackVariant> variants;
 
   const NativeVideoPlayerScreen({
     super.key,
@@ -8558,13 +8579,14 @@ class NativeVideoPlayerScreen extends StatefulWidget {
     required this.sourcePageUrl,
     required this.videoId,
     this.thumbnailUrl = '',
+    this.variants = const [],
   });
 
   @override
   State<NativeVideoPlayerScreen> createState() => _NativeVideoPlayerScreenState();
 }
 
-class _NativeVideoPlayerScreenState extends State<NativeVideoPlayerScreen> {
+class _NativeVideoPlayerScreenState extends State<NativeVideoPlayerScreen> with WidgetsBindingObserver {
   BetterPlayerController? _betterPlayerController;
   VideoPlayerController? _directPlayer;
   int _playbackAttempt = 0;
@@ -8574,6 +8596,7 @@ class _NativeVideoPlayerScreenState extends State<NativeVideoPlayerScreen> {
   bool _isInitialized = false;
   bool _hasError = false;
   String _streamError = 'Stream Connection Error';
+  String _decoderHint = '';
 
   bool _isFullscreen = false;
   bool _isZoomed = false;
@@ -8591,8 +8614,24 @@ class _NativeVideoPlayerScreenState extends State<NativeVideoPlayerScreen> {
   final List<double> _speeds = [0.5, 0.75, 1.0, 1.25, 1.5, 2.0];
   bool _isLongPressBoost = false;
 
-  String _selectedQuality = 'Auto (1080p)';
-  final List<String> _qualities = ['Auto (1080p)', '1080p FHD', '720p HD', '480p SD', '360p Low'];
+  String _selectedQuality = 'Original';
+  String? _qualityUrl;
+  List<MayaPlaybackVariant> _activeVariants = [];
+  bool _qualityChanging = false;
+  Timer? _positionTicker;
+  bool _screenLocked = false;
+  bool _recordedPlayback = false;
+  int _quarterTurns = 0;
+  bool get _social => _isSocialLink(widget.sourcePageUrl);
+  Duration get _position => _directPlayer?.value.position ??
+      _betterPlayerController?.videoPlayerController?.value.position ?? Duration.zero;
+  Duration get _duration => _directPlayer?.value.duration ??
+      _betterPlayerController?.videoPlayerController?.value.duration ?? Duration.zero;
+  bool get _playing => _directPlayer?.value.isPlaying ??
+      _betterPlayerController?.isPlaying() ?? false;
+  double get _aspect => _directPlayer?.value.aspectRatio ??
+      _betterPlayerController?.videoPlayerController?.value.aspectRatio ?? 16 / 9;
+
 
 
   double _volume = 1.0;
@@ -8623,20 +8662,57 @@ class _NativeVideoPlayerScreenState extends State<NativeVideoPlayerScreen> {
   @override
   void initState() {
     super.initState();
+    WidgetsBinding.instance.addObserver(this);
+    _activeVariants = widget.variants;
+    if (widget.variants.isNotEmpty) {
+      _selectedQuality = widget.variants.firstWhere(
+        (v) => v.url.toString() == widget.videoUrl,
+        orElse: () => widget.variants.first).label;
+    }
     _loadUserPrefs();
-    unawaited(WatchHistory.recordPlayback({
-      'url': widget.sourcePageUrl,
-      'id': widget.videoId,
-      'title': widget.title,
-      'uploader': widget.uploader,
-      'thumbnail': widget.thumbnailUrl,
-      'streamUrl': widget.videoUrl,
-      'time': DateTime.now().toIso8601String(),
-    }));
     _initVideo();
-    _startStatsListeners();
-    _fetchOwner().then((_) => _loadRelatedVideos());
-    _fetchVideoMeta();
+    if (!_social) {
+      _startStatsListeners();
+      _fetchOwner().then((_) => _loadRelatedVideos());
+      _fetchVideoMeta();
+    } else {
+      _loadRelatedVideos();
+    }
+    _positionTicker = Timer.periodic(const Duration(milliseconds: 350), (_) {
+      if (mounted && _isInitialized) setState(() {});
+    });
+  }
+
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    if (state != AppLifecycleState.resumed) {
+      _directPlayer?.pause();
+      _betterPlayerController?.pause();
+      unawaited(_mayaKeepAwake(false));
+    } else {
+      unawaited(_mayaKeepAwake(_isInitialized && !_hasError));
+    }
+  }
+
+  Future<void> _recordStarted() async {
+    if (_recordedPlayback) return;
+    _recordedPlayback = true;
+    await WatchHistory.recordPlayback({
+      'url': widget.sourcePageUrl, 'id': widget.videoId,
+      'title': widget.title, 'uploader': widget.uploader,
+      'thumbnail': widget.thumbnailUrl, 'streamUrl': widget.videoUrl,
+      'time': DateTime.now().toIso8601String(),
+    });
+    if (widget.thumbnailUrl.startsWith('https://')) {
+      try {
+        final response = await http.get(Uri.parse(widget.thumbnailUrl))
+            .timeout(const Duration(seconds: 8));
+        if (response.statusCode == 200 && response.bodyBytes.length < 600000 &&
+            (response.headers['content-type'] ?? '').startsWith('image/')) {
+          await WatchHistory.saveThumbnail(widget.sourcePageUrl, base64Encode(response.bodyBytes));
+        }
+      } catch (_) {}
+    }
   }
 
   Future<void> _fetchVideoMeta() async {
@@ -8680,6 +8756,7 @@ class _NativeVideoPlayerScreenState extends State<NativeVideoPlayerScreen> {
   }
 
   Future<void> _reportViewToBackend() async {
+    if (_social) return;
     if (_viewReported) return;
     _viewReported = true;
 
@@ -8767,35 +8844,23 @@ class _NativeVideoPlayerScreenState extends State<NativeVideoPlayerScreen> {
   }
 
   Future<void> _loadRelatedVideos() async {
-    try {
-      final recentIds = await WatchHistory.getRecentIds(limit: 5);
-      final uid = FirebaseAuth.instance.currentUser?.uid ?? 'guest';
-      final prefs = await SharedPreferences.getInstance();
-      final recentThumbs = {
-        for (final record in WatchHistory.localRecords(prefs, 'watch_history_v2_$uid'))
-          WatchHistory.recordKey(record): _storedVideoThumbnail(record),
-      };
-      final related = await FirebaseService.getRelatedVideos(
-        currentVideoId: widget.videoId,
-        currentOwnerUid: _ownerUid,
-        recentIds: recentIds,
-        limit: 10,
-      );
-      if (mounted) {
-        setState(() {
-          _relatedVideos = [
-            for (final video in related)
-              if (_storedVideoThumbnail(video).isEmpty &&
-                  (recentThumbs[WatchHistory.recordKey(video)]?.isNotEmpty ?? false))
-                {...video, 'thumbnail': recentThumbs[WatchHistory.recordKey(video)]}
-              else video,
-          ];
-          _relatedLoading = false;
-        });
-      }
-    } catch (_) {
-      if (mounted) setState(() => _relatedLoading = false);
+    final prefs = await SharedPreferences.getInstance();
+    final uid = FirebaseAuth.instance.currentUser?.uid ?? 'guest';
+    final local = WatchHistory.localRecords(prefs, 'watch_history_v2_$uid')
+        .where((r) => r['id'] != widget.videoId).toList();
+    var related = <Map<String, dynamic>>[];
+    if (!_social) {
+      try {
+        related = await FirebaseService.getRelatedVideos(currentVideoId: widget.videoId,
+          currentOwnerUid: _ownerUid, recentIds: const [], limit: 10);
+      } catch (_) {}
     }
+    if (!mounted) return;
+    final seen = <String>{};
+    setState(() {
+      _relatedVideos = [...local, ...related].where((r) => seen.add(WatchHistory.recordKey(r))).take(12).toList();
+      _relatedLoading = false;
+    });
   }
 
   Future<void> _loadUserPrefs() async {
@@ -8812,7 +8877,20 @@ class _NativeVideoPlayerScreenState extends State<NativeVideoPlayerScreen> {
     } catch (_) {}
   }
 
-  Future<void> _retryVideo() => _initVideo(refreshLink: true);
+  Future<void> _retryVideo() async {
+    if (_social) {
+      try {
+        final media = await MayaResolvedMedia.load(Uri.parse(widget.sourcePageUrl));
+        if (!mounted) return;
+        _qualityUrl = media.stream?.toString();
+        _activeVariants = media.variants;
+      } catch (error) {
+        if (mounted) setState(() { _hasError = true; _streamError = error is HttpException ? error.message : 'Could not refresh this source'; });
+        return;
+      }
+    }
+    await _initVideo(refreshLink: true);
+  }
 
   Future<Uri> _refreshPlaybackLink(Uri page) async {
     final token = page.queryParameters['t'] ?? page.queryParameters['s'] ?? '';
@@ -8850,7 +8928,8 @@ class _NativeVideoPlayerScreenState extends State<NativeVideoPlayerScreen> {
       } else if (type.contains('text/html') || type.contains('application/json')) {
         message = 'Stream URL returned a page (HTTP ${response.statusCode})';
       } else {
-        message = 'Player could not initialize (stream HTTP ${response.statusCode})';
+        message = _decoderHint.isEmpty ? 'Player could not initialize (stream HTTP ${response.statusCode})' :
+            'Player: ${_decoderHint.replaceAll(RegExp(r"https?://[^\s]+"), "[media URL]")}';
       }
     } on TimeoutException {
       message = 'Stream request timed out on this phone';
@@ -8865,6 +8944,7 @@ class _NativeVideoPlayerScreenState extends State<NativeVideoPlayerScreen> {
   }
 
   Future<void> _initVideo({bool refreshLink = false}) async {
+    unawaited(_mayaKeepAwake(false));
     final attempt = ++_playbackAttempt;
     final oldController = _betterPlayerController;
     final oldDirect = _directPlayer;
@@ -8875,10 +8955,11 @@ class _NativeVideoPlayerScreenState extends State<NativeVideoPlayerScreen> {
     setState(() {
       _hasError = false;
       _streamError = 'Stream Connection Error';
+      _decoderHint = '';
       _isInitialized = false;
       _directPlayerReady = false;
     });
-    String realVideoUrl = widget.videoUrl.trim();
+    String realVideoUrl = (_qualityUrl ?? widget.videoUrl).trim();
     final sourcePage = Uri.tryParse(widget.sourcePageUrl);
     if (refreshLink && sourcePage != null && _isMayaVideoLink(sourcePage)) {
       try {
@@ -8914,8 +8995,11 @@ class _NativeVideoPlayerScreenState extends State<NativeVideoPlayerScreen> {
     };
 
     final config = BetterPlayerConfiguration(
+      controlsConfiguration: const BetterPlayerControlsConfiguration(showControls: false),
+      allowedScreenSleep: false,
+      autoDispose: false,
       autoPlay: true,
-      aspectRatio: 16 / 9,
+      aspectRatio: null,
       fit: BoxFit.contain,
       errorBuilder: (context, errorMessage) {
         return Center(
@@ -8945,7 +9029,7 @@ class _NativeVideoPlayerScreenState extends State<NativeVideoPlayerScreen> {
     void showFailure() {
       if (!mounted || !identical(_betterPlayerController, controller) || _hasError) return;
       if (!initialized.isCompleted) initialized.complete();
-      if (!_isInitialized && !isHls) {
+      if (!_isInitialized) {
         _betterPlayerController = null;
         scheduleMicrotask(() {
           controller.dispose();
@@ -8955,12 +9039,14 @@ class _NativeVideoPlayerScreenState extends State<NativeVideoPlayerScreen> {
         });
         return;
       }
+      unawaited(_mayaKeepAwake(false));
       setState(() => _hasError = true);
       unawaited(_checkStreamFailure(attempt, stream, headers));
     }
     controller.addEventsListener((event) {
       if (!mounted || !identical(_betterPlayerController, controller)) return;
       if (event.betterPlayerEventType == BetterPlayerEventType.exception) {
+        _decoderHint = '${event.parameters?['exception'] ?? 'Decoder initialization failed'}';
         showFailure();
       } else if (event.betterPlayerEventType == BetterPlayerEventType.initialized &&
           !initialized.isCompleted) {
@@ -8968,12 +9054,14 @@ class _NativeVideoPlayerScreenState extends State<NativeVideoPlayerScreen> {
         setState(() => _isInitialized = true);
         _resetControlTimer();
         _startWatchTracking();
+        unawaited(_recordStarted());
+        unawaited(_mayaKeepAwake(true));
         _captureThumbnail();
       }
     });
     try {
-      await controller.setupDataSource(dataSource).timeout(const Duration(seconds: 15));
-      await initialized.future.timeout(const Duration(seconds: 15));
+      await controller.setupDataSource(dataSource).timeout(Duration(seconds: isHls ? 30 : 20));
+      await initialized.future.timeout(Duration(seconds: isHls ? 30 : 20));
     } catch (_) {
       showFailure();
     }
@@ -8985,6 +9073,7 @@ class _NativeVideoPlayerScreenState extends State<NativeVideoPlayerScreen> {
     bool isActive() => mounted && attempt == _playbackAttempt && identical(_directPlayer, direct);
     void showError() {
       if (!isActive() || _hasError) return;
+      unawaited(_mayaKeepAwake(false));
       setState(() {
         _hasError = true;
         _directPlayerReady = false;
@@ -8993,10 +9082,13 @@ class _NativeVideoPlayerScreenState extends State<NativeVideoPlayerScreen> {
     }
 
     try {
-      await direct.initialize().timeout(const Duration(seconds: 15));
+      await direct.initialize().timeout(const Duration(seconds: 30));
       if (!isActive()) return;
       direct.addListener(() {
-        if (direct.value.hasError) showError();
+        if (direct.value.hasError) {
+          _decoderHint = direct.value.errorDescription ?? 'Device decoder failed';
+          showError();
+        }
       });
       await direct.play();
       if (!isActive() || _hasError) return;
@@ -9005,41 +9097,97 @@ class _NativeVideoPlayerScreenState extends State<NativeVideoPlayerScreen> {
         _isInitialized = true;
       });
       _startWatchTracking();
+      _resetControlTimer();
+      unawaited(_recordStarted());
+      unawaited(_mayaKeepAwake(true));
       unawaited(_captureThumbnail());
-    } catch (_) {
+    } catch (error) {
+      _decoderHint = error.toString();
       showError();
     }
   }
 
-  Widget _buildDirectPlayback(VideoPlayerController controller) {
-    return Column(children: [
-      Expanded(child: Center(child: RepaintBoundary(
-        key: _videoKey,
-        child: AspectRatio(
-          aspectRatio: controller.value.aspectRatio,
-          child: VideoPlayer(controller),
-        ),
-      ))),
-      VideoProgressIndicator(controller, allowScrubbing: true),
-      ValueListenableBuilder<VideoPlayerValue>(
-        valueListenable: controller,
-        builder: (context, value, _) => IconButton(
-          tooltip: value.isPlaying ? 'Pause' : 'Play',
-          icon: Icon(value.isPlaying ? Icons.pause : Icons.play_arrow, color: AppThemes.kGreen),
-          onPressed: () async {
-            if (value.isPlaying) {
-              await controller.pause();
-            } else {
-              await controller.play();
-            }
-          },
-        ),
-      ),
-    ]);
+  Widget _buildDirectPlayback(VideoPlayerController controller) => _buildUnifiedPlayback();
+
+  Widget _control(IconData icon, String tooltip, VoidCallback action) => IconButton(
+    visualDensity: VisualDensity.compact, tooltip: tooltip,
+    onPressed: action, icon: Icon(icon, color: Colors.white),
+  );
+
+  Widget _buildUnifiedPlayback() {
+    if (_hasError) return Center(child: Column(mainAxisSize: MainAxisSize.min, children: [
+      const Icon(Icons.error_outline, color: Colors.redAccent, size: 36),
+      Padding(padding: const EdgeInsets.all(12), child: Text(_streamError, textAlign: TextAlign.center)),
+      TextButton(onPressed: _retryVideo, child: const Text('Retry')),
+    ]));
+    if (!_isInitialized) return const ProfessionalLoader(message: 'Preparing playback…');
+    return LayoutBuilder(builder: (context, box) => GestureDetector(
+      behavior: HitTestBehavior.opaque,
+      onTap: _onScreenTapped,
+      onDoubleTapDown: (d) => _onDoubleTap(d, box.maxWidth), onDoubleTap: () {},
+      onLongPressStart: _screenLocked ? null : (_) => _onLongPressStart(),
+      onLongPressEnd: _screenLocked ? null : (_) => _onLongPressEnd(),
+      onVerticalDragStart: _screenLocked ? null : (d) => _onVerticalDragStart(d, box.maxWidth),
+      onVerticalDragUpdate: _screenLocked ? null : (d) => _onVerticalDragUpdate(d, box.maxHeight),
+      onVerticalDragEnd: _screenLocked ? null : _onVerticalDragEnd,
+      child: Stack(fit: StackFit.expand, alignment: Alignment.center, children: [
+        _buildScaledVideo(),
+        if (_brightness < 1) IgnorePointer(child: ColoredBox(color: Colors.black.withOpacity(1 - _brightness))),
+        if (_showControls && !_screenLocked && !_isLongPressBoost) ...[
+          Positioned(top: 0, left: 0, right: 0, child: Container(
+            decoration: const BoxDecoration(gradient: LinearGradient(begin: Alignment.topCenter, end: Alignment.bottomCenter, colors: [Colors.black87, Colors.transparent])),
+            child: Row(children: [
+              _control(Icons.settings_outlined, 'Quality', _showQualityDialog),
+              Expanded(child: Text(_selectedQuality, maxLines: 1, style: const TextStyle(color: Colors.white, fontSize: 12))),
+              TextButton(onPressed: _showSpeedDialog, child: Text('${_playbackSpeed}x')),
+              _control(Icons.lock_open, 'Lock controls', () => setState(() => _screenLocked = true)),
+            ]),
+          )),
+          Center(child: Row(mainAxisSize: MainAxisSize.min, children: [
+            _control(Icons.replay_10, 'Back 10 seconds', () => _seekRelative(-10)),
+            const SizedBox(width: 18),
+            IconButton(iconSize: 48, onPressed: () => unawaited(_togglePlayback()),
+              icon: Icon(_playing ? Icons.pause_circle_filled : Icons.play_circle_fill, color: Colors.white)),
+            const SizedBox(width: 18),
+            _control(Icons.forward_10, 'Forward 10 seconds', () => _seekRelative(10)),
+          ])),
+          Positioned(bottom: 0, left: 0, right: 0, child: Container(
+            padding: const EdgeInsets.symmetric(horizontal: 8), color: Colors.black54,
+            child: Column(mainAxisSize: MainAxisSize.min, children: [
+              Slider(value: _position.inMilliseconds.toDouble().clamp(0.0, math.max(1, _duration.inMilliseconds).toDouble()).toDouble(),
+                max: math.max(1, _duration.inMilliseconds).toDouble(),
+                onChangeStart: (_) => _controlsTimer?.cancel(),
+                onChanged: (v) => unawaited(_seekTo(Duration(milliseconds: v.toInt()))),
+                onChangeEnd: (_) => _resetControlTimer()),
+              Row(children: [
+                Expanded(child: Text('${_formatDuration(_position)} / ${_formatDuration(_duration)}',
+                  style: const TextStyle(color: Colors.white, fontSize: 11))),
+                _control(_volume == 0 ? Icons.volume_off : Icons.volume_up, 'Mute', () {
+                  setState(() => _volume = _volume == 0 ? 1 : 0);
+                  _directPlayer?.setVolume(_volume); _betterPlayerController?.setVolume(_volume);
+                }),
+                _control(Icons.aspect_ratio, 'Fit / fill', () => setState(() => _isZoomed = !_isZoomed)),
+                _control(Icons.rotate_right, 'Rotate video', () => setState(() => _quarterTurns = (_quarterTurns + 1) % 4)),
+                _control(_isFullscreen ? Icons.fullscreen_exit : Icons.fullscreen, 'Fullscreen', _toggleSmartFullscreen),
+              ]),
+            ]),
+          )),
+        ],
+        if (_screenLocked && _showControls) Positioned(right: 8, top: 8,
+          child: _control(Icons.lock, 'Unlock controls', () => setState(() => _screenLocked = false))),
+        if (_flashFeedback.isNotEmpty) Center(child: IgnorePointer(child: Container(
+          padding: const EdgeInsets.all(10), color: Colors.black87,
+          child: Text(_flashFeedback, textAlign: TextAlign.center, style: const TextStyle(color: AppThemes.kGreen)),
+        ))),
+      ]),
+    ));
   }
 
   @override
   void dispose() {
+    WidgetsBinding.instance.removeObserver(this);
+    _positionTicker?.cancel();
+    unawaited(_mayaKeepAwake(false));
     _statsSub?.cancel();
     _likeSub?.cancel();
     _unlikeSub?.cancel();
@@ -9059,10 +9207,35 @@ class _NativeVideoPlayerScreenState extends State<NativeVideoPlayerScreen> {
   void _resetControlTimer() {
     _controlsTimer?.cancel();
     _controlsTimer = Timer(const Duration(seconds: 4), () {
-      if (mounted && _betterPlayerController != null && (_betterPlayerController!.isPlaying() ?? false)) { // 🔥 Null Safety Fixed
-        setState(() => _showControls = false);
-      }
+      if (mounted && _playing) setState(() => _showControls = false);
     });
+  }
+
+  Future<void> _togglePlayback() async {
+    if (_playing) {
+      await _directPlayer?.pause();
+      await _betterPlayerController?.pause();
+    } else {
+      if (_duration > Duration.zero && _position >= _duration) await _seekTo(Duration.zero);
+      await _directPlayer?.play();
+      await _betterPlayerController?.play();
+    }
+    unawaited(_mayaKeepAwake(_playing));
+    if (mounted) setState(() => _showControls = true);
+    _resetControlTimer();
+  }
+
+  Future<void> _seekTo(Duration position) async {
+    final end = _duration;
+    final target = position < Duration.zero ? Duration.zero :
+        (end > Duration.zero && position > end ? end : position);
+    await _directPlayer?.seekTo(target);
+    await _betterPlayerController?.seekTo(target);
+  }
+
+  void _setSpeed(double speed) {
+    _directPlayer?.setPlaybackSpeed(speed);
+    _betterPlayerController?.setSpeed(speed);
   }
 
   void _onScreenTapped() {
@@ -9084,49 +9257,33 @@ class _NativeVideoPlayerScreenState extends State<NativeVideoPlayerScreen> {
     Haptic.light();
     setState(() {
       _isLongPressBoost = true;
-      _betterPlayerController?.setSpeed(2.0);
+      _setSpeed(2.0);
     });
     _showFeedback('▶▶ 2x');
   }
 
   void _onLongPressEnd() {
     if (_isLongPressBoost) {
-      _betterPlayerController?.setSpeed(_playbackSpeed);
+      _setSpeed(_playbackSpeed);
       setState(() => _isLongPressBoost = false);
       _resetControlTimer();
     }
   }
 
   void _onDoubleTap(TapDownDetails details, double width) {
-    final dx = details.localPosition.dx;
-    if (dx < width * 0.35) {
+    if (_screenLocked) return;
+    if (details.localPosition.dx < width * .35) {
       _seekRelative(-10);
-    } else if (dx > width * 0.65) {
+    } else if (details.localPosition.dx > width * .65) {
       _seekRelative(10);
     } else {
-      SoundService.playClick();
-      if (_betterPlayerController != null) {
-        if (_betterPlayerController!.isPlaying() ?? false) { // 🔥 Null Safety Fixed
-          _betterPlayerController!.pause();
-        } else {
-          _betterPlayerController!.play();
-        }
-      }
-      Haptic.light();
-      _resetControlTimer();
+      unawaited(_togglePlayback());
     }
   }
 
   void _seekRelative(int seconds) {
-    SoundService.playClick();
-    Haptic.medium();
-    if (_betterPlayerController != null) {
-      final currentPos = _betterPlayerController!.videoPlayerController?.value.position ?? Duration.zero;
-      final newPos = currentPos + Duration(seconds: seconds);
-      final clamped = newPos < Duration.zero ? Duration.zero : newPos;
-      _betterPlayerController!.seekTo(clamped);
-      _showFeedback(seconds > 0 ? '+${seconds}s' : '${seconds}s');
-    }
+    unawaited(_seekTo(_position + Duration(seconds: seconds)));
+    _showFeedback('${seconds > 0 ? '+' : ''}${seconds}s');
     _resetControlTimer();
   }
 
@@ -9137,7 +9294,7 @@ class _NativeVideoPlayerScreenState extends State<NativeVideoPlayerScreen> {
 
     if (_isFullscreen) {
       SystemChrome.setEnabledSystemUIMode(SystemUiMode.immersiveSticky);
-      final isWide = (_betterPlayerController?.videoPlayerController?.value.aspectRatio ?? 1.0) >= 1.2;
+      final isWide = _aspect >= 1.2;
       if (isWide) {
         SystemChrome.setPreferredOrientations([DeviceOrientation.landscapeLeft, DeviceOrientation.landscapeRight]);
       } else {
@@ -9185,7 +9342,7 @@ class _NativeVideoPlayerScreenState extends State<NativeVideoPlayerScreen> {
   Future<void> _shareVideoLink() async {
     SoundService.playClick();
     Haptic.light();
-    await FirebaseService.recordShare(widget.videoId);
+    if (!_social) await FirebaseService.recordShare(widget.videoId);
     if (!mounted) return;
 
     showModalBottomSheet(
@@ -9254,23 +9411,17 @@ class _NativeVideoPlayerScreenState extends State<NativeVideoPlayerScreen> {
   }
 
   Future<void> _startInAppDownload() async {
-    SoundService.playClick();
-    Haptic.medium();
-
-    final url = Uri.tryParse(widget.videoUrl);
-    if (url == null || url.scheme != 'https' || url.host.isEmpty ||
-        TeraBoxResolver.isTeraBoxLink(widget.sourcePageUrl)) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('A downloadable video file is unavailable.')),
-      );
+    if (_social) {
+      await Navigator.of(context).push(MaterialPageRoute(builder: (_) => MayaSocialMediaScreen(source: Uri.parse(widget.sourcePageUrl), showDownloads: true)));
       return;
     }
-    final uid = FirebaseAuth.instance.currentUser?.uid ?? 'guest';
-    final transfer = MayaDownloads.start(uid, url, widget.title);
-    Navigator.of(context).push<void>(
-      MaterialPageRoute(builder: (_) => const MayaDownloadsScreen()),
-    );
-    await transfer;
+    final url = _mediaLink(_qualityUrl ?? widget.videoUrl);
+    if (url == null || url.path.endsWith('.m3u8')) {
+      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('This source does not provide a downloadable file.')));
+      return;
+    }
+    unawaited(MayaDownloads.start(FirebaseAuth.instance.currentUser?.uid ?? 'guest', url, widget.title));
+    await Navigator.of(context).push(MaterialPageRoute(builder: (_) => const MayaDownloadsScreen()));
   }
 
   Future<void> _toggleSave() async {
@@ -9318,36 +9469,61 @@ class _NativeVideoPlayerScreenState extends State<NativeVideoPlayerScreen> {
   }
 
   void _showQualityDialog() {
-    SoundService.playClick();
-    Haptic.light();
-    showDialog(
-      context: context,
-      builder: (c) => AlertDialog(
-        backgroundColor: AppThemes.kCardBg,
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14), side: const BorderSide(color: AppThemes.kBorder)),
-        title: const Text('SELECT QUALITY', style: TextStyle(color: Colors.white, fontSize: 13, fontWeight: FontWeight.bold)),
-        content: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: _qualities.map((q) {
-            return RadioListTile<String>(
-              value: q,
-              groupValue: _selectedQuality,
-              activeColor: AppThemes.kGreen,
-              title: Text(q, style: const TextStyle(color: Colors.white70, fontSize: 12)),
-              onChanged: (val) {
-                if (val != null) {
-                  SoundService.playClick();
-                  Haptic.selection();
-                  setState(() => _selectedQuality = val);
-                  Navigator.pop(c);
-                  _showFeedback('Quality: $val');
-                }
-              },
-            );
-          }).toList(),
-        ),
-      ),
-    );
+    final variants = _activeVariants;
+    showModalBottomSheet<void>(context: context, isScrollControlled: true,
+      backgroundColor: AppThemes.kCardBg,
+      builder: (sheet) => SafeArea(child: ConstrainedBox(
+        constraints: BoxConstraints(maxHeight: MediaQuery.of(sheet).size.height * .65),
+        child: ListView(shrinkWrap: true, children: [
+          const ListTile(title: Text('Playback quality'),
+            subtitle: Text('Available source formats · device decoding limits apply')),
+          if (variants.isEmpty) const ListTile(
+            leading: Icon(Icons.high_quality), title: Text('Original source'),
+            subtitle: Text('This source provides one stream. No artificial quality labels.')),
+          for (final variant in variants) ListTile(
+            title: Text(variant.label), subtitle: Text(variant.codec),
+            trailing: variant.label == _selectedQuality ? const Icon(Icons.check, color: AppThemes.kGreen) : null,
+            onTap: () {
+              Navigator.pop(sheet);
+              unawaited(_switchQuality(variant));
+            },
+          ),
+        ]),
+      )));
+  }
+
+  Future<void> _switchQuality(MayaPlaybackVariant variant) async {
+    if (_qualityChanging || variant.url.toString() == (_qualityUrl ?? widget.videoUrl)) return;
+    final position = _position;
+    final wasPlaying = _playing;
+    final previous = _qualityUrl;
+    final previousLabel = _selectedQuality;
+    _qualityChanging = true;
+    _qualityUrl = variant.url.toString();
+    _selectedQuality = variant.label;
+    try {
+      await _initVideo();
+      // Fallback video_player initialization can finish after BetterPlayer fails.
+      for (var i = 0; i < 160 && mounted && !_isInitialized && !_hasError; i++) {
+        await Future<void>.delayed(const Duration(milliseconds: 250));
+      }
+      if (!mounted) return;
+      if (_hasError || !_isInitialized) {
+        _qualityUrl = previous;
+        _selectedQuality = previousLabel;
+        await _initVideo();
+        _showFeedback('Quality unavailable on this device; restored previous stream');
+      } else {
+        _setSpeed(_playbackSpeed);
+        await _seekTo(position);
+        if (!wasPlaying) {
+          await _directPlayer?.pause();
+          await _betterPlayerController?.pause();
+        }
+      }
+    } finally {
+      _qualityChanging = false;
+    }
   }
 
   void _showSpeedDialog() {
@@ -9372,7 +9548,7 @@ class _NativeVideoPlayerScreenState extends State<NativeVideoPlayerScreen> {
                   SoundService.playClick();
                   Haptic.selection();
                   setState(() => _playbackSpeed = val);
-                  _betterPlayerController?.setSpeed(val);
+                  _setSpeed(val);
                   Navigator.pop(c);
                 }
               },
@@ -9384,23 +9560,17 @@ class _NativeVideoPlayerScreenState extends State<NativeVideoPlayerScreen> {
   }
 
   Widget _buildScaledVideo() {
-    if (_betterPlayerController == null || !_isInitialized) return const SizedBox.shrink();
-    final size = _betterPlayerController!.videoPlayerController?.value.size;
-    if (size == null) return const SizedBox.shrink(); // 🔥 Null Safety Fixed
-
-    return SizedBox.expand(
-      child: FittedBox(
+    if (!_isInitialized) return const SizedBox.shrink();
+    final size = _directPlayer?.value.size ?? _betterPlayerController?.videoPlayerController?.value.size;
+    if (size == null || size.width <= 0 || size.height <= 0) return const SizedBox.shrink();
+    return RepaintBoundary(key: _videoKey, child: RotatedBox(
+      quarterTurns: _quarterTurns,
+      child: SizedBox.expand(child: FittedBox(
         fit: _isZoomed ? BoxFit.cover : BoxFit.contain,
-        child: SizedBox(
-          width: size.width,
-          height: size.height,
-          child: RepaintBoundary(
-            key: _videoKey,
-            child: BetterPlayer(controller: _betterPlayerController!),
-          ),
-        ),
-      ),
-    );
+        child: SizedBox(width: size.width, height: size.height,
+          child: _directPlayer != null ? VideoPlayer(_directPlayer!) : BetterPlayer(controller: _betterPlayerController!)),
+      )),
+    ));
   }
 
   void _onVerticalDragStart(DragStartDetails details, double width) {
@@ -9421,12 +9591,13 @@ class _NativeVideoPlayerScreenState extends State<NativeVideoPlayerScreen> {
     final delta = (_dragStartY - details.localPosition.dy) / height;
 
     if (_isAdjustingVolume) {
-      final newVol = (_volumeStart + delta).clamp(0.0, 1.0);
+      final newVol = (_volumeStart + delta).clamp(0.0, 1.0).toDouble();
       setState(() => _volume = newVol);
       _betterPlayerController?.setVolume(newVol);
+      _directPlayer?.setVolume(newVol);
       _showFeedback('🔊 ${(newVol * 100).toInt()}%');
     } else if (_isAdjustingBrightness) {
-      final newBright = (_brightnessStart + delta).clamp(0.1, 1.0);
+      final newBright = (_brightnessStart + delta).clamp(0.1, 1.0).toDouble();
       setState(() => _brightness = newBright);
       _showFeedback('☀️ ${(newBright * 100).toInt()}%');
     }
@@ -9468,565 +9639,44 @@ class _NativeVideoPlayerScreenState extends State<NativeVideoPlayerScreen> {
 
   @override
   Widget build(BuildContext context) {
-    if (_isFullscreen) {
-      return Scaffold(
-        backgroundColor: Colors.black,
-        body: LayoutBuilder(
-          builder: (context, constraints) {
-            final w = constraints.maxWidth;
-            final h = constraints.maxHeight;
-            return GestureDetector(
-              onTap: _onScreenTapped,
-              onDoubleTapDown: (d) => _onDoubleTap(d, w),
-              onDoubleTap: () {},
-              onLongPressStart: (_) => _onLongPressStart(),
-              onLongPressEnd: (_) => _onLongPressEnd(),
-              onVerticalDragStart: (d) => _onVerticalDragStart(d, w),
-              onVerticalDragUpdate: (d) => _onVerticalDragUpdate(d, h),
-              onVerticalDragEnd: _onVerticalDragEnd,
-              behavior: HitTestBehavior.opaque,
-              child: Stack(
-                alignment: Alignment.center,
-                children: [
-                  _buildScaledVideo(),
-                  if (_brightness < 1.0)
-                    Positioned.fill(child: IgnorePointer(child: Container(color: Colors.black.withOpacity(1.0 - _brightness)))),
-                  if (_showControls) ...[
-                    Positioned(
-                      top: 18,
-                      left: 18,
-                      child: GestureDetector(
-                        onTap: _toggleSmartFullscreen,
-                        child: Container(
-                          padding: const EdgeInsets.all(6),
-                          decoration: BoxDecoration(color: Colors.black54, shape: BoxShape.circle),
-                          child: const Icon(Icons.fullscreen_exit, color: Colors.white, size: 24),
-                        ),
-                      ),
-                    ),
-                    Row(
-                      mainAxisAlignment: MainAxisAlignment.center,
-                      children: [
-                        GestureDetector(
-                          onTap: () => _seekRelative(-10),
-                          child: Container(
-                            padding: const EdgeInsets.all(8),
-                            decoration: BoxDecoration(color: Colors.black54, shape: BoxShape.circle),
-                            child: const Icon(Icons.replay_10, color: Colors.white, size: 26),
-                          ),
-                        ),
-                        const SizedBox(width: 24),
-                        GestureDetector(
-                          onTap: () {
-                            SoundService.playClick();
-                            Haptic.light();
-                            if (_betterPlayerController != null) {
-                              if (_betterPlayerController!.isPlaying() ?? false) { // 🔥 Null Safety Fixed
-                                _betterPlayerController!.pause();
-                              } else {
-                                _betterPlayerController!.play();
-                              }
-                            }
-                            _resetControlTimer();
-                          },
-                          child: Container(
-                            width: 60,
-                            height: 60,
-                            decoration: BoxDecoration(color: Colors.black54, shape: BoxShape.circle, border: Border.all(color: Colors.white60, width: 1.5)),
-                            child: Icon((_betterPlayerController?.isPlaying() ?? false) ? Icons.pause : Icons.play_arrow, color: Colors.white, size: 34), // 🔥 Null Safety Fixed
-                          ),
-                        ),
-                        const SizedBox(width: 24),
-                        GestureDetector(
-                          onTap: () => _seekRelative(10),
-                          child: Container(
-                            padding: const EdgeInsets.all(8),
-                            decoration: BoxDecoration(color: Colors.black54, shape: BoxShape.circle),
-                            child: const Icon(Icons.forward_10, color: Colors.white, size: 26),
-                          ),
-                        ),
-                      ],
-                    ),
-                    Positioned(
-                      bottom: 16,
-                      left: 16,
-                      right: 16,
-                      child: Row(
-                        children: [
-                          Text(_formatDuration(_betterPlayerController?.videoPlayerController?.value.position ?? Duration.zero), style: const TextStyle(color: Colors.white, fontSize: 11, fontFamily: 'monospace')),
-                          const SizedBox(width: 6),
-                          Expanded(
-                            child: SliderTheme(
-                              data: SliderTheme.of(context).copyWith(trackHeight: 2.5, activeTrackColor: AppThemes.kGreen, inactiveTrackColor: Colors.white24, thumbColor: AppThemes.kGreen, thumbShape: const RoundSliderThumbShape(enabledThumbRadius: 5)),
-                              child: Slider(
-                                value: (_betterPlayerController?.videoPlayerController?.value.position.inSeconds.toDouble() ?? 0.0).clamp(0.0, (_betterPlayerController?.videoPlayerController?.value.duration?.inSeconds.toDouble() ?? 1.0) <= 0 ? 1.0 : (_betterPlayerController?.videoPlayerController?.value.duration?.inSeconds.toDouble() ?? 1.0)), // 🔥 Null Safety Fixed
-                                min: 0.0,
-                                max: (_betterPlayerController?.videoPlayerController?.value.duration?.inSeconds.toDouble() ?? 1.0) > 0 ? (_betterPlayerController?.videoPlayerController?.value.duration?.inSeconds.toDouble() ?? 1.0) : 1.0, // 🔥 Null Safety Fixed
-                                onChanged: (val) => _betterPlayerController?.seekTo(Duration(seconds: val.toInt())),
-                              ),
-                            ),
-                          ),
-                          const SizedBox(width: 6),
-                          Text(_formatDuration(_betterPlayerController?.videoPlayerController?.value.duration ?? Duration.zero), style: const TextStyle(color: Colors.white, fontSize: 11, fontFamily: 'monospace')),
-                        ],
-                      ),
-                    ),
-                  ],
-                  if (_flashFeedback.isNotEmpty)
-                    Center(
-                      child: Container(
-                        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
-                        decoration: BoxDecoration(color: Colors.black87, borderRadius: BorderRadius.circular(8), border: Border.all(color: AppThemes.kBorder)),
-                        child: Text(_flashFeedback, style: const TextStyle(color: AppThemes.kGreen, fontWeight: FontWeight.bold, fontSize: 16)),
-                      ),
-                    ),
-                ],
-              ),
-            );
-          },
-        ),
-      );
-    }
-
-    return WillPopScope(
-      onWillPop: () async {
-        Navigator.pop(context);
-        return false;
-      },
-      child: Scaffold(
-        backgroundColor: AppThemes.kBg,
-        body: SafeArea(
-          child: Column(
-            children: [
-              Padding(
-                padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 6),
-                child: Row(
-                  children: [
-                    IconButton(
-                      icon: const Icon(Icons.arrow_back_ios_new, color: AppThemes.kGreen, size: 18),
-                      onPressed: () {
-                        SoundService.playClick();
-                        Haptic.light();
-                        Navigator.pop(context);
-                      },
-                    ),
-                    Expanded(
-                      child: Column(
-                        mainAxisSize: MainAxisSize.min,
-                        children: [
-                          Row(
-                            mainAxisAlignment: MainAxisAlignment.center,
-                            children: [
-                              Container(
-                                width: 30,
-                                height: 30,
-                                decoration: BoxDecoration(
-                                  color: Colors.black,
-                                  borderRadius: BorderRadius.circular(7),
-                                  border: Border.all(color: AppThemes.kGreen, width: 1.2),
-                                ),
-                                child: ClipRRect(
-                                  borderRadius: BorderRadius.circular(6),
-                                  child: Image.asset(
-                                    'assets/icon/logo.png',
-                                    fit: BoxFit.cover,
-                                    errorBuilder: (c, e, s) => const Icon(Icons.change_history, color: AppThemes.kGreen, size: 16),
-                                  ),
-                                ),
-                              ),
-                              const SizedBox(width: 8),
-                              const Text('Maya', style: TextStyle(fontSize: 20, fontWeight: FontWeight.w900, color: Colors.white)),
-                              const Text('Jaal', style: TextStyle(fontSize: 20, fontWeight: FontWeight.w900, color: AppThemes.kGreen)),
-                            ],
-                          ),
-                          Text('— STREAM BEYOND LIMITS —', style: TextStyle(color: Colors.white38, fontSize: 7.5, letterSpacing: 1.5, fontWeight: FontWeight.bold)),
-                        ],
-                      ),
-                    ),
-                    IconButton(icon: const Icon(Icons.share, color: AppThemes.kGreen, size: 20), onPressed: _shareVideoLink),
-                  ],
-                ),
-              ),
-              Expanded(
-                flex: 0,
-                child: Padding(
-                  padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 2),
-                  child: Container(
-                    width: double.infinity,
-                    height: 220,
-                    decoration: BoxDecoration(color: Colors.black, borderRadius: BorderRadius.circular(14), border: Border.all(color: AppThemes.kBorder)),
-                    child: ClipRRect(
-                      borderRadius: BorderRadius.circular(13),
-                      child: _hasError
-                          ? Center(
-                              child: Column(
-                                mainAxisAlignment: MainAxisAlignment.center,
-                                children: [
-                                  const Icon(Icons.error_outline, color: Colors.redAccent, size: 40),
-                                  const SizedBox(height: 8),
-                                  Text(_streamError, textAlign: TextAlign.center, style: const TextStyle(color: Colors.redAccent, fontSize: 12)),
-                                  TextButton(onPressed: _retryVideo, child: const Text('RETRY', style: TextStyle(color: AppThemes.kGreen))),
-                                ],
-                              ),
-                            )
-                          : _directPlayerReady && _directPlayer != null
-                              ? _buildDirectPlayback(_directPlayer!)
-                          : !_isInitialized
-                              ? const ProfessionalLoader(message: 'INITIALIZING VIDEO...')
-                              : LayoutBuilder(
-                                  builder: (context, constraints) {
-                                    final w = constraints.maxWidth;
-                                    final h = constraints.maxHeight;
-                                    return GestureDetector(
-                                      onTap: _onScreenTapped,
-                                      onDoubleTapDown: (d) => _onDoubleTap(d, w),
-                                      onDoubleTap: () {},
-                                      onLongPressStart: (_) => _onLongPressStart(),
-                                      onLongPressEnd: (_) => _onLongPressEnd(),
-                                      onVerticalDragStart: (d) => _onVerticalDragStart(d, w),
-                                      onVerticalDragUpdate: (d) => _onVerticalDragUpdate(d, h),
-                                      onVerticalDragEnd: _onVerticalDragEnd,
-                                      behavior: HitTestBehavior.opaque,
-                                      child: Stack(
-                                        alignment: Alignment.center,
-                                        children: [
-                                          _buildScaledVideo(),
-                                          if (_brightness < 1.0)
-                                            Positioned.fill(child: IgnorePointer(child: Container(color: Colors.black.withOpacity(1.0 - _brightness)))),
-                                          Positioned(
-                                            top: 8,
-                                            left: 8,
-                                            child: GestureDetector(
-                                              onTap: _showQualityDialog,
-                                              child: Container(
-                                                padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
-                                                decoration: BoxDecoration(color: Colors.black54, borderRadius: BorderRadius.circular(5), border: Border.all(color: AppThemes.kBorder)),
-                                                child: const Text('HD', style: TextStyle(color: AppThemes.kGreen, fontSize: 9, fontWeight: FontWeight.bold)),
-                                              ),
-                                            ),
-                                          ),
-                                          Positioned(
-                                            top: 8,
-                                            right: 8,
-                                            child: GestureDetector(
-                                              onTap: _showSpeedDialog,
-                                              child: Container(
-                                                padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 3),
-                                                decoration: BoxDecoration(color: Colors.black54, borderRadius: BorderRadius.circular(5), border: Border.all(color: AppThemes.kBorder)),
-                                                child: Text('${_playbackSpeed}x', style: const TextStyle(color: AppThemes.kNeonCyan, fontSize: 9.5, fontWeight: FontWeight.bold)),
-                                              ),
-                                            ),
-                                          ),
-                                          if (_showControls && !_isLongPressBoost)
-                                            Row(
-                                              mainAxisAlignment: MainAxisAlignment.center,
-                                              children: [
-                                                GestureDetector(
-                                                  onTap: () => _seekRelative(-10),
-                                                  child: Container(
-                                                    padding: const EdgeInsets.all(6),
-                                                    decoration: BoxDecoration(color: Colors.black54, shape: BoxShape.circle),
-                                                    child: const Icon(Icons.replay_10, color: Colors.white, size: 24),
-                                                  ),
-                                                ),
-                                                const SizedBox(width: 18),
-                                                GestureDetector(
-                                                  onTap: () {
-                                                    SoundService.playClick();
-                                                    Haptic.light();
-                                                    if (_betterPlayerController != null) {
-                                                      if (_betterPlayerController!.isPlaying() ?? false) { // 🔥 Null Safety Fixed
-                                                        _betterPlayerController!.pause();
-                                                      } else {
-                                                        _betterPlayerController!.play();
-                                                      }
-                                                    }
-                                                    _resetControlTimer();
-                                                  },
-                                                  child: Container(
-                                                    width: 56,
-                                                    height: 56,
-                                                    decoration: BoxDecoration(color: Colors.black54, shape: BoxShape.circle, border: Border.all(color: Colors.white70, width: 1.5)),
-                                                    child: Icon((_betterPlayerController?.isPlaying() ?? false) ? Icons.pause : Icons.play_arrow, color: Colors.white, size: 32), // 🔥 Null Safety Fixed
-                                                  ),
-                                                ),
-                                                const SizedBox(width: 18),
-                                                GestureDetector(
-                                                  onTap: () => _seekRelative(10),
-                                                  child: Container(
-                                                    padding: const EdgeInsets.all(6),
-                                                    decoration: BoxDecoration(color: Colors.black54, shape: BoxShape.circle),
-                                                    child: const Icon(Icons.forward_10, color: Colors.white, size: 24),
-                                                  ),
-                                                ),
-                                              ],
-                                            ),
-                                          if (_flashFeedback.isNotEmpty)
-                                            Center(
-                                              child: Container(
-                                                padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
-                                                decoration: BoxDecoration(color: Colors.black87, borderRadius: BorderRadius.circular(8), border: Border.all(color: AppThemes.kBorder)),
-                                                child: Text(_flashFeedback, style: const TextStyle(color: AppThemes.kGreen, fontWeight: FontWeight.bold, fontSize: 16)),
-                                              ),
-                                            ),
-                                          if (_showControls)
-                                            Positioned(
-                                              bottom: 6,
-                                              left: 8,
-                                              right: 8,
-                                              child: Row(
-                                                children: [
-                                                  Text(_formatDuration(_betterPlayerController?.videoPlayerController?.value.position ?? Duration.zero), style: const TextStyle(color: Colors.white, fontSize: 9.5, fontFamily: 'monospace')),
-                                                  const SizedBox(width: 4),
-                                                  Expanded(
-                                                    child: SliderTheme(
-                                                      data: SliderTheme.of(context).copyWith(trackHeight: 2.0, activeTrackColor: AppThemes.kGreen, inactiveTrackColor: Colors.white24, thumbColor: AppThemes.kGreen, thumbShape: const RoundSliderThumbShape(enabledThumbRadius: 4)),
-                                                      child: Slider(
-                                                        value: (_betterPlayerController?.videoPlayerController?.value.position.inSeconds.toDouble() ?? 0.0).clamp(0.0, (_betterPlayerController?.videoPlayerController?.value.duration?.inSeconds.toDouble() ?? 1.0) <= 0 ? 1.0 : (_betterPlayerController?.videoPlayerController?.value.duration?.inSeconds.toDouble() ?? 1.0)), // 🔥 Null Safety Fixed
-                                                        min: 0.0,
-                                                        max: (_betterPlayerController?.videoPlayerController?.value.duration?.inSeconds.toDouble() ?? 1.0) > 0 ? (_betterPlayerController?.videoPlayerController?.value.duration?.inSeconds.toDouble() ?? 1.0) : 1.0, // 🔥 Null Safety Fixed
-                                                        onChanged: (val) => _betterPlayerController?.seekTo(Duration(seconds: val.toInt())),
-                                                      ),
-                                                    ),
-                                                  ),
-                                                  const SizedBox(width: 4),
-                                                  Text(_formatDuration(_betterPlayerController?.videoPlayerController?.value.duration ?? Duration.zero), style: const TextStyle(color: Colors.white, fontSize: 9.5, fontFamily: 'monospace')),
-                                                  const SizedBox(width: 6),
-                                                  GestureDetector(
-                                                    onTap: () {
-                                                      SoundService.playClick();
-                                                      Haptic.light();
-                                                      setState(() => _isZoomed = !_isZoomed);
-                                                      _resetControlTimer();
-                                                    },
-                                                    child: Icon(
-                                                      _isZoomed ? Icons.zoom_in : Icons.zoom_out,
-                                                      color: _isZoomed ? AppThemes.kGreen : Colors.white70,
-                                                      size: 18,
-                                                    ),
-                                                  ),
-                                                  const SizedBox(width: 6),
-                                                  GestureDetector(
-                                                    onTap: _toggleSmartFullscreen,
-                                                    child: Icon(_isFullscreen ? Icons.fullscreen_exit : Icons.fullscreen, color: Colors.white, size: 18),
-                                                  ),
-                                                ],
-                                              ),
-                                            ),
-                                        ],
-                                      ),
-                                    );
-                                  },
-                                ),
-                    ),
-                  ),
-                ),
-              ),
-              Expanded(
-                child: SingleChildScrollView(
-                  padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
-                  child: Column(
-                    children: [
-                      const SizedBox(height: 6),
-
-                      Container(
-                        padding: const EdgeInsets.all(10),
-                        decoration: BoxDecoration(color: AppThemes.kCardBg, borderRadius: BorderRadius.circular(14), border: Border.all(color: AppThemes.kBorder)),
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            Row(
-                              children: [
-                                const Icon(Icons.play_circle_fill, color: AppThemes.kGreen, size: 22),
-                                const SizedBox(width: 8),
-                                Expanded(
-                                  child: Text(widget.title, style: const TextStyle(color: Colors.white, fontSize: 13, fontWeight: FontWeight.bold), maxLines: 1, overflow: TextOverflow.ellipsis),
-                                ),
-                                Container(
-                                  padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
-                                  decoration: BoxDecoration(borderRadius: BorderRadius.circular(5), border: Border.all(color: AppThemes.kBorder)),
-                                  child: const Text('HD', style: TextStyle(color: AppThemes.kGreen, fontSize: 9, fontWeight: FontWeight.bold)),
-                                ),
-                              ],
-                            ),
-                            const SizedBox(height: 6),
-                            Row(
-                              children: [
-                                const Icon(Icons.account_circle, color: Colors.white38, size: 12),
-                                const SizedBox(width: 4),
-                                Text('Uploaded by: ${widget.uploader}', style: const TextStyle(color: AppThemes.kDimGreen, fontSize: 9.5)),
-                                const SizedBox(width: 8),
-                                Text('|   👁 ${_stats['views']} views', style: const TextStyle(color: Colors.white38, fontSize: 9.5)),
-                              ],
-                            ),
-
-                            if (_videoSize.isNotEmpty || _videoAge.isNotEmpty) ...[
-                              const SizedBox(height: 8),
-                              Row(
-                                children: [
-                                  if (_videoSize.isNotEmpty)
-                                    Container(
-                                      padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 3),
-                                      margin: const EdgeInsets.only(right: 6),
-                                      decoration: BoxDecoration(
-                                        color: AppThemes.kNeonCyan.withOpacity(0.1),
-                                        borderRadius: BorderRadius.circular(5),
-                                        border: Border.all(color: AppThemes.kNeonCyan.withOpacity(0.4)),
-                                      ),
-                                      child: Row(
-                                        mainAxisSize: MainAxisSize.min,
-                                        children: [
-                                          const Icon(Icons.sd_storage_outlined, size: 10, color: AppThemes.kNeonCyan),
-                                          const SizedBox(width: 4),
-                                          Text(
-                                            _videoSize,
-                                            style: const TextStyle(
-                                              color: AppThemes.kNeonCyan,
-                                              fontSize: 9.5,
-                                              fontWeight: FontWeight.bold,
-                                            ),
-                                          ),
-                                        ],
-                                      ),
-                                    ),
-                                  if (_videoAge.isNotEmpty)
-                                    Container(
-                                      padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 3),
-                                      decoration: BoxDecoration(
-                                        color: AppThemes.kGold.withOpacity(0.1),
-                                        borderRadius: BorderRadius.circular(5),
-                                        border: Border.all(color: AppThemes.kGold.withOpacity(0.4)),
-                                      ),
-                                      child: Row(
-                                        mainAxisSize: MainAxisSize.min,
-                                        children: [
-                                          const Icon(Icons.calendar_today_outlined, size: 10, color: AppThemes.kGold),
-                                          const SizedBox(width: 4),
-                                          Text(
-                                            _videoAge,
-                                            style: const TextStyle(
-                                              color: AppThemes.kGold,
-                                              fontSize: 9.5,
-                                              fontWeight: FontWeight.bold,
-                                            ),
-                                          ),
-                                        ],
-                                      ),
-                                    ),
-                                ],
-                              ),
-                            ],
-
-                            const SizedBox(height: 10),
-                            Row(
-                              children: [
-                                Expanded(
-                                  child: InkWell(
-                                    onTap: _handleLike,
-                                    child: Container(
-                                      padding: const EdgeInsets.symmetric(vertical: 6),
-                                      decoration: BoxDecoration(color: Colors.black, borderRadius: BorderRadius.circular(6), border: Border.all(color: _isLiked ? AppThemes.kGreen : AppThemes.kBorder)),
-                                      child: Column(
-                                        children: [
-                                          Row(
-                                            mainAxisAlignment: MainAxisAlignment.center,
-                                            children: [
-                                              Icon(_isLiked ? Icons.thumb_up : Icons.thumb_up_alt_outlined, color: AppThemes.kGreen, size: 13),
-                                              const SizedBox(width: 3),
-                                              Text('${_stats['likes']}', style: const TextStyle(color: Colors.white, fontSize: 10, fontWeight: FontWeight.bold)),
-                                            ],
-                                          ),
-                                          const Text('Like', style: TextStyle(color: Colors.white38, fontSize: 8.5)),
-                                        ],
-                                      ),
-                                    ),
-                                  ),
-                                ),
-                                const SizedBox(width: 6),
-                                Expanded(
-                                  child: InkWell(
-                                    onTap: _handleDislike,
-                                    child: Container(
-                                      padding: const EdgeInsets.symmetric(vertical: 6),
-                                      decoration: BoxDecoration(color: Colors.black, borderRadius: BorderRadius.circular(6), border: Border.all(color: _isUnliked ? Colors.redAccent : AppThemes.kBorder)),
-                                      child: Column(
-                                        children: [
-                                          Row(
-                                            mainAxisAlignment: MainAxisAlignment.center,
-                                            children: [
-                                              Icon(_isUnliked ? Icons.thumb_down : Icons.thumb_down_alt_outlined, color: Colors.redAccent, size: 13),
-                                              const SizedBox(width: 3),
-                                              Text('${_stats['unlikes']}', style: const TextStyle(color: Colors.white, fontSize: 10, fontWeight: FontWeight.bold)),
-                                            ],
-                                          ),
-                                          const Text('Dislike', style: TextStyle(color: Colors.white38, fontSize: 8.5)),
-                                        ],
-                                      ),
-                                    ),
-                                  ),
-                                ),
-                                const SizedBox(width: 6),
-                                Expanded(
-                                  child: InkWell(
-                                    onTap: _toggleSave,
-                                    child: Container(
-                                      padding: const EdgeInsets.symmetric(vertical: 6),
-                                      decoration: BoxDecoration(color: Colors.black, borderRadius: BorderRadius.circular(6), border: Border.all(color: _isSaved ? AppThemes.kGreen : AppThemes.kBorder)),
-                                      child: Column(
-                                        children: [
-                                          Icon(_isSaved ? Icons.bookmark : Icons.bookmark_border, color: _isSaved ? AppThemes.kGreen : Colors.white70, size: 13),
-                                          const Text('Save', style: TextStyle(color: Colors.white38, fontSize: 8.5)),
-                                        ],
-                                      ),
-                                    ),
-                                  ),
-                                ),
-                                const SizedBox(width: 6),
-                                _buildWaterFillDownloadButton(),
-                              ],
-                            ),
-                          ],
-                        ),
-                      ),
-                      const SizedBox(height: 14),
-
-                      Row(
-                        children: const [
-                          Icon(Icons.play_circle_outline, color: AppThemes.kGreen, size: 16),
-                          SizedBox(width: 6),
-                          Text('Related Videos', style: TextStyle(color: Colors.white, fontSize: 12.5, fontWeight: FontWeight.bold)),
-                        ],
-                      ),
-                      const SizedBox(height: 8),
-
-                      _relatedLoading
-                          ? const Center(child: Padding(padding: EdgeInsets.all(16), child: CircularProgressIndicator(color: AppThemes.kGreen, strokeWidth: 1.8)))
-                          : _relatedVideos.isEmpty
-                              ? Container(
-                                  padding: const EdgeInsets.all(16),
-                                  decoration: BoxDecoration(color: AppThemes.kCardBg, borderRadius: BorderRadius.circular(10), border: Border.all(color: AppThemes.kBorder)),
-                                  child: const Center(child: Text('No related videos yet', style: TextStyle(color: Colors.white38, fontSize: 11.5))),
-                                )
-                              : SizedBox(
-                                  height: 145,
-                                  child: ListView.builder(
-                                    scrollDirection: Axis.horizontal,
-                                    itemCount: _relatedVideos.length,
-                                    itemBuilder: (context, i) {
-                                      final v = _relatedVideos[i];
-                                      return _buildRelatedCard(v);
-                                    },
-                                  ),
-                                ),
-                      const SizedBox(height: 16),
-                    ],
-                  ),
-                ),
-              ),
+    if (_isFullscreen) return WillPopScope(
+      onWillPop: () async { _toggleSmartFullscreen(); return false; },
+      child: Scaffold(backgroundColor: Colors.black, body: SafeArea(child: _buildUnifiedPlayback())),
+    );
+    return Scaffold(backgroundColor: AppThemes.kBg,
+      appBar: AppBar(title: const Text('MayaJaal Player', style: TextStyle(fontFamily: 'Roboto', fontWeight: FontWeight.w700)),
+        actions: [IconButton(onPressed: _shareVideoLink, icon: const Icon(Icons.share_outlined))]),
+      body: Column(children: [
+        SizedBox(height: MediaQuery.of(context).size.height * .32, width: double.infinity, child: _buildUnifiedPlayback()),
+        Expanded(child: ListView(padding: const EdgeInsets.all(16), children: [
+          Text(widget.title, style: const TextStyle(fontFamily: 'Roboto', fontWeight: FontWeight.w700, fontSize: 18)),
+          const SizedBox(height: 8), Text(widget.uploader, style: const TextStyle(color: AppThemes.kDimGreen)),
+          if (_videoSize.isNotEmpty || _videoAge.isNotEmpty) Text('$_videoSize  $_videoAge'),
+          const SizedBox(height: 12),
+          Wrap(spacing: 8, runSpacing: 8, children: [
+            if (!_social) ...[
+              OutlinedButton.icon(onPressed: _handleLike, icon: Icon(_isLiked ? Icons.thumb_up : Icons.thumb_up_outlined), label: Text('${_stats['likes'] ?? 0}')),
+              OutlinedButton.icon(onPressed: _handleDislike, icon: const Icon(Icons.thumb_down_outlined), label: Text('${_stats['unlikes'] ?? 0}')),
             ],
+            OutlinedButton.icon(onPressed: _toggleSave, icon: Icon(_isSaved ? Icons.bookmark : Icons.bookmark_outline), label: const Text('Save')),
+            OutlinedButton.icon(onPressed: _startInAppDownload, icon: const Icon(Icons.download_outlined), label: const Text('Download')),
+          ]),
+          const SizedBox(height: 20),
+          const Text('Recent & related', style: TextStyle(fontFamily: 'Roboto', fontSize: 16, fontWeight: FontWeight.w600)),
+          for (final item in _relatedVideos) ListTile(
+            contentPadding: EdgeInsets.zero,
+            leading: SizedBox(width: 96, height: 54, child: ClipRRect(borderRadius: BorderRadius.circular(8),
+              child: buildMediaThumbnail(_storedVideoThumbnail(item), '${item['title'] ?? 'Video'}', ''))),
+            title: Text('${item['title'] ?? 'Video'}', maxLines: 2, overflow: TextOverflow.ellipsis),
+            subtitle: Text('${item['uploader'] ?? ''}', maxLines: 1),
+            onTap: () {
+              final source = item['url']?.toString() ?? '';
+              if (source.isNotEmpty) Navigator.of(context).push(MaterialPageRoute(builder: (_) => _mayaPlaybackEntry(source)));
+            },
           ),
-        ),
-      ),
+          if (_relatedLoading) const Center(child: CircularProgressIndicator()),
+        ])),
+      ]),
     );
   }
 
@@ -10057,7 +9707,7 @@ class _NativeVideoPlayerScreenState extends State<NativeVideoPlayerScreen> {
           Navigator.pushReplacement(
             context,
             MaterialPageRoute(
-              builder: (_) => StreamPreviewScreen(targetUrl: url),
+              builder: (_) => _mayaPlaybackEntry(url),
             ),
           );
         },
@@ -11085,202 +10735,266 @@ bool _isSocialLink(String value) {
   ].any((domain) => host == domain || host.endsWith('.$domain'));
 }
 
-class MayaSocialMediaScreen extends StatefulWidget {
-  const MayaSocialMediaScreen({super.key, required this.source});
-  final Uri source;
+class MayaMediaOption {
+  final String label;
+  final Uri? download;
+  final Uri? prepare;
+  final String kind;
+  final String detail;
+  const MayaMediaOption(this.label, {this.download, this.prepare, this.kind = 'video', this.detail = ''});
+}
 
+class MayaResolvedMedia {
+  final String title;
+  final String thumbnail;
+  final String uploader;
+  final String kind;
+  final String duration;
+  final Uri? stream;
+  final List<MayaPlaybackVariant> variants;
+  final List<MayaMediaOption> downloads;
+  const MayaResolvedMedia({required this.title, this.thumbnail = '', this.uploader = '',
+    this.kind = 'video', this.duration = '', this.stream, this.variants = const [], this.downloads = const []});
+
+  static const endpoint = String.fromEnvironment('MAYAJAAL_SOCIAL_RESOLVER');
+  static Future<MayaResolvedMedia> load(Uri source) async {
+    final api = _mediaLink(endpoint);
+    if (api == null) throw const HttpException('Social resolver is not configured for this build.');
+    final user = FirebaseAuth.instance.currentUser;
+    if (user == null) throw const HttpException('Sign in to open this media.');
+    var token = await user.getIdToken();
+    Future<http.Response> request() => http.post(api,
+      headers: {'Content-Type': 'application/json', 'Authorization': 'Bearer $token'},
+      body: jsonEncode({'url': source.toString()})).timeout(const Duration(seconds: 90));
+    var response = await request();
+    if (response.statusCode == 401) { token = await user.getIdToken(true); response = await request(); }
+    if (response.statusCode != 200) {
+      String message = 'Media service HTTP ${response.statusCode}';
+      try {
+        final error = jsonDecode(response.body);
+        if (error is Map && error['detail'] is String) message += ': ${error['detail']}';
+      } catch (_) {}
+      throw HttpException(message);
+    }
+    final raw = jsonDecode(response.body);
+    if (raw is! Map) throw const FormatException('Invalid media response');
+    final stream = _mediaLink('${raw['stream_url'] ?? raw['streamUrl'] ?? ''}');
+    final variants = <MayaPlaybackVariant>[];
+    final downloads = <MayaMediaOption>[];
+    for (final row in raw['formats'] is List ? raw['formats'] as List : const []) {
+      if (row is! Map) continue;
+      final url = _mediaLink('${row['stream_url'] ?? ''}');
+      final label = '${row['label'] ?? 'Original'}';
+      if (url != null) variants.add(MayaPlaybackVariant(label, url, codec: '${row['codec'] ?? ''}'));
+      final download = _mediaLink('${row['download_url'] ?? ''}');
+      final prepare = _mediaLink('${row['prepare_url'] ?? ''}');
+      if (download != null || prepare != null) downloads.add(MayaMediaOption(label,
+        download: download, prepare: prepare, kind: '${row['kind'] ?? 'video'}',
+        detail: '${row['detail'] ?? row['codec'] ?? ''}'));
+    }
+    if (variants.isEmpty && stream != null) variants.add(MayaPlaybackVariant('Original', stream));
+    if (downloads.isEmpty && stream != null && !stream.path.endsWith('.m3u8')) {
+      downloads.add(MayaMediaOption('Original', download: stream));
+    }
+    return MayaResolvedMedia(title: '${raw['title'] ?? source.host}',
+      thumbnail: '${raw['thumbnail'] ?? ''}', uploader: '${raw['uploader'] ?? source.host}',
+      kind: '${raw['kind'] ?? 'video'}', duration: '${raw['duration_label'] ?? ''}',
+      stream: stream, variants: variants, downloads: downloads);
+  }
+}
+
+class MayaSocialMediaScreen extends StatefulWidget {
+  const MayaSocialMediaScreen({super.key, required this.source, this.showDownloads = false});
+  final Uri source;
+  final bool showDownloads;
   @override
   State<MayaSocialMediaScreen> createState() => _MayaSocialMediaScreenState();
 }
 
 class _MayaSocialMediaScreenState extends State<MayaSocialMediaScreen> {
-  static const resolver = String.fromEnvironment('MAYAJAAL_SOCIAL_RESOLVER');
-  late Future<List<({String label, Uri url})>> _formats = _loadFormats();
+  late Future<MayaResolvedMedia> _media = _load();
+  bool _opening = false;
+  bool _preparing = false;
+  int _downloadGeneration = 0;
+  bool _downloadSheetShown = false;
+  String _downloadMessage = '';
 
-  Uri? _stream;
-  String? _mediaTitle;
-  bool _openingPlayer = false;
+  String get _platform {
+    final host = widget.source.host;
+    if (host.contains('instagram')) return 'Instagram';
+    if (host.contains('youtu')) return 'YouTube';
+    if (host.contains('facebook') || host == 'fb.watch') return 'Facebook';
+    return 'File';
+  }
 
-  Future<List<({String label, Uri url})>> _loadFormats() async {
-    final extension = _fileExtension(widget.source);
-    if (extension != null && !_isSocialLink(widget.source.toString())) {
-      if (const ['.mp4', '.webm', '.mkv', '.mov'].contains(extension)) {
-        _stream = widget.source;
-        _mediaTitle = widget.source.pathSegments.last;
+  Future<MayaResolvedMedia> _load() async {
+    if (_isSocialLink(widget.source.toString())) return MayaResolvedMedia.load(widget.source);
+    final ext = _fileExtension(widget.source);
+    final image = const ['.jpg', '.png', '.webp', '.gif'].contains(ext);
+    final video = const ['.mp4', '.webm', '.mkv', '.mov'].contains(ext);
+    return MayaResolvedMedia(title: widget.source.pathSegments.isEmpty ? 'Original file' : widget.source.pathSegments.last,
+      thumbnail: image ? widget.source.toString() : '', kind: image ? 'image' : (video ? 'video' : 'file'),
+      stream: video ? widget.source : null,
+      variants: video ? [MayaPlaybackVariant('Original', widget.source)] : [],
+      downloads: [MayaMediaOption('Original file', download: widget.source, kind: image ? 'image' : (video ? 'video' : 'file'))]);
+  }
+
+  String _error(Object? error) => error is HttpException ? error.message :
+      error is TimeoutException ? 'The source took too long. Please retry.' : 'Could not load this media. Please retry.';
+
+  Future<void> _play(MayaResolvedMedia media) async {
+    if (_opening) return;
+    setState(() => _opening = true);
+    try {
+      if (media.kind == 'image') {
+        await Navigator.of(context).push(MaterialPageRoute(builder: (_) => Scaffold(
+          appBar: AppBar(title: Text(media.title)),
+          body: Center(child: InteractiveViewer(child: Image.network(media.thumbnail,
+            errorBuilder: (_, __, ___) => const Text('Image unavailable')))),
+        )));
+      } else if (media.stream != null) {
+        // Social playback goes directly to the player. No monetized countdown route.
+        final canonical = widget.source.replace(queryParameters: {
+          for (final e in widget.source.queryParameters.entries)
+            if (!const ['si', 'evlk', 'igsh', 'utm_source', 'utm_medium'].contains(e.key)) e.key: e.value,
+        }, fragment: '').toString();
+        await Navigator.of(context).push(MaterialPageRoute(builder: (_) => NativeVideoPlayerScreen(
+          videoUrl: media.stream.toString(), title: media.title, uploader: media.uploader,
+          sourcePageUrl: widget.source.toString(), thumbnailUrl: media.thumbnail,
+          videoId: crypto.sha256.convert(utf8.encode(canonical)).toString(), variants: media.variants,
+        )));
+      } else {
+        await launchUrl(widget.source, mode: LaunchMode.externalApplication);
       }
-      return [(label: 'Original file', url: widget.source)];
-    }
-    final api = _mediaLink(resolver);
-    if (api == null) throw StateError('Social resolver is not configured');
-    _stream = null;
-    _mediaTitle = null;
-    final idToken = await FirebaseAuth.instance.currentUser?.getIdToken();
-    final response = await http.post(api,
-      headers: {
-        'Content-Type': 'application/json',
-        if (idToken != null) 'Authorization': 'Bearer $idToken',
-      },
-      body: jsonEncode({'url': widget.source.toString()}),
-    ).timeout(const Duration(seconds: 55));
-    if (response.statusCode != 200) {
-      throw StateError('Media service HTTP ${response.statusCode}');
-    }
-    final data = jsonDecode(response.body);
-    if (data is! Map) throw const FormatException('Invalid media response');
-    _stream = _mediaLink((data['stream_url'] ?? data['streamUrl'])?.toString() ?? '');
-    _mediaTitle = data['title'] is String ? data['title'] as String : null;
-    final rawFormats = data['formats'];
-    final formats = <({String label, Uri url})>[];
-    for (final item in rawFormats is List ? rawFormats : const []) {
-      if (item is! Map || item['label'] is! String) continue;
-      final url = _mediaLink(item['download_url']?.toString() ?? '');
-      if (url != null) formats.add((label: item['label'] as String, url: url));
-    }
-    final stream = _stream;
-    if (stream != null && formats.isEmpty &&
-        const ['.mp4', '.webm', '.mkv', '.mov'].contains(_fileExtension(stream))) {
-      formats.add((label: 'Original video', url: stream));
-    }
-    return formats;
-  }
-
-  Future<void> _play() async {
-    if (_openingPlayer) return;
-    _openingPlayer = true;
-    try {
-      await _openPlayer();
     } finally {
-      _openingPlayer = false;
+      if (mounted) setState(() => _opening = false);
     }
   }
 
-  Future<void> _openPlayer() async {
+  void _chooseDownload(MayaResolvedMedia media) {
+    showModalBottomSheet<void>(context: context, isScrollControlled: true,
+      backgroundColor: AppThemes.kCardBg,
+      shape: const RoundedRectangleBorder(borderRadius: BorderRadius.vertical(top: Radius.circular(24))),
+      builder: (sheet) => SafeArea(child: ConstrainedBox(
+        constraints: BoxConstraints(maxHeight: MediaQuery.of(sheet).size.height * .75),
+        child: ListView(shrinkWrap: true, padding: const EdgeInsets.all(18), children: [
+          const Text('Download quality', style: TextStyle(fontFamily: 'Roboto', fontSize: 22, fontWeight: FontWeight.w700)),
+          const SizedBox(height: 6),
+          const Text('Original source formats. High resolutions and audio conversion may need preparation.',
+            style: TextStyle(fontFamily: 'Roboto', color: Colors.white60, height: 1.4)),
+          const SizedBox(height: 12),
+          if (media.downloads.isEmpty) const Text('This source did not provide a downloadable file.'),
+          for (final option in media.downloads) ListTile(
+            contentPadding: EdgeInsets.zero,
+            leading: Icon(option.kind == 'audio' ? Icons.music_note : option.kind == 'image' ? Icons.image_outlined : Icons.high_quality, color: AppThemes.kGreen),
+            title: Text(option.label, style: const TextStyle(fontFamily: 'Roboto', fontWeight: FontWeight.w600)),
+            subtitle: option.detail.isEmpty ? null : Text(option.detail, style: const TextStyle(fontFamily: 'Roboto', fontSize: 12)),
+            trailing: const Icon(Icons.download_outlined),
+            onTap: _preparing ? null : () { Navigator.pop(sheet); unawaited(_download(media, option)); },
+          ),
+        ]),
+      )));
+  }
+
+  Future<void> _download(MayaResolvedMedia media, MayaMediaOption option) async {
+    final generation = ++_downloadGeneration;
+    setState(() { _preparing = true; _downloadMessage = 'Preparing ${option.label}…'; });
     try {
-      await _formats;
-    } catch (_) {
-      if (mounted) ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Could not load this video. Tap Retry below.')),
-      );
-      return;
+      Uri? url = option.download;
+      if (option.prepare != null) {
+        final token = await FirebaseAuth.instance.currentUser?.getIdToken();
+        final response = await http.post(option.prepare!, headers: {'Authorization': 'Bearer $token'})
+            .timeout(const Duration(seconds: 20));
+        if (response.statusCode != 200) throw HttpException('Preparation HTTP ${response.statusCode}');
+        var job = jsonDecode(response.body) as Map;
+        final deadline = DateTime.now().add(const Duration(minutes: 30));
+        while (job['status'] != 'ready') {
+          if (!mounted || generation != _downloadGeneration) return;
+          if (job['status'] == 'failed') throw HttpException('${job['error'] ?? 'File preparation failed'}');
+          if (DateTime.now().isAfter(deadline)) throw const HttpException('Preparation timed out. Try a smaller quality.');
+          final status = _mediaLink('${job['status_url'] ?? ''}');
+          if (status == null) throw const FormatException('Invalid preparation response');
+          await Future<void>.delayed(const Duration(seconds: 2));
+          final poll = await http.get(status).timeout(const Duration(seconds: 15));
+          if (poll.statusCode != 200) throw HttpException('Preparation HTTP ${poll.statusCode}');
+          job = jsonDecode(poll.body) as Map;
+          if (mounted) setState(() => _downloadMessage = 'Preparing ${option.label} · ${job['status'] ?? 'working'}');
+        }
+        url = _mediaLink('${job['download_url'] ?? ''}');
+      }
+      if (url == null || !mounted || generation != _downloadGeneration) return;
+      unawaited(MayaDownloads.start(FirebaseAuth.instance.currentUser?.uid ?? 'guest', url, '${media.title} ${option.label}'));
+      await Navigator.of(context).push(MaterialPageRoute(builder: (_) => const MayaDownloadsScreen()));
+    } catch (error) {
+      if (mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(_error(error))));
+    } finally {
+      if (mounted && generation == _downloadGeneration) setState(() => _preparing = false);
     }
-    if (!mounted) return;
-    if (const ['.jpg', '.png', '.webp', '.gif'].contains(_fileExtension(widget.source)) &&
-        !_isSocialLink(widget.source.toString())) {
-      await Navigator.of(context).push<void>(MaterialPageRoute(
-        builder: (_) => Scaffold(
-          appBar: AppBar(title: const Text('Image')),
-          body: Center(child: InteractiveViewer(child: Image.network(
-            widget.source.toString(),
-            errorBuilder: (_, __, ___) => const Text('Could not open this image.'),
-          ))),
-        ),
-      ));
-      return;
-    }
-    final stream = _stream;
-    if (stream != null) {
-      await Navigator.of(context).push<void>(MaterialPageRoute(
-        builder: (_) => NativeVideoPlayerScreen(
-          videoUrl: stream.toString(),
-          title: _mediaTitle ?? widget.source.host,
-          uploader: widget.source.host,
-          sourcePageUrl: widget.source.toString(),
-          videoId: crypto.sha256.convert(utf8.encode(widget.source.toString())).toString(),
-        ),
-      ));
-      return;
-    }
-    if (_isSocialLink(widget.source.toString())) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('This post has no playable video in MayaJaal right now.')),
-      );
-      return;
-    }
-    await _openOriginal();
-  }
-
-  Future<void> _openOriginal() async {
-    var opened = false;
-    try {
-      opened = await launchUrl(widget.source, mode: LaunchMode.externalApplication);
-    } catch (_) {}
-    if (!opened && mounted) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Could not open the original post.')),
-      );
-    }
-  }
-
-  void _download(Uri url, String label) {
-    final uid = FirebaseAuth.instance.currentUser?.uid ?? 'guest';
-    unawaited(MayaDownloads.start(uid, url, '${widget.source.host} · $label'));
-    Navigator.of(context).push<void>(
-      MaterialPageRoute(builder: (_) => const MayaDownloadsScreen()),
-    );
   }
 
   @override
-  Widget build(BuildContext context) {
-    return Scaffold(
-      backgroundColor: AppThemes.kBg,
-      appBar: AppBar(title: const Text('Media')),
-      body: ListView(
-        padding: const EdgeInsets.all(16),
-        children: [
-          Text(widget.source.host),
-          const SizedBox(height: 12),
-          FilledButton.icon(onPressed: _play,
-            icon: const Icon(Icons.play_arrow),
-            label: Text(const ['.jpg', '.png', '.webp', '.gif', '.pdf', '.doc', '.docx',
-              '.xlsx', '.txt', '.csv', '.zip'].contains(_fileExtension(widget.source))
-                ? 'View file' : 'Play')),
-          if (_isSocialLink(widget.source.toString()))
-            TextButton(onPressed: _openOriginal, child: const Text('Open original post')),
-          const SizedBox(height: 12),
-          Text('Download options', style: Theme.of(context).textTheme.titleMedium),
-          FutureBuilder<List<({String label, Uri url})>>(
-            future: _formats,
-            builder: (context, snapshot) {
-              if (snapshot.connectionState != ConnectionState.done) {
-                return const Center(child: CircularProgressIndicator());
-              }
-              final formats = snapshot.data ?? [];
-              if (formats.isEmpty) return Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  const SizedBox(height: 10),
-                  Text(snapshot.hasError
-                    ? (resolver.trim().isEmpty
-                        ? 'Media service is not configured for this build.'
-                        : 'Could not load this video from the media service.')
-                    : 'No downloadable versions were provided for this post.'),
-                  if (snapshot.hasError) TextButton(
-                    onPressed: () => setState(() => _formats = _loadFormats()),
-                    child: const Text('Retry'),
-                  ),
-                ],
-              );
-              return Column(children: [
-                for (final format in formats)
-                  ListTile(
-                    title: Text(format.label),
-                    trailing: IconButton(
-                      tooltip: 'Download',
-                      icon: const Icon(Icons.download),
-                      onPressed: () => _download(format.url, format.label),
-                    ),
-                  ),
-              ]);
-            },
-          ),
-        ],
-      ),
-    );
-  }
+  void dispose() { _downloadGeneration++; super.dispose(); }
+
+  @override
+  Widget build(BuildContext context) => Theme(
+    data: Theme.of(context).copyWith(textTheme: Theme.of(context).textTheme.apply(fontFamily: 'Roboto')),
+    child: Scaffold(backgroundColor: AppThemes.kBg,
+      appBar: AppBar(title: Text('$_platform Preview', style: const TextStyle(fontFamily: 'Roboto', fontWeight: FontWeight.w700))),
+      body: FutureBuilder<MayaResolvedMedia>(future: _media, builder: (context, snapshot) {
+        if (!snapshot.hasData) {
+          if (snapshot.hasError) return Center(child: Padding(padding: const EdgeInsets.all(24), child: Column(mainAxisSize: MainAxisSize.min, children: [
+            const Icon(Icons.cloud_off_outlined, size: 48, color: AppThemes.kGreen),
+            const SizedBox(height: 16), Text(_error(snapshot.error), textAlign: TextAlign.center),
+            const SizedBox(height: 12), FilledButton(onPressed: () => setState(() => _media = _load()), child: const Text('Retry')),
+          ])));
+          return const Center(child: CircularProgressIndicator());
+        }
+        final media = snapshot.data!;
+        if (widget.showDownloads && !_downloadSheetShown) {
+          _downloadSheetShown = true;
+          WidgetsBinding.instance.addPostFrameCallback((_) { if (mounted) _chooseDownload(media); });
+        }
+        return ListView(padding: const EdgeInsets.fromLTRB(20, 12, 20, 28), children: [
+          ClipRRect(borderRadius: BorderRadius.circular(20), child: AspectRatio(aspectRatio: 16 / 9,
+            child: Stack(fit: StackFit.expand, children: [
+              buildMediaThumbnail(media.thumbnail, media.title, ''),
+              const DecoratedBox(decoration: BoxDecoration(gradient: LinearGradient(begin: Alignment.topCenter,
+                end: Alignment.bottomCenter, colors: [Colors.transparent, Colors.black87]))),
+              Positioned(left: 14, bottom: 12, child: Text('$_platform${media.duration.isEmpty ? '' : ' · ${media.duration}'}',
+                style: const TextStyle(fontFamily: 'Roboto', color: Colors.white, fontWeight: FontWeight.w600))),
+              if (media.kind == 'video') Center(child: IconButton.filled(
+                iconSize: 42, onPressed: _opening ? null : () => _play(media), icon: const Icon(Icons.play_arrow_rounded))),
+            ]))),
+          const SizedBox(height: 20),
+          Text(media.title, style: const TextStyle(fontFamily: 'Roboto', fontSize: 22, fontWeight: FontWeight.w700, height: 1.3)),
+          const SizedBox(height: 8), Text(media.uploader, style: const TextStyle(fontFamily: 'Roboto', color: Colors.white60)),
+          const SizedBox(height: 24),
+          Row(children: [
+            Expanded(child: FilledButton.icon(onPressed: _opening ? null : () => _play(media),
+              icon: Icon(media.kind == 'video' ? Icons.play_arrow_rounded : Icons.image_outlined),
+              label: Padding(padding: const EdgeInsets.symmetric(vertical: 14), child: Text(_opening ? 'Opening…' : media.kind == 'video' ? 'Play' : 'View')))),
+            const SizedBox(width: 12),
+            Expanded(child: OutlinedButton.icon(onPressed: _preparing ? null : () => _chooseDownload(media),
+              icon: const Icon(Icons.download_rounded), label: const Padding(padding: EdgeInsets.symmetric(vertical: 14), child: Text('Download')))),
+          ]),
+          if (_preparing) ...[
+            const SizedBox(height: 18), const LinearProgressIndicator(), const SizedBox(height: 10), Text(_downloadMessage),
+            TextButton(onPressed: () { _downloadGeneration++; setState(() => _preparing = false); }, child: const Text('Stop waiting')),
+          ],
+          const SizedBox(height: 16),
+          Text('${media.variants.length} playback quality options · ${media.downloads.length} download options',
+            style: const TextStyle(fontFamily: 'Roboto', fontSize: 12, color: Colors.white54)),
+          TextButton.icon(onPressed: () => launchUrl(widget.source, mode: LaunchMode.externalApplication),
+            icon: const Icon(Icons.open_in_new, size: 16), label: const Text('Open original post')),
+        ]);
+      }),
+    ),
+  );
 }
 
 
 const _fileTypes = {
+  'audio/mpeg': '.mp3', 'audio/mp4': '.m4a', 'audio/webm': '.webm',
   'video/mp4': '.mp4', 'video/webm': '.webm', 'video/x-matroska': '.mkv',
   'video/quicktime': '.mov', 'image/jpeg': '.jpg', 'image/png': '.png',
   'image/webp': '.webp', 'image/gif': '.gif', 'application/pdf': '.pdf',
