@@ -3749,6 +3749,12 @@ class _MainNavigationHolderState extends State<MainNavigationHolder> {
             ));
             break;
           }
+          if (uri != null && (_isMayaVideoLink(uri) || _mayaChannelId(uri) != null)) {
+            Navigator.of(context).push<void>(MaterialPageRoute(
+              builder: (_) => _mayaLinkScreen(uri.toString()),
+            ));
+            break;
+          }
           if (uri != null && TeraBoxResolver.isTeraBoxLink(url)) {
             Navigator.of(context).push<void>(MaterialPageRoute(
               builder: (_) => StreamPreviewScreen(targetUrl: uri.toString()),
@@ -8560,6 +8566,9 @@ class NativeVideoPlayerScreen extends StatefulWidget {
 
 class _NativeVideoPlayerScreenState extends State<NativeVideoPlayerScreen> {
   BetterPlayerController? _betterPlayerController;
+  VideoPlayerController? _directPlayer;
+  int _playbackAttempt = 0;
+  bool _directPlayerReady = false;
   final GlobalKey _videoKey = GlobalKey();
 
   bool _isInitialized = false;
@@ -8712,9 +8721,9 @@ class _NativeVideoPlayerScreenState extends State<NativeVideoPlayerScreen> {
     _watchTimer?.cancel();
     _watchTimer = Timer.periodic(const Duration(seconds: 1), (t) {
       if (!mounted) return;
-      if (_betterPlayerController != null &&
-          (_betterPlayerController!.isPlaying() ?? false) && // 🔥 Null Safety Fixed
-          _watchedSeconds < 10) {
+      final playing = _directPlayer?.value.isPlaying ??
+          _betterPlayerController?.isPlaying() ?? false;
+      if (playing && _watchedSeconds < 10) {
         _watchedSeconds++;
         if (_watchedSeconds == 10 && !_viewReported) {
           _reportViewToBackend();
@@ -8826,7 +8835,7 @@ class _NativeVideoPlayerScreenState extends State<NativeVideoPlayerScreen> {
     return url;
   }
 
-  Future<void> _checkStreamFailure(BetterPlayerController controller, Uri uri,
+  Future<void> _checkStreamFailure(int attempt, Uri uri,
       Map<String, String> headers) async {
     final client = http.Client();
     String message;
@@ -8850,19 +8859,24 @@ class _NativeVideoPlayerScreenState extends State<NativeVideoPlayerScreen> {
     } finally {
       client.close();
     }
-    if (mounted && identical(_betterPlayerController, controller) && _hasError) {
+    if (mounted && attempt == _playbackAttempt && _hasError) {
       setState(() => _streamError = message);
     }
   }
 
   Future<void> _initVideo({bool refreshLink = false}) async {
+    final attempt = ++_playbackAttempt;
     final oldController = _betterPlayerController;
+    final oldDirect = _directPlayer;
     _betterPlayerController = null;
+    _directPlayer = null;
     oldController?.dispose();
+    if (oldDirect != null) unawaited(oldDirect.dispose());
     setState(() {
       _hasError = false;
       _streamError = 'Stream Connection Error';
       _isInitialized = false;
+      _directPlayerReady = false;
     });
     String realVideoUrl = widget.videoUrl.trim();
     final sourcePage = Uri.tryParse(widget.sourcePageUrl);
@@ -8876,7 +8890,7 @@ class _NativeVideoPlayerScreenState extends State<NativeVideoPlayerScreen> {
         });
         return;
       }
-      if (!mounted) return;
+      if (!mounted || attempt != _playbackAttempt) return;
     }
 
     if (realVideoUrl.isEmpty || !realVideoUrl.startsWith('http')) {
@@ -8930,9 +8944,19 @@ class _NativeVideoPlayerScreenState extends State<NativeVideoPlayerScreen> {
     final initialized = Completer<void>();
     void showFailure() {
       if (!mounted || !identical(_betterPlayerController, controller) || _hasError) return;
-      setState(() => _hasError = true);
       if (!initialized.isCompleted) initialized.complete();
-      unawaited(_checkStreamFailure(controller, stream, headers));
+      if (!_isInitialized && !isHls) {
+        _betterPlayerController = null;
+        scheduleMicrotask(() {
+          controller.dispose();
+          if (mounted && attempt == _playbackAttempt) {
+            unawaited(_tryDirectPlayback(attempt, stream, headers));
+          }
+        });
+        return;
+      }
+      setState(() => _hasError = true);
+      unawaited(_checkStreamFailure(attempt, stream, headers));
     }
     controller.addEventsListener((event) {
       if (!mounted || !identical(_betterPlayerController, controller)) return;
@@ -8955,6 +8979,65 @@ class _NativeVideoPlayerScreenState extends State<NativeVideoPlayerScreen> {
     }
   }
 
+  Future<void> _tryDirectPlayback(int attempt, Uri stream, Map<String, String> headers) async {
+    final direct = VideoPlayerController.networkUrl(stream, httpHeaders: headers);
+    _directPlayer = direct;
+    bool isActive() => mounted && attempt == _playbackAttempt && identical(_directPlayer, direct);
+    void showError() {
+      if (!isActive() || _hasError) return;
+      setState(() {
+        _hasError = true;
+        _directPlayerReady = false;
+      });
+      unawaited(_checkStreamFailure(attempt, stream, headers));
+    }
+
+    try {
+      await direct.initialize().timeout(const Duration(seconds: 15));
+      if (!isActive()) return;
+      direct.addListener(() {
+        if (direct.value.hasError) showError();
+      });
+      await direct.play();
+      if (!isActive() || _hasError) return;
+      setState(() {
+        _directPlayerReady = true;
+        _isInitialized = true;
+      });
+      _startWatchTracking();
+      unawaited(_captureThumbnail());
+    } catch (_) {
+      showError();
+    }
+  }
+
+  Widget _buildDirectPlayback(VideoPlayerController controller) {
+    return Column(children: [
+      Expanded(child: Center(child: RepaintBoundary(
+        key: _videoKey,
+        child: AspectRatio(
+          aspectRatio: controller.value.aspectRatio,
+          child: VideoPlayer(controller),
+        ),
+      ))),
+      VideoProgressIndicator(controller, allowScrubbing: true),
+      ValueListenableBuilder<VideoPlayerValue>(
+        valueListenable: controller,
+        builder: (context, value, _) => IconButton(
+          tooltip: value.isPlaying ? 'Pause' : 'Play',
+          icon: Icon(value.isPlaying ? Icons.pause : Icons.play_arrow, color: AppThemes.kGreen),
+          onPressed: () async {
+            if (value.isPlaying) {
+              await controller.pause();
+            } else {
+              await controller.play();
+            }
+          },
+        ),
+      ),
+    ]);
+  }
+
   @override
   void dispose() {
     _statsSub?.cancel();
@@ -8963,7 +9046,11 @@ class _NativeVideoPlayerScreenState extends State<NativeVideoPlayerScreen> {
     _controlsTimer?.cancel();
     _feedbackTimer?.cancel();
     _watchTimer?.cancel();
+    _playbackAttempt++;
     _betterPlayerController?.dispose();
+    final direct = _directPlayer;
+    _directPlayer = null;
+    if (direct != null) unawaited(direct.dispose());
     SystemChrome.setPreferredOrientations([DeviceOrientation.portraitUp]);
     SystemChrome.setEnabledSystemUIMode(SystemUiMode.edgeToEdge);
     super.dispose();
@@ -9582,6 +9669,8 @@ class _NativeVideoPlayerScreenState extends State<NativeVideoPlayerScreen> {
                                 ],
                               ),
                             )
+                          : _directPlayerReady && _directPlayer != null
+                              ? _buildDirectPlayback(_directPlayer!)
                           : !_isInitialized
                               ? const ProfessionalLoader(message: 'INITIALIZING VIDEO...')
                               : LayoutBuilder(
@@ -11010,6 +11099,7 @@ class _MayaSocialMediaScreenState extends State<MayaSocialMediaScreen> {
 
   Uri? _stream;
   String? _mediaTitle;
+  bool _openingPlayer = false;
 
   Future<List<({String label, Uri url})>> _loadFormats() async {
     final extension = _fileExtension(widget.source);
@@ -11024,11 +11114,17 @@ class _MayaSocialMediaScreenState extends State<MayaSocialMediaScreen> {
     if (api == null) throw StateError('Social resolver is not configured');
     _stream = null;
     _mediaTitle = null;
+    final idToken = await FirebaseAuth.instance.currentUser?.getIdToken();
     final response = await http.post(api,
-      headers: {'Content-Type': 'application/json'},
+      headers: {
+        'Content-Type': 'application/json',
+        if (idToken != null) 'Authorization': 'Bearer $idToken',
+      },
       body: jsonEncode({'url': widget.source.toString()}),
-    ).timeout(const Duration(seconds: 15));
-    if (response.statusCode != 200) throw StateError('Unavailable');
+    ).timeout(const Duration(seconds: 55));
+    if (response.statusCode != 200) {
+      throw StateError('Media service HTTP ${response.statusCode}');
+    }
     final data = jsonDecode(response.body);
     if (data is! Map) throw const FormatException('Invalid media response');
     _stream = _mediaLink((data['stream_url'] ?? data['streamUrl'])?.toString() ?? '');
@@ -11049,7 +11145,24 @@ class _MayaSocialMediaScreenState extends State<MayaSocialMediaScreen> {
   }
 
   Future<void> _play() async {
-    try { await _formats; } catch (_) {}
+    if (_openingPlayer) return;
+    _openingPlayer = true;
+    try {
+      await _openPlayer();
+    } finally {
+      _openingPlayer = false;
+    }
+  }
+
+  Future<void> _openPlayer() async {
+    try {
+      await _formats;
+    } catch (_) {
+      if (mounted) ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Could not load this video. Tap Retry below.')),
+      );
+      return;
+    }
     if (!mounted) return;
     if (const ['.jpg', '.png', '.webp', '.gif'].contains(_fileExtension(widget.source)) &&
         !_isSocialLink(widget.source.toString())) {
@@ -11137,7 +11250,9 @@ class _MayaSocialMediaScreenState extends State<MayaSocialMediaScreen> {
                 children: [
                   const SizedBox(height: 10),
                   Text(snapshot.hasError
-                    ? 'Could not load download options.'
+                    ? (resolver.trim().isEmpty
+                        ? 'Media service is not configured for this build.'
+                        : 'Could not load this video from the media service.')
                     : 'No downloadable versions were provided for this post.'),
                   if (snapshot.hasError) TextButton(
                     onPressed: () => setState(() => _formats = _loadFormats()),
