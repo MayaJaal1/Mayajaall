@@ -375,7 +375,7 @@ class _MayaPosterState extends State<_MayaPoster> {
           gaplessPlayback: true, errorBuilder: (_, __, ___) => buildAutoThumbnail(widget.title, isSmall: widget.isSmall));
 }
 
-const _mayaMint = Color(0xFF9FE3BD);
+const _mayaMint = Color(0xFF69E6A6);
 class MayaBrandTitle extends StatelessWidget {
   const MayaBrandTitle({super.key, this.section});
   final String? section;
@@ -870,7 +870,7 @@ final Map<String, Map<String, String>> localizedStrings = {
 
 String tr(String key) {
   final lang = languageNotifier.value;
-  return localizedStrings[lang]?[key] ?? localizedStrings['English']?[key] ?? key;
+  return mayaCoreLocales[lang]?[key] ?? localizedStrings[lang]?[key] ?? mayaCoreLocales['English']?[key] ?? localizedStrings['English']?[key] ?? key;
 }
 
 // ═══════════════════════════════════════════════════════════════════════════════
@@ -1351,6 +1351,12 @@ class MayaJaalAccount {
     final deviceId = await DeviceIdHelper.get();
 
     try {
+      // Remove this account's comments and reactions before deleting its sign-in.
+      try {
+        await MayaCommunityApi.request('/account', method: 'DELETE');
+      } on HttpException catch (error) {
+        if (!error.message.contains('not installed')) rethrow;
+      }
       // 1. Wipe user profile node
       await _rtdb.child('users/$uid').remove();
 
@@ -2299,6 +2305,8 @@ void showTopNotificationDropdown(BuildContext context) {
 // CLOUD-SYNCED WATCH HISTORY & SAVED VIDEOS
 // ═══════════════════════════════════════════════════════════════════════════════
 class WatchHistory {
+  static final savedChanges = ValueNotifier<int>(0);
+  static Future<void> _cloudWriteChain = Future<void>.value();
   static final changes = ValueNotifier<int>(0);
   static Future<void> _writeChain = Future<void>.value();
   static Future<void> _exclusive(Future<void> Function() action) {
@@ -2313,15 +2321,18 @@ class WatchHistory {
   static DatabaseReference get _rtdb => FirebaseDatabase.instance.ref();
 
   static String recordKey(Map<String, dynamic> item) {
+    final url = item['url']?.toString() ?? '';
+    if (_isSocialLink(url)) return MayaCommunityApi.videoKey('', url);
     final id = item['id']?.toString() ?? '';
-    return id.isNotEmpty ? id : (item['url']?.toString() ?? '');
+    return id.isNotEmpty ? id : url;
   }
 
   static List<Map<String, dynamic>> localRecords(SharedPreferences prefs, String key) {
     try {
       final data = jsonDecode(prefs.getString(key) ?? '[]');
       if (data is List) {
-        return data.whereType<Map>().map((item) => Map<String, dynamic>.from(item)).toList();
+        final records = data.whereType<Map>().map((item) => Map<String, dynamic>.from(item));
+        return (key.startsWith('watch_history_v2_') ? records.take(20) : records).toList();
       }
     } catch (_) {}
     return [];
@@ -2332,7 +2343,7 @@ class WatchHistory {
       (item['syncedAt'] is num ? (item['syncedAt'] as num).toInt() : 0);
 
   static List<Map<String, dynamic>> mergeRecords(
-      Iterable<Map<String, dynamic>> records, {int limit = 30}) {
+      Iterable<Map<String, dynamic>> records, {int limit = 20}) {
     final sorted = records.toList()..sort((a, b) => recordedAt(b).compareTo(recordedAt(a)));
     final byId = <String, Map<String, dynamic>>{};
     for (final record in sorted) {
@@ -2445,38 +2456,49 @@ class WatchHistory {
           }
         }
         changes.value++;
+        savedChanges.value++;
       } catch (_) {}
     });
   }
 
-  static Future<void> syncWatchRecordCloud(Map<String, dynamic> item) async {
-    if (_uid == 'guest') return;
-    try {
-      final safeKey = (item['id'] ?? DateTime.now().millisecondsSinceEpoch).toString();
-      await _rtdb.child('users/$_uid/watchHistory/$safeKey').set({
-        ...item,
-        'syncedAt': DateTime.now().millisecondsSinceEpoch,
-      });
-    } catch (e) {
-      debugPrint('Cloud sync error: $e');
-    }
+  static Future<void> syncWatchRecordCloud(Map<String, dynamic> item) {
+    final uid = _uid;
+    final next = _cloudWriteChain.then((_) async {
+      if (uid == 'guest' || _uid != uid) return;
+      try {
+        final root = _rtdb.child('users/$uid/watchHistory');
+        final safeKey = recordKey(item);
+        await root.child(safeKey).set({...item, 'syncedAt': DateTime.now().millisecondsSinceEpoch});
+        final snapshot = await root.get();
+        if (_uid != uid) return;
+        final rows = snapshot.children.where((c) => c.value is Map).toList()
+          ..sort((a,b) => recordedAt(Map<String,dynamic>.from(b.value as Map)).compareTo(recordedAt(Map<String,dynamic>.from(a.value as Map))));
+        final removed = <String, Object?>{for (final row in rows.skip(20)) row.key!: null};
+        if (removed.isNotEmpty) await root.update(removed);
+      } catch (e) { debugPrint('History sync: $e'); }
+    });
+    _cloudWriteChain = next.catchError((Object _) {});
+    return next;
   }
 
   static Future<void> syncSavedRecordCloud(Map<String, dynamic> item, bool isAdd) async {
-    if (_uid == 'guest') return;
+    savedChanges.value++;
+    final uid = _uid;
+    if (uid == 'guest') return;
     try {
-      final safeKey = (item['id'] ?? DateTime.now().millisecondsSinceEpoch).toString();
-      if (isAdd) {
-        await _rtdb.child('users/$_uid/savedVideos/$safeKey').set({
-          ...item,
-          'savedAt': DateTime.now().millisecondsSinceEpoch,
-        });
-      } else {
-        await _rtdb.child('users/$_uid/savedVideos/$safeKey').remove();
+      final root = _rtdb.child('users/$uid/savedVideos');
+      final canonical = recordKey(item);
+      final snapshot = await root.get();
+      if (_uid != uid) return;
+      final updates = <String, Object?>{};
+      for (final child in snapshot.children) {
+        if (child.value is Map && recordKey(Map<String,dynamic>.from(child.value as Map)) == canonical) {
+          updates[child.key!] = null;
+        }
       }
-    } catch (e) {
-      debugPrint('Cloud saved sync error: $e');
-    }
+      if (isAdd) updates[canonical] = {...item, 'savedAt': DateTime.now().millisecondsSinceEpoch};
+      if (updates.isNotEmpty) await root.update(updates);
+    } catch (e) { debugPrint('Saved videos sync: $e'); }
   }
 
   static Future<void> repairBadTitles({
@@ -2545,6 +2567,11 @@ Future<void> main() async {
     );
     debugPrint("✅ Firebase Initialized Successfully");
     await MayaJaalAccount.init();
+    final uiPrefs = await SharedPreferences.getInstance();
+    themeNotifier.value = uiPrefs.getString('app_theme') ?? 'Cyber Emerald';
+    languageNotifier.value = uiPrefs.getString('language') ?? 'English';
+    soundEnabledNotifier.value = uiPrefs.getBool('sound_enabled') ?? true;
+
   } catch (e) {
     debugPrint("Firebase Init Error: $e");
   }
@@ -3018,14 +3045,7 @@ class _MyAppState extends State<MyApp> {
   }
 
   ThemeData _buildDynamicTheme(String themeName) {
-    Color primaryColor = AppThemes.kGreen;
-    if (themeName == 'Quantum Blue') {
-      primaryColor = AppThemes.kNeonCyan;
-    } else if (themeName == 'Neon Violet') {
-      primaryColor = AppThemes.kNeonPurple;
-    } else if (themeName == 'Obsidian Stealth') {
-      primaryColor = Colors.white70;
-    }
+    final primaryColor = mayaThemeColors[themeName] ?? _mayaMint;
 
     return ThemeData(
       brightness: Brightness.dark,
@@ -3037,7 +3057,15 @@ class _MyAppState extends State<MyApp> {
         surface: AppThemes.kCardBg,
       ),
       useMaterial3: true,
-      fontFamily: 'monospace',
+      cardTheme: CardThemeData(color: AppThemes.kCardBg, elevation: 0,
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(18))),
+      filledButtonTheme: FilledButtonThemeData(style: FilledButton.styleFrom(
+        backgroundColor: primaryColor, foregroundColor: const Color(0xFF082015),
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)))),
+      sliderTheme: SliderThemeData(activeTrackColor: primaryColor, thumbColor: primaryColor),
+      progressIndicatorTheme: ProgressIndicatorThemeData(color: primaryColor),
+
+      fontFamily: 'Roboto',
       appBarTheme: AppBarTheme(
         backgroundColor: Colors.black,
         foregroundColor: primaryColor,
@@ -4280,6 +4308,7 @@ class _HomeScreenState extends State<HomeScreen>
       onTap: () {
         SoundService.playClick();
         Haptic.light();
+        if (title == 'Favorites') Navigator.of(context).push(MaterialPageRoute(builder: (_) => const SavedVideosScreen()));
       },
       child: Container(
         padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 10),
@@ -4695,6 +4724,8 @@ class _HomeScreenState extends State<HomeScreen>
                   ],
                 ),
               ),
+
+              const MayaFavoritesStrip(),
 
               Padding(
                 padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 6),
@@ -5327,25 +5358,6 @@ class _MoreDrawerState extends State<MoreDrawer>
                         Navigator.push(
                           context,
                           MaterialPageRoute(builder: (_) => const StatsScreen()),
-                        );
-                      },
-                    ),
-                  ),
-                  _staggered(
-                    index: 3,
-                    child: _snakeItem(
-                      context,
-                      icon: Icons.bookmark,
-                      color: AppThemes.kNeonCyan,
-                      title: 'Saved Videos',
-                      subtitle: 'Your cloud bookmarked media',
-                      onTap: () {
-                        SoundService.playClick();
-                        Haptic.medium();
-                        Navigator.pop(context);
-                        Navigator.push(
-                          context,
-                          MaterialPageRoute(builder: (_) => const SavedVideosScreen()),
                         );
                       },
                     ),
@@ -6050,30 +6062,7 @@ class _StreamPreviewScreenState extends State<StreamPreviewScreen>
         }
       });
       
-      if (result['success'] == 'true') {
-         final prefs = await SharedPreferences.getInstance();
-         final key = 'watch_history_v2_${MayaJaalAccount.cachedUid ?? 'guest'}';
-         final raw = prefs.getString(key);
-         List history = [];
-         if (raw != null) {
-           try { history = jsonDecode(raw); } catch(_) {}
-         }
-         history.removeWhere((h) => h['url'] == widget.targetUrl);
-         history.insert(0, {
-            'url': widget.targetUrl,
-            'title': _videoTitle,
-            'uploader': _uploaderName,
-            'id': _rawId,
-            'thumbnail': _thumbnailUrl,
-            'streamUrl': _streamUrl,
-            'size': _videoSize,
-            'age': _videoAge,
-            'time': DateTime.now().toIso8601String(),
-         });
-         if (history.length > 10) history = history.sublist(0, 10);
-         await prefs.setString(key, jsonEncode(history));
-         await WatchHistory.syncWatchRecordCloud(history[0]);
-      }
+
     }
   }
 
@@ -6356,7 +6345,7 @@ class _StreamPreviewScreenState extends State<StreamPreviewScreen>
                             ),
                           ),
                           const Text(
-                            'SEC',
+                            'seconds',
                             style: TextStyle(color: Colors.white54, fontSize: 9, letterSpacing: 2, fontWeight: FontWeight.bold),
                           ),
                         ],
@@ -6385,7 +6374,7 @@ class _StreamPreviewScreenState extends State<StreamPreviewScreen>
                       ),
                       const SizedBox(width: 10),
                       Text(
-                        _countdown > 3 ? 'PREPARING STREAM' : 'ALMOST READY',
+                        _countdown > 3 ? 'Preparing your video' : 'Ready in a moment',
                         style: const TextStyle(
                           color: AppThemes.kNeonCyan,
                           fontSize: 11,
@@ -6431,7 +6420,7 @@ class _StreamPreviewScreenState extends State<StreamPreviewScreen>
                     Icon(Icons.play_arrow_rounded, color: _mayaMint, size: 30),
                     SizedBox(width: 8),
                     Text(
-                      'PLAY NOW',
+                      'Play video',
                       style: TextStyle(color: _mayaMint, fontSize: 14, fontWeight: FontWeight.w900, letterSpacing: 2.0),
                     ),
                   ],
@@ -6551,7 +6540,7 @@ class _StreamPreviewScreenState extends State<StreamPreviewScreen>
                           alignment: Alignment.center,
                           children: [
                             if (_isResolving)
-                               const Center(child: ProfessionalLoader(message: 'RESOLVING TERABOX...'))
+                               const Center(child: ProfessionalLoader(message: 'Loading video details…'))
                             else if (_resolveError.isNotEmpty)
                                Center(
                                   child: Padding(
@@ -6579,7 +6568,7 @@ class _StreamPreviewScreenState extends State<StreamPreviewScreen>
                               child: Container(
                                 padding: const EdgeInsets.symmetric(horizontal: 5, vertical: 2),
                                 decoration: BoxDecoration(color: Colors.black54, borderRadius: BorderRadius.circular(4), border: Border.all(color: AppThemes.kGreen, width: 0.8)),
-                                child: const Text('HD', style: TextStyle(color: AppThemes.kGreen, fontSize: 8.5, fontWeight: FontWeight.bold)),
+                                child: const Text('Preview', style: TextStyle(color: AppThemes.kGreen, fontSize: 8.5, fontWeight: FontWeight.bold)),
                               ),
                             ),
                           ],
@@ -7935,7 +7924,7 @@ class _SavedVideosScreenState extends State<SavedVideosScreen> {
           cloudList.sort((a, b) => (b['savedAt'] ?? 0).compareTo(a['savedAt'] ?? 0));
           if (mounted) {
             setState(() {
-              _saved = cloudList;
+              _saved = WatchHistory.mergeRecords(cloudList, limit: cloudList.length);
               _loading = false;
             });
             await prefs.setString(key, jsonEncode(_saved));
@@ -7966,6 +7955,7 @@ class _SavedVideosScreenState extends State<SavedVideosScreen> {
 
     setState(() => _saved.removeAt(index));
     await prefs.setString(key, jsonEncode(_saved));
+    await prefs.setBool('saved_${uid}_${item['id']}', false);
     await WatchHistory.syncSavedRecordCloud(item, false);
   }
 
@@ -7973,7 +7963,7 @@ class _SavedVideosScreenState extends State<SavedVideosScreen> {
   Widget build(BuildContext context) {
     return Scaffold(
       backgroundColor: AppThemes.kBg,
-      appBar: AppBar(title: const Text('SAVED VIDEOS')),
+      appBar: AppBar(title: Text(tr('favorites'))),
       body: _loading
           ? const Center(child: CircularProgressIndicator(color: AppThemes.kGreen))
           : _saved.isEmpty
@@ -8110,7 +8100,7 @@ class _HistoryScreenState extends State<HistoryScreen> {
 
     try {
       final snap = await FirebaseDatabase.instance.ref('users/$uid/watchHistory')
-          .orderByChild('syncedAt').limitToLast(30).once().timeout(const Duration(seconds: 8));
+          .orderByChild('syncedAt').limitToLast(60).once().timeout(const Duration(seconds: 8));
       if (!mounted || FirebaseAuth.instance.currentUser?.uid != uid) return;
       final cloud = snap.snapshot.children
           .map((child) => child.value).whereType<Map>()
@@ -8321,14 +8311,8 @@ class _SettingsScreenState extends State<SettingsScreen> {
   String _downloadLocation = 'Internal Storage / Mayajaall';
   bool _soundEnabled = true;
 
-  final List<String> _themes = [
-    'Cyber Emerald',
-    'Quantum Blue',
-    'Neon Violet',
-    'Obsidian Stealth'
-  ];
-
-  final List<String> _languages = ['English', 'Hindi', 'Bengali', 'Tamil', 'Telugu'];
+  final List<String> _themes = mayaThemeColors.keys.toList();
+  final List<String> _languages = mayaLanguageNames.keys.toList();
   final List<String> _downloadLocations = [
     'Internal Storage / Mayajaall',
     'Internal Storage / Download',
@@ -8417,6 +8401,11 @@ class _SettingsScreenState extends State<SettingsScreen> {
             onTap: _showLanguageDialog,
           ),
           Divider(color: Colors.white10),
+          ListTile(leading: const Icon(Icons.shield_outlined, color: _mayaMint),
+            title: Text(tr('comment_settings')), subtitle: const Text('Blocked words, abusive language and replies'),
+            trailing: const Icon(Icons.chevron_right),
+            onTap: () => Navigator.of(context).push(MaterialPageRoute(builder: (_) => const MayaCommentSettings()))),
+          const Divider(color: Colors.white10),
           ListTile(
             leading: const Icon(Icons.download, color: AppThemes.kGold, size: 20),
             title: Text(tr('download_location'), style: const TextStyle(color: Colors.white, fontSize: 13, fontWeight: FontWeight.bold)),
@@ -8490,65 +8479,58 @@ class _SettingsScreenState extends State<SettingsScreen> {
   }
 
   void _showThemeDialog() {
-    SoundService.playClick();
-    showDialog(
-      context: context,
-      builder: (c) => AlertDialog(
-        backgroundColor: AppThemes.kCardBg,
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12), side: BorderSide(color: AppThemes.kBorder)),
-        title: Text(tr('dark_theme'), style: const TextStyle(color: Colors.white, fontSize: 14)),
-        content: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: _themes.map((t) {
-            return RadioListTile<String>(
-              title: Text(t, style: const TextStyle(color: Colors.white70, fontSize: 12.5)),
-              value: t,
-              groupValue: _currentTheme,
-              activeColor: AppThemes.kGreen,
-              onChanged: (val) {
-                if (val != null) {
-                  SoundService.playClick();
-                  setState(() => _currentTheme = val);
-                  themeNotifier.value = val;
-                  Navigator.pop(c);
-                }
-              },
-            );
-          }).toList(),
-        ),
-      ),
-    );
+    showModalBottomSheet<void>(context: context, isScrollControlled: true,
+      backgroundColor: AppThemes.kCardBg,
+      shape: const RoundedRectangleBorder(borderRadius: BorderRadius.vertical(top: Radius.circular(24))),
+      builder: (c) => SafeArea(child: SizedBox(height: MediaQuery.sizeOf(c).height * .72,
+        child: Column(children: [
+          ListTile(title: Text(tr('dark_theme'), style: const TextStyle(fontSize: 20, fontWeight: FontWeight.w700)),
+            subtitle: const Text('Professional dark palettes · live preview'),
+            trailing: IconButton(icon: const Icon(Icons.close), onPressed: () => Navigator.pop(c))),
+          Expanded(child: GridView.builder(padding: const EdgeInsets.all(16),
+            gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(crossAxisCount: 2, childAspectRatio: 1.6, crossAxisSpacing: 12, mainAxisSpacing: 12),
+            itemCount: _themes.length, itemBuilder: (_, i) {
+              final name = _themes[i]; final color = mayaThemeColors[name]!;
+              return InkWell(borderRadius: BorderRadius.circular(16), onTap: () async {
+                setState(() => _currentTheme = name); themeNotifier.value = name;
+                final prefs = await SharedPreferences.getInstance(); await prefs.setString('app_theme', name);
+                if (c.mounted) Navigator.pop(c);
+              }, child: Container(padding: const EdgeInsets.all(12), decoration: BoxDecoration(color: color.withOpacity(.08),
+                borderRadius: BorderRadius.circular(16), border: Border.all(color: color.withOpacity(_currentTheme == name ? 1 : .3), width: _currentTheme == name ? 2 : 1)),
+                child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+                  Row(children: [CircleAvatar(radius: 10, backgroundColor: color), const Spacer(), if (_currentTheme == name) Icon(Icons.check_circle, color: color, size: 19)]),
+                  const Spacer(), Text(name, style: const TextStyle(fontFamily: 'Roboto', fontWeight: FontWeight.w600, fontSize: 13)),
+                ])));
+            })),
+        ]))));
   }
 
   void _showLanguageDialog() {
-    SoundService.playClick();
-    showDialog(
-      context: context,
-      builder: (c) => AlertDialog(
-        backgroundColor: AppThemes.kCardBg,
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12), side: BorderSide(color: AppThemes.kBorder)),
-        title: Text(tr('language'), style: const TextStyle(color: Colors.white, fontSize: 14)),
-        content: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: _languages.map((l) {
-            return RadioListTile<String>(
-              title: Text(l, style: const TextStyle(color: Colors.white70, fontSize: 12.5)),
-              value: l,
-              groupValue: _language,
-              activeColor: AppThemes.kGreen,
-              onChanged: (val) {
-                if (val != null) {
-                  SoundService.playClick();
-                  setState(() => _language = val);
-                  languageNotifier.value = val;
-                  Navigator.pop(c);
-                }
-              },
-            );
-          }).toList(),
-        ),
-      ),
-    );
+    String query = '';
+    showModalBottomSheet<void>(context: context, isScrollControlled: true, useSafeArea: true,
+      backgroundColor: AppThemes.kCardBg,
+      builder: (c) => StatefulBuilder(builder: (c, update) {
+        final languages = _languages.where((name) => ('$name ${mayaLanguageNames[name]}').toLowerCase().contains(query.toLowerCase())).toList();
+        return SizedBox(height: MediaQuery.sizeOf(c).height * .8, child: Column(children: [
+          ListTile(title: Text(tr('language'), style: const TextStyle(fontWeight: FontWeight.w700, fontSize: 20)),
+            subtitle: Text('${_languages.length} languages · core controls translated'),
+            trailing: IconButton(icon: const Icon(Icons.close), onPressed: () => Navigator.pop(c))),
+          Padding(padding: const EdgeInsets.symmetric(horizontal: 16), child: TextField(
+            decoration: const InputDecoration(prefixIcon: Icon(Icons.search), hintText: 'Search language'),
+            onChanged: (value) => update(() => query = value))),
+          const Padding(padding: EdgeInsets.all(12), child: Text('Some detailed screens currently use English.', style: TextStyle(color: Colors.white38, fontSize: 11))),
+          Expanded(child: ListView.builder(itemCount: languages.length, itemBuilder: (_, i) {
+            final name = languages[i];
+            return ListTile(title: Text(mayaLanguageNames[name]!), subtitle: Text(name),
+              trailing: _language == name ? const Icon(Icons.check_circle, color: _mayaMint) : null,
+              onTap: () async {
+                setState(() => _language = name); languageNotifier.value = name;
+                final prefs = await SharedPreferences.getInstance(); await prefs.setString('language', name);
+                if (c.mounted) Navigator.pop(c);
+              });
+          })),
+        ]));
+      }));
   }
 
   void _showDownloadLocationDialog() {
@@ -8594,6 +8576,11 @@ class MayaPlaybackVariant {
 }
 
 Widget _mayaPlaybackEntry(String source) {
+  final local = Uri.tryParse(source);
+  if (local?.scheme == 'file') {
+    final file = File.fromUri(local!);
+    return MayaOfflineVideo(file: file, name: file.uri.pathSegments.last);
+  }
   final uri = Uri.tryParse(source);
   if (uri != null && _isSocialLink(source)) return MayaSocialMediaScreen(source: uri);
   return StreamPreviewScreen(targetUrl: source);
@@ -8689,6 +8676,8 @@ class _NativeVideoPlayerScreenState extends State<NativeVideoPlayerScreen> with 
   bool _isLiked = false;
   bool _isUnliked = false;
   bool _isSaved = false;
+  Map<String, dynamic> _community = {};
+  String get _communityKey => MayaCommunityApi.videoKey(widget.videoId, widget.sourcePageUrl);
   String _ownerUid = '';
 
   StreamSubscription? _statsSub;
@@ -8701,6 +8690,7 @@ class _NativeVideoPlayerScreenState extends State<NativeVideoPlayerScreen> with 
 
   List<Map<String, dynamic>> _relatedVideos = [];
   bool _relatedLoading = true;
+  int _relatedGeneration = 0;
 
   @override
   void initState() {
@@ -8713,6 +8703,7 @@ class _NativeVideoPlayerScreenState extends State<NativeVideoPlayerScreen> with 
         orElse: () => widget.variants.first).label;
     }
     _loadUserPrefs();
+    unawaited(_loadCommunity());
     _initVideo();
     if (!_social) {
       _startStatsListeners();
@@ -8740,12 +8731,14 @@ class _NativeVideoPlayerScreenState extends State<NativeVideoPlayerScreen> with 
   Future<void> _recordStarted() async {
     if (_recordedPlayback) return;
     _recordedPlayback = true;
+    if (_social) unawaited(MayaCommunityApi.request('/$_communityKey/view', method: 'POST').then((_) => _loadCommunity()).catchError((Object _) {}));
     await WatchHistory.recordPlayback({
       'url': widget.sourcePageUrl, 'id': widget.videoId,
       'title': widget.title, 'uploader': widget.uploader,
       'thumbnail': widget.thumbnailUrl, 'streamUrl': widget.videoUrl,
       'time': DateTime.now().toIso8601String(),
     });
+    unawaited(_loadRelatedVideos());
     if (widget.thumbnailUrl.startsWith('https://')) {
       try {
         final response = await http.get(Uri.parse(widget.thumbnailUrl))
@@ -8887,23 +8880,13 @@ class _NativeVideoPlayerScreenState extends State<NativeVideoPlayerScreen> with 
   }
 
   Future<void> _loadRelatedVideos() async {
+    final generation = ++_relatedGeneration;
     final prefs = await SharedPreferences.getInstance();
     final uid = FirebaseAuth.instance.currentUser?.uid ?? 'guest';
     final local = WatchHistory.localRecords(prefs, 'watch_history_v2_$uid')
-        .where((r) => r['id'] != widget.videoId).toList();
-    var related = <Map<String, dynamic>>[];
-    if (!_social) {
-      try {
-        related = await FirebaseService.getRelatedVideos(currentVideoId: widget.videoId,
-          currentOwnerUid: _ownerUid, recentIds: const [], limit: 10);
-      } catch (_) {}
-    }
-    if (!mounted) return;
-    final seen = <String>{};
-    setState(() {
-      _relatedVideos = [...local, ...related].where((r) => seen.add(WatchHistory.recordKey(r))).take(12).toList();
-      _relatedLoading = false;
-    });
+        .where((r) => r['id'] != widget.videoId).take(20).toList();
+    if (!mounted || generation != _relatedGeneration) return;
+    setState(() { _relatedVideos = local; _relatedLoading = false; });
   }
 
   Future<void> _loadUserPrefs() async {
@@ -8912,7 +8895,7 @@ class _NativeVideoPlayerScreenState extends State<NativeVideoPlayerScreen> with 
       if (uid != null) {
         final prefs = await SharedPreferences.getInstance();
         setState(() {
-          _isSaved = prefs.getBool('saved_${uid}_${widget.videoId}') ?? false;
+          _isSaved = WatchHistory.localRecords(prefs, 'saved_videos_v1_$uid').any((item) => WatchHistory.recordKey(item) == WatchHistory.recordKey({'id': widget.videoId, 'url': widget.sourcePageUrl}));
           _isLiked = prefs.getBool('liked_${uid}_${widget.videoId}') ?? false;
           _isUnliked = prefs.getBool('unliked_${uid}_${widget.videoId}') ?? false;
         });
@@ -9356,7 +9339,34 @@ class _NativeVideoPlayerScreenState extends State<NativeVideoPlayerScreen> with 
     return '$h$m:$s';
   }
 
+  Future<void> _loadCommunity() async {
+    try {
+      final data = await MayaCommunityApi.request('/$_communityKey');
+      if (mounted) setState(() => _community = data);
+    } catch (_) {}
+  }
+  Future<void> _socialReact(int value) async {
+    try {
+      await MayaCommunityApi.request('/$_communityKey/reaction', method: 'POST',
+        body: {'value': _community['reaction'] == value ? 0 : value});
+      await _loadCommunity();
+    } catch (e) { if (mounted) _showFeedback(e is HttpException ? e.message : 'Could not save reaction.'); }
+  }
+  String _compactCount(Object? input) {
+    final count = input is num ? input.toInt() : int.tryParse('$input') ?? 0;
+    if (count >= 1000000) return '${(count / 1000000).toStringAsFixed(1)}M';
+    if (count >= 1000) return '${(count / 1000).toStringAsFixed(1)}K';
+    return '$count';
+  }
+  Widget _playerAction(IconData icon, String label, VoidCallback action, {bool active = false}) => Expanded(
+    child: TextButton(onPressed: action, style: TextButton.styleFrom(foregroundColor: active ? _mayaMint : Colors.white70,
+      minimumSize: const Size(0, 44), padding: const EdgeInsets.symmetric(horizontal: 2)),
+      child: FittedBox(fit: BoxFit.scaleDown, child: Row(mainAxisSize: MainAxisSize.min, children: [
+        Icon(icon, size: 19), const SizedBox(width: 5), Text(label, style: const TextStyle(fontFamily: 'Roboto', fontSize: 12, fontWeight: FontWeight.w600)),
+      ]))));
+
   Future<void> _handleLike() async {
+    if (_social) { await _socialReact(1); return; }
     SoundService.playClick();
     Haptic.medium();
     final uid = MayaJaalAccount.cachedUid;
@@ -9370,6 +9380,7 @@ class _NativeVideoPlayerScreenState extends State<NativeVideoPlayerScreen> with 
   }
 
   Future<void> _handleDislike() async {
+    if (_social) { await _socialReact(-1); return; }
     SoundService.playClick();
     Haptic.medium();
     final uid = MayaJaalAccount.cachedUid;
@@ -9492,15 +9503,17 @@ class _NativeVideoPlayerScreenState extends State<NativeVideoPlayerScreen> with 
       'streamUrl': widget.videoUrl,
       'size': _videoSize,
       'age': _videoAge,
+      'savedAt': DateTime.now().millisecondsSinceEpoch,
     };
 
     if (_isSaved) {
-      savedList.add(item);
+      savedList.removeWhere((saved) => WatchHistory.recordKey(saved) == WatchHistory.recordKey(item));
+      savedList.insert(0, item);
       await prefs.setString(key, jsonEncode(savedList));
       prefs.setBool('saved_${uid}_${widget.videoId}', true);
       await WatchHistory.syncSavedRecordCloud(item, true);
     } else {
-      savedList.removeWhere((s) => s['url'] == widget.sourcePageUrl);
+      savedList.removeWhere((saved) => WatchHistory.recordKey(saved) == WatchHistory.recordKey(item));
       await prefs.setString(key, jsonEncode(savedList));
       prefs.setBool('saved_${uid}_${widget.videoId}', false);
       await WatchHistory.syncSavedRecordCloud(item, false);
@@ -9693,19 +9706,35 @@ class _NativeVideoPlayerScreenState extends State<NativeVideoPlayerScreen> with 
         SizedBox(height: MediaQuery.of(context).size.height * .32, width: double.infinity, child: _buildUnifiedPlayback()),
         Expanded(child: ListView(padding: const EdgeInsets.all(16), children: [
           Text(widget.title, style: const TextStyle(fontFamily: 'Roboto', fontWeight: FontWeight.w700, fontSize: 18)),
-          const SizedBox(height: 8), Text(widget.uploader, style: const TextStyle(color: AppThemes.kDimGreen)),
-          if (_videoSize.isNotEmpty || _videoAge.isNotEmpty) Text('$_videoSize  $_videoAge'),
-          const SizedBox(height: 12),
-          Wrap(spacing: 8, runSpacing: 8, children: [
-            if (!_social) ...[
-              OutlinedButton.icon(onPressed: _handleLike, icon: Icon(_isLiked ? Icons.thumb_up : Icons.thumb_up_outlined), label: Text('${_stats['likes'] ?? 0}')),
-              OutlinedButton.icon(onPressed: _handleDislike, icon: const Icon(Icons.thumb_down_outlined), label: Text('${_stats['unlikes'] ?? 0}')),
-            ],
-            OutlinedButton.icon(onPressed: _toggleSave, icon: Icon(_isSaved ? Icons.bookmark : Icons.bookmark_outline), label: const Text('Save')),
-            OutlinedButton.icon(onPressed: _startInAppDownload, icon: const Icon(Icons.download_outlined), label: const Text('Download')),
+          const SizedBox(height: 10),
+          Row(children: [Expanded(child: Text(widget.uploader, maxLines: 1, overflow: TextOverflow.ellipsis,
+            style: const TextStyle(fontFamily: 'Roboto', color: AppThemes.kDimGreen, fontSize: 13))),
+            const SizedBox(width: 10), const Icon(Icons.visibility_outlined, size: 15, color: Colors.white54),
+            const SizedBox(width: 5), Text(_compactCount(_social ? _community['views'] : _stats['views']),
+              style: const TextStyle(fontFamily: 'Roboto', color: Colors.white70, fontSize: 12)),
+            const SizedBox(width: 4), Text(_social ? 'app views' : tr('views'), style: const TextStyle(fontFamily: 'Roboto', color: Colors.white38, fontSize: 11)),
           ]),
+          if (_videoSize.isNotEmpty || _videoAge.isNotEmpty) Padding(padding: const EdgeInsets.only(top: 6),
+            child: Text('$_videoSize  $_videoAge', style: const TextStyle(fontFamily: 'Roboto', color: Colors.white38, fontSize: 12))),
+          const SizedBox(height: 12),
+          DecoratedBox(decoration: BoxDecoration(color: Colors.white.withOpacity(.035), borderRadius: BorderRadius.circular(14),
+            border: Border.all(color: _mayaMint.withOpacity(.2))), child: Row(children: [
+            _playerAction((_social ? _community['reaction'] == 1 : _isLiked) ? Icons.thumb_up : Icons.thumb_up_outlined,
+              _compactCount(_social ? _community['likes'] : _stats['likes']), _handleLike, active: _social ? _community['reaction'] == 1 : _isLiked),
+            _playerAction((_social ? _community['reaction'] == -1 : _isUnliked) ? Icons.thumb_down : Icons.thumb_down_outlined,
+              _compactCount(_social ? _community['dislikes'] : _stats['unlikes']), _handleDislike, active: _social ? _community['reaction'] == -1 : _isUnliked),
+            _playerAction(_isSaved ? Icons.bookmark : Icons.bookmark_outline, tr('save'), _toggleSave, active: _isSaved),
+            _playerAction(Icons.download_outlined, tr('download'), _startInAppDownload),
+          ])),
+          const SizedBox(height: 10),
+          InkWell(borderRadius: BorderRadius.circular(14), onTap: () => showMayaComments(context, _communityKey),
+            child: Container(padding: const EdgeInsets.all(14), decoration: BoxDecoration(color: AppThemes.kCardBg,
+              borderRadius: BorderRadius.circular(14), border: Border.all(color: AppThemes.kBorder)),
+              child: Row(children: [const Icon(Icons.chat_bubble_outline_rounded, color: _mayaMint, size: 20),
+                const SizedBox(width: 10), Expanded(child: Text(tr('comments'), style: const TextStyle(fontFamily: 'Roboto', fontWeight: FontWeight.w600))),
+                const Icon(Icons.keyboard_arrow_up_rounded, color: Colors.white54)]))),
           const SizedBox(height: 20),
-          const Text('Recent & related', style: TextStyle(fontFamily: 'Roboto', fontSize: 16, fontWeight: FontWeight.w600)),
+          Text(tr('watch_history'), style: TextStyle(fontFamily: 'Roboto', fontSize: 16, fontWeight: FontWeight.w600)),
           for (final item in _relatedVideos) ListTile(
             key: ValueKey(WatchHistory.recordKey(item)),
             contentPadding: EdgeInsets.zero,
@@ -10674,7 +10703,7 @@ class _MayaDownloadsScreenState extends State<MayaDownloadsScreen> {
       child: Scaffold(
         backgroundColor: AppThemes.kBg,
         appBar: AppBar(
-          title: const MayaSectionTitle('Downloads', Icons.download_rounded),
+          title: MayaSectionTitle(tr('downloads'), Icons.download_rounded),
           bottom: const TabBar(tabs: [Tab(text: 'Downloading'), Tab(text: 'Completed')]),
         ),
         body: ValueListenableBuilder<List<MayaDownload>>(
@@ -10817,7 +10846,14 @@ class _MayaOfflineVideoState extends State<MayaOfflineVideo> {
   void initState() {
     super.initState();
     controller = VideoPlayerController.file(widget.file);
-    ready = controller.initialize();
+    ready = controller.initialize().then((_) async {
+      await controller.play();
+      await WatchHistory.recordPlayback({
+        'id': 'offline_${crypto.sha256.convert(utf8.encode(widget.file.path))}',
+        'url': widget.file.uri.toString(), 'streamUrl': widget.file.path,
+        'title': widget.name, 'uploader': 'On this device', 'time': DateTime.now().toIso8601String(),
+      });
+    });
   }
 
   @override
@@ -10993,14 +11029,10 @@ class _MayaSocialMediaScreenState extends State<MayaSocialMediaScreen> {
         )));
       } else if (media.stream != null) {
         // Social playback goes directly to the player. No monetized countdown route.
-        final canonical = widget.source.replace(queryParameters: {
-          for (final e in widget.source.queryParameters.entries)
-            if (!const ['si', 'evlk', 'igsh', 'utm_source', 'utm_medium'].contains(e.key)) e.key: e.value,
-        }, fragment: '').toString();
         await Navigator.of(context).push(MaterialPageRoute(builder: (_) => NativeVideoPlayerScreen(
           videoUrl: media.stream.toString(), title: media.title, uploader: media.uploader,
           sourcePageUrl: widget.source.toString(), thumbnailUrl: media.thumbnail,
-          videoId: crypto.sha256.convert(utf8.encode(canonical)).toString(), variants: media.variants,
+          videoId: MayaCommunityApi.videoKey('', widget.source.toString()).replaceFirst('external_', ''), variants: media.variants,
         )));
       } else {
         await launchUrl(widget.source, mode: LaunchMode.externalApplication);
@@ -11115,10 +11147,10 @@ class _MayaSocialMediaScreenState extends State<MayaSocialMediaScreen> {
           Row(children: [
             Expanded(child: FilledButton.icon(onPressed: _opening ? null : () => _play(media),
               icon: Icon(media.kind == 'video' ? Icons.play_arrow_rounded : Icons.image_outlined),
-              label: Padding(padding: const EdgeInsets.symmetric(vertical: 14), child: Text(_opening ? 'Opening…' : media.kind == 'video' ? 'Play' : 'View')))),
+              label: Padding(padding: const EdgeInsets.symmetric(vertical: 14), child: Text(_opening ? 'Opening…' : media.kind == 'video' ? tr('play') : 'View')))),
             const SizedBox(width: 12),
             Expanded(child: OutlinedButton.icon(onPressed: _preparing ? null : () => _chooseDownload(media),
-              icon: const Icon(Icons.download_rounded), label: const Padding(padding: EdgeInsets.symmetric(vertical: 14), child: Text('Download')))),
+              icon: const Icon(Icons.download_rounded), label: Padding(padding: const EdgeInsets.symmetric(vertical: 14), child: Text(tr('download'))))),
           ]),
           if (_preparing) ...[
             const SizedBox(height: 18), const LinearProgressIndicator(), const SizedBox(height: 10), Text(_downloadMessage),
@@ -11343,3 +11375,358 @@ class _MayaChannelUploadDialogState extends State<_MayaChannelUploadDialog> {
     },
   );
 }
+
+class MayaCommunityApi {
+  static Uri uri(String path, [Map<String, String>? query]) {
+    final resolver = Uri.tryParse(MayaResolvedMedia.endpoint);
+    final root = resolver != null && resolver.hasAuthority && resolver.path.contains('/')
+        ? Uri(scheme: resolver.scheme, host: resolver.host, port: resolver.hasPort ? resolver.port : null,
+            path: resolver.path.substring(0, resolver.path.lastIndexOf('/'))).toString()
+        : '$kBackendBaseUrl/social';
+    return Uri.parse('$root/community$path').replace(queryParameters: query);
+  }
+  static String videoKey(String id, String source) {
+    if (!_isSocialLink(source) && RegExp(r'^[A-Za-z0-9_-]{1,128}$').hasMatch(id) &&
+        ((Uri.tryParse(source)?.host == 'mayajaal.online') || (Uri.tryParse(source)?.host.endsWith('.mayajaal.online') ?? false))) return 'maya_$id';
+    final uri = Uri.tryParse(source);
+    String canonical = source;
+    if (uri != null) {
+      if (uri.host.contains('instagram.com')) {
+        canonical = 'https://www.instagram.com${uri.path.replaceAll(RegExp(r'/+$'), '')}/';
+      } else if (uri.host == 'youtu.be' || uri.host.endsWith('youtube.com')) {
+        final ytId = uri.host == 'youtu.be' ? (uri.pathSegments.isEmpty ? null : uri.pathSegments.first) : uri.queryParameters['v'];
+        canonical = ytId == null ? uri.replace(query: '', fragment: '').toString() : 'https://www.youtube.com/watch?v=$ytId';
+      } else { canonical = uri.replace(fragment: '').toString(); }
+    }
+    return 'external_${crypto.sha256.convert(utf8.encode(canonical))}';
+  }
+  static Future<Map<String, dynamic>> request(String path, {String method = 'GET',
+      Map<String, dynamic>? body, Map<String, String>? query}) async {
+    final user = FirebaseAuth.instance.currentUser;
+    if (user == null) throw const HttpException('Sign in to use comments.');
+    Future<http.Response> send(bool force) async {
+      final token = await user.getIdToken(force);
+      final req = http.Request(method, uri(path, query));
+      req.headers.addAll({'Authorization': 'Bearer $token', 'Content-Type': 'application/json'});
+      if (body != null) req.body = jsonEncode(body);
+      final client = http.Client();
+      try {
+        return await http.Response.fromStream(await client.send(req).timeout(const Duration(seconds: 20))).timeout(const Duration(seconds: 20));
+      } finally { client.close(); }
+    }
+    var response = await send(false);
+    if (response.statusCode == 401) response = await send(true);
+    if (response.statusCode != 200) {
+      String message = response.statusCode == 404 ? 'Comments service is not installed yet.' : 'Could not update comments. Please retry.';
+      try { final data = jsonDecode(response.body); if (data is Map && data['detail'] is String && !(response.statusCode == 404 && data['detail'] == 'Not Found')) message = data['detail']; } catch (_) {}
+      throw HttpException(message);
+    }
+    return Map<String, dynamic>.from(jsonDecode(response.body) as Map);
+  }
+}
+
+Future<void> showMayaComments(BuildContext context, String videoKey) => showModalBottomSheet<void>(
+  context: context, isScrollControlled: true, useSafeArea: true, backgroundColor: AppThemes.kCardBg,
+  shape: const RoundedRectangleBorder(borderRadius: BorderRadius.vertical(top: Radius.circular(24))),
+  builder: (_) => MayaCommentsSheet(videoKey: videoKey),
+);
+
+class MayaCommentsSheet extends StatefulWidget {
+  const MayaCommentsSheet({super.key, required this.videoKey});
+  final String videoKey;
+  @override
+  State<MayaCommentsSheet> createState() => _MayaCommentsSheetState();
+}
+class _MayaCommentsSheetState extends State<MayaCommentsSheet> {
+  final _text = TextEditingController();
+  final _focus = FocusNode();
+  final _busyReactions = <String>{};
+  List<Map<String, dynamic>> _comments = [];
+  Map<String, dynamic>? _reply;
+  Timer? _poll;
+  String _error = '';
+  bool _loading = true, _sending = false, _canModerate = false, _moreLoading = false, _pagesExpanded = false, _fetching = false;
+  int? _before;
+  int _generation = 0;
+  @override
+  void initState() {
+    super.initState();
+    unawaited(_load());
+    _poll = Timer.periodic(const Duration(seconds: 8), (_) {
+      if (mounted && (ModalRoute.of(context)?.isCurrent ?? true) && !_moreLoading && !_pagesExpanded && !_fetching) unawaited(_load());
+    });
+  }
+  Future<void> _load({bool more = false}) async {
+    if (more && (_before == null || _moreLoading)) return;
+    _pagesExpanded = more;
+    _fetching = true;
+    final generation = ++_generation;
+    if (more && mounted) setState(() => _moreLoading = true);
+    try {
+      final data = await MayaCommunityApi.request('/${widget.videoKey}',
+        query: more ? {'before': '$_before'} : null);
+      if (!mounted || generation != _generation) return;
+      final rows = (data['comments'] as List? ?? []).whereType<Map>().map((e) => Map<String, dynamic>.from(e)).toList();
+      setState(() {
+        if (more) {
+          final seen = _comments.map((e) => e['id']).toSet();
+          _comments = [..._comments, ...rows.where((e) => seen.add(e['id']))];
+        } else { _comments = rows; }
+        _before = (data['next_before'] as num?)?.toInt();
+        _canModerate = data['can_moderate'] == true;
+        _error = ''; _loading = false; _moreLoading = false;
+      });
+    } catch (e) {
+      if (mounted && generation == _generation) setState(() {
+        _error = e is HttpException ? e.message : 'Could not load comments. Please retry.';
+        _loading = false; _moreLoading = false;
+      });
+    } finally { if (generation == _generation) _fetching = false; }
+  }
+  Future<void> _send() async {
+    if (_sending || _text.text.trim().isEmpty) return;
+    setState(() => _sending = true);
+    try {
+      await MayaCommunityApi.request('/${widget.videoKey}/comments', method: 'POST',
+        body: {'text': _text.text.trim(), 'parent_id': _reply?['id']});
+      if (!mounted) return;
+      _text.clear(); setState(() => _reply = null);
+      await _load();
+    } catch (e) { _notice(e); }
+    finally { if (mounted) setState(() => _sending = false); }
+  }
+  void _notice(Object error) {
+    if (!mounted) return;
+    ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(error is HttpException ? error.message : 'Please retry.')));
+  }
+  Future<void> _react(Map<String, dynamic> item, int value) async {
+    final id = '${item['id']}';
+    if (!_busyReactions.add(id)) return;
+    try {
+      await MayaCommunityApi.request('/${widget.videoKey}/comments/$id/reaction', method: 'POST',
+        body: {'value': item['reaction'] == value ? 0 : value});
+      await _load();
+    } catch (e) { _notice(e); } finally { _busyReactions.remove(id); }
+  }
+  Future<void> _pin(Map<String, dynamic> item) async {
+    if (!_canModerate) return;
+    Haptic.medium();
+    final confirmed = await showModalBottomSheet<bool>(context: context, builder: (c) => SafeArea(
+      child: ListTile(leading: const Icon(Icons.push_pin_outlined),
+        title: Text(item['pinned'] == true ? 'Unpin comment' : 'Pin comment'),
+        subtitle: const Text('Pinned comments appear at the top'), onTap: () => Navigator.pop(c, true))));
+    if (confirmed != true || !mounted) return;
+    try {
+      await MayaCommunityApi.request('/${widget.videoKey}/pin', method: 'POST',
+        body: {'comment_id': item['pinned'] == true ? null : item['id']});
+      await _load();
+    } catch (e) { _notice(e); }
+  }
+  Widget _tile(Map<String, dynamic> item, {bool reply = false}) => MayaCommentTile(
+    key: ValueKey(item['id']), item: item, reply: reply, canModerate: _canModerate,
+    onPin: () => _pin(item), onReact: (value) => _react(item, value),
+    onReply: () { setState(() => _reply = item); _focus.requestFocus(); },
+  );
+  @override
+  void dispose() { _generation++; _poll?.cancel(); _text.dispose(); _focus.dispose(); super.dispose(); }
+  @override
+  Widget build(BuildContext context) => Padding(padding: EdgeInsets.only(bottom: MediaQuery.viewInsetsOf(context).bottom),
+    child: DraggableScrollableSheet(expand: false, initialChildSize: .78, minChildSize: .4, maxChildSize: .95,
+      builder: (context, scroll) => Column(children: [
+        Container(width: 36, height: 4, margin: const EdgeInsets.only(top: 12), decoration: BoxDecoration(color: Colors.white24, borderRadius: BorderRadius.circular(4))),
+        ListTile(title: Text(tr('comments'), style: const TextStyle(fontFamily: 'Roboto', fontSize: 20, fontWeight: FontWeight.w700)),
+          subtitle: _canModerate ? const Text('Hold a comment for 2 seconds to pin or unpin', style: TextStyle(fontFamily: 'Roboto', fontSize: 11)) : null,
+          trailing: IconButton(tooltip: 'Close', icon: const Icon(Icons.close), onPressed: () => Navigator.pop(context))),
+        const Divider(height: 1),
+        Expanded(child: _loading ? const Center(child: CircularProgressIndicator()) : RefreshIndicator(
+          onRefresh: _load, child: ListView(controller: scroll, physics: const AlwaysScrollableScrollPhysics(), padding: const EdgeInsets.all(16), children: [
+            if (_error.isNotEmpty) Padding(padding: const EdgeInsets.all(12), child: Column(children: [Text(_error), TextButton(onPressed: _load, child: const Text('Retry'))])),
+            if (_comments.isEmpty && _error.isEmpty) const Padding(padding: EdgeInsets.all(24), child: Text('No comments yet. Start the conversation.', textAlign: TextAlign.center)),
+            for (final item in _comments) ...[
+              _tile(item),
+              for (final reply in (item['replies'] as List? ?? []).whereType<Map>()) Padding(
+                padding: const EdgeInsets.only(left: 30), child: _tile(Map<String, dynamic>.from(reply), reply: true)),
+            ],
+            if (_before != null) TextButton(onPressed: _moreLoading ? null : () => _load(more: true), child: Text(_moreLoading ? 'Loading…' : 'Load older comments')),
+          ]))),
+        if (_reply != null) ListTile(dense: true, title: Text('Replying to ${_reply!['name']}'), trailing: IconButton(icon: const Icon(Icons.close), onPressed: () => setState(() => _reply = null))),
+        Padding(padding: const EdgeInsets.fromLTRB(16, 8, 8, 12), child: Row(crossAxisAlignment: CrossAxisAlignment.end, children: [
+          Expanded(child: TextField(controller: _text, focusNode: _focus, maxLength: 1500, minLines: 1, maxLines: 4,
+            textCapitalization: TextCapitalization.sentences,
+            decoration: InputDecoration(hintText: tr('add_comment'), counterText: '', filled: true, fillColor: Colors.black26,
+              border: OutlineInputBorder(borderRadius: BorderRadius.circular(18), borderSide: BorderSide.none)))),
+          IconButton(tooltip: 'Send comment', color: _mayaMint, onPressed: _sending ? null : _send,
+            icon: _sending ? const SizedBox(width: 20, height: 20, child: CircularProgressIndicator(strokeWidth: 2)) : const Icon(Icons.send_rounded)),
+        ])),
+      ])));
+}
+
+class MayaCommentTile extends StatefulWidget {
+  const MayaCommentTile({super.key, required this.item, required this.canModerate, required this.onPin,
+    required this.onReact, required this.onReply, this.reply = false});
+  final Map<String, dynamic> item;
+  final bool canModerate, reply;
+  final VoidCallback onPin, onReply;
+  final ValueChanged<int> onReact;
+  @override
+  State<MayaCommentTile> createState() => _MayaCommentTileState();
+}
+class _MayaCommentTileState extends State<MayaCommentTile> {
+  Timer? _hold;
+  Offset? _down;
+  void _cancel() { _hold?.cancel(); _down = null; }
+  @override
+  void dispose() { _cancel(); super.dispose(); }
+  @override
+  Widget build(BuildContext context) {
+    final item = widget.item;
+    return Listener(
+      onPointerDown: widget.canModerate ? (event) { _cancel(); _down = event.position;
+        _hold = Timer(const Duration(seconds: 2), () { if (mounted) widget.onPin(); }); } : null,
+      onPointerMove: (event) { if (_down != null && (event.position - _down!).distance > 10) _cancel(); },
+      onPointerUp: (_) => _cancel(), onPointerCancel: (_) => _cancel(),
+      child: Padding(padding: const EdgeInsets.only(bottom: 14), child: Row(crossAxisAlignment: CrossAxisAlignment.start, children: [
+        CircleAvatar(radius: widget.reply ? 13 : 17, backgroundColor: _mayaMint.withOpacity(.15),
+          child: Text(('${item['name'] ?? ''}'.trim().isEmpty ? 'U' : '${item['name']}'.characters.first), style: const TextStyle(fontFamily: 'Roboto', color: _mayaMint))),
+        const SizedBox(width: 10),
+        Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+          if (item['pinned'] == true) const Padding(padding: EdgeInsets.only(bottom: 4), child: Row(children: [
+            Icon(Icons.push_pin, size: 12, color: _mayaMint), SizedBox(width: 4), Text('Pinned by creator', style: TextStyle(fontFamily: 'Roboto', fontSize: 11, color: _mayaMint))])),
+          Text('${item['name'] ?? 'MayaJaal user'}', style: const TextStyle(fontFamily: 'Roboto', fontWeight: FontWeight.w600, fontSize: 12, color: Colors.white70)),
+          const SizedBox(height: 4), Text('${item['text'] ?? ''}', style: const TextStyle(fontFamily: 'Roboto', fontSize: 14, height: 1.4)),
+          Wrap(crossAxisAlignment: WrapCrossAlignment.center, spacing: 4, children: [
+            TextButton.icon(onPressed: () => widget.onReact(1), style: TextButton.styleFrom(foregroundColor: item['reaction'] == 1 ? _mayaMint : Colors.white60),
+              icon: const Icon(Icons.thumb_up_outlined, size: 16), label: Text('${item['likes'] ?? 0}')),
+            TextButton.icon(onPressed: () => widget.onReact(-1), style: TextButton.styleFrom(foregroundColor: item['reaction'] == -1 ? _mayaMint : Colors.white60),
+              icon: const Icon(Icons.thumb_down_outlined, size: 16), label: Text('${item['dislikes'] ?? 0}')),
+            TextButton(onPressed: widget.onReply, child: Text(tr('reply'))),
+          ]),
+        ])),
+      ])));
+  }
+}
+
+class MayaCommentSettings extends StatefulWidget {
+  const MayaCommentSettings({super.key});
+  @override
+  State<MayaCommentSettings> createState() => _MayaCommentSettingsState();
+}
+class _MayaCommentSettingsState extends State<MayaCommentSettings> {
+  final _words = TextEditingController();
+  bool _profanity = true, _loading = true, _saving = false;
+  String _error = '';
+  @override
+  void initState() { super.initState(); unawaited(_load()); }
+  Future<void> _load() async {
+    try {
+      final data = await MayaCommunityApi.request('/settings');
+      if (!mounted) return;
+      setState(() { _words.text = (data['words'] as List? ?? []).join('\n'); _profanity = data['profanity'] != false; _loading = false; _error = ''; });
+    } catch (e) { if (mounted) setState(() { _loading = false; _error = e is HttpException ? e.message : 'Could not load settings.'; }); }
+  }
+  Future<void> _save() async {
+    setState(() => _saving = true);
+    try {
+      final words = _words.text.split(RegExp(r'[,\n]')).map((s) => s.trim()).where((s) => s.isNotEmpty).toList();
+      await MayaCommunityApi.request('/settings', method: 'PUT', body: {'words': words, 'profanity': _profanity});
+      if (mounted) { ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Comment settings saved'))); Navigator.pop(context); }
+    } catch (e) { if (mounted) setState(() => _error = e is HttpException ? e.message : 'Could not save settings.'); }
+    finally { if (mounted) setState(() => _saving = false); }
+  }
+  @override
+  void dispose() { _words.dispose(); super.dispose(); }
+  @override
+  Widget build(BuildContext context) => Scaffold(appBar: AppBar(title: Text(tr('comment_settings'))),
+    body: _loading ? const Center(child: CircularProgressIndicator()) : ListView(padding: const EdgeInsets.all(20), children: [
+      const Text('Control comments on videos you own', style: TextStyle(fontFamily: 'Roboto', fontWeight: FontWeight.w700, fontSize: 20)),
+      const SizedBox(height: 8),
+      const Text('Your blocked words apply to all your MayaJaal videos and replies. Matching comments are hidden, and new matches cannot be posted.'),
+      SwitchListTile(contentPadding: EdgeInsets.zero, value: _profanity, onChanged: (v) => setState(() => _profanity = v),
+        title: const Text('Block common abusive words'), subtitle: const Text('Basic Hindi and English word filter')),
+      const SizedBox(height: 12),
+      TextField(controller: _words, maxLines: 8, decoration: const InputDecoration(labelText: 'Blocked words or phrases',
+        helperText: 'One per line or separated by commas · up to 100', border: OutlineInputBorder())),
+      if (_error.isNotEmpty) Padding(padding: const EdgeInsets.symmetric(vertical: 12), child: Text(_error, style: const TextStyle(color: AppThemes.kRed))),
+      const SizedBox(height: 20), FilledButton(onPressed: _saving || _error.contains('not installed') ? null : _save,
+        child: Text(_saving ? 'Saving…' : tr('save_changes'))),
+      if (_error.isNotEmpty) TextButton(onPressed: _load, child: const Text('Retry')),
+    ]));
+}
+
+class MayaFavoritesStrip extends StatefulWidget {
+  const MayaFavoritesStrip({super.key});
+  @override
+  State<MayaFavoritesStrip> createState() => _MayaFavoritesStripState();
+}
+class _MayaFavoritesStripState extends State<MayaFavoritesStrip> {
+  List<Map<String, dynamic>> _saved = [];
+  int _index = 0;
+  Timer? _rotate;
+  String get _uid => FirebaseAuth.instance.currentUser?.uid ?? 'guest';
+  @override
+  void initState() {
+    super.initState();
+    WatchHistory.savedChanges.addListener(_changed);
+    unawaited(_load(cloud: true));
+    _rotate = Timer.periodic(const Duration(seconds: 5), (_) {
+      if (mounted && _saved.length > 1 && TickerMode.of(context) && (ModalRoute.of(context)?.isCurrent ?? true)) {
+        setState(() => _index = (_index + 1) % _saved.length);
+      }
+    });
+  }
+  void _changed() { unawaited(_load()); }
+  Future<void> _load({bool cloud = false}) async {
+    final uid = _uid;
+    final prefs = await SharedPreferences.getInstance();
+    var saved = WatchHistory.localRecords(prefs, 'saved_videos_v1_$uid');
+    if (mounted && uid == _uid) setState(() { _saved = saved; _index = _saved.isEmpty ? 0 : _index % _saved.length; });
+    if (cloud && uid != 'guest') {
+      try {
+        final snapshot = await FirebaseDatabase.instance.ref('users/$uid/savedVideos').get().timeout(const Duration(seconds: 8));
+        final items = snapshot.children.map((c) => c.value).whereType<Map>().map((e) => Map<String, dynamic>.from(e)).toList();
+        final map = <String, Map<String, dynamic>>{};
+        for (final item in [...saved, ...items]) { map[WatchHistory.recordKey(item)] = item; }
+        saved = map.values.toList()..sort((a,b) => ((b['savedAt'] as num?)?.toInt() ?? WatchHistory.recordedAt(b)).compareTo((a['savedAt'] as num?)?.toInt() ?? WatchHistory.recordedAt(a)));
+        if (mounted && uid == _uid) {
+          await prefs.setString('saved_videos_v1_$uid', jsonEncode(saved));
+          if (mounted) setState(() { _saved = saved; _index = _saved.isEmpty ? 0 : _index % _saved.length; });
+        }
+      } catch (_) {}
+    }
+  }
+  @override
+  void dispose() { WatchHistory.savedChanges.removeListener(_changed); _rotate?.cancel(); super.dispose(); }
+  @override
+  Widget build(BuildContext context) {
+    final item = _saved.isEmpty ? null : _saved[_index % _saved.length];
+    return Padding(padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8), child: InkWell(
+      borderRadius: BorderRadius.circular(16), onTap: () => Navigator.of(context).push(
+        MaterialPageRoute(builder: (_) => const SavedVideosScreen())).then((_) => _load()),
+      child: Container(padding: const EdgeInsets.all(12), decoration: BoxDecoration(color: AppThemes.kCardBg,
+        borderRadius: BorderRadius.circular(16), border: Border.all(color: _mayaMint.withOpacity(.3))),
+        child: Row(children: [
+          ClipRRect(borderRadius: BorderRadius.circular(10), child: SizedBox(width: 104, height: 64,
+            child: item == null ? const ColoredBox(color: Colors.black26, child: Icon(Icons.bookmark_outline_rounded, color: _mayaMint, size: 28))
+              : KeyedSubtree(key: ValueKey(WatchHistory.recordKey(item)), child: buildMediaThumbnail(
+                  _storedVideoThumbnail(item), '${item['title'] ?? 'Saved video'}', '${item['streamUrl'] ?? ''}', loopPreview: true)))),
+          const SizedBox(width: 14), Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+            Row(children: [const Icon(Icons.bookmark_rounded, size: 15, color: _mayaMint), const SizedBox(width: 5),
+              Text(tr('favorites'), style: const TextStyle(fontFamily: 'Roboto', fontWeight: FontWeight.w700, fontSize: 15)),
+              const Spacer(), Text('${_saved.length}', style: const TextStyle(color: _mayaMint, fontFamily: 'Roboto', fontWeight: FontWeight.w700))]),
+            const SizedBox(height: 6), Text(item == null ? 'Save a video to keep it here' : '${item['title'] ?? 'Saved video'}',
+              maxLines: 2, overflow: TextOverflow.ellipsis, style: const TextStyle(fontFamily: 'Roboto', fontSize: 12, color: Colors.white60)),
+          ])), const SizedBox(width: 6), const Icon(Icons.chevron_right, color: Colors.white38),
+        ])),
+    ));
+  }
+}
+
+final Map<String, Map<String, String>> mayaCoreLocales = {"English": {"settings": "Settings", "dark_theme": "Theme", "language": "Language", "downloads": "Downloads", "watch_history": "Recent videos", "favorites": "Favorites", "play": "Play", "save": "Save", "download": "Download", "comments": "Comments", "reply": "Reply", "add_comment": "Add a comment…", "comment_settings": "Comment controls", "save_changes": "Save changes", "views": "views"}, "Hindi": {"settings": "सेटिंग्स", "dark_theme": "थीम", "language": "भाषा", "downloads": "डाउनलोड", "watch_history": "हाल के वीडियो", "favorites": "पसंदीदा", "play": "चलाएँ", "save": "सहेजें", "download": "डाउनलोड", "comments": "टिप्पणियाँ", "reply": "जवाब दें", "add_comment": "टिप्पणी लिखें…", "comment_settings": "टिप्पणी नियंत्रण", "save_changes": "बदलाव सहेजें", "views": "व्यूज़"}, "Bengali": {"settings": "সেটিংস", "dark_theme": "থিম", "language": "ভাষা", "downloads": "ডাউনলোড", "watch_history": "সাম্প্রতিক ভিডিও", "favorites": "পছন্দের", "play": "চালান", "save": "সংরক্ষণ", "download": "ডাউনলোড", "comments": "মন্তব্য", "reply": "উত্তর", "add_comment": "মন্তব্য লিখুন…", "comment_settings": "মন্তব্য নিয়ন্ত্রণ", "save_changes": "পরিবর্তন সংরক্ষণ", "views": "বার দেখা"}, "Tamil": {"settings": "அமைப்புகள்", "dark_theme": "தீம்", "language": "மொழி", "downloads": "பதிவிறக்கங்கள்", "watch_history": "சமீபத்திய காணொளிகள்", "favorites": "பிடித்தவை", "play": "இயக்கு", "save": "சேமி", "download": "பதிவிறக்கு", "comments": "கருத்துகள்", "reply": "பதில்", "add_comment": "கருத்தைச் சேர்க்கவும்…", "comment_settings": "கருத்துக் கட்டுப்பாடுகள்", "save_changes": "மாற்றங்களைச் சேமி", "views": "பார்வைகள்"}, "Telugu": {"settings": "సెట్టింగ్‌లు", "dark_theme": "థీమ్", "language": "భాష", "downloads": "డౌన్‌లోడ్‌లు", "watch_history": "ఇటీవలి వీడియోలు", "favorites": "ఇష్టమైనవి", "play": "ప్లే", "save": "సేవ్", "download": "డౌన్‌లోడ్", "comments": "వ్యాఖ్యలు", "reply": "ప్రత్యుత్తరం", "add_comment": "వ్యాఖ్య రాయండి…", "comment_settings": "వ్యాఖ్య నియంత్రణలు", "save_changes": "మార్పులు సేవ్ చేయి", "views": "వీక్షణలు"}, "Marathi": {"settings": "सेटिंग्ज", "dark_theme": "थीम", "language": "भाषा", "downloads": "डाउनलोड", "watch_history": "अलीकडील व्हिडिओ", "favorites": "आवडते", "play": "प्ले करा", "save": "जतन करा", "download": "डाउनलोड", "comments": "टिप्पण्या", "reply": "उत्तर द्या", "add_comment": "टिप्पणी लिहा…", "comment_settings": "टिप्पणी नियंत्रण", "save_changes": "बदल जतन करा", "views": "दृश्ये"}, "Gujarati": {"settings": "સેટિંગ્સ", "dark_theme": "થીમ", "language": "ભાષા", "downloads": "ડાઉનલોડ્સ", "watch_history": "તાજેતરના વિડિઓ", "favorites": "મનપસંદ", "play": "ચલાવો", "save": "સાચવો", "download": "ડાઉનલોડ", "comments": "ટિપ્પણીઓ", "reply": "જવાબ", "add_comment": "ટિપ્પણી લખો…", "comment_settings": "ટિપ્પણી નિયંત્રણ", "save_changes": "ફેરફારો સાચવો", "views": "વ્યૂઝ"}, "Kannada": {"settings": "ಸೆಟ್ಟಿಂಗ್‌ಗಳು", "dark_theme": "ಥೀಮ್", "language": "ಭಾಷೆ", "downloads": "ಡೌನ್‌ಲೋಡ್‌ಗಳು", "watch_history": "ಇತ್ತೀಚಿನ ವೀಡಿಯೊಗಳು", "favorites": "ಮೆಚ್ಚಿನವುಗಳು", "play": "ಪ್ಲೇ ಮಾಡಿ", "save": "ಉಳಿಸಿ", "download": "ಡೌನ್‌ಲೋಡ್", "comments": "ಕಾಮೆಂಟ್‌ಗಳು", "reply": "ಪ್ರತ್ಯುತ್ತರ", "add_comment": "ಕಾಮೆಂಟ್ ಬರೆಯಿರಿ…", "comment_settings": "ಕಾಮೆಂಟ್ ನಿಯಂತ್ರಣಗಳು", "save_changes": "ಬದಲಾವಣೆಗಳನ್ನು ಉಳಿಸಿ", "views": "ವೀಕ್ಷಣೆಗಳು"}, "Malayalam": {"settings": "ക്രമീകരണങ്ങൾ", "dark_theme": "തീം", "language": "ഭാഷ", "downloads": "ഡൗൺലോഡുകൾ", "watch_history": "സമീപകാല വീഡിയോകൾ", "favorites": "പ്രിയപ്പെട്ടവ", "play": "പ്ലേ ചെയ്യുക", "save": "സംരക്ഷിക്കുക", "download": "ഡൗൺലോഡ്", "comments": "അഭിപ്രായങ്ങൾ", "reply": "മറുപടി", "add_comment": "അഭിപ്രായം എഴുതുക…", "comment_settings": "അഭിപ്രായ നിയന്ത്രണങ്ങൾ", "save_changes": "മാറ്റങ്ങൾ സംരക്ഷിക്കുക", "views": "കാഴ്ചകൾ"}, "Punjabi": {"settings": "ਸੈਟਿੰਗਾਂ", "dark_theme": "ਥੀਮ", "language": "ਭਾਸ਼ਾ", "downloads": "ਡਾਊਨਲੋਡ", "watch_history": "ਹਾਲੀਆ ਵੀਡੀਓ", "favorites": "ਮਨਪਸੰਦ", "play": "ਚਲਾਓ", "save": "ਸੰਭਾਲੋ", "download": "ਡਾਊਨਲੋਡ", "comments": "ਟਿੱਪਣੀਆਂ", "reply": "ਜਵਾਬ", "add_comment": "ਟਿੱਪਣੀ ਲਿਖੋ…", "comment_settings": "ਟਿੱਪਣੀ ਨਿਯੰਤਰਣ", "save_changes": "ਬਦਲਾਅ ਸੰਭਾਲੋ", "views": "ਵਿਊਜ਼"}, "Urdu": {"settings": "ترتیبات", "dark_theme": "تھیم", "language": "زبان", "downloads": "ڈاؤن لوڈز", "watch_history": "حالیہ ویڈیوز", "favorites": "پسندیدہ", "play": "چلائیں", "save": "محفوظ کریں", "download": "ڈاؤن لوڈ", "comments": "تبصرے", "reply": "جواب دیں", "add_comment": "تبصرہ لکھیں…", "comment_settings": "تبصرے کے اختیارات", "save_changes": "تبدیلیاں محفوظ کریں", "views": "مناظر"}, "Nepali": {"settings": "सेटिङहरू", "dark_theme": "थिम", "language": "भाषा", "downloads": "डाउनलोडहरू", "watch_history": "हालका भिडियोहरू", "favorites": "मनपर्ने", "play": "चलाउनुहोस्", "save": "सुरक्षित गर्नुहोस्", "download": "डाउनलोड", "comments": "टिप्पणीहरू", "reply": "जवाफ", "add_comment": "टिप्पणी लेख्नुहोस्…", "comment_settings": "टिप्पणी नियन्त्रण", "save_changes": "परिवर्तन सुरक्षित गर्नुहोस्", "views": "हेराइहरू"}, "Arabic": {"settings": "الإعدادات", "dark_theme": "المظهر", "language": "اللغة", "downloads": "التنزيلات", "watch_history": "الفيديوهات الأخيرة", "favorites": "المفضلة", "play": "تشغيل", "save": "حفظ", "download": "تنزيل", "comments": "التعليقات", "reply": "رد", "add_comment": "أضف تعليقًا…", "comment_settings": "إعدادات التعليقات", "save_changes": "حفظ التغييرات", "views": "مشاهدة"}, "Persian": {"settings": "تنظیمات", "dark_theme": "پوسته", "language": "زبان", "downloads": "دانلودها", "watch_history": "ویدیوهای اخیر", "favorites": "علاقه‌مندی‌ها", "play": "پخش", "save": "ذخیره", "download": "دانلود", "comments": "دیدگاه‌ها", "reply": "پاسخ", "add_comment": "دیدگاه بنویسید…", "comment_settings": "کنترل دیدگاه‌ها", "save_changes": "ذخیره تغییرات", "views": "بازدید"}, "Spanish": {"settings": "Ajustes", "dark_theme": "Tema", "language": "Idioma", "downloads": "Descargas", "watch_history": "Vídeos recientes", "favorites": "Favoritos", "play": "Reproducir", "save": "Guardar", "download": "Descargar", "comments": "Comentarios", "reply": "Responder", "add_comment": "Añade un comentario…", "comment_settings": "Controles de comentarios", "save_changes": "Guardar cambios", "views": "vistas"}, "French": {"settings": "Paramètres", "dark_theme": "Thème", "language": "Langue", "downloads": "Téléchargements", "watch_history": "Vidéos récentes", "favorites": "Favoris", "play": "Lire", "save": "Enregistrer", "download": "Télécharger", "comments": "Commentaires", "reply": "Répondre", "add_comment": "Ajouter un commentaire…", "comment_settings": "Contrôle des commentaires", "save_changes": "Enregistrer", "views": "vues"}, "Portuguese": {"settings": "Configurações", "dark_theme": "Tema", "language": "Idioma", "downloads": "Downloads", "watch_history": "Vídeos recentes", "favorites": "Favoritos", "play": "Reproduzir", "save": "Salvar", "download": "Baixar", "comments": "Comentários", "reply": "Responder", "add_comment": "Adicione um comentário…", "comment_settings": "Controles de comentários", "save_changes": "Salvar alterações", "views": "visualizações"}, "German": {"settings": "Einstellungen", "dark_theme": "Design", "language": "Sprache", "downloads": "Downloads", "watch_history": "Letzte Videos", "favorites": "Favoriten", "play": "Abspielen", "save": "Speichern", "download": "Herunterladen", "comments": "Kommentare", "reply": "Antworten", "add_comment": "Kommentar schreiben…", "comment_settings": "Kommentareinstellungen", "save_changes": "Änderungen speichern", "views": "Aufrufe"}, "Italian": {"settings": "Impostazioni", "dark_theme": "Tema", "language": "Lingua", "downloads": "Download", "watch_history": "Video recenti", "favorites": "Preferiti", "play": "Riproduci", "save": "Salva", "download": "Scarica", "comments": "Commenti", "reply": "Rispondi", "add_comment": "Aggiungi un commento…", "comment_settings": "Controlli dei commenti", "save_changes": "Salva modifiche", "views": "visualizzazioni"}, "Russian": {"settings": "Настройки", "dark_theme": "Тема", "language": "Язык", "downloads": "Загрузки", "watch_history": "Недавние видео", "favorites": "Избранное", "play": "Смотреть", "save": "Сохранить", "download": "Скачать", "comments": "Комментарии", "reply": "Ответить", "add_comment": "Добавьте комментарий…", "comment_settings": "Управление комментариями", "save_changes": "Сохранить изменения", "views": "просмотров"}, "Ukrainian": {"settings": "Налаштування", "dark_theme": "Тема", "language": "Мова", "downloads": "Завантаження", "watch_history": "Нещодавні відео", "favorites": "Обране", "play": "Відтворити", "save": "Зберегти", "download": "Завантажити", "comments": "Коментарі", "reply": "Відповісти", "add_comment": "Додайте коментар…", "comment_settings": "Керування коментарями", "save_changes": "Зберегти зміни", "views": "переглядів"}, "Turkish": {"settings": "Ayarlar", "dark_theme": "Tema", "language": "Dil", "downloads": "İndirilenler", "watch_history": "Son videolar", "favorites": "Favoriler", "play": "Oynat", "save": "Kaydet", "download": "İndir", "comments": "Yorumlar", "reply": "Yanıtla", "add_comment": "Yorum ekleyin…", "comment_settings": "Yorum kontrolleri", "save_changes": "Değişiklikleri kaydet", "views": "görüntüleme"}, "Indonesian": {"settings": "Setelan", "dark_theme": "Tema", "language": "Bahasa", "downloads": "Unduhan", "watch_history": "Video terbaru", "favorites": "Favorit", "play": "Putar", "save": "Simpan", "download": "Unduh", "comments": "Komentar", "reply": "Balas", "add_comment": "Tambahkan komentar…", "comment_settings": "Kontrol komentar", "save_changes": "Simpan perubahan", "views": "penayangan"}, "Malay": {"settings": "Tetapan", "dark_theme": "Tema", "language": "Bahasa", "downloads": "Muat turun", "watch_history": "Video terkini", "favorites": "Kegemaran", "play": "Main", "save": "Simpan", "download": "Muat turun", "comments": "Komen", "reply": "Balas", "add_comment": "Tambah komen…", "comment_settings": "Kawalan komen", "save_changes": "Simpan perubahan", "views": "tontonan"}, "Vietnamese": {"settings": "Cài đặt", "dark_theme": "Giao diện", "language": "Ngôn ngữ", "downloads": "Tệp tải xuống", "watch_history": "Video gần đây", "favorites": "Yêu thích", "play": "Phát", "save": "Lưu", "download": "Tải xuống", "comments": "Bình luận", "reply": "Trả lời", "add_comment": "Thêm bình luận…", "comment_settings": "Kiểm soát bình luận", "save_changes": "Lưu thay đổi", "views": "lượt xem"}, "Thai": {"settings": "การตั้งค่า", "dark_theme": "ธีม", "language": "ภาษา", "downloads": "ดาวน์โหลด", "watch_history": "วิดีโอล่าสุด", "favorites": "รายการโปรด", "play": "เล่น", "save": "บันทึก", "download": "ดาวน์โหลด", "comments": "ความคิดเห็น", "reply": "ตอบกลับ", "add_comment": "เพิ่มความคิดเห็น…", "comment_settings": "การควบคุมความคิดเห็น", "save_changes": "บันทึกการเปลี่ยนแปลง", "views": "ครั้ง"}, "Chinese": {"settings": "设置", "dark_theme": "主题", "language": "语言", "downloads": "下载内容", "watch_history": "最近的视频", "favorites": "收藏", "play": "播放", "save": "保存", "download": "下载", "comments": "评论", "reply": "回复", "add_comment": "添加评论…", "comment_settings": "评论管理", "save_changes": "保存更改", "views": "次观看"}, "Japanese": {"settings": "設定", "dark_theme": "テーマ", "language": "言語", "downloads": "ダウンロード", "watch_history": "最近の動画", "favorites": "お気に入り", "play": "再生", "save": "保存", "download": "ダウンロード", "comments": "コメント", "reply": "返信", "add_comment": "コメントを追加…", "comment_settings": "コメント管理", "save_changes": "変更を保存", "views": "回視聴"}, "Korean": {"settings": "설정", "dark_theme": "테마", "language": "언어", "downloads": "다운로드", "watch_history": "최근 동영상", "favorites": "즐겨찾기", "play": "재생", "save": "저장", "download": "다운로드", "comments": "댓글", "reply": "답글", "add_comment": "댓글 추가…", "comment_settings": "댓글 관리", "save_changes": "변경사항 저장", "views": "조회"}, "Swahili": {"settings": "Mipangilio", "dark_theme": "Mandhari", "language": "Lugha", "downloads": "Vipakuliwa", "watch_history": "Video za karibuni", "favorites": "Vipendwa", "play": "Cheza", "save": "Hifadhi", "download": "Pakua", "comments": "Maoni", "reply": "Jibu", "add_comment": "Ongeza maoni…", "comment_settings": "Udhibiti wa maoni", "save_changes": "Hifadhi mabadiliko", "views": "mitazamo"}};
+final Map<String, String> mayaLanguageNames = {"English": "English", "Hindi": "हिन्दी", "Bengali": "বাংলা", "Tamil": "தமிழ்", "Telugu": "తెలుగు", "Marathi": "मराठी", "Gujarati": "ગુજરાતી", "Kannada": "ಕನ್ನಡ", "Malayalam": "മലയാളം", "Punjabi": "ਪੰਜਾਬੀ", "Urdu": "اردو", "Nepali": "नेपाली", "Arabic": "العربية", "Persian": "فارسی", "Spanish": "Español", "French": "Français", "Portuguese": "Português", "German": "Deutsch", "Italian": "Italiano", "Russian": "Русский", "Ukrainian": "Українська", "Turkish": "Türkçe", "Indonesian": "Bahasa Indonesia", "Malay": "Bahasa Melayu", "Vietnamese": "Tiếng Việt", "Thai": "ไทย", "Chinese": "中文", "Japanese": "日本語", "Korean": "한국어", "Swahili": "Kiswahili"};
+const mayaThemeColors = <String, Color>{
+  'Cyber Emerald': Color(0xFF69E6A6), 'Quantum Blue': Color(0xFF72C8F1),
+  'Neon Violet': Color(0xFFC2AAFF), 'Obsidian Stealth': Color(0xFFCED4DC),
+  'Ocean Teal': Color(0xFF61D5CA), 'Champagne Gold': Color(0xFFE7C885),
+  'Rose Quartz': Color(0xFFEBA4BF), 'Arctic Sky': Color(0xFFA7D8FF),
+  'Sunset Coral': Color(0xFFFFB29D), 'Midnight Indigo': Color(0xFFA5B4FC),
+};
