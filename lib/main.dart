@@ -23,6 +23,7 @@ import 'package:permission_handler/permission_handler.dart';
 import 'package:path_provider/path_provider.dart';
 import 'package:open_filex/open_filex.dart';
 import 'package:file_picker/file_picker.dart';
+import 'package:image_picker/image_picker.dart';
 import 'package:photo_manager/photo_manager.dart';
 import 'package:photo_manager_image_provider/photo_manager_image_provider.dart';
 import 'package:crypto/crypto.dart' as crypto;
@@ -70,6 +71,19 @@ final ValueNotifier<String> themeNotifier = ValueNotifier<String>(
 final ValueNotifier<String> languageNotifier = ValueNotifier<String>('English');
 final ValueNotifier<bool> soundEnabledNotifier = ValueNotifier<bool>(true);
 final GlobalKey<NavigatorState> navigatorKey = GlobalKey<NavigatorState>();
+bool _pendingMayaPushInbox = false;
+void _openPendingMayaPushInbox() {
+  if (!_pendingMayaPushInbox ||
+      FirebaseAuth.instance.currentUser == null ||
+      navigatorKey.currentState == null)
+    return;
+  _pendingMayaPushInbox = false;
+  WidgetsBinding.instance.addPostFrameCallback((_) {
+    final context = navigatorKey.currentContext;
+    if (context != null && FirebaseAuth.instance.currentUser != null)
+      showTopNotificationDropdown(context);
+  });
+}
 
 // ═══════════════════════════════════════════════════════════════════════════════
 // AUDIO FEEDBACK CONTROLLER
@@ -174,6 +188,7 @@ class VideoLoopThumbnail extends StatefulWidget {
   final String sourceUrl;
   final String title;
   final bool isSmall;
+  final BoxFit fit;
   final String? fallbackThumb;
   final void Function(String base64Thumb)? onFrameCaptured;
   const VideoLoopThumbnail({
@@ -184,6 +199,7 @@ class VideoLoopThumbnail extends StatefulWidget {
     this.fallbackThumb,
     this.onFrameCaptured,
     this.sourceUrl = '',
+    this.fit = BoxFit.cover,
   });
   @override
   State<VideoLoopThumbnail> createState() => _VideoLoopThumbnailState();
@@ -266,7 +282,9 @@ class _VideoLoopThumbnailState extends State<VideoLoopThumbnail>
       visible =
           overlap.width > 0 &&
           overlap.height > 0 &&
-          overlap.width * overlap.height >= rect.width * rect.height * .55;
+          overlap.width * overlap.height >=
+              math.min(rect.width * rect.height, clip.width * clip.height) *
+                  .55;
     }
     _visible = visible;
     if (!visible) {
@@ -320,6 +338,27 @@ class _VideoLoopThumbnailState extends State<VideoLoopThumbnail>
         }
         if (!mounted || generation != _generation || !_visible) return;
         unawaited(MayaPosterCache.remember(widget.sourceUrl, media.thumbnail));
+      }
+      final channelSource = Uri.tryParse(widget.sourceUrl);
+      if (channelSource != null &&
+          _isMayaJaalHost(channelSource.host) &&
+          channelSource.pathSegments.length == 2 &&
+          channelSource.pathSegments.first == 'channel' &&
+          (channelSource.queryParameters['post'] ?? '').isNotEmpty) {
+        final post = await MayaChannelsApi.request(
+          '/${Uri.encodeComponent(channelSource.pathSegments[1])}/posts/${Uri.encodeComponent(channelSource.queryParameters['post']!)}',
+        );
+        if (!mounted || generation != _generation || !_visible) return;
+        address =
+            '${post['preview'] ?? ''}'.isNotEmpty
+                ? '${post['preview']}'
+                : '${post['media'] ?? ''}';
+        unawaited(
+          MayaPosterCache.remember(
+            widget.sourceUrl,
+            '${post['thumbnail'] ?? ''}',
+          ),
+        );
       }
       final uri = Uri.tryParse(address);
       final options = VideoPlayerOptions(mixWithOthers: true);
@@ -385,7 +424,9 @@ class _VideoLoopThumbnailState extends State<VideoLoopThumbnail>
   }
 
   Future<void> _capture() async {
-    if (_captured || widget.onFrameCaptured == null) return;
+    if (_captured ||
+        (widget.onFrameCaptured == null && widget.sourceUrl.isEmpty))
+      return;
     _captured = true;
     await Future<void>.delayed(const Duration(milliseconds: 700));
     if (!mounted || !_ready) return;
@@ -396,8 +437,12 @@ class _VideoLoopThumbnailState extends State<VideoLoopThumbnail>
         return;
       image = await boundary.toImage(pixelRatio: .5);
       final bytes = await image.toByteData(format: ui.ImageByteFormat.png);
-      if (mounted && bytes != null)
-        widget.onFrameCaptured?.call(base64Encode(bytes.buffer.asUint8List()));
+      if (mounted && bytes != null) {
+        final frame = base64Encode(bytes.buffer.asUint8List());
+        widget.onFrameCaptured?.call(frame);
+        if (widget.sourceUrl.isNotEmpty)
+          unawaited(MayaPosterCache.remember(widget.sourceUrl, frame));
+      }
     } catch (_) {
     } finally {
       image?.dispose();
@@ -433,6 +478,7 @@ class _VideoLoopThumbnailState extends State<VideoLoopThumbnail>
         title: widget.title,
         isSmall: widget.isSmall,
         sourceUrl: widget.sourceUrl,
+        fit: widget.fit,
       ),
       if (_ready && _controller != null)
         Positioned.fill(
@@ -440,7 +486,7 @@ class _VideoLoopThumbnailState extends State<VideoLoopThumbnail>
             key: _captureKey,
             child: ClipRect(
               child: FittedBox(
-                fit: BoxFit.cover,
+                fit: widget.fit,
                 child: SizedBox(
                   width: _controller!.value.size.width,
                   height: _controller!.value.size.height,
@@ -457,8 +503,45 @@ class _VideoLoopThumbnailState extends State<VideoLoopThumbnail>
 // ImageProvider is retained across player timer/progress rebuilds. In particular,
 // don't base64Decode into a new MemoryImage every 350 ms.
 // Durable source posters survive a backend restart; stream tokens never act as cache keys.
+bool _isMayaJaalHost(String host) =>
+    host == 'mayajaal.online' || host.endsWith('.mayajaal.online');
+
 class MayaPosterCache {
   static final changed = ValueNotifier<int>(0);
+  static bool _metadataBusy = false;
+  static final _posterAttempts = <String, DateTime>{};
+  static Future<bool> recover(String source) async {
+    if (source.isEmpty || _metadataBusy) return false;
+    final key = _key(source);
+    if (_posterAttempts[key] != null &&
+        DateTime.now().difference(_posterAttempts[key]!).inSeconds < 60)
+      return true;
+    if (_posterAttempts.length > 120)
+      _posterAttempts.remove(_posterAttempts.keys.first);
+    _posterAttempts[key] = DateTime.now();
+    _metadataBusy = true;
+    try {
+      final uri = Uri.tryParse(source);
+      if (_isSocialLink(source)) {
+        final media = await MayaResolvedMedia.load(Uri.parse(source));
+        await remember(source, media.thumbnail);
+      } else if (uri != null &&
+          _isMayaJaalHost(uri.host) &&
+          uri.pathSegments.length == 2 &&
+          uri.pathSegments.first == 'channel' &&
+          (uri.queryParameters['post'] ?? '').isNotEmpty) {
+        final post = await MayaChannelsApi.request(
+          '/${Uri.encodeComponent(uri.pathSegments[1])}/posts/${Uri.encodeComponent(uri.queryParameters['post']!)}',
+        );
+        await remember(source, '${post['thumbnail'] ?? ''}');
+      }
+    } catch (_) {
+    } finally {
+      _metadataBusy = false;
+    }
+    return true;
+  }
+
   static final _memory = <String, String>{};
   static final _pending = <String>{};
   static Future<void> _writes = Future<void>.value();
@@ -553,11 +636,13 @@ class _MayaPoster extends StatefulWidget {
     required this.title,
     this.isSmall = false,
     this.sourceUrl = '',
+    this.fit = BoxFit.cover,
   });
   final String? thumb;
   final String sourceUrl;
   final String title;
   final bool isSmall;
+  final BoxFit fit;
   @override
   State<_MayaPoster> createState() => _MayaPosterState();
 }
@@ -565,12 +650,18 @@ class _MayaPoster extends StatefulWidget {
 class _MayaPosterState extends State<_MayaPoster> {
   ImageProvider? _image;
   String _activeThumb = '';
+  bool _broken = false, _recovering = false, _attempted = false;
+  Timer? _posterTimer;
   @override
   void initState() {
     super.initState();
     MayaPosterCache.changed.addListener(_cacheChanged);
     _read();
     unawaited(_loadCached());
+    _posterTimer = Timer.periodic(
+      const Duration(milliseconds: 650),
+      (_) => _recoverVisible(),
+    );
   }
 
   void _cacheChanged() {
@@ -597,6 +688,7 @@ class _MayaPosterState extends State<_MayaPoster> {
 
   @override
   void dispose() {
+    _posterTimer?.cancel();
     MayaPosterCache.changed.removeListener(_cacheChanged);
     super.dispose();
   }
@@ -606,6 +698,7 @@ class _MayaPosterState extends State<_MayaPoster> {
     super.didUpdateWidget(oldWidget);
     if (oldWidget.thumb != widget.thumb ||
         oldWidget.sourceUrl != widget.sourceUrl) {
+      _attempted = false;
       _read();
       unawaited(_loadCached());
     }
@@ -615,6 +708,7 @@ class _MayaPosterState extends State<_MayaPoster> {
     final thumb = MayaPosterCache.peek(widget.sourceUrl) ?? widget.thumb ?? '';
     if (thumb == _activeThumb) return;
     _activeThumb = thumb;
+    _broken = false;
     try {
       if (thumb.isEmpty) {
         _image = null;
@@ -628,19 +722,42 @@ class _MayaPosterState extends State<_MayaPoster> {
     }
   }
 
+  Future<void> _recoverVisible() async {
+    if (!mounted ||
+        _attempted ||
+        _recovering ||
+        widget.sourceUrl.isEmpty ||
+        (_image != null && !_broken) ||
+        !(ModalRoute.of(context)?.isCurrent ?? true) ||
+        WidgetsBinding.instance.lifecycleState != AppLifecycleState.resumed)
+      return;
+    final box = context.findRenderObject();
+    if (box is! RenderBox || !box.hasSize || !box.attached) return;
+    final rect = box.localToGlobal(Offset.zero) & box.size;
+    final viewport = Offset.zero & MediaQuery.sizeOf(context);
+    if (!rect.overlaps(viewport)) return;
+    _recovering = true;
+    try {
+      _attempted = await MayaPosterCache.recover(widget.sourceUrl);
+    } finally {
+      _recovering = false;
+    }
+  }
+
   @override
   Widget build(BuildContext context) =>
       _image == null
           ? buildAutoThumbnail(widget.title, isSmall: widget.isSmall)
           : Image(
             image: _image!,
-            fit: BoxFit.cover,
+            fit: widget.fit,
             width: double.infinity,
             height: double.infinity,
             gaplessPlayback: true,
-            errorBuilder:
-                (_, __, ___) =>
-                    buildAutoThumbnail(widget.title, isSmall: widget.isSmall),
+            errorBuilder: (_, __, ___) {
+              _broken = true;
+              return buildAutoThumbnail(widget.title, isSmall: widget.isSmall);
+            },
           );
 }
 
@@ -777,6 +894,7 @@ Widget buildMediaThumbnail(
   bool isSmall = false,
   bool loopPreview = false,
   String sourceUrl = '',
+  BoxFit fit = BoxFit.cover,
   void Function(String base64Thumb)? onFrameCaptured,
 }) {
   if (loopPreview && (videoUrl.isNotEmpty || _isSocialLink(sourceUrl))) {
@@ -787,6 +905,7 @@ Widget buildMediaThumbnail(
       fallbackThumb: thumb,
       onFrameCaptured: onFrameCaptured,
       sourceUrl: sourceUrl,
+      fit: fit,
     );
   }
   return _MayaPoster(
@@ -794,6 +913,7 @@ Widget buildMediaThumbnail(
     title: title,
     isSmall: isSmall,
     sourceUrl: sourceUrl,
+    fit: fit,
   );
 }
 
@@ -1936,6 +2056,9 @@ class MayaJaalAccount {
 
   static Future<void> signOut() async {
     try {
+      await OneSignal.logout();
+    } catch (_) {}
+    try {
       final googleSignIn = GoogleSignIn(serverClientId: webClientId);
       try {
         await googleSignIn.signOut();
@@ -2197,6 +2320,7 @@ class MayaJaalAccount {
 // FIREBASE SERVICE — REALTIME CLOUD INTEGRATION & NOTIFICATIONS
 // ═══════════════════════════════════════════════════════════════════════════════
 class FirebaseService {
+  static final _noticeRefresh = ValueNotifier<int>(0);
   static DatabaseReference get _rtdb => FirebaseDatabase.instance.ref();
 
   static Future<void> sendNotification({
@@ -2221,28 +2345,97 @@ class FirebaseService {
   }
 
   static Stream<List<Map<String, dynamic>>> getNotifications(String uid) {
-    return _rtdb.child('users/$uid/notifications').onValue.map((event) {
-      final val = event.snapshot.value;
-      if (val == null) return <Map<String, dynamic>>[];
-      final map = Map<String, dynamic>.from(val as Map);
-      final list =
-          map.entries.map((e) {
-            final d = Map<String, dynamic>.from(e.value as Map);
-            d['id'] = e.key;
-            return d;
-          }).toList();
-      list.sort((a, b) => (b['time'] ?? 0).compareTo(a['time'] ?? 0));
-      return list;
-    });
+    late StreamController<List<Map<String, dynamic>>> output;
+    StreamSubscription<DatabaseEvent>? subscription;
+    Timer? timer;
+    var firebaseRows = <Map<String, dynamic>>[],
+        channelRows = <Map<String, dynamic>>[];
+    var polling = false;
+    void emit() {
+      if (output.isClosed) return;
+      final rows = [...firebaseRows, ...channelRows];
+      rows.sort(
+        (a, b) =>
+            ((b['time'] as num?) ?? 0).compareTo((a['time'] as num?) ?? 0),
+      );
+      output.add(rows);
+    }
+
+    Future<void> poll() async {
+      if (polling || FirebaseAuth.instance.currentUser?.uid != uid) return;
+      polling = true;
+      try {
+        final result = await MayaChannelsApi.request('/account/notifications');
+        channelRows =
+            (result['notifications'] as List? ?? [])
+                .whereType<Map>()
+                .map((r) => Map<String, dynamic>.from(r))
+                .toList();
+        emit();
+      } catch (_) {
+        // Keep the existing Firebase inbox available during a network outage.
+      } finally {
+        polling = false;
+      }
+    }
+
+    void refresh() => unawaited(poll());
+    output = StreamController<List<Map<String, dynamic>>>(
+      onListen: () {
+        subscription = _rtdb.child('users/$uid/notifications').onValue.listen((
+          event,
+        ) {
+          final value = event.snapshot.value;
+          firebaseRows =
+              value is Map
+                  ? value.entries.where((e) => e.value is Map).map((e) {
+                    final row = Map<String, dynamic>.from(e.value as Map);
+                    row['id'] = '${e.key}';
+                    return row;
+                  }).toList()
+                  : [];
+          emit();
+        }, onError: (_) => emit());
+        _noticeRefresh.addListener(refresh);
+        unawaited(poll());
+        timer = Timer.periodic(
+          const Duration(seconds: 15),
+          (_) => unawaited(poll()),
+        );
+      },
+      onCancel: () async {
+        timer?.cancel();
+        _noticeRefresh.removeListener(refresh);
+        await subscription?.cancel();
+      },
+    );
+    return output.stream;
   }
 
   static Future<void> markNotificationRead(String uid, String notifId) async {
     try {
+      if (notifId.startsWith('channel_')) {
+        await MayaChannelsApi.request(
+          '/account/notifications/read',
+          method: 'POST',
+          body: {'id': notifId},
+        );
+        _noticeRefresh.value++;
+        return;
+      }
       await _rtdb.child('users/$uid/notifications/$notifId/read').set(true);
     } catch (_) {}
   }
 
   static Future<void> markAllRead(String uid) async {
+    try {
+      await MayaChannelsApi.request(
+        '/account/notifications/read',
+        method: 'POST',
+        body: {},
+      );
+      _noticeRefresh.value++;
+    } catch (_) {}
     try {
       final snap = await _rtdb.child('users/$uid/notifications').once();
       final val = snap.snapshot.value as Map?;
@@ -2257,18 +2450,9 @@ class FirebaseService {
     } catch (_) {}
   }
 
-  static Stream<int> getUnreadCount(String uid) {
-    return _rtdb.child('users/$uid/notifications').onValue.map((event) {
-      final val = event.snapshot.value;
-      if (val == null) return 0;
-      final map = Map<String, dynamic>.from(val as Map);
-      int count = 0;
-      for (final v in map.values) {
-        if (v is Map && v['read'] != true) count++;
-      }
-      return count;
-    });
-  }
+  static Stream<int> getUnreadCount(String uid) => getNotifications(
+    uid,
+  ).map((rows) => rows.where((r) => r['read'] != true).length);
 
   static Future<Map<String, dynamic>?> getProfile(String uid) async {
     try {
@@ -2714,148 +2898,230 @@ class _FirePainter extends CustomPainter {
 // ═══════════════════════════════════════════════════════════════════════════════
 // NOTIFICATION DETAILS SCREEN
 // ═══════════════════════════════════════════════════════════════════════════════
-class NotificationDetailsScreen extends StatelessWidget {
+class NotificationDetailsScreen extends StatefulWidget {
   final Map<String, dynamic> notification;
   const NotificationDetailsScreen({super.key, required this.notification});
+  @override
+  State<NotificationDetailsScreen> createState() =>
+      _NotificationDetailsScreenState();
+}
+
+class _NotificationDetailsScreenState extends State<NotificationDetailsScreen> {
+  bool _busy = false;
+  late String _status = '${widget.notification['request_status'] ?? ''}';
+  Future<void> _respond(bool accept) async {
+    if (_busy) return;
+    setState(() => _busy = true);
+    try {
+      final result = await MayaChannelsApi.request(
+        '/account/requests/${widget.notification['request_id']}/respond',
+        method: 'POST',
+        body: {'accept': accept},
+      );
+      FirebaseService._noticeRefresh.value++;
+      if (mounted) setState(() => _status = '${result['status']}');
+    } catch (e) {
+      if (mounted) _channelNotice(context, e);
+    } finally {
+      if (mounted) setState(() => _busy = false);
+    }
+  }
 
   @override
   Widget build(BuildContext context) {
-    final title = notification['title']?.toString() ?? 'Notification';
-    final message = notification['message']?.toString() ?? '';
-    final timeMs = notification['time'] as int? ?? 0;
-    final dt = DateTime.fromMillisecondsSinceEpoch(timeMs);
-
+    final n = widget.notification;
+    final date =
+        DateTime.fromMillisecondsSinceEpoch(
+          (n['time'] as num?)?.toInt() ?? 0,
+        ).toLocal();
     return Scaffold(
       backgroundColor: AppThemes.kBg,
-      appBar: AppBar(
-        title: const Text(
-          'NOTIFICATION DETAILS',
-          style: TextStyle(
-            letterSpacing: 1.2,
-            fontSize: 13,
-            fontWeight: FontWeight.bold,
+      appBar: AppBar(title: const Text('Notification')),
+      body: ListView(
+        padding: const EdgeInsets.all(24),
+        children: [
+          const Align(
+            alignment: Alignment.centerLeft,
+            child: Icon(
+              Icons.notifications_active_outlined,
+              size: 38,
+              color: _mayaMint,
+            ),
           ),
-        ),
-        backgroundColor: Colors.black,
-        elevation: 0,
-        leading: IconButton(
-          icon: const Icon(
-            Icons.arrow_back_ios_new,
-            color: AppThemes.kGreen,
-            size: 18,
+          const SizedBox(height: 24),
+          Text(
+            '${n['title'] ?? 'Notification'}',
+            style: const TextStyle(
+              fontFamily: 'Roboto',
+              fontSize: 24,
+              fontWeight: FontWeight.w700,
+            ),
           ),
-          onPressed: () {
-            SoundService.playClick();
-            Navigator.pop(context);
-          },
-        ),
-      ),
-      body: SingleChildScrollView(
-        padding: const EdgeInsets.all(16),
-        child: Container(
-          width: double.infinity,
-          padding: const EdgeInsets.all(20),
-          decoration: BoxDecoration(
-            color: AppThemes.kCardBg,
-            borderRadius: BorderRadius.circular(16),
-            border: Border.all(color: AppThemes.kBorder),
+          const SizedBox(height: 10),
+          Text(
+            '${date.day}/${date.month}/${date.year} · ${TimeOfDay.fromDateTime(date).format(context)}',
+            style: const TextStyle(color: Colors.white54),
           ),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
+          const SizedBox(height: 24),
+          SelectableText(
+            '${n['message'] ?? ''}',
+            style: const TextStyle(
+              fontFamily: 'Roboto',
+              fontSize: 16,
+              height: 1.6,
+            ),
+          ),
+          if (n['request_id'] != null &&
+              n['type'] == 'channel_role_request') ...[
+            const SizedBox(height: 24),
+            if (_status == 'pending')
               Row(
                 children: [
-                  Container(
-                    padding: const EdgeInsets.all(10),
-                    decoration: BoxDecoration(
-                      shape: BoxShape.circle,
-                      border: Border.all(
-                        color: AppThemes.kGreen.withOpacity(0.5),
-                      ),
-                      color: Colors.black,
-                    ),
-                    child: const Icon(
-                      Icons.notifications_active,
-                      color: AppThemes.kGreen,
-                      size: 22,
+                  Expanded(
+                    child: OutlinedButton(
+                      onPressed: _busy ? null : () => _respond(false),
+                      child: const Text('Decline'),
                     ),
                   ),
                   const SizedBox(width: 12),
                   Expanded(
-                    child: Text(
-                      title,
-                      style: const TextStyle(
-                        color: Colors.white,
-                        fontSize: 15,
-                        fontWeight: FontWeight.bold,
-                      ),
-                      maxLines: 2,
-                      overflow: TextOverflow.ellipsis,
+                    child: FilledButton(
+                      onPressed: _busy ? null : () => _respond(true),
+                      child: const Text('Accept'),
                     ),
                   ),
                 ],
+              )
+            else
+              Text(
+                'Request $_status',
+                style: const TextStyle(color: _mayaMint),
               ),
-              const SizedBox(height: 14),
-              Container(
-                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-                decoration: BoxDecoration(
-                  color: Colors.black38,
-                  borderRadius: BorderRadius.circular(6),
-                  border: Border.all(color: AppThemes.kBorder),
-                ),
-                child: Text(
-                  'Received: ${dt.day}/${dt.month}/${dt.year} at ${dt.hour.toString().padLeft(2, '0')}:${dt.minute.toString().padLeft(2, '0')}',
-                  style: TextStyle(
-                    color: Colors.white.withOpacity(0.5),
-                    fontSize: 10.5,
-                    fontFamily: 'monospace',
-                  ),
-                ),
-              ),
-              const Padding(
-                padding: EdgeInsets.symmetric(vertical: 14),
-                child: Divider(color: Colors.white10, height: 1),
-              ),
-              SelectableText(
-                message,
-                style: const TextStyle(
-                  color: Colors.white70,
-                  fontSize: 13.5,
-                  height: 1.6,
-                  fontFamily: 'monospace',
-                ),
-              ),
-              const SizedBox(height: 24),
-              SizedBox(
-                width: double.infinity,
-                height: 44,
-                child: OutlinedButton(
-                  onPressed: () {
-                    SoundService.playClick();
-                    Navigator.pop(context);
-                  },
-                  style: OutlinedButton.styleFrom(
-                    side: const BorderSide(color: AppThemes.kBorder),
-                    shape: RoundedRectangleBorder(
-                      borderRadius: BorderRadius.circular(10),
+          ],
+          if (n['channel_id'] != null) ...[
+            const SizedBox(height: 24),
+            TextButton.icon(
+              icon: const Icon(Icons.forum_outlined),
+              label: const Text('Open channel'),
+              onPressed:
+                  () => Navigator.of(context).push(
+                    MaterialPageRoute(
+                      builder:
+                          (_) => MayaChannelPage(
+                            channel: ChannelScreen.channels.child(
+                              '${n['channel_id']}',
+                            ),
+                          ),
                     ),
                   ),
-                  child: const Text(
-                    'BACK TO APP',
-                    style: TextStyle(
-                      color: AppThemes.kGreen,
-                      fontWeight: FontWeight.bold,
-                      letterSpacing: 1.0,
-                      fontSize: 12,
-                    ),
-                  ),
-                ),
-              ),
-            ],
-          ),
-        ),
+            ),
+          ],
+        ],
       ),
     );
+  }
+}
+
+Future<void> showMayaNotificationSettings(BuildContext context) async {
+  try {
+    final data = await MayaChannelsApi.request(
+      '/account/notification-preferences',
+    );
+    if (!context.mounted) return;
+    var enabled = data['push'] == true;
+    var saving = false;
+    await showModalBottomSheet<void>(
+      context: context,
+      showDragHandle: true,
+      builder:
+          (sheet) => StatefulBuilder(
+            builder:
+                (c, update) => SafeArea(
+                  child: Column(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      const ListTile(
+                        title: Text(
+                          'Notification preferences',
+                          style: TextStyle(
+                            fontSize: 20,
+                            fontWeight: FontWeight.w700,
+                          ),
+                        ),
+                        subtitle: Text(
+                          'Your in-app notifications always stay in the bell inbox.',
+                        ),
+                      ),
+                      SwitchListTile(
+                        title: const Text('Notify me on this phone'),
+                        subtitle: const Text(
+                          'Channel updates, reactions and invitations',
+                        ),
+                        value: enabled,
+                        onChanged:
+                            saving
+                                ? null
+                                : (value) async {
+                                  update(() => saving = true);
+                                  try {
+                                    if (value) {
+                                      final allowed = await _PermissionQueue.run(
+                                        () => OneSignal
+                                            .Notifications.requestPermission(
+                                          true,
+                                        ),
+                                      );
+                                      if (!allowed) {
+                                        if (c.mounted)
+                                          _channelNotice(
+                                            c,
+                                            'Allow notifications in your phone settings.',
+                                          );
+                                        return;
+                                      }
+                                      final uid =
+                                          FirebaseAuth
+                                              .instance
+                                              .currentUser
+                                              ?.uid;
+                                      if (uid == null) return;
+                                      await OneSignal.login(uid);
+                                      await OneSignal.User.pushSubscription
+                                          .optIn();
+                                    } else {
+                                      await OneSignal.User.pushSubscription
+                                          .optOut();
+                                    }
+                                    final result =
+                                        await MayaChannelsApi.request(
+                                          '/account/notification-preferences',
+                                          method: 'PATCH',
+                                          body: {'push': value},
+                                        );
+                                    if (c.mounted) {
+                                      update(() => enabled = value);
+                                      if (value &&
+                                          result['push_configured'] != true)
+                                        _channelNotice(
+                                          c,
+                                          'Preference saved. Phone alerts are temporarily unavailable.',
+                                        );
+                                    }
+                                  } catch (e) {
+                                    if (c.mounted) _channelNotice(c, e);
+                                  } finally {
+                                    if (c.mounted) update(() => saving = false);
+                                  }
+                                },
+                      ),
+                      const SizedBox(height: 20),
+                    ],
+                  ),
+                ),
+          ),
+    );
+  } catch (e) {
+    if (context.mounted) _channelNotice(context, e);
   }
 }
 
@@ -2923,28 +3189,34 @@ void showTopNotificationDropdown(BuildContext context) {
                         ),
                       ),
                       const SizedBox(width: 8),
-                      const Text(
-                        'NOTIFICATIONS',
-                        style: TextStyle(
-                          color: Colors.white,
-                          fontWeight: FontWeight.bold,
-                          fontSize: 12.5,
-                          letterSpacing: 1.0,
+                      const Expanded(
+                        child: Text(
+                          'Notifications',
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                          style: TextStyle(
+                            color: Colors.white,
+                            fontFamily: 'Roboto',
+                            fontWeight: FontWeight.w700,
+                            fontSize: 16,
+                          ),
                         ),
                       ),
-                      const Spacer(),
-                      TextButton(
+                      IconButton(
+                        tooltip: 'Mark all read',
+                        icon: const Icon(Icons.done_all, size: 20),
                         onPressed: () {
                           SoundService.playClick();
                           FirebaseService.markAllRead(uid);
                         },
-                        child: const Text(
-                          'Mark all read',
-                          style: TextStyle(
-                            color: AppThemes.kDimGreen,
-                            fontSize: 10.5,
-                          ),
-                        ),
+                      ),
+                      IconButton(
+                        tooltip: 'Notification preferences',
+                        icon: const Icon(Icons.tune, size: 20),
+                        onPressed: () {
+                          Navigator.pop(ctx);
+                          showMayaNotificationSettings(context);
+                        },
                       ),
                       IconButton(
                         icon: const Icon(
@@ -3029,9 +3301,10 @@ void showTopNotificationDropdown(BuildContext context) {
                                     isRead
                                         ? FontWeight.normal
                                         : FontWeight.bold,
-                                fontSize: 12.5,
+                                fontSize: 15,
+                                fontFamily: 'Roboto',
                               ),
-                              maxLines: 1,
+                              maxLines: 2,
                               overflow: TextOverflow.ellipsis,
                             ),
                             subtitle: Text(
@@ -3040,7 +3313,9 @@ void showTopNotificationDropdown(BuildContext context) {
                               overflow: TextOverflow.ellipsis,
                               style: const TextStyle(
                                 color: Colors.white38,
-                                fontSize: 10.5,
+                                fontSize: 13,
+                                height: 1.4,
+                                fontFamily: 'Roboto',
                               ),
                             ),
                             trailing: Column(
@@ -3421,6 +3696,10 @@ Future<void> main() async {
   try {
     OneSignal.Debug.setLogLevel(OSLogLevel.verbose);
     OneSignal.initialize(oneSignalAppId);
+    OneSignal.Notifications.addClickListener((event) {
+      _pendingMayaPushInbox = true;
+      Timer(const Duration(milliseconds: 700), _openPendingMayaPushInbox);
+    });
   } catch (e) {
     debugPrint("OneSignal Init Error: $e");
   }
@@ -3999,6 +4278,10 @@ class _AuthGateState extends State<AuthGate> {
   bool _notificationRequestStarted = false;
 
   Future<void> _requestNotificationPermission(String uid) async {
+    _openPendingMayaPushInbox();
+    try {
+      await OneSignal.login(uid);
+    } catch (_) {}
     if (_notificationRequestStarted || !mounted) return;
     _notificationRequestStarted = true;
     try {
@@ -8446,37 +8729,49 @@ class MayaChannelsApi {
     return data;
   }
 
-  static Future<void> upload(String id, {bool avatar = false}) async {
-    final result = await _PermissionQueue.run(
-      () => FilePicker.platform.pickFiles(
-        type: avatar ? FileType.image : FileType.custom,
-        allowedExtensions:
-            avatar
-                ? null
-                : const [
-                  'jpg',
-                  'jpeg',
-                  'png',
-                  'webp',
-                  'gif',
-                  'mp4',
-                  'mov',
-                  'mkv',
-                  'webm',
-                  'pdf',
-                  'doc',
-                  'docx',
-                  'xls',
-                  'xlsx',
-                  'ppt',
-                  'pptx',
-                  'txt',
-                  'csv',
-                  'zip',
-                ],
-      ),
-    );
-    if (result == null || result.files.single.path == null) return;
+  static Future<void> upload(
+    String id, {
+    bool avatar = false,
+    String? filePath,
+    String? fileName,
+    String text = '',
+  }) async {
+    final result =
+        filePath != null
+            ? null
+            : await _PermissionQueue.run(
+              () => FilePicker.platform.pickFiles(
+                type: avatar ? FileType.image : FileType.custom,
+                allowedExtensions:
+                    avatar
+                        ? null
+                        : const [
+                          'jpg',
+                          'jpeg',
+                          'png',
+                          'webp',
+                          'gif',
+                          'mp4',
+                          'mov',
+                          'mkv',
+                          'webm',
+                          'pdf',
+                          'doc',
+                          'docx',
+                          'xls',
+                          'xlsx',
+                          'ppt',
+                          'pptx',
+                          'txt',
+                          'csv',
+                          'zip',
+                        ],
+              ),
+            );
+    final selectedPath = filePath ?? result?.files.single.path;
+    if (selectedPath == null) return;
+    final selectedName =
+        fileName ?? result?.files.single.name ?? selectedPath.split('/').last;
     final user = FirebaseAuth.instance.currentUser;
     if (user == null) throw const HttpException('Sign in again.');
     final token = await user.getIdToken();
@@ -8484,11 +8779,12 @@ class MayaChannelsApi {
         http.MultipartRequest('POST', uri('/${Uri.encodeComponent(id)}/upload'))
           ..headers['Authorization'] = 'Bearer $token'
           ..fields['purpose'] = avatar ? 'avatar' : 'post'
+          ..fields['text'] = text
           ..files.add(
             await http.MultipartFile.fromPath(
               'file',
-              result.files.single.path!,
-              filename: result.files.single.name,
+              selectedPath,
+              filename: selectedName,
             ),
           );
     final client = http.Client();
@@ -8969,6 +9265,11 @@ class _MayaChannelPageState extends State<MayaChannelPage>
   Map<String, dynamic> _channel = {};
   List<Map<String, dynamic>> _posts = [];
   final _search = TextEditingController();
+  final _draft = TextEditingController();
+  final _draftFocus = FocusNode();
+  String? _draftPath, _draftName;
+  bool _choosingAttachment = false;
+
   String _error = '';
   String? _next;
   bool _loading = true,
@@ -8988,6 +9289,7 @@ class _MayaChannelPageState extends State<MayaChannelPage>
     super.initState();
     WidgetsBinding.instance.addObserver(this);
     unawaited(_load());
+    unawaited(_recoverCamera());
     _poll = Timer.periodic(const Duration(seconds: 20), (_) {
       if (mounted &&
           _foreground &&
@@ -9238,25 +9540,271 @@ class _MayaChannelPageState extends State<MayaChannelPage>
   }
 
   Future<void> _publish() async {
-    final text = await _channelInput(
-      context,
-      'New update',
-      'Write a message or paste a link',
-      limit: 5000,
-    );
-    if (text != null)
-      await _action(() async {
+    if (_busy || (_draft.text.trim().isEmpty && _draftPath == null)) return;
+    final message = _draft.text.trim();
+    if (message.length > 5000) {
+      _channelNotice(context, 'Keep the message under 5,000 characters.');
+      return;
+    }
+    setState(() => _busy = true);
+    try {
+      if (_draftPath != null) {
+        await MayaChannelsApi.upload(
+          _id,
+          filePath: _draftPath,
+          fileName: _draftName,
+          text: message,
+        );
+      } else {
         await MayaChannelsApi.request(
           '$_path/posts',
           method: 'POST',
-          body: {'text': text},
+          body: {'text': message},
         );
+      }
+      if (!mounted) return;
+      setState(() {
+        _draft.clear();
+        _draftPath = _draftName = null;
       });
+      _draftFocus.unfocus();
+      await _load(quiet: true);
+    } catch (e) {
+      if (mounted) _channelNotice(context, e);
+    } finally {
+      if (mounted) setState(() => _busy = false);
+    }
   }
 
-  Future<void> _upload({bool avatar = false}) => _action(() async {
-    await MayaChannelsApi.upload(_id, avatar: avatar);
-  });
+  Future<void> _upload({bool avatar = false}) async {
+    if (avatar) {
+      await _action(() async {
+        await MayaChannelsApi.upload(_id, avatar: true);
+      });
+    } else {
+      await _attachments();
+    }
+  }
+
+  Future<void> _recoverCamera() async {
+    if (!Platform.isAndroid) return;
+    try {
+      final result = await ImagePicker().retrieveLostData();
+      final files = result.files;
+      if (mounted && files != null && files.isNotEmpty && _draftPath == null) {
+        setState(() {
+          _draftPath = files.first.path;
+          _draftName = files.first.name;
+        });
+      }
+    } catch (_) {}
+  }
+
+  Future<void> _attachments() async {
+    if (_busy || _choosingAttachment) return;
+    final choice = await showModalBottomSheet<String>(
+      context: context,
+      showDragHandle: true,
+      builder:
+          (sheet) => SafeArea(
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                ListTile(
+                  leading: const Icon(Icons.camera_alt_outlined),
+                  title: const Text('Camera'),
+                  onTap: () => Navigator.pop(sheet, 'camera'),
+                ),
+                ListTile(
+                  leading: const Icon(Icons.photo_library_outlined),
+                  title: const Text('Photos & videos'),
+                  onTap: () => Navigator.pop(sheet, 'media'),
+                ),
+                ListTile(
+                  leading: const Icon(Icons.description_outlined),
+                  title: const Text('Files'),
+                  onTap: () => Navigator.pop(sheet, 'file'),
+                ),
+              ],
+            ),
+          ),
+    );
+    if (choice == null || !mounted) return;
+    _choosingAttachment = true;
+    try {
+      String? path, name;
+      if (choice == 'camera') {
+        final file = await _PermissionQueue.run(
+          () => ImagePicker().pickImage(source: ImageSource.camera),
+        );
+        path = file?.path;
+        name = file?.name;
+      } else {
+        final result = await _PermissionQueue.run(
+          () => FilePicker.platform.pickFiles(
+            type: FileType.custom,
+            allowedExtensions:
+                choice == 'media'
+                    ? const [
+                      'jpg',
+                      'jpeg',
+                      'png',
+                      'webp',
+                      'gif',
+                      'mp4',
+                      'mov',
+                      'mkv',
+                      'webm',
+                    ]
+                    : const [
+                      'pdf',
+                      'txt',
+                      'csv',
+                      'doc',
+                      'docx',
+                      'xls',
+                      'xlsx',
+                      'ppt',
+                      'pptx',
+                      'zip',
+                    ],
+          ),
+        );
+        path = result?.files.single.path;
+        name = result?.files.single.name;
+      }
+      if (!mounted || path == null) return;
+      if (await File(path).length() > 512 * 1024 * 1024) {
+        if (mounted) _channelNotice(context, 'Choose a file under 512 MB.');
+        return;
+      }
+      if (!mounted) return;
+      setState(() {
+        _draftPath = path;
+        _draftName = name;
+      });
+      _draftFocus.requestFocus();
+    } catch (e) {
+      if (mounted) _channelNotice(context, e);
+    } finally {
+      _choosingAttachment = false;
+    }
+  }
+
+  Widget _composer() {
+    final keyboard = MediaQuery.viewInsetsOf(context).bottom;
+    final image =
+        _draftPath != null &&
+        RegExp(
+          r'\.(jpg|jpeg|png|webp|gif)$',
+          caseSensitive: false,
+        ).hasMatch(_draftPath!);
+    return Padding(
+      padding: EdgeInsets.only(bottom: keyboard),
+      child: SafeArea(
+        top: false,
+        child: Material(
+          color: AppThemes.kBg,
+          child: Padding(
+            padding: const EdgeInsets.fromLTRB(8, 8, 8, 10),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                if (_busy) const LinearProgressIndicator(minHeight: 2),
+                if (_draftPath != null)
+                  Padding(
+                    padding: const EdgeInsets.fromLTRB(12, 4, 4, 8),
+                    child: Row(
+                      children: [
+                        if (image)
+                          SizedBox(
+                            width: 64,
+                            height: 64,
+                            child: Image.file(
+                              File(_draftPath!),
+                              fit: BoxFit.contain,
+                            ),
+                          )
+                        else
+                          const Icon(
+                            Icons.insert_drive_file_outlined,
+                            size: 36,
+                          ),
+                        const SizedBox(width: 12),
+                        Expanded(
+                          child: Text(
+                            _draftName ?? 'Attachment',
+                            maxLines: 2,
+                            overflow: TextOverflow.ellipsis,
+                          ),
+                        ),
+                        IconButton(
+                          tooltip: 'Remove attachment',
+                          onPressed:
+                              _busy
+                                  ? null
+                                  : () => setState(() {
+                                    _draftPath = _draftName = null;
+                                  }),
+                          icon: const Icon(Icons.close),
+                        ),
+                      ],
+                    ),
+                  ),
+                Row(
+                  crossAxisAlignment: CrossAxisAlignment.end,
+                  children: [
+                    IconButton(
+                      tooltip: 'Add attachment',
+                      onPressed: _busy ? null : _attachments,
+                      icon: const Icon(Icons.add, size: 29),
+                    ),
+                    Expanded(
+                      child: TextField(
+                        controller: _draft,
+                        focusNode: _draftFocus,
+                        enabled: !_busy,
+                        minLines: 1,
+                        maxLines: 5,
+                        maxLength: 5000,
+                        keyboardType: TextInputType.multiline,
+                        textInputAction: TextInputAction.newline,
+                        textCapitalization: TextCapitalization.sentences,
+                        onChanged: (_) => setState(() {}),
+                        decoration: const InputDecoration(
+                          hintText: 'Message or link…',
+                          counterText: '',
+                          filled: false,
+                          border: InputBorder.none,
+                          enabledBorder: InputBorder.none,
+                          focusedBorder: InputBorder.none,
+                          contentPadding: EdgeInsets.symmetric(
+                            vertical: 13,
+                            horizontal: 8,
+                          ),
+                        ),
+                      ),
+                    ),
+                    IconButton.filled(
+                      tooltip: 'Post update',
+                      onPressed:
+                          _busy ||
+                                  (_draft.text.trim().isEmpty &&
+                                      _draftPath == null)
+                              ? null
+                              : _publish,
+                      icon: const Icon(Icons.arrow_upward),
+                    ),
+                  ],
+                ),
+              ],
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+
   Future<void> _preference(String key, bool value) => _action(() async {
     await MayaChannelsApi.request(
       '$_path/preferences',
@@ -9960,6 +10508,8 @@ class _MayaChannelPageState extends State<MayaChannelPage>
     _poll?.cancel();
     _debounce?.cancel();
     _search.dispose();
+    _draft.dispose();
+    _draftFocus.dispose();
     WidgetsBinding.instance.removeObserver(this);
     super.dispose();
   }
@@ -10032,40 +10582,7 @@ class _MayaChannelPageState extends State<MayaChannelPage>
             ),
         ],
       ),
-      bottomNavigationBar:
-          _channel['can_post'] == true
-              ? SafeArea(
-                child: Padding(
-                  padding: const EdgeInsets.fromLTRB(16, 8, 16, 12),
-                  child: Column(
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      if (_busy) const LinearProgressIndicator(),
-                      Row(
-                        children: [
-                          Expanded(
-                            child: OutlinedButton.icon(
-                              onPressed: _busy ? null : _publish,
-                              icon: const Icon(Icons.edit_outlined),
-                              label: const Padding(
-                                padding: EdgeInsets.all(12),
-                                child: Text('Write an update'),
-                              ),
-                            ),
-                          ),
-                          const SizedBox(width: 8),
-                          IconButton(
-                            tooltip: 'Upload image, video or document',
-                            onPressed: _busy ? null : () => _upload(),
-                            icon: const Icon(Icons.attach_file),
-                          ),
-                        ],
-                      ),
-                    ],
-                  ),
-                ),
-              )
-              : null,
+      bottomNavigationBar: _channel['can_post'] == true ? _composer() : null,
       body:
           _loading
               ? const Center(child: CircularProgressIndicator())
@@ -10116,7 +10633,7 @@ class _MayaChannelPageState extends State<MayaChannelPage>
               : RefreshIndicator(
                 onRefresh: _load,
                 child: ListView(
-                  padding: const EdgeInsets.fromLTRB(14, 10, 14, 24),
+                  padding: const EdgeInsets.only(top: 10, bottom: 24),
                   children: [
                     if (_search.text.isNotEmpty)
                       ListTile(
@@ -10234,7 +10751,8 @@ class _MayaChannelPostState extends State<MayaChannelPost> {
     final overlap = rect.intersect(clip);
     if (overlap.width > 0 &&
         overlap.height > 0 &&
-        overlap.width * overlap.height >= rect.width * rect.height * .6) {
+        overlap.width * overlap.height >=
+            math.min(rect.width * rect.height, clip.width * clip.height) * .6) {
       _sent = true;
       _timer?.cancel();
       widget.onVisible();
@@ -10284,48 +10802,80 @@ class _MayaChannelPostState extends State<MayaChannelPost> {
     );
     return Container(
       margin: const EdgeInsets.only(bottom: 14),
-      padding: const EdgeInsets.fromLTRB(14, 12, 14, 5),
-      decoration: BoxDecoration(
-        color: AppThemes.kCardBg,
-        borderRadius: BorderRadius.circular(18),
-        border: Border.all(color: AppThemes.kBorder),
-      ),
+      padding: const EdgeInsets.only(top: 8, bottom: 12),
+
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Row(
-            children: [
-              if (p['forwarded'] == true)
-                const Text(
-                  'Forwarded update',
-                  style: TextStyle(fontSize: 11, color: Colors.white54),
+          Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 16),
+            child: Row(
+              children: [
+                if (p['forwarded'] == true)
+                  const Text(
+                    'Forwarded update',
+                    style: TextStyle(fontSize: 11, color: Colors.white54),
+                  ),
+                const Spacer(),
+                Text(
+                  '${created.day}/${created.month} · ${TimeOfDay.fromDateTime(created).format(context)}',
+                  style: const TextStyle(fontSize: 11, color: Colors.white54),
                 ),
-              const Spacer(),
-              Text(
-                '${created.day}/${created.month} · ${TimeOfDay.fromDateTime(created).format(context)}',
-                style: const TextStyle(fontSize: 11, color: Colors.white54),
-              ),
-              if (widget.canDelete)
-                PopupMenuButton<String>(
-                  iconSize: 18,
-                  onSelected: (v) => widget.onAction(v, null),
-                  itemBuilder:
-                      (_) => [
-                        const PopupMenuItem(
-                          value: 'delete',
-                          child: Text('Delete post'),
-                        ),
-                      ],
-                ),
-            ],
+                if (widget.canDelete)
+                  PopupMenuButton<String>(
+                    iconSize: 18,
+                    onSelected: (v) => widget.onAction(v, null),
+                    itemBuilder:
+                        (_) => [
+                          const PopupMenuItem(
+                            value: 'delete',
+                            child: Text('Delete post'),
+                          ),
+                        ],
+                  ),
+              ],
+            ),
           ),
-          if (kind == 'image' || kind == 'video')
+          if (kind == 'image')
+            GestureDetector(
+              onTap: widget.onMedia,
+              child: Image.network(
+                '${p['thumbnail'] ?? ''}'.isNotEmpty
+                    ? '${p['thumbnail']}'
+                    : '${p['media'] ?? ''}',
+                gaplessPlayback: true,
+                width: double.infinity,
+                fit: BoxFit.fitWidth,
+                cacheWidth: (MediaQuery.sizeOf(context).width *
+                        MediaQuery.devicePixelRatioOf(context))
+                    .round()
+                    .clamp(1, 1440),
+                errorBuilder:
+                    (_, __, ___) => Image.network(
+                      '${p['media'] ?? ''}',
+                      fit: BoxFit.contain,
+                      errorBuilder:
+                          (_, __, ___) => const SizedBox(
+                            height: 180,
+                            child: Center(
+                              child: Text('Image unavailable · tap to reopen'),
+                            ),
+                          ),
+                    ),
+              ),
+            ),
+          if (kind == 'video')
             GestureDetector(
               onTap: widget.onMedia,
               child: ClipRRect(
-                borderRadius: BorderRadius.circular(12),
+                borderRadius: BorderRadius.zero,
                 child: AspectRatio(
-                  aspectRatio: 16 / 9,
+                  aspectRatio:
+                      (p['width'] is num &&
+                              p['height'] is num &&
+                              (p['height'] as num) > 0)
+                          ? (p['width'] as num) / (p['height'] as num)
+                          : 16 / 9,
                   child: Stack(
                     fit: StackFit.expand,
                     children: [
@@ -10335,9 +10885,8 @@ class _MayaChannelPostState extends State<MayaChannelPost> {
                         '${p['preview'] ?? ''}'.isNotEmpty
                             ? '${p['preview']}'
                             : '${p['media'] ?? ''}',
-                        loopPreview:
-                            kind == 'video' &&
-                            '${p['preview'] ?? ''}'.isNotEmpty,
+                        loopPreview: true,
+                        fit: BoxFit.contain,
                       ),
                       if (kind == 'video')
                         const Align(
@@ -10373,7 +10922,7 @@ class _MayaChannelPostState extends State<MayaChannelPost> {
             ),
           if (text.isNotEmpty)
             Padding(
-              padding: const EdgeInsets.symmetric(vertical: 10),
+              padding: const EdgeInsets.symmetric(vertical: 10, horizontal: 16),
               child: GestureDetector(
                 onTap: text.contains('https://') ? widget.onLink : null,
                 child: Text(
@@ -10400,7 +10949,7 @@ class _MayaChannelPostState extends State<MayaChannelPost> {
               ),
               const SizedBox(width: 5),
               Text(
-                '${p['views'] ?? 0} views',
+                "${p['views'] ?? 0} ${(p['views'] ?? 0) == 1 ? 'view' : 'views'}",
                 style: const TextStyle(fontSize: 11, color: Colors.white54),
               ),
             ],
@@ -10627,7 +11176,7 @@ class _MayaChannelMembersState extends State<MayaChannelMembers> {
             (c) => AlertDialog(
               title: const Text('Transfer channel ownership?'),
               content: const Text(
-                'The selected member becomes owner. You become an admin and lose owner-only controls.',
+                'An invitation appears in the member’s Notifications. Ownership changes only after they accept.',
               ),
               actions: [
                 TextButton(
@@ -10636,7 +11185,7 @@ class _MayaChannelMembersState extends State<MayaChannelMembers> {
                 ),
                 FilledButton(
                   onPressed: () => Navigator.pop(c, true),
-                  child: const Text('Transfer'),
+                  child: const Text('Send request'),
                 ),
               ],
             ),
@@ -10651,10 +11200,12 @@ class _MayaChannelMembersState extends State<MayaChannelMembers> {
         body: {'action': action},
       );
       if (mounted) {
-        if (action == 'transfer')
-          Navigator.pop(context);
-        else
-          await _load();
+        if (action == 'transfer' || action == 'admin')
+          _channelNotice(
+            context,
+            'Invitation sent. The member must accept in Notifications.',
+          );
+        await _load();
       }
     } catch (e) {
       if (mounted) _channelNotice(context, e);
