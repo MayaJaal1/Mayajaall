@@ -71,8 +71,12 @@ jobs:
           fi
         done
         [[ "$missing" == 0 ]] || exit 1
+        if ! keytool -list -keystore mayajaal-release.jks -storepass:env MAYAJAAL_STORE_PASSWORD >/dev/null 2>&1; then
+          echo "::error::The repository keystore cannot be opened. ANDROID_KEYSTORE_PASSWORD does not unlock this file, or the file is invalid. Verify the original mayajaal-release.jks and its store password."
+          exit 1
+        fi
         if ! keytool -list -keystore mayajaal-release.jks -storepass:env MAYAJAAL_STORE_PASSWORD -alias "$MAYAJAAL_KEY_ALIAS" >/dev/null 2>&1; then
-          echo "::error::Existing keystore could not be unlocked, or alias was not found. Check ANDROID_KEYSTORE_PASSWORD and ANDROID_KEY_ALIAS. No new signing key was generated."
+          echo "::error::Keystore password accepted, but ANDROID_KEY_ALIAS was not found in this keystore. Set its exact existing alias."
           exit 1
         fi
         # Import only into a temporary validation file; the original release keystore is never modified.
@@ -132,8 +136,8 @@ jobs:
             'distributionBase=GRADLE_USER_HOME', 'distributionPath=wrapper/dists',
             'zipStoreBase=GRADLE_USER_HOME', 'zipStorePath=wrapper/dists']
         lines=[line for line in existing if not line.startswith(('distributionUrl=','distributionSha256Sum='))]
-        lines += [r'distributionUrl=https\://services.gradle.org/distributions/gradle-8.11.1-all.zip',
-                  'distributionSha256Sum=89d4e70e4e84e2d2dfbb63e4daa53e21b25017cc70c37e4eea31ee51fb15098a']
+        lines += [r'distributionUrl=https\://services.gradle.org/distributions/gradle-8.13-all.zip',
+                  'distributionSha256Sum=fba8464465835e74f7270bbf43d6d8a8d7709ab0a43ce1aa3323f73e9aa0c612']
         props.write_text('\n'.join(lines)+'\n')
         flutter=os.environ.get('FLUTTER_ROOT')
         if not flutter:raise SystemExit('::error::Flutter SDK path is missing.')
@@ -274,6 +278,7 @@ jobs:
 
             <uses-permission android:name="android.permission.INTERNET"/>
             <uses-permission android:name="android.permission.ACCESS_NETWORK_STATE"/>
+            <uses-permission android:name="android.permission.CHANGE_NETWORK_STATE"/>
             <uses-permission android:name="android.permission.READ_MEDIA_IMAGES"/>
             <uses-permission android:name="android.permission.READ_MEDIA_VIDEO"/>
             <uses-permission android:name="android.permission.READ_MEDIA_VISUAL_USER_SELECTED"/>
@@ -285,6 +290,7 @@ jobs:
             <uses-permission android:name="android.permission.RECORD_AUDIO"/>
             <uses-permission android:name="android.permission.MODIFY_AUDIO_SETTINGS"/>
             <uses-permission android:name="android.permission.BLUETOOTH" android:maxSdkVersion="30"/>
+            <uses-permission android:name="android.permission.BLUETOOTH_ADMIN" android:maxSdkVersion="30"/>
             <uses-permission android:name="android.permission.BLUETOOTH_CONNECT"/>
             <uses-permission android:name="android.permission.FOREGROUND_SERVICE"/>
             <uses-permission android:name="android.permission.FOREGROUND_SERVICE_DATA_SYNC"/>
@@ -472,8 +478,8 @@ jobs:
 
         plugins {
             id "dev.flutter.flutter-plugin-loader" version "1.0.0"
-            id "com.android.application" version "8.10.1" apply false
-            id "org.jetbrains.kotlin.android" version "2.1.0" apply false
+            id "com.android.application" version "8.12.1" apply false
+            id "org.jetbrains.kotlin.android" version "2.2.0" apply false
             id "com.google.gms.google-services" version "4.4.0" apply false
         }
 
@@ -521,11 +527,12 @@ jobs:
         MAYAJAAL_TERABOX_RESOLVER: ${{ vars.MAYAJAAL_TERABOX_RESOLVER }}
         MAYAJAAL_SOCIAL_RESOLVER: ${{ vars.MAYAJAAL_SOCIAL_RESOLVER }}
         MAYAJAAL_CHANNEL_UPLOAD: ${{ vars.MAYAJAAL_CHANNEL_UPLOAD }}
+        MAYA_LIVE_API: ${{ vars.MAYA_LIVE_API }}
       run: |
         set -euo pipefail
         args=(--release --build-name="$MAYAJAAL_BUILD_NAME" --build-number="$MAYAJAAL_BUILD_NUMBER")
         # Omit blank values so String.fromEnvironment defaults in Dart still work.
-        for name in MAYAJAAL_TERABOX_RESOLVER MAYAJAAL_SOCIAL_RESOLVER MAYAJAAL_CHANNEL_UPLOAD; do
+        for name in MAYAJAAL_TERABOX_RESOLVER MAYAJAAL_SOCIAL_RESOLVER MAYAJAAL_CHANNEL_UPLOAD MAYA_LIVE_API; do
           value="${!name}"
           if [[ -n "$value" ]]; then args+=("--dart-define=$name=$value"); fi
         done
@@ -556,11 +563,12 @@ jobs:
         MAYAJAAL_TERABOX_RESOLVER: ${{ vars.MAYAJAAL_TERABOX_RESOLVER }}
         MAYAJAAL_SOCIAL_RESOLVER: ${{ vars.MAYAJAAL_SOCIAL_RESOLVER }}
         MAYAJAAL_CHANNEL_UPLOAD: ${{ vars.MAYAJAAL_CHANNEL_UPLOAD }}
+        MAYA_LIVE_API: ${{ vars.MAYA_LIVE_API }}
       run: |
         set -euo pipefail
         args=(--release --build-name="$MAYAJAAL_BUILD_NAME" --build-number="$MAYAJAAL_BUILD_NUMBER")
         # Omit blank values so String.fromEnvironment defaults in Dart still work.
-        for name in MAYAJAAL_TERABOX_RESOLVER MAYAJAAL_SOCIAL_RESOLVER MAYAJAAL_CHANNEL_UPLOAD; do
+        for name in MAYAJAAL_TERABOX_RESOLVER MAYAJAAL_SOCIAL_RESOLVER MAYAJAAL_CHANNEL_UPLOAD MAYA_LIVE_API; do
           value="${!name}"
           if [[ -n "$value" ]]; then args+=("--dart-define=$name=$value"); fi
         done
