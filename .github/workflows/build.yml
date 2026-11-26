@@ -48,15 +48,25 @@ jobs:
           test -f lib/live_adventures.dart || { echo "::error::lib/live_adventures.dart not found"; exit 1; }
           echo "✅ All required files present"
 
-      - name: Verify existing keystore
+      - name: Verify existing keystore and signing credentials
         shell: bash
+        env:
+          STORE_PASS: ${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
+          KEY_PASS: ${{ secrets.ANDROID_KEY_PASSWORD }}
+          KEY_ALIAS: ${{ secrets.ANDROID_KEY_ALIAS }}
         run: |
           set -euo pipefail
-          if [ ! -f "mayajaal-release.jks" ]; then
-            echo "::error::mayajaal-release.jks repo mein nahi mila."
-            exit 1
-          fi
-          echo "✅ Existing keystore mil gaya - isse hi sign hoga"
+          test -f mayajaal-release.jks || { echo "::error::Keystore missing"; exit 1; }
+          test -n "$STORE_PASS" && test -n "$KEY_PASS" && test -n "$KEY_ALIAS" || { echo "::error::Signing secrets missing"; exit 1; }
+          export LC_ALL=C
+          cert=$(keytool -list -v -keystore mayajaal-release.jks -storepass:env STORE_PASS -alias "$KEY_ALIAS") || { echo "::error::Store password or alias incorrect"; exit 1; }
+          echo "$cert" | grep -Fq '4E:C6:A6:4D:34:C4:B1:FA:52:64:9C:62:B1:1F:D5:57:14:6B:5E:BD:00:FD:0C:07:2E:EF:7E:91:F9:C4:77:DD' || { echo "::error::Wrong signing certificate; use Firebase-matching keystore"; exit 1; }
+          tmp=$(mktemp -d)
+          trap 'rm -rf "$tmp"' EXIT
+          echo test > "$tmp/check.txt"
+          jar cf "$tmp/check.jar" -C "$tmp" check.txt
+          jarsigner -keystore mayajaal-release.jks -storepass:env STORE_PASS -keypass:env KEY_PASS "$tmp/check.jar" "$KEY_ALIAS" >/dev/null || { echo "::error::Private key signing failed"; exit 1; }
+          echo "Signing credentials and Firebase certificate verified"
 
       - name: Read release version from pubspec
         shell: bash
