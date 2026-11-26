@@ -1,4 +1,3 @@
-
 import 'dart:async';
 import 'dart:convert';
 import 'package:flutter/material.dart';
@@ -14,57 +13,75 @@ const _base = String.fromEnvironment(
 
 const _mint = Color(0xff00e676);
 
-Future<Map<String, dynamic>> _api(
-  String path, {
-  Map<String, dynamic>? body,
-}) async {
-  final user = FirebaseAuth.instance.currentUser;
-
-  if (user == null) {
-    throw Exception('Sign in first');
+Map<String, dynamic> _parseLiveResponse(int status, String text) {
+  Object? decoded;
+  try {
+    decoded = jsonDecode(text);
+  } catch (_) {}
+  final data = decoded is Map ? Map<String, dynamic>.from(decoded) : null;
+  if (status < 200 || status >= 300) {
+    final detail = data?['error'] ?? data?['detail'] ?? data?['message'];
+    if (detail is String && detail.trim().isNotEmpty) {
+      throw Exception(detail.length > 240 ? detail.substring(0, 240) : detail);
+    }
+    throw Exception('Live service HTTP $status. Please try again.');
   }
-
-  final token = await user.getIdToken();
-  final uri = Uri.parse('$_base$path');
-
-  if (uri.scheme != 'https') {
-    throw Exception('HTTPS required');
-  }
-
-  final headers = {
-    'Authorization': 'Bearer $token',
-    'Content-Type': 'application/json',
-  };
-
-  final response = await (
-    body == null
-        ? http.get(uri, headers: headers)
-        : http.post(
-            uri,
-            headers: headers,
-            body: jsonEncode(body),
-          )
-  ).timeout(const Duration(seconds: 15));
-
-  final data = jsonDecode(response.body) as Map<String, dynamic>;
-
-  if (response.statusCode != 200) {
-    throw Exception(data['error'] ?? 'Live service unavailable');
-  }
-
+  if (data == null)
+    throw Exception(
+        'The live service returned an invalid response. Please retry.');
   return data;
+}
+
+Future<Map<String, dynamic>> _api(String path,
+    {Map<String, dynamic>? body}) async {
+  final user = FirebaseAuth.instance.currentUser;
+  if (user == null) throw Exception('Sign in first');
+  final uri =
+      Uri.tryParse('${_base.trim().replaceAll(RegExp(r'/+$'), '')}$path');
+  if (uri == null ||
+      uri.scheme != 'https' ||
+      !uri.hasAuthority ||
+      uri.host.isEmpty) {
+    throw Exception('A valid HTTPS live service address is required.');
+  }
+  final client = http.Client();
+  try {
+    Future<http.Response> send(bool refresh) async {
+      final token = await user.getIdToken(refresh);
+      final headers = {
+        'Authorization': 'Bearer $token',
+        'Content-Type': 'application/json'
+      };
+      return await (body == null
+              ? client.get(uri, headers: headers)
+              : client.post(uri, headers: headers, body: jsonEncode(body)))
+          .timeout(const Duration(seconds: 15));
+    }
+
+    var response = await send(false);
+    if (response.statusCode == 401) response = await send(true);
+    if (FirebaseAuth.instance.currentUser?.uid != user.uid)
+      throw Exception('Sign in again to continue.');
+    return _parseLiveResponse(response.statusCode, response.body);
+  } on TimeoutException {
+    throw Exception(
+        'The live service took too long to respond. Please try again.');
+  } finally {
+    client.close();
+  }
 }
 
 class LiveAdventuresScreen extends StatefulWidget {
   const LiveAdventuresScreen({super.key});
 
   @override
-  State<LiveAdventuresScreen> createState() =>
-      _LiveAdventuresState();
+  State<LiveAdventuresScreen> createState() => _LiveAdventuresState();
 }
 
-class _LiveAdventuresState extends State<LiveAdventuresScreen> {
-  List<dynamic> rooms = [];
+class _LiveAdventuresState extends State<LiveAdventuresScreen>
+    with WidgetsBindingObserver {
+  List<Map<String, dynamic>> rooms = [];
+  bool _refreshing = false, _foreground = true;
   String? error;
   bool busy = false;
   Timer? timer;
@@ -72,36 +89,57 @@ class _LiveAdventuresState extends State<LiveAdventuresScreen> {
   @override
   void initState() {
     super.initState();
-    refresh();
+    WidgetsBinding.instance.addObserver(this);
+    unawaited(refresh());
 
     timer = Timer.periodic(
       const Duration(seconds: 10),
-      (_) => refresh(),
+      (_) {
+        if (mounted &&
+            _foreground &&
+            !busy &&
+            (ModalRoute.of(context)?.isCurrent ?? true)) unawaited(refresh());
+      },
     );
   }
 
   @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    _foreground = state == AppLifecycleState.resumed;
+    if (_foreground && mounted && (ModalRoute.of(context)?.isCurrent ?? true))
+      unawaited(refresh());
+  }
+
+  @override
   void dispose() {
+    WidgetsBinding.instance.removeObserver(this);
     timer?.cancel();
     super.dispose();
   }
 
   Future<void> refresh() async {
+    if (_refreshing || !_foreground || !mounted) return;
+    _refreshing = true;
     try {
-      final r = await _api('/rooms');
-
-      if (mounted) {
+      final response = await _api('/rooms');
+      final value = response['rooms'];
+      if (value is! List) throw Exception('Invalid room list');
+      final next = value
+          .whereType<Map>()
+          .map((r) => Map<String, dynamic>.from(r))
+          .where((r) => r['id'] is String && (r['id'] as String).isNotEmpty)
+          .toList();
+      if (mounted)
         setState(() {
-          rooms = r['rooms'] as List;
+          rooms = next;
           error = null;
         });
-      }
-    } catch (e) {
-      if (mounted) {
-        setState(() {
-          error = 'Could not load live adventures. Pull to retry.';
-        });
-      }
+    } catch (_) {
+      if (mounted)
+        setState(
+            () => error = 'Could not load live adventures. Pull to retry.');
+    } finally {
+      _refreshing = false;
     }
   }
 
@@ -120,8 +158,7 @@ class _LiveAdventuresState extends State<LiveAdventuresScreen> {
           throw Exception('Microphone permission required');
         }
 
-        if (video &&
-            !await Permission.camera.request().isGranted) {
+        if (video && !await Permission.camera.request().isGranted) {
           throw Exception('Camera permission required');
         }
       }
@@ -138,7 +175,22 @@ class _LiveAdventuresState extends State<LiveAdventuresScreen> {
               },
       );
 
-      if (!mounted) return;
+      if (r['url'] is! String ||
+          r['token'] is! String ||
+          r['id'] is! String ||
+          (r['url'] as String).isEmpty ||
+          (r['token'] as String).isEmpty) {
+        throw Exception(
+            'The live service returned incomplete connection details.');
+      }
+      if (!mounted) {
+        if (id == null) {
+          try {
+            await _api('/end', body: {'id': r['id']});
+          } catch (_) {}
+        }
+        return;
+      }
 
       await Navigator.of(context).push(
         MaterialPageRoute(
@@ -264,17 +316,13 @@ class _LiveAdventuresState extends State<LiveAdventuresScreen> {
               Card(
                 child: ListTile(
                   leading: Icon(
-                    r['video'] == true
-                        ? Icons.videocam
-                        : Icons.mic,
+                    r['video'] == true ? Icons.videocam : Icons.mic,
                     color: _mint,
                   ),
                   title: Text('${r['title']}'),
                   subtitle: Text('${r['hostName']} • LIVE'),
                   trailing: const Icon(Icons.arrow_forward),
-                  onTap: busy
-                      ? null
-                      : () => enter(id: r['id'] as String),
+                  onTap: busy ? null : () => enter(id: r['id'] as String),
                 ),
               ),
           ],
@@ -296,14 +344,13 @@ class _AdventureRoom extends StatefulWidget {
   });
 
   @override
-  State<_AdventureRoom> createState() =>
-      _AdventureRoomState();
+  State<_AdventureRoom> createState() => _AdventureRoomState();
 }
 
 class _AdventureRoomState extends State<_AdventureRoom> {
   final room = lk.Room();
 
-  Timer? ticker;
+  Future<void>? _ending;
   String? error;
 
   bool ready = false;
@@ -318,14 +365,11 @@ class _AdventureRoomState extends State<_AdventureRoom> {
     camera = widget.video;
     connect();
 
-    ticker = Timer.periodic(
-      const Duration(seconds: 1),
-      (_) {
-        if (mounted) {
-          setState(() {});
-        }
-      },
-    );
+    room.addListener(_roomChanged);
+  }
+
+  void _roomChanged() {
+    if (mounted && !closing) setState(() {});
   }
 
   Future<void> connect() async {
@@ -335,7 +379,7 @@ class _AdventureRoomState extends State<_AdventureRoom> {
         widget.data['token'] as String,
       );
 
-      if (!mounted) {
+      if (!mounted || closing) {
         await room.disconnect();
         return;
       }
@@ -343,12 +387,16 @@ class _AdventureRoomState extends State<_AdventureRoom> {
       if (widget.host) {
         await room.localParticipant!.setMicrophoneEnabled(true);
 
+        if (!mounted || closing) {
+          await room.disconnect();
+          return;
+        }
         if (widget.video) {
           await room.localParticipant!.setCameraEnabled(true);
         }
       }
 
-      if (mounted) {
+      if (mounted && !closing) {
         setState(() => ready = true);
       }
     } catch (e) {
@@ -360,9 +408,9 @@ class _AdventureRoomState extends State<_AdventureRoom> {
     }
   }
 
-  Future<void> end() async {
-    if (closing) return;
+  Future<void> end() => _ending ??= _close();
 
+  Future<void> _close() async {
     closing = true;
 
     try {
@@ -383,7 +431,7 @@ class _AdventureRoomState extends State<_AdventureRoom> {
 
   @override
   void dispose() {
-    ticker?.cancel();
+    room.removeListener(_roomChanged);
 
     unawaited(
       end().whenComplete(() => room.dispose()),
@@ -399,9 +447,9 @@ class _AdventureRoomState extends State<_AdventureRoom> {
     // FIX: Explicit participant type for LiveKit.
     final participants = <lk.Participant>[
       if (widget.host) ...[
-        if (room.localParticipant != null)
-          room.localParticipant!,
-      ] else ...room.remoteParticipants.values,
+        if (room.localParticipant != null) room.localParticipant!,
+      ] else
+        ...room.remoteParticipants.values,
     ];
 
     for (final p in participants) {
@@ -449,8 +497,7 @@ class _AdventureRoomState extends State<_AdventureRoom> {
                   tooltip: 'Toggle microphone',
                   onPressed: () async {
                     try {
-                      await room.localParticipant!
-                          .setMicrophoneEnabled(muted);
+                      await room.localParticipant!.setMicrophoneEnabled(muted);
 
                       if (mounted) {
                         setState(() => muted = !muted);
@@ -470,8 +517,7 @@ class _AdventureRoomState extends State<_AdventureRoom> {
                     tooltip: 'Toggle camera',
                     onPressed: () async {
                       try {
-                        await room.localParticipant!
-                            .setCameraEnabled(!camera);
+                        await room.localParticipant!.setCameraEnabled(!camera);
 
                         if (mounted) {
                           setState(() => camera = !camera);
@@ -483,26 +529,27 @@ class _AdventureRoomState extends State<_AdventureRoom> {
                       }
                     },
                     icon: Icon(
-                      camera
-                          ? Icons.videocam
-                          : Icons.videocam_off,
+                      camera ? Icons.videocam : Icons.videocam_off,
                     ),
                   ),
               ],
             ),
           SafeArea(
             child: FilledButton(
-              onPressed: () async {
-                await end();
+              onPressed: closing
+                  ? null
+                  : () async {
+                      setState(() => closing = true);
+                      await end();
 
-                if (mounted) {
-                  Navigator.pop(context);
-                }
-              },
+                      if (mounted) {
+                        Navigator.pop(context);
+                      }
+                    },
               child: Text(
                 widget.host
-                    ? 'End broadcast'
-                    : 'Leave adventure',
+                    ? (closing ? 'Ending broadcast…' : 'End broadcast')
+                    : (closing ? 'Leaving…' : 'Leave adventure'),
               ),
             ),
           ),
