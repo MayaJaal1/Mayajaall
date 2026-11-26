@@ -4,6 +4,11 @@ on:
   push:
     branches: [main]
   workflow_dispatch:
+    inputs:
+      publish_release:
+        description: Publish tested build to downloads repository
+        type: boolean
+        default: false
 
 permissions:
   contents: write
@@ -40,6 +45,7 @@ jobs:
           test -f android/app/google-services.json || { echo "::error::android/app/google-services.json not found"; exit 1; }
           test -f assets/icon/logo.png || { echo "::error::assets/icon/logo.png not found"; exit 1; }
           test -f lib/main.dart || { echo "::error::lib/main.dart not found"; exit 1; }
+          test -f lib/live_adventures.dart || { echo "::error::lib/live_adventures.dart not found"; exit 1; }
           echo "✅ All required files present"
 
       - name: Verify existing keystore
@@ -95,7 +101,7 @@ jobs:
           done
 
       - name: Analyze app source
-        run: flutter analyze --no-fatal-infos --no-fatal-warnings lib/main.dart
+        run: flutter analyze --no-fatal-infos --no-fatal-warnings lib/main.dart lib/live_adventures.dart
 
       - name: Prepare Android project
         shell: bash
@@ -234,6 +240,16 @@ jobs:
               <uses-permission android:name="android.permission.WRITE_EXTERNAL_STORAGE" android:maxSdkVersion="28"/>
               <uses-permission android:name="android.permission.POST_NOTIFICATIONS"/>
               <uses-permission android:name="android.permission.WAKE_LOCK"/>
+              <uses-permission android:name="android.permission.CAMERA"/>
+              <uses-permission android:name="android.permission.RECORD_AUDIO"/>
+              <uses-permission android:name="android.permission.MODIFY_AUDIO_SETTINGS"/>
+              <uses-permission android:name="android.permission.BLUETOOTH" android:maxSdkVersion="30"/>
+              <uses-permission android:name="android.permission.BLUETOOTH_CONNECT"/>
+              <uses-permission android:name="android.permission.FOREGROUND_SERVICE"/>
+              <uses-permission android:name="android.permission.FOREGROUND_SERVICE_DATA_SYNC"/>
+              <uses-feature android:name="android.hardware.camera" android:required="false"/>
+              <uses-feature android:name="android.hardware.camera.autofocus" android:required="false"/>
+              <uses-feature android:name="android.hardware.microphone" android:required="false"/>
 
               <application
                   android:label="MayaJaal"
@@ -243,6 +259,9 @@ jobs:
                   android:networkSecurityConfig="@xml/network_security_config"
                   android:usesCleartextTraffic="true"
                   tools:targetApi="35">
+
+                  <meta-data android:name="com.google.android.gms.ads.APPLICATION_ID" android:value="ca-app-pub-2838903415772756~9180315931"/>
+                  <meta-data android:name="com.onesignal.NotificationServiceExtension" android:value="com.onesignal.notifications.internal.service.impl.NotificationServiceExtension"/>
 
                   <activity
                       android:name=".MainActivity"
@@ -283,6 +302,7 @@ jobs:
                           <data android:scheme="https" android:host="www.mayajaal.online" android:pathPrefix="/api/v/"/>
                           <data android:scheme="https" android:host="www.mayajaal.online" android:pathPrefix="/s/"/>
                           <data android:scheme="https" android:host="www.mayajaal.online" android:pathPrefix="/channel/"/>
+                          <data android:scheme="https" android:host="www.mayajaal.online" android:pathPrefix="/tb/"/>
                           <data android:scheme="https" android:host="mayajaal.online" android:pathPrefix="/channel/"/>
                           <data android:scheme="https" android:host="m.mayajaal.online"/>
                       </intent-filter>
@@ -320,6 +340,10 @@ jobs:
                   <intent>
                       <action android:name="android.intent.action.SEND"/>
                       <data android:mimeType="text/plain"/>
+                  </intent>
+                  <intent>
+                      <action android:name="android.intent.action.SEND"/>
+                      <data android:mimeType="image/*"/>
                   </intent>
               </queries>
           </manifest>
@@ -362,9 +386,9 @@ jobs:
               signingConfigs {
                   release {
                       storeFile file('mayajaal-release.jks')
-                      storePassword 'MayajaalRelease2024'
+                      storePassword System.getenv('MAYAJAAL_STORE_PASSWORD')
                       keyAlias 'newkey2024'
-                      keyPassword 'MayajaalRelease2024'
+                      keyPassword System.getenv('MAYAJAAL_KEY_PASSWORD')
                   }
               }
 
@@ -456,6 +480,8 @@ jobs:
       # ⭐ Yahan se APK aur AAB dono build honge
       - name: Build release APK
         env:
+          MAYAJAAL_STORE_PASSWORD: ${{ secrets.MAYAJAAL_STORE_PASSWORD }}
+          MAYAJAAL_KEY_PASSWORD: ${{ secrets.MAYAJAAL_KEY_PASSWORD }}
           MAYAJAAL_TERABOX_RESOLVER: ${{ vars.MAYAJAAL_TERABOX_RESOLVER }}
           MAYAJAAL_SOCIAL_RESOLVER: ${{ vars.MAYAJAAL_SOCIAL_RESOLVER }}
           MAYAJAAL_CHANNEL_UPLOAD: ${{ vars.MAYAJAAL_CHANNEL_UPLOAD }}
@@ -469,6 +495,8 @@ jobs:
 
       - name: Build release AAB
         env:
+          MAYAJAAL_STORE_PASSWORD: ${{ secrets.MAYAJAAL_STORE_PASSWORD }}
+          MAYAJAAL_KEY_PASSWORD: ${{ secrets.MAYAJAAL_KEY_PASSWORD }}
           MAYAJAAL_TERABOX_RESOLVER: ${{ vars.MAYAJAAL_TERABOX_RESOLVER }}
           MAYAJAAL_SOCIAL_RESOLVER: ${{ vars.MAYAJAAL_SOCIAL_RESOLVER }}
           MAYAJAAL_CHANNEL_UPLOAD: ${{ vars.MAYAJAAL_CHANNEL_UPLOAD }}
@@ -510,7 +538,7 @@ jobs:
           if-no-files-found: error
 
       - name: Publish GitHub Release
-        if: github.ref == 'refs/heads/main'
+        if: github.ref == 'refs/heads/main' && github.event_name == 'workflow_dispatch' && inputs.publish_release
         uses: softprops/action-gh-release@v2
         with:
           tag_name: v${{ env.MAYAJAAL_BUILD_NAME }}-${{ env.MAYAJAAL_BUILD_NUMBER }}
