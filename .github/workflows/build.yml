@@ -24,7 +24,7 @@ jobs:
       shell: bash
       run: |
         set -euo pipefail
-        for file in pubspec.yaml android/app/google-services.json assets/icon/logo.png lib/main.dart lib/live_adventures.dart mayajaal-release.jks android/gradlew android/gradle/wrapper/gradle-wrapper.jar android/gradle/wrapper/gradle-wrapper.properties; do
+        for file in pubspec.yaml android/app/google-services.json assets/icon/logo.png lib/main.dart lib/live_adventures.dart mayajaal-release.jks; do
           test -f "$file" || { echo "::error::Required project file missing: $file"; exit 1; }
         done
         python3 - <<'PYFIREBASE'
@@ -127,7 +127,11 @@ jobs:
         python3 - <<'PYGRADLE'
         import os,pathlib
         props=pathlib.Path('android/gradle/wrapper/gradle-wrapper.properties')
-        lines=[line for line in props.read_text().splitlines() if not line.startswith(('distributionUrl=','distributionSha256Sum='))]
+        props.parent.mkdir(parents=True,exist_ok=True)
+        existing=props.read_text().splitlines() if props.is_file() else [
+            'distributionBase=GRADLE_USER_HOME', 'distributionPath=wrapper/dists',
+            'zipStoreBase=GRADLE_USER_HOME', 'zipStorePath=wrapper/dists']
+        lines=[line for line in existing if not line.startswith(('distributionUrl=','distributionSha256Sum='))]
         lines += [r'distributionUrl=https\://services.gradle.org/distributions/gradle-8.11.1-all.zip',
                   'distributionSha256Sum=89d4e70e4e84e2d2dfbb63e4daa53e21b25017cc70c37e4eea31ee51fb15098a']
         props.write_text('\n'.join(lines)+'\n')
@@ -137,7 +141,9 @@ jobs:
         def prop(value):return value.replace('\\','\\\\').replace(':','\\:')
         pathlib.Path('android/local.properties').write_text('sdk.dir='+prop(sdk)+'\nflutter.sdk='+prop(flutter)+'\n')
         PYGRADLE
-        chmod +x android/gradlew
+        # Flutter 3.29 restores missing wrapper scripts/JAR from its own SDK cache at build time.
+        # They are normally ignored by Flutter's generated Android .gitignore.
+        if [[ -f android/gradlew ]]; then chmod +x android/gradlew; fi
     - name: Prepare Android project
       shell: bash
       run: |
