@@ -387,7 +387,7 @@ jobs:
                   release {
                       storeFile file('mayajaal-release.jks')
                       storePassword System.getenv('MAYAJAAL_STORE_PASSWORD')
-                      keyAlias 'newkey2024'
+                      keyAlias System.getenv('MAYAJAAL_KEY_ALIAS')
                       keyPassword System.getenv('MAYAJAAL_KEY_PASSWORD')
                   }
               }
@@ -480,8 +480,9 @@ jobs:
       # ⭐ Yahan se APK aur AAB dono build honge
       - name: Build release APK
         env:
-          MAYAJAAL_STORE_PASSWORD: ${{ secrets.MAYAJAAL_STORE_PASSWORD }}
-          MAYAJAAL_KEY_PASSWORD: ${{ secrets.MAYAJAAL_KEY_PASSWORD }}
+          MAYAJAAL_STORE_PASSWORD: ${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
+          MAYAJAAL_KEY_PASSWORD: ${{ secrets.ANDROID_KEY_PASSWORD }}
+          MAYAJAAL_KEY_ALIAS: ${{ secrets.ANDROID_KEY_ALIAS }}
           MAYAJAAL_TERABOX_RESOLVER: ${{ vars.MAYAJAAL_TERABOX_RESOLVER }}
           MAYAJAAL_SOCIAL_RESOLVER: ${{ vars.MAYAJAAL_SOCIAL_RESOLVER }}
           MAYAJAAL_CHANNEL_UPLOAD: ${{ vars.MAYAJAAL_CHANNEL_UPLOAD }}
@@ -495,8 +496,9 @@ jobs:
 
       - name: Build release AAB
         env:
-          MAYAJAAL_STORE_PASSWORD: ${{ secrets.MAYAJAAL_STORE_PASSWORD }}
-          MAYAJAAL_KEY_PASSWORD: ${{ secrets.MAYAJAAL_KEY_PASSWORD }}
+          MAYAJAAL_STORE_PASSWORD: ${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
+          MAYAJAAL_KEY_PASSWORD: ${{ secrets.ANDROID_KEY_PASSWORD }}
+          MAYAJAAL_KEY_ALIAS: ${{ secrets.ANDROID_KEY_ALIAS }}
           MAYAJAAL_TERABOX_RESOLVER: ${{ vars.MAYAJAAL_TERABOX_RESOLVER }}
           MAYAJAAL_SOCIAL_RESOLVER: ${{ vars.MAYAJAAL_SOCIAL_RESOLVER }}
           MAYAJAAL_CHANNEL_UPLOAD: ${{ vars.MAYAJAAL_CHANNEL_UPLOAD }}
