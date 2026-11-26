@@ -1,42 +1,50 @@
+
 <manifest xmlns:android="http://schemas.android.com/apk/res/android"
     xmlns:tools="http://schemas.android.com/tools">
 
-    <!-- ═══════════════════════════════════════════════════ -->
-    <!-- PERMISSIONS                                         -->
-    <!-- ═══════════════════════════════════════════════════ -->
-
-    <!-- 🔐 Network (required for streaming & API) -->
+    <!-- NETWORK -->
     <uses-permission android:name="android.permission.INTERNET"/>
     <uses-permission android:name="android.permission.ACCESS_NETWORK_STATE"/>
 
-    <!-- 📸 Gallery — Android 13+ (API 33+) -->
+    <!-- LIVE ADVENTURES - NEW -->
+    <uses-permission android:name="android.permission.CAMERA"/>
+    <uses-permission android:name="android.permission.RECORD_AUDIO"/>
+    <uses-permission android:name="android.permission.MODIFY_AUDIO_SETTINGS"/>
+    <uses-permission android:name="android.permission.BLUETOOTH"
+        android:maxSdkVersion="30"/>
+    <uses-permission android:name="android.permission.BLUETOOTH_CONNECT"/>
+
+    <!-- Camera optional for audio-only users -->
+    <uses-feature android:name="android.hardware.camera"
+        android:required="false"/>
+    <uses-feature android:name="android.hardware.camera.autofocus"
+        android:required="false"/>
+    <uses-feature android:name="android.hardware.microphone"
+        android:required="false"/>
+
+    <!-- GALLERY -->
     <uses-permission android:name="android.permission.READ_MEDIA_IMAGES"/>
     <uses-permission android:name="android.permission.READ_MEDIA_VIDEO"/>
 
-    <!-- 📸 Gallery — Android 14+ (Partial media access) -->
     <uses-permission android:name="android.permission.READ_MEDIA_VISUAL_USER_SELECTED"/>
 
-    <!-- 📸 Gallery — Android 12 and below (API 32-) -->
     <uses-permission android:name="android.permission.READ_EXTERNAL_STORAGE"
         android:maxSdkVersion="32"/>
 
-    <!-- 💾 Downloads — Android 9 and below (API 28-) -->
     <uses-permission android:name="android.permission.WRITE_EXTERNAL_STORAGE"
         android:maxSdkVersion="28"/>
 
-    <!-- 🔔 Push Notifications — Android 13+ (API 33+) -->
+    <!-- NOTIFICATIONS -->
     <uses-permission android:name="android.permission.POST_NOTIFICATIONS"/>
 
-    <!-- ▶️ Video Playback — keep screen awake during video -->
+    <!-- VIDEO PLAYBACK -->
     <uses-permission android:name="android.permission.WAKE_LOCK"/>
 
-    <!-- 📥 In-app downloads — Android 14+ (API 34+) foreground service -->
+    <!-- DOWNLOAD SERVICES -->
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE"/>
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE_DATA_SYNC"/>
 
-    <!-- ═══════════════════════════════════════════════════ -->
-    <!-- APPLICATION                                         -->
-    <!-- ═══════════════════════════════════════════════════ -->
+    <!-- APPLICATION -->
     <application
         android:label="MayaJaal"
         android:name="${applicationName}"
@@ -46,7 +54,7 @@
         android:usesCleartextTraffic="true"
         tools:targetApi="34">
 
-        <!-- 🔥 NEW: AdMob App ID (Required by Google IMA SDK for Ads) -->
+        <!-- ADMOB -->
         <meta-data
             android:name="com.google.android.gms.ads.APPLICATION_ID"
             android:value="ca-app-pub-2838903415772756~9180315931" />
@@ -64,79 +72,82 @@
             android:windowSoftInputMode="adjustResize">
 
             <meta-data
-              android:name="io.flutter.embedding.android.NormalTheme"
-              android:resource="@style/NormalTheme"
-              />
+                android:name="io.flutter.embedding.android.NormalTheme"
+                android:resource="@style/NormalTheme"/>
 
-            <!-- 🏠 Default launcher intent -->
+            <!-- DEFAULT LAUNCHER -->
             <intent-filter>
                 <action android:name="android.intent.action.MAIN"/>
                 <category android:name="android.intent.category.LAUNCHER"/>
             </intent-filter>
 
-            <!-- 🔗 Auto-Verify: ONLY www.mayajaal.online -->
+            <!-- MAYAJAAL DEEP LINKS -->
             <intent-filter android:autoVerify="true">
-                <action android:name="android.intent.action.VIEW" />
-                <category android:name="android.intent.category.DEFAULT" />
-                <category android:name="android.intent.category.BROWSABLE" />
+                <action android:name="android.intent.action.VIEW"/>
+                <category android:name="android.intent.category.DEFAULT"/>
+                <category android:name="android.intent.category.BROWSABLE"/>
 
-                <!-- Sirf www.mayajaal.online routes -->
-                <data android:scheme="https" android:host="www.mayajaal.online" android:pathPrefix="/v/" />
-                <data android:scheme="https" android:host="www.mayajaal.online" android:pathPrefix="/stream/" />
-                <data android:scheme="https" android:host="www.mayajaal.online" android:pathPrefix="/api/v/" />
-                <data android:scheme="https" android:host="www.mayajaal.online" android:pathPrefix="/tb/" />
-                <data android:scheme="https" android:host="www.mayajaal.online" android:pathPrefix="/s/" />
-                <data android:scheme="https" android:host="www.mayajaal.online" android:pathPrefix="/channel/" />
+                <data android:scheme="https" android:host="www.mayajaal.online" android:pathPrefix="/v/"/>
+                <data android:scheme="https" android:host="www.mayajaal.online" android:pathPrefix="/stream/"/>
+                <data android:scheme="https" android:host="www.mayajaal.online" android:pathPrefix="/api/v/"/>
+                <data android:scheme="https" android:host="www.mayajaal.online" android:pathPrefix="/tb/"/>
+                <data android:scheme="https" android:host="www.mayajaal.online" android:pathPrefix="/s/"/>
+                <data android:scheme="https" android:host="www.mayajaal.online" android:pathPrefix="/channel/"/>
             </intent-filter>
 
-            <!-- 🔗 Custom scheme fallback -->
+            <!-- CUSTOM SCHEME -->
             <intent-filter>
-                <action android:name="android.intent.action.VIEW" />
-                <category android:name="android.intent.category.DEFAULT" />
-                <category android:name="android.intent.category.BROWSABLE" />
-                <data android:scheme="mayajaall" />
+                <action android:name="android.intent.action.VIEW"/>
+                <category android:name="android.intent.category.DEFAULT"/>
+                <category android:name="android.intent.category.BROWSABLE"/>
+                <data android:scheme="mayajaall"/>
             </intent-filter>
+
         </activity>
 
-        <!-- 🔔 OneSignal Push Notification Extension -->
+        <!-- ONESIGNAL -->
         <meta-data
             android:name="com.onesignal.NotificationServiceExtension"
             android:value="com.onesignal.notifications.internal.service.impl.NotificationServiceExtension"/>
 
-        <!-- Flutter Embedding -->
+        <!-- FLUTTER EMBEDDING -->
         <meta-data
             android:name="flutter.embedding"
-            android:value="2" />
+            android:value="2"/>
+
     </application>
 
-    <!-- ═══════════════════════════════════════════════════ -->
-    <!-- QUERIES (for url_launcher, share, mail, etc.)      -->
-    <!-- ═══════════════════════════════════════════════════ -->
+    <!-- APPLICATION QUERIES -->
     <queries>
         <intent>
             <action android:name="android.intent.action.PROCESS_TEXT"/>
             <data android:mimeType="text/plain"/>
         </intent>
+
         <intent>
             <action android:name="android.intent.action.VIEW"/>
             <data android:scheme="https"/>
         </intent>
+
         <intent>
             <action android:name="android.intent.action.VIEW"/>
             <data android:scheme="http"/>
         </intent>
+
         <intent>
             <action android:name="android.intent.action.SENDTO"/>
             <data android:scheme="mailto"/>
         </intent>
+
         <intent>
             <action android:name="android.intent.action.SEND"/>
             <data android:mimeType="text/plain"/>
         </intent>
-        <!-- Telegram, WhatsApp share -->
+
         <intent>
             <action android:name="android.intent.action.SEND"/>
             <data android:mimeType="image/*"/>
         </intent>
     </queries>
+
 </manifest>
