@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'live_adventures.dart';
 import 'dart:convert';
 import 'dart:io';
 import 'dart:ui' as ui;
@@ -5088,7 +5089,7 @@ class _MayaJaalBrowserScreenState extends State<MayaJaalBrowserScreen> {
 }
 
 // ═══════════════════════════════════════════════════════════════════════════════
-// MAIN NAVIGATION HOLDER (5 TABS)
+// MAIN NAVIGATION HOLDER (6 TABS)
 // ═══════════════════════════════════════════════════════════════════════════════
 class MainNavigationHolder extends StatefulWidget {
   const MainNavigationHolder({super.key});
@@ -5181,8 +5182,12 @@ class _MainNavigationHolderState extends State<MainNavigationHolder> {
             initialUrl: 'https://web.telegram.org/k/',
             showAppBar: false,
           ),
+          if (_currentIndex == 3)
+            const LiveAdventuresScreen()
+          else
+            const SizedBox.shrink(),
           const MayaDownloadsScreen(),
-          if (_currentIndex == 4)
+          if (_currentIndex == 5)
             const HistoryScreen()
           else
             const SizedBox.shrink(),
@@ -5222,6 +5227,11 @@ class _MainNavigationHolderState extends State<MainNavigationHolder> {
               icon: Icon(Icons.send_rounded, color: Color(0xFF229ED9)),
               activeIcon: Icon(Icons.send_rounded, color: AppThemes.kGreen),
               label: 'Telegram',
+            ),
+            BottomNavigationBarItem(
+              icon: Icon(Icons.explore_outlined),
+              activeIcon: Icon(Icons.explore, color: AppThemes.kGreen),
+              label: 'Live Adventures',
             ),
             BottomNavigationBarItem(
               icon: Icon(Icons.download_outlined),
