@@ -1,3 +1,4 @@
+export 'world_earth.dart' show LiveAdventuresScreen;
 import 'maya_ai.dart';
 import 'dart:async';
 import 'dart:convert';
@@ -21,11 +22,11 @@ Future<Map<String, dynamic>> _api(String path, {Map<String,dynamic>? body}) asyn
   if(response.statusCode != 200) throw Exception(data['error'] ?? 'Live service unavailable');
   return data;
 }
-class LiveAdventuresScreen extends StatefulWidget {
-  const LiveAdventuresScreen({super.key});
-  @override State<LiveAdventuresScreen> createState()=>_LiveAdventuresState();
+class WorldLiveScreen extends StatefulWidget {
+  const WorldLiveScreen({super.key});
+  @override State<WorldLiveScreen> createState()=>_LiveAdventuresState();
 }
-class _LiveAdventuresState extends State<LiveAdventuresScreen> {
+class _LiveAdventuresState extends State<WorldLiveScreen> {
   List<dynamic> rooms=[]; String? error; bool busy=false; Timer? timer;
   @override void initState(){super.initState(); refresh(); timer=Timer.periodic(const Duration(seconds:10),(_)=>refresh());}
   @override void dispose(){timer?.cancel();super.dispose();}
