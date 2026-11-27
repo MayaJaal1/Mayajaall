@@ -1,3 +1,4 @@
+import 'maya_ai.dart';
 import 'dart:async';
 import 'dart:convert';
 import 'package:flutter/material.dart';
@@ -55,7 +56,7 @@ class _LiveAdventuresState extends State<LiveAdventuresScreen> {
     }).toList();
     return Theme(data: ThemeData.dark().copyWith(scaffoldBackgroundColor: Colors.black), child: ColoredBox(color: Colors.black, child: SafeArea(child: RefreshIndicator(color: _mint, onRefresh: refresh, child: CustomScrollView(physics: const AlwaysScrollableScrollPhysics(), slivers: [
       SliverPadding(padding: const EdgeInsets.fromLTRB(20, 12, 20, 12), sliver: SliverToBoxAdapter(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-        Row(children: [const Expanded(child: _WorldBrand()), IconButton(tooltip: 'Refresh', onPressed: refresh, icon: const Icon(Icons.refresh_rounded, color: _mint))]),
+        Row(children: [const Expanded(child: _WorldBrand()), IconButton(tooltip: 'AI translation trial', onPressed: () => MayaAI.open(context), icon: const Icon(Icons.translate, color: _mint)), IconButton(tooltip: 'Refresh', onPressed: refresh, icon: const Icon(Icons.refresh_rounded, color: _mint))]),
         const SizedBox(height: 24),
         const Text('DISCOVER  /  CONNECT', style: TextStyle(color: _mint, fontSize: 11, letterSpacing: 2.2, fontWeight: FontWeight.w700)),
         const SizedBox(height: 8),
