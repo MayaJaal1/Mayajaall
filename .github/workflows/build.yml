@@ -502,12 +502,12 @@ jobs:
             private boolean visible() { return foreground && !closed && !activity.isFinishing() && !activity.isDestroyed(); }
             private void ensure(Consumer<Boolean> next) {
                 if(closed || !allowed) { next.accept(false); return; }
-                if(ready) { safe(()->InMobiSdk.updateGDPRConsent(consent(true))); next.accept(true); return; }
+                if(ready) { safe(()->InMobiSdk.updateGDPRConsent(consent(MayaAdsMode.TRIAL))); next.accept(true); return; }
                 waiting.add(next);
                 if(initializing)return;
                 initializing=true; final int epoch=++initGeneration;
                 try {
-                    InMobiSdk.init(activity,ACCOUNT,consent(true),error->ui.post(()->{
+                    InMobiSdk.init(activity,ACCOUNT,consent(MayaAdsMode.TRIAL),error->ui.post(()->{
                         if(epoch!=initGeneration || closed)return;
                         if(error!=null)Log.w(TAG,"Initialization: "+error.getMessage());
                         finishInit(error==null);
@@ -1347,6 +1347,7 @@ jobs:
         MAYA_LIVE_API: ${{ vars.MAYA_LIVE_API }}
         MAYA_ADS_TRIAL: ${{ github.event_name == 'workflow_dispatch' && inputs.ads_trial && !inputs.publish_release }}
         MAYA_VAST_TEST_TAG: ${{ vars.MAYA_VAST_TEST_TAG }}
+        MAYA_ADS_CONTEXTUAL_APPROVED: ${{ vars.MAYA_ADS_CONTEXTUAL_APPROVED }}
         MAYA_ADS_ENABLED: ${{ (github.event_name == 'push' && vars.MAYA_ADS_PRODUCTION_APPROVED == 'true') || (github.event_name == 'workflow_dispatch' && inputs.ads_enabled && (inputs.ads_trial || vars.MAYA_ADS_PRODUCTION_APPROVED == 'true')) }}
       run: |
         set -euo pipefail
@@ -1356,6 +1357,7 @@ jobs:
           if [[ -n "$MAYA_VAST_TEST_TAG" ]]; then args+=("--dart-define=MAYA_VAST_TEST_TAG=$MAYA_VAST_TEST_TAG"); fi
         fi
         if [[ "$MAYA_ADS_ENABLED" == "true" ]]; then args+=(--dart-define=MAYA_ADS_ENABLED=true); fi
+        if [[ "$MAYA_ADS_ENABLED" == "true" && "$MAYA_ADS_TRIAL" != "true" && "$MAYA_ADS_CONTEXTUAL_APPROVED" == "true" ]]; then args+=(--dart-define=MAYA_ADS_CONTEXTUAL_APPROVED=true); fi
         # Omit blank values so String.fromEnvironment defaults in Dart still work.
         for name in MAYAJAAL_TERABOX_RESOLVER MAYAJAAL_SOCIAL_RESOLVER MAYAJAAL_CHANNEL_UPLOAD MAYA_LIVE_API; do
           value="${!name}"
@@ -1391,6 +1393,7 @@ jobs:
         MAYA_LIVE_API: ${{ vars.MAYA_LIVE_API }}
         MAYA_ADS_TRIAL: ${{ github.event_name == 'workflow_dispatch' && inputs.ads_trial && !inputs.publish_release }}
         MAYA_VAST_TEST_TAG: ${{ vars.MAYA_VAST_TEST_TAG }}
+        MAYA_ADS_CONTEXTUAL_APPROVED: ${{ vars.MAYA_ADS_CONTEXTUAL_APPROVED }}
         MAYA_ADS_ENABLED: ${{ (github.event_name == 'push' && vars.MAYA_ADS_PRODUCTION_APPROVED == 'true') || (github.event_name == 'workflow_dispatch' && inputs.ads_enabled && (inputs.ads_trial || vars.MAYA_ADS_PRODUCTION_APPROVED == 'true')) }}
       run: |
         set -euo pipefail
@@ -1400,6 +1403,7 @@ jobs:
           if [[ -n "$MAYA_VAST_TEST_TAG" ]]; then args+=("--dart-define=MAYA_VAST_TEST_TAG=$MAYA_VAST_TEST_TAG"); fi
         fi
         if [[ "$MAYA_ADS_ENABLED" == "true" ]]; then args+=(--dart-define=MAYA_ADS_ENABLED=true); fi
+        if [[ "$MAYA_ADS_ENABLED" == "true" && "$MAYA_ADS_TRIAL" != "true" && "$MAYA_ADS_CONTEXTUAL_APPROVED" == "true" ]]; then args+=(--dart-define=MAYA_ADS_CONTEXTUAL_APPROVED=true); fi
         # Omit blank values so String.fromEnvironment defaults in Dart still work.
         for name in MAYAJAAL_TERABOX_RESOLVER MAYAJAAL_SOCIAL_RESOLVER MAYAJAAL_CHANNEL_UPLOAD MAYA_LIVE_API; do
           value="${!name}"
