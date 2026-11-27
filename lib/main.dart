@@ -1,4 +1,5 @@
 import 'maya_ai.dart';
+import 'maya_ads.dart';
 import 'dart:async';
 import 'live_adventures.dart';
 import 'dart:convert';
@@ -1165,6 +1166,10 @@ class LegalPolicyDialog {
       (
         '4. Sharing information',
         'We do not sell, rent or trade creator data, viewing history or engagement records to advertisers. We may disclose information in response to valid legal requests.',
+      ),
+      (
+        'Optional in-app advertising',
+        'Where enabled, MayaJaal uses InMobi to deliver and measure ads. The SDK may process advertising identifiers, device and network information for advertising and fraud prevention. Only adult users who opt in are eligible for MayaJaal in-app ads. You can withdraw consent under Advertising & privacy. Watching optional ads never creates cash or creator-view earnings. External sites may have their own advertising and privacy policies.',
       ),
       (
         '5. Content and sharing',
@@ -5173,6 +5178,7 @@ class _MainNavigationHolderState extends State<MainNavigationHolder> {
   int _currentIndex = 0;
 
   bool _readingShare = false;
+  bool _adsDrawerOpen = false;
 
   @override
   void initState() {
@@ -5244,6 +5250,7 @@ class _MainNavigationHolderState extends State<MainNavigationHolder> {
       key: _scaffoldKey,
       backgroundColor: AppThemes.kBg,
       drawer: const MoreDrawer(),
+      onDrawerChanged: (open) { if (mounted) setState(() => _adsDrawerOpen = open); },
       floatingActionButton:
           const bool.fromEnvironment('MAYA_ADS_TRIAL') && _currentIndex == 0
               ? FloatingActionButton.extended(
@@ -5268,7 +5275,7 @@ class _MainNavigationHolderState extends State<MainNavigationHolder> {
       body: IndexedStack(
         index: _currentIndex,
         children: [
-          HomeScreen(onMenuTap: () => _scaffoldKey.currentState?.openDrawer()),
+          HomeScreen(onMenuTap: () => _scaffoldKey.currentState?.openDrawer(), adsActive: _currentIndex == 0 && !_adsDrawerOpen),
           const ChannelScreen(),
           const MayaJaalBrowserScreen(
             initialUrl: 'https://web.telegram.org/k/',
@@ -5285,7 +5292,11 @@ class _MainNavigationHolderState extends State<MainNavigationHolder> {
             const SizedBox.shrink(),
         ],
       ),
-      bottomNavigationBar: Container(
+      bottomNavigationBar: Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          MayaAdSlot(active: !_adsDrawerOpen && _currentIndex != 2, askConsent: _currentIndex == 0),
+          Container(
         decoration: BoxDecoration(
           color: Colors.black,
           border: Border(top: BorderSide(color: AppThemes.kBorder, width: 1.0)),
@@ -5339,6 +5350,8 @@ class _MainNavigationHolderState extends State<MainNavigationHolder> {
             ),
           ],
         ),
+          ),
+        ],
       ),
     );
   }
@@ -5702,7 +5715,8 @@ class _LivePulseCardState extends State<LivePulseCard>
 // ═══════════════════════════════════════════════════════════════════════════════
 class HomeScreen extends StatefulWidget {
   final VoidCallback? onMenuTap;
-  const HomeScreen({super.key, this.onMenuTap});
+  final bool adsActive;
+  const HomeScreen({super.key, this.onMenuTap, this.adsActive = true});
   @override
   State<HomeScreen> createState() => _HomeScreenState();
 }
@@ -7257,6 +7271,16 @@ class _MoreDrawerState extends State<MoreDrawer> with TickerProviderStateMixin {
                       },
                     ),
                   ),
+                  if (MayaAds.available)
+                    _snakeItem(
+                      context, icon: Icons.privacy_tip_outlined, color: AppThemes.kGreen,
+                      title: 'Advertising & privacy', subtitle: 'Your ad choices & optional ad-free break',
+                      onTap: () {
+                        Navigator.pop(context);
+                        final ctx = navigatorKey.currentContext;
+                        if (ctx != null && ctx.mounted) unawaited(MayaAds.settings(ctx));
+                      },
+                    ),
                   if (const bool.fromEnvironment('MAYA_ADS_TRIAL'))
                     _snakeItem(
                       context,
@@ -8048,6 +8072,7 @@ class _StreamPreviewScreenState extends State<StreamPreviewScreen>
         .then((_) {
           if (mounted) {
             _startCountdown();
+            unawaited(MayaAds.afterVideo(context));
           }
         });
   }
@@ -8279,6 +8304,7 @@ class _StreamPreviewScreenState extends State<StreamPreviewScreen>
                     ),
                   ),
                   const SizedBox(height: 10),
+                  const MayaAdSlot(),
 
                   Row(
                     children: [
@@ -10002,6 +10028,7 @@ class _MayaChannelPageState extends State<MayaChannelPage>
               ),
         ),
       );
+      if (mounted) unawaited(MayaAds.afterVideo(context));
     } else {
       unawaited(
         MayaDownloads.start(
@@ -10802,7 +10829,7 @@ class _MayaChannelPageState extends State<MayaChannelPage>
                           ],
                         ),
                       ),
-                    for (final p in _posts)
+                    for (final p in _posts) ...[
                       MayaChannelPost(
                         key: ValueKey(p['id']),
                         post: p,
@@ -10821,6 +10848,9 @@ class _MayaChannelPageState extends State<MayaChannelPage>
                             (action, value) =>
                                 _postAction(p, action, value: value),
                       ),
+                      if (_channel['visibility'] == 'public' && _search.text.isEmpty && _posts.length >= 3 && identical(p, _posts[2]))
+                        const Padding(padding: EdgeInsets.symmetric(horizontal: 12), child: MayaAdSlot(nativeAd: true)),
+                    ],
                     if (_next != null)
                       TextButton(
                         onPressed: _paging ? null : () => _load(more: true),
@@ -12976,6 +13006,37 @@ class _NativeVideoPlayerScreenState extends State<NativeVideoPlayerScreen>
   Timer? _positionTicker;
   bool _screenLocked = false;
   bool _recordedPlayback = false;
+  int _adPlayMs = 0;
+  bool _adPreloadRequested = false;
+  final MayaVideoAdSchedule _adSchedule = MayaVideoAdSchedule();
+  final Stopwatch _adClock = Stopwatch()..start();
+  int _lastAdTick = 0;
+  int? _lastAdPosition;
+  bool _adBreakRunning = false;
+
+  Future<void> _runScheduledAd() async {
+    if (_adBreakRunning || !mounted || !_playing || !MayaAds.canShow || !MayaAds.scheduledVideoAvailable) return;
+    final attempt = _playbackAttempt;
+    _adBreakRunning = true;
+    try {
+      await _directPlayer?.pause();
+      await _betterPlayerController?.pause();
+      if (!mounted || attempt != _playbackAttempt || ModalRoute.of(context)?.isCurrent != true) return;
+      if (MayaAds.canShow) await MayaAds.playScheduledVideo();
+    } catch (e) { debugPrint('Maya video ad: $e'); }
+    finally {
+      // Activity results can arrive just before Flutter is resumed.
+      for (var i = 0; i < 12 && mounted && WidgetsBinding.instance.lifecycleState != AppLifecycleState.resumed; i++) {
+        await Future<void>.delayed(const Duration(milliseconds: 150));
+      }
+      if (mounted && attempt == _playbackAttempt && !_hasError && ModalRoute.of(context)?.isCurrent == true && WidgetsBinding.instance.lifecycleState == AppLifecycleState.resumed) {
+        try { await _directPlayer?.play(); await _betterPlayerController?.play(); } catch (_) {}
+      }
+      _lastAdPosition = null;
+      _lastAdTick = _adClock.elapsedMilliseconds;
+      _adBreakRunning = false;
+    }
+  }
   int _quarterTurns = 0;
   bool get _social => _isSocialLink(widget.sourcePageUrl);
   bool get _channelVideo =>
@@ -13032,6 +13093,8 @@ class _NativeVideoPlayerScreenState extends State<NativeVideoPlayerScreen>
   void initState() {
     super.initState();
     WidgetsBinding.instance.addObserver(this);
+    MayaAds.beginVideo();
+    unawaited(MayaAds.load());
     _activeVariants = widget.variants;
     if (widget.variants.isNotEmpty) {
       _selectedQuality =
@@ -13053,7 +13116,28 @@ class _NativeVideoPlayerScreenState extends State<NativeVideoPlayerScreen>
       _loadRelatedVideos();
     }
     _positionTicker = Timer.periodic(const Duration(milliseconds: 350), (_) {
-      if (mounted && _isInitialized) setState(() {});
+      if (mounted && _isInitialized) {
+        final tick = _adClock.elapsedMilliseconds;
+        final elapsed = tick - _lastAdTick;
+        final position = _position.inMilliseconds;
+        final previous = _lastAdPosition;
+        _lastAdTick = tick;
+        _lastAdPosition = position;
+        final active = !_adBreakRunning && _playing && !_hasError && ModalRoute.of(context)?.isCurrent == true && WidgetsBinding.instance.lifecycleState == AppLifecycleState.resumed;
+        // Count real foreground watching, not pauses, buffering, seeks or speed jumps.
+        final advance = previous == null ? 0 : position - previous;
+        if (active && elapsed > 0 && elapsed <= 1200 && advance > 0 && advance <= elapsed * 3 + 350) {
+          _adPlayMs += elapsed;
+          if (MayaAds.scheduledVideoAvailable) {
+            final due = _adSchedule.add(elapsed);
+            if (due && MayaAds.canShow) unawaited(_runScheduledAd());
+          } else if (MayaAds.canShow && _adPlayMs >= 45000 && !_adPreloadRequested) {
+            _adPreloadRequested = true;
+            unawaited(MayaAds.prepareInterstitial());
+          }
+        }
+        setState(() {});
+      }
     });
   }
 
@@ -13942,6 +14026,7 @@ class _NativeVideoPlayerScreenState extends State<NativeVideoPlayerScreen>
   void dispose() {
     WidgetsBinding.instance.removeObserver(this);
     _positionTicker?.cancel();
+    if (!MayaAds.scheduledVideoAvailable && _adPlayMs >= 60000 && !_hasError && _recordedPlayback) MayaAds.qualifyVideoExit();
     unawaited(_mayaKeepAwake(false));
     _statsSub?.cancel();
     _likeSub?.cancel();
@@ -13982,6 +14067,7 @@ class _NativeVideoPlayerScreenState extends State<NativeVideoPlayerScreen>
   }
 
   Future<void> _seekTo(Duration position) async {
+    _lastAdPosition = null;
     final end = _duration;
     final target =
         position < Duration.zero
@@ -14740,6 +14826,7 @@ class _NativeVideoPlayerScreenState extends State<NativeVideoPlayerScreen>
             child: ListView(
               padding: const EdgeInsets.all(16),
               children: [
+                const MayaAdSlot(),
                 Text(
                   widget.title,
                   style: const TextStyle(
@@ -17121,6 +17208,7 @@ class _MayaSocialMediaScreenState extends State<MayaSocialMediaScreen> {
                 ),
           ),
         );
+        if (mounted) unawaited(MayaAds.afterVideo(context));
       } else {
         await launchUrl(widget.source, mode: LaunchMode.externalApplication);
       }
