@@ -516,6 +516,9 @@ jobs:
         android.useAndroidX=true
         android.enableJetifier=true
         android.enableR8.fullMode=false
+        org.gradle.vfs.watch=false
+        org.gradle.logging.stacktrace=all
+        org.gradle.console=plain
         EOF
     - name: Generate launcher icons
       run: dart run flutter_launcher_icons
