@@ -365,7 +365,7 @@ jobs:
         import android.view.ViewGroup;
         import android.content.Intent;
         import com.inmobi.ads.InMobiNative;
-        import com.inmobi.ads.InMobiNativeViewData;
+        import com.inmobi.media.ads.nativeAd.InMobiNativeViewData;
         import com.inmobi.ads.listeners.NativeAdEventListener;
         import com.squareup.picasso.Picasso;
         import java.util.Collections;
