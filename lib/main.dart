@@ -7236,6 +7236,28 @@ class _MoreDrawerState extends State<MoreDrawer> with TickerProviderStateMixin {
                       },
                     ),
                   ),
+                  if (const bool.fromEnvironment('MAYA_ADS_TRIAL'))
+                    _snakeItem(
+                      context,
+                      icon: Icons.science_outlined,
+                      color: AppThemes.kNeonCyan,
+                      title: 'Ads Test Lab',
+                      subtitle: 'InMobi SDK · developer testing only',
+                      onTap: () async {
+                        Navigator.pop(context);
+                        try {
+                          await const MethodChannel('mayajaal/ads_trial')
+                              .invokeMethod<void>('open');
+                        } catch (e) {
+                          final ctx = navigatorKey.currentContext;
+                          if (ctx != null && ctx.mounted) {
+                            ScaffoldMessenger.of(ctx).showSnackBar(
+                              SnackBar(content: Text('Ads test unavailable: $e')),
+                            );
+                          }
+                        }
+                      },
+                    ),
                   _staggered(
                     index: 19,
                     child: _snakeItem(
