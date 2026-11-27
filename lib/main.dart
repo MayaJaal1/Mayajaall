@@ -4212,6 +4212,17 @@ class _MyAppState extends State<MyApp> {
         surface: AppThemes.kCardBg,
       ),
       useMaterial3: true,
+      inputDecorationTheme: InputDecorationTheme(
+        filled: true,
+        fillColor: AppThemes.kCardBg,
+        contentPadding: const EdgeInsets.symmetric(horizontal: 18, vertical: 16),
+        border: OutlineInputBorder(borderRadius: BorderRadius.circular(18),
+          borderSide: const BorderSide(color: AppThemes.kBorder)),
+        enabledBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(18),
+          borderSide: const BorderSide(color: AppThemes.kBorder)),
+        focusedBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(18),
+          borderSide: BorderSide(color: primaryColor, width: 1.5)),
+      ),
       cardTheme: CardThemeData(
         color: AppThemes.kCardBg,
         elevation: 0,
@@ -5091,6 +5102,65 @@ class _MayaJaalBrowserScreenState extends State<MayaJaalBrowserScreen> {
 // ═══════════════════════════════════════════════════════════════════════════════
 // MAIN NAVIGATION HOLDER (6 TABS)
 // ═══════════════════════════════════════════════════════════════════════════════
+// Shared full-screen editor route. Existing save/cancel results are preserved.
+Future<T?> _mayaOpenEditor<T>({
+  required BuildContext context,
+  required WidgetBuilder builder,
+}) => Navigator.of(context, rootNavigator: true).push<T>(
+  MaterialPageRoute<T>(builder: builder, fullscreenDialog: true),
+);
+
+class _MayaEditorPage extends StatelessWidget {
+  const _MayaEditorPage({required this.title, required this.content,
+    required this.actions});
+  final Widget title;
+  final Widget content;
+  final List<Widget> actions;
+
+  @override
+  Widget build(BuildContext context) {
+    final accent = Theme.of(context).colorScheme.primary;
+    return Scaffold(
+      backgroundColor: AppThemes.kBg,
+      appBar: AppBar(
+        leading: const BackButton(),
+        title: const Text('MAYAJAAL'),
+        centerTitle: false,
+      ),
+      body: SafeArea(
+        child: LayoutBuilder(builder: (context, constraints) {
+          return Center(child: ConstrainedBox(
+            constraints: const BoxConstraints(maxWidth: 620),
+            child: Column(crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                Expanded(child: SingleChildScrollView(
+                  padding: const EdgeInsets.fromLTRB(24, 24, 24, 16),
+                  child: Column(crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Container(width: 42, height: 4,
+                        decoration: BoxDecoration(color: accent,
+                          borderRadius: BorderRadius.circular(8))),
+                      const SizedBox(height: 18),
+                      DefaultTextStyle.merge(style: const TextStyle(
+                        fontSize: 28, fontWeight: FontWeight.w700,
+                        color: Colors.white), child: title),
+                      const SizedBox(height: 28),
+                      content,
+                    ],
+                  ),
+                )),
+                Padding(padding: const EdgeInsets.fromLTRB(24, 8, 24, 16),
+                  child: OverflowBar(alignment: MainAxisAlignment.end,
+                    spacing: 12, overflowSpacing: 8, children: actions)),
+              ],
+            ),
+          ));
+        }),
+      ),
+    );
+  }
+}
+
 class MainNavigationHolder extends StatefulWidget {
   const MainNavigationHolder({super.key});
   @override
@@ -5206,7 +5276,9 @@ class _MainNavigationHolderState extends State<MainNavigationHolder> {
           unselectedItemColor: Colors.white38,
           type: BottomNavigationBarType.fixed,
           selectedFontSize: 10,
-          unselectedFontSize: 10,
+          unselectedFontSize: 9,
+          selectedLabelStyle: const TextStyle(fontWeight: FontWeight.w700),
+          iconSize: 23,
           onTap: (index) {
             SoundService.playClick();
             Haptic.selection();
@@ -5231,7 +5303,7 @@ class _MainNavigationHolderState extends State<MainNavigationHolder> {
             BottomNavigationBarItem(
               icon: Icon(Icons.explore_outlined),
               activeIcon: Icon(Icons.explore, color: AppThemes.kGreen),
-              label: 'Live Adventures',
+              label: 'World',
             ),
             BottomNavigationBarItem(
               icon: Icon(Icons.download_outlined),
@@ -8885,12 +8957,12 @@ class _ChannelScreenState extends State<ChannelScreen> {
   Future<void> _create() async {
     var name = '', handle = '', description = '';
     var private = false;
-    final result = await showDialog<Map<String, dynamic>>(
+    final result = await _mayaOpenEditor<Map<String, dynamic>>(
       context: context,
       builder:
           (dialog) => StatefulBuilder(
             builder:
-                (c, update) => AlertDialog(
+                (c, update) => _MayaEditorPage(
                   title: const Text('Create your channel'),
                   content: SingleChildScrollView(
                     child: Column(
@@ -9220,10 +9292,10 @@ Future<String?> _channelInput(
   required int limit,
 }) async {
   final controller = TextEditingController();
-  final value = await showDialog<String>(
+  final value = await _mayaOpenEditor<String>(
     context: context,
     builder:
-        (c) => AlertDialog(
+        (c) => _MayaEditorPage(
           title: Text(title),
           content: TextField(
             controller: controller,
@@ -9424,12 +9496,12 @@ class _MayaChannelPageState extends State<MayaChannelPage>
         sharing = _channel['sharing'] == true,
         memberPosts = _channel['member_posts'] == true;
     var days = (_channel['expiry_days'] as num?)?.toInt() ?? 0;
-    final values = await showDialog<Map<String, dynamic>>(
+    final values = await _mayaOpenEditor<Map<String, dynamic>>(
       context: context,
       builder:
           (dialog) => StatefulBuilder(
             builder:
-                (c, update) => AlertDialog(
+                (c, update) => _MayaEditorPage(
                   title: const Text('Channel settings'),
                   content: SingleChildScrollView(
                     child: Column(
