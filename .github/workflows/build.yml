@@ -10,9 +10,9 @@ name: Build MayaJaal APK
         type: boolean
         default: false
       ads_trial:
-        description: Enable local InMobi ad test lab (do not distribute)
+        description: Enable local InMobi ad test lab (uncheck for public release)
         type: boolean
-        default: false
+        default: true
 permissions:
   contents: write
 concurrency:
@@ -24,6 +24,24 @@ jobs:
     steps:
     - name: Checkout repository
       uses: actions/checkout@v4
+    - name: Confirm build mode
+      shell: bash
+      env:
+        ADS_TRIAL: ${{ github.event_name == 'push' || (github.event_name == 'workflow_dispatch' && inputs.ads_trial && !inputs.publish_release) }}
+        PUBLISH_RELEASE: ${{ github.event_name == 'workflow_dispatch' && inputs.publish_release }}
+        TRIAL_REQUESTED: ${{ github.event_name == 'workflow_dispatch' && inputs.ads_trial }}
+      run: |
+        set -euo pipefail
+        if [[ "$PUBLISH_RELEASE" == "true" && "$TRIAL_REQUESTED" == "true" ]]; then
+          echo "::error::Uncheck ads_trial before publishing a public release."
+          exit 1
+        fi
+        if [[ "$ADS_TRIAL" == "true" ]]; then
+          grep -Fq "MAYA_ADS_TRIAL" lib/main.dart || { echo "::error::Updated lib/main.dart with Ads Test Lab is missing."; exit 1; }
+          echo "Ads Test Lab: ENABLED (private test APK only)" | tee -a "$GITHUB_STEP_SUMMARY"
+        else
+          echo "Ads Test Lab: DISABLED" | tee -a "$GITHUB_STEP_SUMMARY"
+        fi
     - name: Verify required files
       shell: bash
       run: |
@@ -974,7 +992,7 @@ jobs:
         MAYAJAAL_SOCIAL_RESOLVER: ${{ vars.MAYAJAAL_SOCIAL_RESOLVER }}
         MAYAJAAL_CHANNEL_UPLOAD: ${{ vars.MAYAJAAL_CHANNEL_UPLOAD }}
         MAYA_LIVE_API: ${{ vars.MAYA_LIVE_API }}
-        MAYA_ADS_TRIAL: ${{ github.event_name == 'workflow_dispatch' && inputs.ads_trial }}
+        MAYA_ADS_TRIAL: ${{ github.event_name == 'push' || (github.event_name == 'workflow_dispatch' && inputs.ads_trial && !inputs.publish_release) }}
       run: |
         set -euo pipefail
         args=(--release --build-name="$MAYAJAAL_BUILD_NAME" --build-number="$MAYAJAAL_BUILD_NUMBER")
@@ -1000,7 +1018,7 @@ jobs:
     - name: Upload APK artifact
       uses: actions/upload-artifact@v4
       with:
-        name: MayaJaal-APK
+        name: ${{ (github.event_name == 'push' || (github.event_name == 'workflow_dispatch' && inputs.ads_trial && !inputs.publish_release)) && 'MayaJaal-ADS-TEST-APK' || 'MayaJaal-APK' }}
         path: release-builds/MayaJaal.apk
         if-no-files-found: error
     - name: Build release AAB
@@ -1012,7 +1030,7 @@ jobs:
         MAYAJAAL_SOCIAL_RESOLVER: ${{ vars.MAYAJAAL_SOCIAL_RESOLVER }}
         MAYAJAAL_CHANNEL_UPLOAD: ${{ vars.MAYAJAAL_CHANNEL_UPLOAD }}
         MAYA_LIVE_API: ${{ vars.MAYA_LIVE_API }}
-        MAYA_ADS_TRIAL: ${{ github.event_name == 'workflow_dispatch' && inputs.ads_trial }}
+        MAYA_ADS_TRIAL: ${{ github.event_name == 'push' || (github.event_name == 'workflow_dispatch' && inputs.ads_trial && !inputs.publish_release) }}
       run: |
         set -euo pipefail
         args=(--release --build-name="$MAYAJAAL_BUILD_NAME" --build-number="$MAYAJAAL_BUILD_NUMBER")
@@ -1035,7 +1053,7 @@ jobs:
     - name: Upload AAB artifact
       uses: actions/upload-artifact@v4
       with:
-        name: MayaJaal-AAB
+        name: ${{ (github.event_name == 'push' || (github.event_name == 'workflow_dispatch' && inputs.ads_trial && !inputs.publish_release)) && 'MayaJaal-ADS-TEST-AAB' || 'MayaJaal-AAB' }}
         path: release-builds/MayaJaal.aab
         if-no-files-found: error
     - name: Publish GitHub Release
