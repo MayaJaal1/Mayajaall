@@ -16178,6 +16178,34 @@ class MayaDownloadHistory {
   }
 }
 
+class MayaPublicDownloads {
+  static const _channel = MethodChannel('mayajaal/downloads');
+  static final _saving = <String>{};
+
+  static Future<void> save(File file, String name, {String? mime}) async {
+    if (!Platform.isAndroid) return;
+    if (!_saving.add(file.path)) {
+      throw StateError('This file is already being saved.');
+    }
+    try {
+      final sdk = (await DeviceInfoPlugin().androidInfo).version.sdkInt;
+      if (sdk < 29 && !await Permission.storage.request().isGranted) {
+        throw StateError('Storage permission is needed on this Android version.');
+      }
+      final location = await _channel.invokeMethod<String>('publish', {
+        'path': file.path,
+        'name': name,
+        if (mime != null && mime.isNotEmpty) 'mime': mime,
+      });
+      if (location == null || location.isEmpty) {
+        throw StateError('The phone did not confirm the saved file.');
+      }
+    } finally {
+      _saving.remove(file.path);
+    }
+  }
+}
+
 class MayaDownloads {
   static final jobs = ValueNotifier<List<MayaDownload>>([]);
 
@@ -16210,11 +16238,12 @@ class MayaDownloads {
     String thumbnail = '',
   }) async {
     final id = DateTime.now().microsecondsSinceEpoch.toString();
-    final safeTitle = title.replaceAll(RegExp(r'[^a-zA-Z0-9._ -]'), '_').trim();
-    final name =
-        safeTitle.isEmpty
-            ? 'Video'
-            : safeTitle.substring(0, math.min(safeTitle.length, 120));
+    // Preserve Hindi and other Unicode titles; remove path/control characters.
+    final safeTitle = title.replaceAll(RegExp(r'[\x00-\x1f\x7f/\\:*?"<>|]'), '_').trim();
+    final cleaned = safeTitle.replaceAll(RegExp(r'^[. ]+|[. ]+$'), '');
+    final name = cleaned.isEmpty
+        ? 'Download'
+        : String.fromCharCodes(cleaned.runes.take(52));
     final poster = _cachePoster(thumbnail);
     final job = MayaDownload(uid, id, name, thumbnail);
     jobs.value = [...jobs.value, job];
@@ -16263,7 +16292,33 @@ class MayaDownloads {
           (response.contentLength >= 0 && received != response.contentLength)) {
         throw const FormatException('Incomplete download.');
       }
-      await partial.rename('${folder.path}/${id}_$filename');
+      final completed = await partial.rename('${folder.path}/${id}_$filename');
+      // Publish only a fully received file. A failed public export must not
+      // destroy the completed private download or its offline playback.
+      if (Platform.isAndroid) {
+        try {
+          await MayaPublicDownloads.save(completed, filename, mime: mime);
+          if (FirebaseAuth.instance.currentUser?.uid == uid) {
+            final context = navigatorKey.currentContext;
+            if (context != null && context.mounted) {
+              ScaffoldMessenger.maybeOf(context)?.showSnackBar(
+                const SnackBar(content: Text('Downloaded to phone: Download/MayaJaal')),
+              );
+            }
+          }
+        } catch (_) {
+          if (FirebaseAuth.instance.currentUser?.uid == uid) {
+            final context = navigatorKey.currentContext;
+            if (context != null && context.mounted) {
+              ScaffoldMessenger.maybeOf(context)?.showSnackBar(
+                const SnackBar(content: Text(
+                  'Saved inside MayaJaal. Use Save to phone in Completed to retry public storage.',
+                )),
+              );
+            }
+          }
+        }
+      }
       // Private, per-account poster metadata survives restarts and cloud sync.
       final prefs = await SharedPreferences.getInstance();
       final savedPoster = await poster;
@@ -16335,13 +16390,26 @@ class _MayaDownloadsScreenState extends State<MayaDownloadsScreen> {
     super.dispose();
   }
 
+  Future<void> _saveToPhone(File file, String name) async {
+    try {
+      await MayaPublicDownloads.save(file, name);
+      if (mounted) ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Saved to phone: Download/MayaJaal')),
+      );
+    } catch (_) {
+      if (mounted) ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Could not save to phone. Check storage space and permissions, then retry.')),
+      );
+    }
+  }
+
   Future<void> _delete(File file, String name, String uid) async {
     final confirm = await showDialog<bool>(
       context: context,
       builder:
           (context) => AlertDialog(
-            title: const Text('Delete download?'),
-            content: Text(name),
+            title: const Text('Delete MayaJaal copy?'),
+            content: Text('$name\n\nA copy saved to your phone Downloads will remain there.'),
             actions: [
               TextButton(
                 onPressed: () => Navigator.pop(context, false),
@@ -16540,10 +16608,21 @@ class _MayaDownloadsScreenState extends State<MayaDownloadsScreen> {
                               onTap:
                                   () =>
                                       _openDownloadedFile(context, file, name),
-                              trailing: IconButton(
-                                tooltip: 'Delete download',
-                                icon: const Icon(Icons.delete_outline),
-                                onPressed: () => _delete(file, name, uid),
+                              trailing: Row(
+                                mainAxisSize: MainAxisSize.min,
+                                children: [
+                                  if (Platform.isAndroid)
+                                    IconButton(
+                                      tooltip: 'Save to phone Downloads',
+                                      icon: const Icon(Icons.save_alt_rounded),
+                                      onPressed: () => _saveToPhone(file, name),
+                                    ),
+                                  IconButton(
+                                    tooltip: 'Delete MayaJaal copy',
+                                    icon: const Icon(Icons.delete_outline),
+                                    onPressed: () => _delete(file, name, uid),
+                                  ),
+                                ],
                               ),
                             );
                           }).toList(),
