@@ -5244,6 +5244,27 @@ class _MainNavigationHolderState extends State<MainNavigationHolder> {
       key: _scaffoldKey,
       backgroundColor: AppThemes.kBg,
       drawer: const MoreDrawer(),
+      floatingActionButton:
+          const bool.fromEnvironment('MAYA_ADS_TRIAL') && _currentIndex == 0
+              ? FloatingActionButton.extended(
+                  heroTag: 'mayajaal_ads_test_lab_home',
+                  backgroundColor: AppThemes.kGreen,
+                  foregroundColor: Colors.black,
+                  icon: const Icon(Icons.science_outlined),
+                  label: const Text('Ads Test Lab'),
+                  onPressed: () async {
+                    try {
+                      await const MethodChannel('mayajaal/ads_trial')
+                          .invokeMethod<void>('open');
+                    } catch (e) {
+                      if (!mounted) return;
+                      ScaffoldMessenger.of(context).showSnackBar(
+                        SnackBar(content: Text('Ads test unavailable: $e')),
+                      );
+                    }
+                  },
+                )
+              : null,
       body: IndexedStack(
         index: _currentIndex,
         children: [
