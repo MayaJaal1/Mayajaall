@@ -1,3 +1,4 @@
+import 'maya_ai.dart';
 import 'dart:async';
 import 'live_adventures.dart';
 import 'dart:convert';
@@ -12388,7 +12389,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
   Widget build(BuildContext context) {
     return Scaffold(
       backgroundColor: AppThemes.kBg,
-      appBar: AppBar(title: Text(tr('settings'))),
+      appBar: AppBar(title: Text(tr('settings')), actions: [IconButton(tooltip: 'AI translation trial', icon: const Icon(Icons.translate), onPressed: () => MayaAI.open(context))]),
       body: ListView(
         padding: const EdgeInsets.symmetric(vertical: 6),
         children: [
@@ -14678,6 +14679,7 @@ class _NativeVideoPlayerScreenState extends State<NativeVideoPlayerScreen>
       appBar: AppBar(
         title: const MayaBrandTitle(section: 'Player'),
         actions: [
+          IconButton(tooltip: 'AI translation trial', icon: const Icon(Icons.translate), onPressed: () => MayaAI.open(context)),
           IconButton(
             onPressed: _shareVideoLink,
             icon: const Icon(Icons.share_outlined),
