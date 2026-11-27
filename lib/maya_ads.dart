@@ -8,6 +8,8 @@ import 'package:shared_preferences/shared_preferences.dart';
 class MayaAds {
   static const enabled = bool.fromEnvironment('MAYA_ADS_ENABLED');
   static const test = bool.fromEnvironment('MAYA_ADS_TRIAL');
+  // Enable only after verifying non-targeted delivery, audience and regional privacy requirements.
+  static const contextualApproved = bool.fromEnvironment('MAYA_ADS_CONTEXTUAL_APPROVED');
   static const _bridge = MethodChannel('mayajaal/ads');
   static const _consentKey = test ? 'maya_ads_trial_consent_v2' : 'maya_ads_live_consent_v2';
   static const _adFreeKey = test ? 'maya_ads_trial_free_until_v2' : 'maya_ads_live_free_until_v2';
@@ -24,11 +26,15 @@ class MayaAds {
   static DateTime? adFreeUntil;
   static Timer? _expiry;
   static bool _loaded = false;
+  static bool sdkReady = false;
+  static bool configuring = false;
+  static String sdkStatus = 'Not initialized';
+  static final deliveryStatus = ValueNotifier<String>('No ad request yet');
   static Future<void>? _loading;
   static DateTime? _qualifiedExit;
   static bool get available => enabled && Platform.isAndroid;
-  static bool get permitted => available && consent == true;
-  static bool get canShow => permitted && !(adFreeUntil?.isAfter(DateTime.now()) ?? false);
+  static bool get permitted => available && (consent == true || (!test && contextualApproved && consent == null));
+  static bool get canShow => permitted && sdkReady && !(adFreeUntil?.isAfter(DateTime.now()) ?? false);
 
   static Future<void> load() => _loading ??= _load();
   static Future<void> _load() async {
@@ -39,7 +45,7 @@ class MayaAds {
       adFreeUntil = DateTime.fromMillisecondsSinceEpoch(p.getInt(_adFreeKey) ?? 0);
       _loaded = true;
       _scheduleExpiry();
-      if (permitted) await _bridge.invokeMethod<bool>('configure', true).timeout(const Duration(seconds: 20));
+      if (permitted) await _configure(true);
     } catch (e) { debugPrint('MayaAds init: $e'); }
     finally { changes.value++; }
   }
@@ -50,6 +56,25 @@ class MayaAds {
       _expiry = Timer(remaining, () => changes.value++);
     }
   }
+  static Future<void> _configure(bool allowed) async {
+    configuring = true;
+    sdkReady = false;
+    sdkStatus = allowed ? 'Initializing InMobi…' : 'Advertising disabled';
+    deliveryStatus.value = 'No ad request yet';
+    changes.value++;
+    try {
+      final ok = await _bridge.invokeMethod<bool>('configure', allowed).timeout(const Duration(seconds: 20));
+      sdkReady = allowed && ok == true;
+      sdkStatus = allowed ? (sdkReady ? 'InMobi SDK ready' : 'InMobi initialization unsuccessful') : 'Advertising disabled';
+      debugPrint('MayaAds: $sdkStatus');
+    } catch (e) {
+      sdkStatus = 'InMobi initialization error: $e';
+      debugPrint('MayaAds configure: $e');
+    } finally {
+      configuring = false;
+      changes.value++;
+    }
+  }
   static Future<void> setConsent(bool allowed) async {
     if (!available) return;
     await load();
@@ -57,10 +82,12 @@ class MayaAds {
     await p.setBool(_consentKey, allowed);
     consent = allowed;
     if (!allowed) _qualifiedExit = null;
-    changes.value++;
-    try { await _bridge.invokeMethod<bool>('configure', allowed).timeout(const Duration(seconds: 20)); }
-    catch (e) { debugPrint('MayaAds consent: $e'); }
-    finally { changes.value++; }
+    await _configure(allowed);
+  }
+  static Future<void> retryAds() async {
+    await load();
+    if (!permitted || configuring) return;
+    await _configure(true);
   }
   static Future<void> prepareInterstitial() async {
     await load();
@@ -114,23 +141,31 @@ class _AdsSettingsState extends State<_AdsSettings> {
   }
   @override Widget build(BuildContext context) => Scaffold(
     backgroundColor: const Color(0xff080e0b),
-    appBar: AppBar(title: const Text('Advertising & privacy')),
+    appBar: AppBar(title: const Text('Privacy preferences')),
     body: ValueListenableBuilder<int>(valueListenable: MayaAds.changes, builder: (_, __, ___) => ListView(padding: const EdgeInsets.all(24), children: [
       const Icon(Icons.shield_outlined, color: Color(0xff00e676), size: 54),
       const SizedBox(height: 20),
       const Text('Your choice. Your experience.', style: TextStyle(fontSize: 27, color: Colors.white, fontWeight: FontWeight.w700)),
       const SizedBox(height: 12),
-      const Text('MayaJaal uses InMobi to show ads. The ad SDK may collect and use advertising identifiers, device and network information to deliver and measure ads. Only enable if you are 18 or older and consent to this processing. You can withdraw here at any time. Core features work without consent.', style: TextStyle(color: Colors.white70, height: 1.45)),
+      const Text('MayaJaal uses InMobi to show ads. The ad SDK may collect and use advertising identifiers, device and network information to deliver and measure ads. Non-targeted ads may be shown where permitted. If consent is required, enable only if you are 18 or older and agree to the processing described. You can disable in-app ads here. Core features do not depend on this choice.', style: TextStyle(color: Colors.white70, height: 1.45)),
       if (MayaAds.test) const Padding(padding: EdgeInsets.only(top: 12), child: Text('Developer build: keep InMobi test mode enabled. No real earnings.', style: TextStyle(color: Colors.amber))),
       const SizedBox(height: 20),
       FilledButton(onPressed: busy ? null : () => _choose(true), child: const Text('I am 18+ and allow ads')),
       OutlinedButton(onPressed: busy ? null : () => _choose(false), child: const Text('Do not allow ads')),
       const SizedBox(height: 12),
-      Text(MayaAds.consent == true ? 'Ads allowed' : 'Ads disabled', style: const TextStyle(color: Colors.white70)),
+      Text(MayaAds.permitted ? 'Ads enabled' : 'Ads disabled', style: const TextStyle(color: Colors.white70)),
+      const SizedBox(height: 12),
+      Text('SDK: ${MayaAds.sdkStatus}', style: const TextStyle(color: Colors.white70)),
+      ValueListenableBuilder<String>(valueListenable: MayaAds.deliveryStatus, builder: (_, value, __) => Text('Ad delivery: $value', style: const TextStyle(color: Colors.white70))),
+      if (MayaAds.permitted) OutlinedButton(onPressed: busy || MayaAds.configuring ? null : () async {
+        setState(() => busy = true);
+        try { await MayaAds.retryAds(); }
+        finally { if (mounted) setState(() => busy = false); }
+      }, child: const Text('Retry ad connection')),
       const Divider(height: 40),
       const Text('Ad-free break', style: TextStyle(fontSize: 22, fontWeight: FontWeight.bold, color: Colors.white)),
       const Text('Optional rewarded video: unlock 30 minutes without MayaJaal in-app ads on this device. No cash or creator earnings.', style: TextStyle(color: Colors.white70)),
-      if (MayaAds.permitted && !MayaAds.canShow) const Text('Your ad-free break is active.', style: TextStyle(color: Color(0xff00e676))),
+      if (MayaAds.adFreeUntil?.isAfter(DateTime.now()) == true) const Text('Your ad-free break is active.', style: TextStyle(color: Color(0xff00e676))),
       const SizedBox(height: 12),
       FilledButton.icon(onPressed: busy || !MayaAds.canShow ? null : _reward, icon: const Icon(Icons.ondemand_video), label: const Text('Watch optional video')),
       if (busy) const LinearProgressIndicator(),
@@ -143,8 +178,7 @@ class _AdsSettingsState extends State<_AdsSettings> {
 class MayaAdSlot extends StatefulWidget {
   final bool nativeAd;
   final bool active;
-  final bool askConsent;
-  const MayaAdSlot({super.key, this.nativeAd = false, this.active = true, this.askConsent = false});
+  const MayaAdSlot({super.key, this.nativeAd = false, this.active = true});
   @override State<MayaAdSlot> createState() => _MayaAdSlotState();
 }
 class _MayaAdSlotState extends State<MayaAdSlot> with WidgetsBindingObserver {
@@ -152,19 +186,42 @@ class _MayaAdSlotState extends State<MayaAdSlot> with WidgetsBindingObserver {
   MethodChannel? _channel;
   int? _viewId;
   Timer? _timeout;
+  Timer? _retry;
+  int _attempt = 0;
   @override void initState() {
     super.initState(); WidgetsBinding.instance.addObserver(this);
     foreground = WidgetsBinding.instance.lifecycleState == AppLifecycleState.resumed;
     MayaAds.changes.addListener(_changed); unawaited(MayaAds.load());
   }
-  void _changed() { if (mounted) setState(() { if (!MayaAds.canShow) failed = false; }); }
+  void _changed() {
+    if (!mounted) return;
+    setState(() {
+      if (!MayaAds.canShow) { failed = false; _retry?.cancel(); _attempt = 0; }
+    });
+  }
+  void _failed(String message) {
+    if (!mounted) return;
+    _timeout?.cancel();
+    MayaAds.deliveryStatus.value = message;
+    debugPrint('MayaAds slot: $message');
+    setState(() => failed = true);
+    _retry?.cancel();
+    final delay = [60, 120, 240, 300][_attempt.clamp(0, 3).toInt()];
+    _attempt++;
+    _retry = Timer(Duration(seconds: delay), () {
+      if (mounted && foreground && widget.active && MayaAds.canShow) {
+        setState(() => failed = false);
+      }
+    });
+  }
   @override void didChangeAppLifecycleState(AppLifecycleState state) {
     if (!mounted) return;
-    setState(() { foreground = state == AppLifecycleState.resumed; if (!foreground) _forgetView(); });
+    setState(() { foreground = state == AppLifecycleState.resumed; if (!foreground) { _forgetView(); _retry?.cancel(); } else { failed = false; } });
   }
   @override void didUpdateWidget(covariant MayaAdSlot oldWidget) {
     super.didUpdateWidget(oldWidget);
-    if (widget.active && !oldWidget.active) failed = false;
+    if (widget.active && !oldWidget.active) { failed = false; _retry?.cancel(); }
+    if (!widget.active) _retry?.cancel();
   }
   void _forgetView() { _timeout?.cancel(); _channel?.setMethodCallHandler(null); _channel = null; _viewId = null; }
   void _onView(int id) {
@@ -174,21 +231,24 @@ class _MayaAdSlotState extends State<MayaAdSlot> with WidgetsBindingObserver {
     final ch = MethodChannel('mayajaal/ads/view/$id'); _channel = ch;
     ch.setMethodCallHandler((call) async {
       if (!mounted || _viewId != id) return;
-      if (call.method == 'loaded') _timeout?.cancel();
-      if (call.method == 'failed') { _timeout?.cancel(); setState(() => failed = true); }
+      if (call.method == 'loaded') {
+        _timeout?.cancel();
+        _attempt = 0;
+        MayaAds.deliveryStatus.value = widget.nativeAd ? 'Native ad loaded' : 'Banner loaded';
+      }
+      if (call.method == 'failed') {
+        _failed('${call.arguments ?? 'Ad request failed'}');
+      }
     });
-    _timeout = Timer(const Duration(seconds: 35), () { if (mounted && _viewId == id) setState(() => failed = true); });
-    unawaited(ch.invokeMethod<void>('load').catchError((Object _) { if (mounted && _viewId == id) setState(() => failed = true); }));
+    _timeout = Timer(const Duration(seconds: 35), () { if (mounted && _viewId == id) { _failed('Ad request timed out'); } });
+    unawaited(ch.invokeMethod<void>('load').catchError((Object e) { if (mounted && _viewId == id) { _failed('Ad bridge error: $e'); } }));
   }
   @override void dispose() {
-    _timeout?.cancel(); _channel?.setMethodCallHandler(null); MayaAds.changes.removeListener(_changed);
+    _retry?.cancel(); _timeout?.cancel(); _channel?.setMethodCallHandler(null); MayaAds.changes.removeListener(_changed);
     WidgetsBinding.instance.removeObserver(this); super.dispose();
   }
   @override Widget build(BuildContext context) {
     if (!MayaAds.available || !widget.active || !foreground || ModalRoute.of(context)?.isCurrent != true) { _forgetView(); return const SizedBox.shrink(); }
-    if (widget.askConsent && MayaAds.consent == null) {
-      return Padding(padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 4), child: TextButton.icon(onPressed: () => MayaAds.settings(context), icon: const Icon(Icons.privacy_tip_outlined, size: 16), label: const Text('Advertising preferences')));
-    }
     if (!MayaAds.canShow || failed) { _forgetView(); return const SizedBox.shrink(); }
     return LayoutBuilder(builder: (_, box) {
       if (box.maxWidth < (widget.nativeAd ? 260 : 320)) return const SizedBox.shrink();
