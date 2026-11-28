@@ -38,6 +38,21 @@ class MayaAds {
   static bool configuring = false;
   static String sdkStatus = 'Not initialized';
   static final deliveryStatus = ValueNotifier<String>('No ad request yet');
+  // Separate playback diagnostics from banner callbacks. Keep a bounded, local-only history.
+  static final videoStatus = ValueNotifier<String>('No video ad attempted');
+  static final slotStatuses = ValueNotifier<Map<String, String>>(<String, String>{});
+  static void recordVideo(String message) {
+    videoStatus.value = message;
+    debugPrint('MayaAds video: $message');
+  }
+  static void recordSlot(String slot, String message) {
+    if (slotStatuses.value[slot] == message) return;
+    final next = Map<String, String>.of(slotStatuses.value)..remove(slot);
+    next[slot] = message;
+    while (next.length > 20) { next.remove(next.keys.first); }
+    slotStatuses.value = next;
+    debugPrint('MayaAds slot $slot: $message');
+  }
   static Future<void>? _loading;
   static DateTime? _qualifiedExit;
   static bool get available => enabled && Platform.isAndroid;
@@ -124,34 +139,57 @@ class MayaAds {
       ModalRoute.of(context)?.isCurrent == true &&
       WidgetsBinding.instance.lifecycleState == AppLifecycleState.resumed;
 
+  /// Load the first video creative while content plays, without showing an ad.
+  static Future<String?> preloadFirstVideo(BuildContext context) async {
+    if (!canShow || !_startPermitted || test || _videoTransitionBusy || !_visibleRoute(context)) return null;
+    try {
+      recordVideo('First playback break: preloading Start.io video');
+      final result = await _bridge.invokeMethod<String>('prepareTransitionVideo').timeout(const Duration(seconds: 14));
+      recordVideo('First playback preload: ${result ?? 'unavailable'}');
+      return result;
+    } catch (e) {
+      recordVideo('First playback preload: $e');
+      return null;
+    }
+  }
+
   /// Video-only interstitial at a user-initiated transition. Not a VAST mid-roll.
   /// Failure/no-fill never prevents playback or download. The native layer caps requests.
   static Future<void> videoTransition(BuildContext context, {
     required String placement, Future<void> Function()? beforeDisplay, bool Function()? mayDisplay,
+    Future<String?>? prepared,
   }) async {
-    if (!available || _videoTransitionBusy || !_visibleRoute(context)) return;
+    if (!available || _videoTransitionBusy || !_visibleRoute(context)) {
+      recordVideo('$placement: ${!available ? 'Ads not enabled in this build' : _videoTransitionBusy ? 'Another video ad is in progress' : 'Player route not visible'}');
+      return;
+    }
     _videoTransitionBusy = true;
     try {
       // Never hold the user for a slow SDK initialization.
       if (!canShow || !_startPermitted) {
+        recordVideo('$placement: ${!permitted ? 'Ads not permitted' : breakActive ? 'Ad-free break active' : !_startPermitted ? 'Start.io not enabled/permitted' : 'SDK not ready'}');
         unawaited(load());
         return;
       }
-      deliveryStatus.value = 'Start.io: checking video ad ($placement)';
-      final status = await _bridge.invokeMethod<String>('prepareTransitionVideo')
-          .timeout(const Duration(seconds: 7));
+      recordVideo('$placement: requesting Start.io video');
+      final status = prepared == null
+          ? await _bridge.invokeMethod<String>('prepareTransitionVideo').timeout(const Duration(seconds: 14))
+          : await prepared;
       if (status != 'ready') {
-        deliveryStatus.value = 'Start.io video ($placement): ${status ?? "unavailable"}';
+        recordVideo('Start.io video ($placement): ${status ?? "unavailable"}');
         return;
       }
-      if (!canShow || !_visibleRoute(context) || (mayDisplay != null && !mayDisplay())) return;
+      if (!canShow || !_visibleRoute(context) || (mayDisplay != null && !mayDisplay())) {
+        recordVideo('$placement: loaded, skipped because playback or screen changed');
+        return;
+      }
       if (beforeDisplay != null) await beforeDisplay();
-      if (!canShow || !_visibleRoute(context)) return;
+      if (!canShow || !_visibleRoute(context)) { recordVideo('$placement: screen changed before display'); return; }
       final outcome = await _bridge.invokeMethod<String>('showTransitionVideo')
           .timeout(const Duration(seconds: 125));
-      deliveryStatus.value = 'Start.io video ($placement): ${outcome ?? "unavailable"}';
+      recordVideo('Start.io video ($placement): ${outcome ?? "unavailable"}');
     } catch (e) {
-      deliveryStatus.value = 'Start.io video ($placement): $e';
+      recordVideo('Start.io video ($placement): $e');
       debugPrint('MayaAds transition: $e');
     } finally {
       // SDK dismissal may arrive just before Flutter resumes.
@@ -233,6 +271,12 @@ class _AdsSettingsState extends State<_AdsSettings> {
       const SizedBox(height: 12),
       Text('SDK: ${MayaAds.sdkStatus}', style: const TextStyle(color: Colors.white70)),
       ValueListenableBuilder<String>(valueListenable: MayaAds.deliveryStatus, builder: (_, value, __) => Text('Ad delivery: $value', style: const TextStyle(color: Colors.white70))),
+      ValueListenableBuilder<String>(valueListenable: MayaAds.videoStatus, builder: (_, value, __) => Text('Video ad: $value', style: const TextStyle(color: Colors.white70))),
+      ValueListenableBuilder<Map<String, String>>(valueListenable: MayaAds.slotStatuses, builder: (_, values, __) => Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+        const SizedBox(height: 8),
+        const Text('Ad placements', style: TextStyle(fontWeight: FontWeight.bold, color: Colors.white70)),
+        for (final entry in values.entries) Padding(padding: const EdgeInsets.only(top: 5), child: Text('${entry.key}: ${entry.value}', style: const TextStyle(fontSize: 12, color: Colors.white60))),
+      ])),
       Text('Permitted networks: ${MayaAds.networkNames.isEmpty ? 'None' : MayaAds.networkNames}', style: const TextStyle(color: Colors.white70)),
       if (MayaAds.permitted) OutlinedButton(onPressed: busy || MayaAds.configuring || MayaAds.breakActive ? null : _retry, child: const Text('Retry ad connection')),
       if (MayaAds.breakActive) Text('Existing ad-free reward ends at ${MayaAds.adFreeUntil!.toLocal()}. Ads will resume automatically.', style: const TextStyle(color: Color(0xff00e676))),
@@ -249,7 +293,8 @@ class MayaAdSlot extends StatefulWidget {
   final bool mrec;
   final bool active;
   final bool retryAutomatically;
-  const MayaAdSlot({super.key, this.nativeAd = false, this.mrec = false, this.active = true, this.retryAutomatically = true}) : assert(!(nativeAd && mrec));
+  final String? placement;
+  const MayaAdSlot({super.key, this.nativeAd = false, this.mrec = false, this.active = true, this.retryAutomatically = true, this.placement}) : assert(!(nativeAd && mrec));
   @override State<MayaAdSlot> createState() => _MayaAdSlotState();
 }
 class _MayaAdSlotState extends State<MayaAdSlot> with WidgetsBindingObserver {
@@ -260,6 +305,9 @@ class _MayaAdSlotState extends State<MayaAdSlot> with WidgetsBindingObserver {
   Timer? _retry;
   int _attempt = 0;
   int _generation = MayaAds.retryGeneration;
+  String get _placement => widget.placement ?? (widget.key is ValueKey ? (widget.key as ValueKey).value.toString() : widget.nativeAd ? 'native feed' : widget.mrec ? 'MREC feed' : 'banner');
+  String? _widthNote;
+  void _record(String message) => MayaAds.recordSlot(_placement, message);
   @override void initState() {
     super.initState(); WidgetsBinding.instance.addObserver(this);
     final lifecycle = WidgetsBinding.instance.lifecycleState;
@@ -280,7 +328,7 @@ class _MayaAdSlotState extends State<MayaAdSlot> with WidgetsBindingObserver {
     if (!mounted) return;
     _timeout?.cancel();
     MayaAds.deliveryStatus.value = message;
-    debugPrint('MayaAds slot: $message');
+    _record(message);
     setState(() => failed = true);
     _retry?.cancel();
     if (!widget.retryAutomatically) return;
@@ -312,17 +360,20 @@ class _MayaAdSlotState extends State<MayaAdSlot> with WidgetsBindingObserver {
       if (!mounted || _viewId != id) return;
       if (call.method == 'status') {
         MayaAds.deliveryStatus.value = '${call.arguments ?? 'Ad request in progress'}';
+        _record(MayaAds.deliveryStatus.value);
       }
       if (call.method == 'loaded') {
         _timeout?.cancel();
         _attempt = 0;
         MayaAds.deliveryStatus.value = '${call.arguments ?? 'Ad network'}: ${widget.nativeAd ? 'Native ad loaded' : widget.mrec ? 'MREC loaded' : 'Banner loaded'}';
+        _record(MayaAds.deliveryStatus.value);
       }
       if (call.method == 'failed') {
         _failed('${call.arguments ?? 'Ad request failed'}');
       }
     });
     MayaAds.deliveryStatus.value = 'Requesting ${widget.nativeAd ? 'native' : widget.mrec ? 'MREC' : 'banner'} via ${MayaAds.networkNames}';
+    _record(MayaAds.deliveryStatus.value);
     _timeout = Timer(const Duration(seconds: 55), () { if (mounted && _viewId == id) { _failed('Ad request timed out'); } });
     unawaited(ch.invokeMethod<void>('load').catchError((Object e) { if (mounted && _viewId == id) { _failed('Ad bridge error: $e'); } }));
   }
@@ -335,9 +386,15 @@ class _MayaAdSlotState extends State<MayaAdSlot> with WidgetsBindingObserver {
     if (!MayaAds.canShow || failed || (widget.mrec && !MayaAds._startPermitted)) { _forgetView(); return const SizedBox.shrink(); }
     return LayoutBuilder(builder: (_, box) {
       if (box.maxWidth < (widget.nativeAd ? 260 : widget.mrec ? 300 : 320)) {
+        final note = 'Insufficient width: ${box.maxWidth.toStringAsFixed(0)}dp; requires ${widget.nativeAd ? 260 : widget.mrec ? 300 : 320}dp';
+        if (_widthNote != note) {
+          _widthNote = note;
+          WidgetsBinding.instance.addPostFrameCallback((_) { if (mounted && _widthNote == note) _record(note); });
+        }
         if (!widget.retryAutomatically) return const Text('Not enough width for a 320dp banner. Rotate your device.', style: TextStyle(color: Colors.white70));
         return const SizedBox.shrink();
       }
+      _widthNote = null;
       return Padding(padding: const EdgeInsets.symmetric(vertical: 8), child: Column(mainAxisSize: MainAxisSize.min, children: [
         const Text('Sponsored', style: TextStyle(fontSize: 10, color: Colors.white54)),
         SizedBox(height: widget.nativeAd ? 320 : widget.mrec ? 250 : 50, width: widget.nativeAd ? box.maxWidth : widget.mrec ? 300 : 320,
@@ -353,13 +410,12 @@ class MayaVideoAdSchedule {
   static const seconds = <int>[10, 60, 600, 1200, 2400, 4800, 9600, 15000];
   int _elapsedMs = 0;
   int _next = 0;
-  bool add(int elapsedMs) {
-    if (elapsedMs <= 0) return false;
+  int? add(int elapsedMs) {
+    if (elapsedMs <= 0) return null;
     _elapsedMs += elapsedMs;
-    var due = false;
+    int? due;
     while (_next < seconds.length && _elapsedMs >= seconds[_next] * 1000) {
-      _next++;
-      due = true;
+      due = seconds[_next++];
     }
     return due;
   }
