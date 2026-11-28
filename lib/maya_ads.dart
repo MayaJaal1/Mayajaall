@@ -19,9 +19,9 @@ class MayaAds {
   static const _adFreeKey = test ? 'maya_ads_trial_free_until_v2' : 'maya_ads_live_free_until_v2';
   static const _vastTestTag = String.fromEnvironment('MAYA_VAST_TEST_TAG');
   // Production in-stream ads require a separately approved integration. Never use the sample tag for revenue.
-  static bool get scheduledVideoAvailable => available && test;
+  static bool get scheduledVideoAvailable => available && (test || startEnabled);
   static Future<void> playScheduledVideo() async {
-    if (!canShow || !scheduledVideoAvailable) return;
+    if (!canShow || !test) return;
     try { await _bridge.invokeMethod<bool>('scheduledVideoTest', _vastTestTag); }
     catch (e) { debugPrint('MayaAds VAST trial: $e'); }
   }
@@ -119,6 +119,49 @@ class MayaAds {
     changes.value++;
     return true;
   }
+  static bool _videoTransitionBusy = false;
+  static bool _visibleRoute(BuildContext context) => context.mounted &&
+      ModalRoute.of(context)?.isCurrent == true &&
+      WidgetsBinding.instance.lifecycleState == AppLifecycleState.resumed;
+
+  /// Video-only interstitial at a user-initiated transition. Not a VAST mid-roll.
+  /// Failure/no-fill never prevents playback or download. The native layer caps requests.
+  static Future<void> videoTransition(BuildContext context, {
+    required String placement, Future<void> Function()? beforeDisplay, bool Function()? mayDisplay,
+  }) async {
+    if (!available || _videoTransitionBusy || !_visibleRoute(context)) return;
+    _videoTransitionBusy = true;
+    try {
+      // Never hold the user for a slow SDK initialization.
+      if (!canShow || !_startPermitted) {
+        unawaited(load());
+        return;
+      }
+      deliveryStatus.value = 'Start.io: checking video ad ($placement)';
+      final status = await _bridge.invokeMethod<String>('prepareTransitionVideo')
+          .timeout(const Duration(seconds: 7));
+      if (status != 'ready') {
+        deliveryStatus.value = 'Start.io video ($placement): ${status ?? "unavailable"}';
+        return;
+      }
+      if (!canShow || !_visibleRoute(context) || (mayDisplay != null && !mayDisplay())) return;
+      if (beforeDisplay != null) await beforeDisplay();
+      if (!canShow || !_visibleRoute(context)) return;
+      final outcome = await _bridge.invokeMethod<String>('showTransitionVideo')
+          .timeout(const Duration(seconds: 125));
+      deliveryStatus.value = 'Start.io video ($placement): ${outcome ?? "unavailable"}';
+    } catch (e) {
+      deliveryStatus.value = 'Start.io video ($placement): $e';
+      debugPrint('MayaAds transition: $e');
+    } finally {
+      // SDK dismissal may arrive just before Flutter resumes.
+      for (var i = 0; i < 12 && context.mounted &&
+          WidgetsBinding.instance.lifecycleState != AppLifecycleState.resumed; i++) {
+        await Future<void>.delayed(const Duration(milliseconds: 150));
+      }
+      _videoTransitionBusy = false;
+    }
+  }
   static Future<void> prepareInterstitial() async {
     await load();
     if (!canShow) return;
@@ -203,9 +246,10 @@ class _AdsSettingsState extends State<_AdsSettings> {
 /// A real Android platform view; it collapses when the network has no ad.
 class MayaAdSlot extends StatefulWidget {
   final bool nativeAd;
+  final bool mrec;
   final bool active;
   final bool retryAutomatically;
-  const MayaAdSlot({super.key, this.nativeAd = false, this.active = true, this.retryAutomatically = true});
+  const MayaAdSlot({super.key, this.nativeAd = false, this.mrec = false, this.active = true, this.retryAutomatically = true}) : assert(!(nativeAd && mrec));
   @override State<MayaAdSlot> createState() => _MayaAdSlotState();
 }
 class _MayaAdSlotState extends State<MayaAdSlot> with WidgetsBindingObserver {
@@ -255,6 +299,7 @@ class _MayaAdSlotState extends State<MayaAdSlot> with WidgetsBindingObserver {
   @override void didUpdateWidget(covariant MayaAdSlot oldWidget) {
     super.didUpdateWidget(oldWidget);
     if (widget.active && !oldWidget.active) { failed = false; _retry?.cancel(); }
+    if (widget.nativeAd != oldWidget.nativeAd || widget.mrec != oldWidget.mrec) { failed = false; _retry?.cancel(); _attempt = 0; _forgetView(); }
     if (!widget.active) _retry?.cancel();
   }
   void _forgetView() { _timeout?.cancel(); _channel?.setMethodCallHandler(null); _channel = null; _viewId = null; }
@@ -271,13 +316,13 @@ class _MayaAdSlotState extends State<MayaAdSlot> with WidgetsBindingObserver {
       if (call.method == 'loaded') {
         _timeout?.cancel();
         _attempt = 0;
-        MayaAds.deliveryStatus.value = '${call.arguments ?? 'Ad network'}: ${widget.nativeAd ? 'Native ad loaded' : 'Banner loaded'}';
+        MayaAds.deliveryStatus.value = '${call.arguments ?? 'Ad network'}: ${widget.nativeAd ? 'Native ad loaded' : widget.mrec ? 'MREC loaded' : 'Banner loaded'}';
       }
       if (call.method == 'failed') {
         _failed('${call.arguments ?? 'Ad request failed'}');
       }
     });
-    MayaAds.deliveryStatus.value = 'Requesting ${widget.nativeAd ? 'native' : 'banner'} via ${MayaAds.networkNames}';
+    MayaAds.deliveryStatus.value = 'Requesting ${widget.nativeAd ? 'native' : widget.mrec ? 'MREC' : 'banner'} via ${MayaAds.networkNames}';
     _timeout = Timer(const Duration(seconds: 55), () { if (mounted && _viewId == id) { _failed('Ad request timed out'); } });
     unawaited(ch.invokeMethod<void>('load').catchError((Object e) { if (mounted && _viewId == id) { _failed('Ad bridge error: $e'); } }));
   }
@@ -287,16 +332,16 @@ class _MayaAdSlotState extends State<MayaAdSlot> with WidgetsBindingObserver {
   }
   @override Widget build(BuildContext context) {
     if (!MayaAds.available || !widget.active || !foreground || ModalRoute.of(context)?.isCurrent != true) { _forgetView(); return const SizedBox.shrink(); }
-    if (!MayaAds.canShow || failed) { _forgetView(); return const SizedBox.shrink(); }
+    if (!MayaAds.canShow || failed || (widget.mrec && !MayaAds._startPermitted)) { _forgetView(); return const SizedBox.shrink(); }
     return LayoutBuilder(builder: (_, box) {
-      if (box.maxWidth < (widget.nativeAd ? 260 : 320)) {
+      if (box.maxWidth < (widget.nativeAd ? 260 : widget.mrec ? 300 : 320)) {
         if (!widget.retryAutomatically) return const Text('Not enough width for a 320dp banner. Rotate your device.', style: TextStyle(color: Colors.white70));
         return const SizedBox.shrink();
       }
       return Padding(padding: const EdgeInsets.symmetric(vertical: 8), child: Column(mainAxisSize: MainAxisSize.min, children: [
         const Text('Sponsored', style: TextStyle(fontSize: 10, color: Colors.white54)),
-        SizedBox(height: widget.nativeAd ? 320 : 50, width: widget.nativeAd ? box.maxWidth : 320,
-          child: AndroidView(key: ValueKey(_generation), viewType: 'mayajaal/inmobi_slot', creationParams: {'native': widget.nativeAd}, creationParamsCodec: const StandardMessageCodec(), onPlatformViewCreated: _onView)),
+        SizedBox(height: widget.nativeAd ? 320 : widget.mrec ? 250 : 50, width: widget.nativeAd ? box.maxWidth : widget.mrec ? 300 : 320,
+          child: AndroidView(key: ValueKey('$_generation:${widget.nativeAd}:${widget.mrec}'), viewType: 'mayajaal/inmobi_slot', creationParams: {'native': widget.nativeAd, 'mrec': widget.mrec}, creationParamsCodec: const StandardMessageCodec(), onPlatformViewCreated: _onView)),
       ]));
     });
   }
