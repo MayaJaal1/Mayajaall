@@ -14,7 +14,7 @@ name: Build MayaJaal APK
         type: boolean
         default: false
       ads_enabled:
-        description: Enable automatic InMobi placements (test mode for trial; approval required for production)
+        description: Enable automatic Start.io and InMobi placements (test mode for trial; approval required for production)
         type: boolean
         default: true
 permissions:
@@ -34,8 +34,8 @@ jobs:
         ADS_TRIAL: ${{ github.event_name == 'workflow_dispatch' && inputs.ads_trial && !inputs.publish_release }}
         PUBLISH_RELEASE: ${{ github.event_name == 'workflow_dispatch' && inputs.publish_release }}
         TRIAL_REQUESTED: ${{ github.event_name == 'workflow_dispatch' && inputs.ads_trial }}
-        ADS_REQUESTED: ${{ (github.event_name == 'push' && vars.MAYA_ADS_PRODUCTION_APPROVED == 'true') || (github.event_name == 'workflow_dispatch' && inputs.ads_enabled) }}
-        ADS_APPROVED: ${{ vars.MAYA_ADS_PRODUCTION_APPROVED }}
+        ADS_REQUESTED: ${{ (github.event_name == 'push' && (vars.MAYA_ADS_PRODUCTION_APPROVED == 'true' || vars.MAYA_STARTIO_APPROVED == 'true')) || (github.event_name == 'workflow_dispatch' && inputs.ads_enabled) }}
+        ADS_APPROVED: ${{ vars.MAYA_ADS_PRODUCTION_APPROVED == 'true' || vars.MAYA_STARTIO_APPROVED == 'true' }}
       run: |
         set -euo pipefail
         if [[ "$PUBLISH_RELEASE" == "true" && "$TRIAL_REQUESTED" == "true" ]]; then
@@ -43,7 +43,7 @@ jobs:
           exit 1
         fi
         if [[ "$ADS_REQUESTED" == "true" && "$ADS_TRIAL" != "true" && "$ADS_APPROVED" != "true" ]]; then
-          echo "::error::Production ads are locked. Verify InMobi app/placements approval, required consent and live-mode eligibility; then set repository variable MAYA_ADS_PRODUCTION_APPROVED=true. For testing select ads_trial."
+          echo "::error::Production ads are locked. Verify network live eligibility; set MAYA_STARTIO_APPROVED=true for Start.io or MAYA_ADS_PRODUCTION_APPROVED=true for InMobi. For testing select ads_trial."
           exit 1
         fi
         if [[ "$ADS_TRIAL" == "true" ]]; then
@@ -52,9 +52,9 @@ jobs:
         else
           echo "Ads Test Lab: DISABLED" | tee -a "$GITHUB_STEP_SUMMARY"
           if [[ "$ADS_REQUESTED" == "true" && "$ADS_APPROVED" == "true" ]]; then
-            echo "InMobi: production SDK placements enabled. Confirm dashboard test mode is OFF." | tee -a "$GITHUB_STEP_SUMMARY"
+            echo "Approved ad networks enabled. Confirm live mode in provider dashboards." | tee -a "$GITHUB_STEP_SUMMARY"
           else
-            echo "InMobi: disabled for this build (no production approval or ads not requested)." | tee -a "$GITHUB_STEP_SUMMARY"
+            echo "Ads disabled for this build (no production approval or ads not requested)." | tee -a "$GITHUB_STEP_SUMMARY"
           fi
         fi
     - name: Verify required files
@@ -188,8 +188,10 @@ jobs:
     - name: Prepare Android project
       shell: bash
       env:
+        MAYA_START_APPROVED: ${{ vars.MAYA_STARTIO_APPROVED }}
+        MAYA_INMOBI_APPROVED: ${{ vars.MAYA_ADS_PRODUCTION_APPROVED }}
         MAYA_NATIVE_TRIAL: ${{ github.event_name == 'workflow_dispatch' && inputs.ads_trial && !inputs.publish_release }}
-        MAYA_NATIVE_ADS: ${{ (github.event_name == 'push' && vars.MAYA_ADS_PRODUCTION_APPROVED == 'true') || (github.event_name == 'workflow_dispatch' && inputs.ads_enabled && (inputs.ads_trial || vars.MAYA_ADS_PRODUCTION_APPROVED == 'true')) }}
+        MAYA_NATIVE_ADS: ${{ (github.event_name == 'push' && (vars.MAYA_ADS_PRODUCTION_APPROVED == 'true' || vars.MAYA_STARTIO_APPROVED == 'true')) || (github.event_name == 'workflow_dispatch' && inputs.ads_enabled && (inputs.ads_trial || (vars.MAYA_ADS_PRODUCTION_APPROVED == 'true' || vars.MAYA_STARTIO_APPROVED == 'true'))) }}
       run: |
         set -euo pipefail
         # This workflow owns these generated Gradle files. Keep one DSL per generated file.
@@ -415,14 +417,20 @@ jobs:
         EOF
 
         mkdir -p android/app/src/main/java/com/mayajaal/online
-        trial=false; ads_enabled=false
+        trial=false; ads_enabled=false; start_enabled=false; inmobi_enabled=false
         if [[ "$MAYA_NATIVE_TRIAL" == "true" ]]; then trial=true; fi
         if [[ "$MAYA_NATIVE_ADS" == "true" ]]; then ads_enabled=true; fi
+        if [[ "$ads_enabled" == "true" ]]; then
+          if [[ "$trial" == "true" || "$MAYA_START_APPROVED" == "true" ]]; then start_enabled=true; fi
+          if [[ "$trial" == "true" || "$MAYA_INMOBI_APPROVED" == "true" ]]; then inmobi_enabled=true; fi
+        fi
         cat > android/app/src/main/java/com/mayajaal/online/MayaAdsMode.java <<EOFMODE
         package com.mayajaal.online;
         public final class MayaAdsMode {
             public static final boolean TRIAL = $trial;
             public static final boolean ENABLED = $ads_enabled;
+            public static final boolean START = $start_enabled;
+            public static final boolean INMOBI = $inmobi_enabled;
             private MayaAdsMode() {}
         }
         EOFMODE
@@ -439,6 +447,16 @@ jobs:
         import android.view.View;
         import android.view.ViewGroup;
         import android.widget.*;
+        import com.startapp.sdk.adsbase.StartAppSDK;
+        import com.startapp.sdk.adsbase.StartAppAd;
+        import com.startapp.sdk.adsbase.Ad;
+        import com.startapp.sdk.adsbase.adlisteners.AdEventListener;
+        import com.startapp.sdk.adsbase.adlisteners.AdDisplayListener;
+        import com.startapp.sdk.ads.banner.Banner;
+        import com.startapp.sdk.ads.banner.BannerListener;
+        import com.startapp.sdk.ads.nativead.StartAppNativeAd;
+        import com.startapp.sdk.ads.nativead.NativeAdPreferences;
+        import com.startapp.sdk.ads.nativead.NativeAdDetails;
         import com.inmobi.sdk.InMobiSdk;
         import com.inmobi.ads.*;
         import com.inmobi.ads.listeners.*;
@@ -455,7 +473,7 @@ jobs:
         import java.util.Map;
         import java.util.function.Consumer;
 
-        /** Native Android bridge. All requests require explicit adult opt-in. */
+        /** Native Android bridge. Requests require a permitted network and privacy configuration. */
         public final class MayaAdsBridge {
             private static final String TAG = "MayaAds";
             private static final String ACCOUNT = "a49ee54505e3485b8dec270ba7bb4182";
@@ -466,6 +484,23 @@ jobs:
             private final ArrayList<Consumer<Boolean>> waiting = new ArrayList<>();
             private final ArrayList<Slot> slots = new ArrayList<>();
             private boolean allowed, ready, initializing, closed, foreground;
+            private boolean startAllowed, inmobiAllowed, startReady, startLoading, startShowing;
+            private StartAppAd startFull;
+            private int startEpoch;
+            private boolean initStart() {
+                if (!startAllowed || closed) return false;
+                try {
+                    if (!startReady) {
+                        StartAppSDK.setTestAdsEnabled(MayaAdsMode.TRIAL);
+                        StartAppSDK.init(activity, "210201394", false);
+                        StartAppAd.disableSplash();
+                        startReady=true;
+                    }
+                    // Do not claim consent to personalized advertising.
+                    StartAppSDK.setUserConsent(activity,"pas",System.currentTimeMillis(),false);
+                    return true;
+                } catch (RuntimeException | LinkageError error) { Log.w(TAG,"Start.io init",error); startReady=false; return false; }
+            }
             private int initGeneration;
             private InMobiInterstitial interstitial, rewarded;
             private boolean loadingInterstitial, showingInterstitial, showingReward, earned;
@@ -480,14 +515,18 @@ jobs:
                 channel.setMethodCallHandler((call,result)-> {
                     switch(call.method) {
                         case "configure":
-                            allowed=MayaAdsMode.ENABLED && Boolean.TRUE.equals(call.arguments);
+                            Map<?,?> cfg=call.arguments instanceof Map ? (Map<?,?>)call.arguments : Collections.emptyMap();
+                            startAllowed=MayaAdsMode.START && Boolean.TRUE.equals(cfg.get("start"));
+                            inmobiAllowed=MayaAdsMode.INMOBI && Boolean.TRUE.equals(cfg.get("inmobi"));
+                            allowed=MayaAdsMode.ENABLED && (startAllowed || inmobiAllowed);
                             if (!allowed) { withdraw(); result.success(false); }
+                            else if(initStart()) result.success(true);
                             else ensure(result::success);
                             break;
                         case "preload":
-                            if(allowed) ensure(ok->{if(ok) preload();}); result.success(null); break;
-                        case "showInterstitial": showInterstitial(); result.success(null); break;
-                        case "reward": beginReward(result); break;
+                            if(allowed) preloadPrimary(); result.success(null); break;
+                        case "showInterstitial": showPrimary(); result.success(null); break;
+                        case "reward": rewardPrimary(result); break;
                         case "scheduledVideoTest": beginVideoTest(call.arguments instanceof String ? (String)call.arguments : "", result); break;
                         default: result.notImplemented();
                     }
@@ -501,7 +540,7 @@ jobs:
             private void safe(Runnable work) { try { work.run(); } catch(RuntimeException | LinkageError e) { Log.w(TAG,"Ad operation failed",e); } }
             private boolean visible() { return foreground && !closed && !activity.isFinishing() && !activity.isDestroyed(); }
             private void ensure(Consumer<Boolean> next) {
-                if(closed || !allowed) { next.accept(false); return; }
+                if(closed || !allowed || !inmobiAllowed) { next.accept(false); return; }
                 if(ready) { safe(()->InMobiSdk.updateGDPRConsent(consent(MayaAdsMode.TRIAL))); next.accept(true); return; }
                 waiting.add(next);
                 if(initializing)return;
@@ -519,9 +558,11 @@ jobs:
                 initializing=false; ready=ok;
                 if(ready && !allowed) safe(()->InMobiSdk.updateGDPRConsent(consent(false)));
                 ArrayList<Consumer<Boolean>> callbacks=new ArrayList<>(waiting);waiting.clear();
-                for(Consumer<Boolean> cb:callbacks) safe(()->cb.accept(ok && allowed && !closed));
+                for(Consumer<Boolean> cb:callbacks) safe(()->cb.accept(ok && allowed && inmobiAllowed && !closed));
             }
             private void withdraw() {
+                startEpoch++; startFull=null;startLoading=false;
+                if(startReady)safe(()->StartAppSDK.setUserConsent(activity,"pas",System.currentTimeMillis(),false));
                 if(ready)safe(()->InMobiSdk.updateGDPRConsent(consent(false)));
                 for(Slot slot:new ArrayList<>(slots))slot.stop();
                 if(!showingInterstitial){interstitial=null;loadingInterstitial=false;}
@@ -530,9 +571,74 @@ jobs:
             public void resume(){foreground=true;}
             public void pause(){foreground=false;}
             public void destroy(){closed=true;allowed=false;withdraw();initGeneration++;finishInit(false);finishReward(false);finishVideoTest(false);channel.setMethodCallHandler(null);}
+            private void preloadPrimary(){
+                if(!visible() || !allowed || !frequencyOk() || startShowing || showingInterstitial || showingReward || pendingReward!=null || pendingVideoTest!=null)return;
+                if(!startAllowed || !startReady){ensure(ok->{if(ok)preload();});return;}
+                if(startLoading || startFull!=null)return;
+                startLoading=true; final int epoch=++startEpoch;
+                try{
+                    StartAppAd ad=new StartAppAd(activity);startFull=ad;
+                    ad.loadAd(new AdEventListener(){
+                        public void onReceiveAd(Ad a){ui.post(()->{if(epoch==startEpoch)startLoading=false;});}
+                        public void onFailedToReceiveAd(Ad a){ui.post(()->startFallback(epoch));}
+                    });
+                    ui.postDelayed(()->{if(startLoading)startFallback(epoch);},12000);
+                }catch(RuntimeException | LinkageError e){startFallback(epoch);}
+            }
+            private void startFallback(int epoch){
+                if(epoch!=startEpoch)return; startEpoch++;startLoading=false;startFull=null;
+                Log.i(TAG,"Start.io interstitial unavailable; checking InMobi");
+                ensure(ok->{if(ok)preload();});
+            }
+            private void showPrimary(){
+                if(!allowed || !visible() || !activity.hasWindowFocus() || !frequencyOk() || startShowing || showingInterstitial || showingReward || pendingReward!=null || pendingVideoTest!=null)return;
+                if(startAllowed && startFull!=null && !startLoading){
+                    StartAppAd ad=startFull;startFull=null; startShowing=true;
+                    try{
+                        boolean shown=ad.showAd(new AdDisplayListener(){
+                            public void adDisplayed(Ad a){ui.post(()->lastInterstitial=System.currentTimeMillis());}
+                            public void adHidden(Ad a){ui.post(()->startShowing=false);}
+                            public void adClicked(Ad a){}
+                            public void adNotDisplayed(Ad a){ui.post(()->startShowing=false);}
+                        });
+                        if(shown){lastInterstitial=System.currentTimeMillis();return;}
+                    }catch(RuntimeException | LinkageError e){Log.w(TAG,"Start.io display",e);}
+                    startShowing=false;
+                }
+                showInterstitial();
+            }
+            private void rewardPrimary(MethodChannel.Result result){
+                if(!allowed || !visible() || startShowing || showingInterstitial || showingReward || pendingReward!=null || pendingVideoTest!=null){result.success(false);return;}
+                if(!startAllowed || !startReady){beginReward(result);return;}
+                pendingReward=result; final boolean[] completed={false}; final boolean[] displayed={false};
+                final boolean[] done={false};
+                Runnable fallback=()->{if(done[0] || pendingReward!=result)return;done[0]=true;pendingReward=null;startShowing=false;beginReward(result);};
+                try{
+                    StartAppAd ad=new StartAppAd(activity);
+                    ad.setVideoListener(()->ui.post(()->{if(!done[0] && pendingReward==result)completed[0]=true;}));
+                    ad.loadAd(StartAppAd.AdMode.REWARDED_VIDEO,new AdEventListener(){
+                        public void onFailedToReceiveAd(Ad a){ui.post(fallback);}
+                        public void onReceiveAd(Ad a){ui.post(()->{
+                            if(done[0] || pendingReward!=result)return;
+                            if(!allowed || !visible() || !activity.hasWindowFocus()){done[0]=true;finishReward(false);return;}
+                            startShowing=true;
+                            try{
+                                boolean ok=ad.showAd(new AdDisplayListener(){
+                                    public void adDisplayed(Ad x){ui.post(()->displayed[0]=true);}
+                                    public void adClicked(Ad x){}
+                                    public void adNotDisplayed(Ad x){ui.post(fallback);}
+                                    public void adHidden(Ad x){ui.post(()->{if(!done[0] && pendingReward==result){done[0]=true;startShowing=false;finishReward(completed[0] && allowed);}});}
+                                });
+                                if(!ok)fallback.run();else displayed[0]=true;
+                            }catch(RuntimeException | LinkageError err){fallback.run();}
+                        });}
+                    });
+                    ui.postDelayed(()->{if(!displayed[0])fallback.run();},12000);
+                }catch(RuntimeException | LinkageError err){fallback.run();}
+            }
             private boolean frequencyOk(){return System.currentTimeMillis()-lastInterstitial>=180000;}
             private void preload(){
-                if(!allowed || !ready || !visible() || loadingInterstitial || showingInterstitial || showingReward || pendingReward!=null || pendingVideoTest!=null || interstitial!=null || !frequencyOk())return;
+                if(!allowed || !inmobiAllowed || !ready || !visible() || loadingInterstitial || showingInterstitial || showingReward || pendingReward!=null || pendingVideoTest!=null || interstitial!=null || !frequencyOk())return;
                 loadingInterstitial=true;
                 try{
                     interstitial=new InMobiInterstitial(activity,INTERSTITIAL,new InterstitialAdEventListener(){
@@ -546,14 +652,14 @@ jobs:
                 }catch(RuntimeException | LinkageError e){Log.w(TAG,"Interstitial load",e);interstitial=null;loadingInterstitial=false;}
             }
             private void showInterstitial(){
-                if(!allowed || !ready || !visible() || !activity.hasWindowFocus() || !frequencyOk() || loadingInterstitial || showingInterstitial || showingReward || pendingReward!=null || pendingVideoTest!=null || interstitial==null)return;
+                if(!allowed || !inmobiAllowed || !ready || !visible() || !activity.hasWindowFocus() || !frequencyOk() || loadingInterstitial || showingInterstitial || showingReward || pendingReward!=null || pendingVideoTest!=null || interstitial==null)return;
                 try{
                     if(!interstitial.isReady()){interstitial=null;return;}
                     showingInterstitial=true;lastInterstitial=System.currentTimeMillis();interstitial.show();
                 }catch(RuntimeException | LinkageError e){Log.w(TAG,"Interstitial display",e);interstitial=null;showingInterstitial=false;}
             }
             private void beginVideoTest(String tag, MethodChannel.Result result){
-                if(!MayaAdsMode.TRIAL || !allowed || !visible() || !activity.hasWindowFocus() || pendingVideoTest!=null || pendingReward!=null || showingInterstitial || showingReward){result.success(false);return;}
+                if(!MayaAdsMode.TRIAL || !allowed || startShowing || !visible() || !activity.hasWindowFocus() || pendingVideoTest!=null || pendingReward!=null || showingInterstitial || showingReward){result.success(false);return;}
                 if(!tag.isEmpty()){
                     android.net.Uri uri=android.net.Uri.parse(tag);
                     if(!"https".equalsIgnoreCase(uri.getScheme()) || uri.getHost()==null || uri.getUserInfo()!=null){result.success(false);return;}
@@ -592,6 +698,7 @@ jobs:
                 });
             }
             private void finishReward(boolean value){
+                startShowing=false;
                 MethodChannel.Result r=pendingReward;pendingReward=null;rewarded=null;showingReward=false;earned=false;
                 if(r!=null)safe(()->r.success(value));
             }
@@ -608,6 +715,10 @@ jobs:
                 final MethodChannel pipe;
                 final boolean nativeAd;
                 boolean disposed,started;
+                Banner startBanner;
+                StartAppNativeAd startNative;
+                NativeAdDetails startDetails;
+                boolean startFinished;
                 InMobiBanner banner;
                 InMobiNative nativeUnit;
                 Slot(int id,boolean isNative){
@@ -616,11 +727,53 @@ jobs:
                         if(!"load".equals(call.method)){result.notImplemented();return;}
                         result.success(null);
                         if(disposed || started)return;started=true;
-                        ensure(ok->{if(disposed)return;if(!ok || !visible() || !allowed){fail("Not available");return;} if(nativeAd)loadNative();else loadBanner();});
+                        if(startAllowed && startReady) loadStart(); else loadBackup();
                     });
                 }
                 int dp(int n){return Math.round(n*activity.getResources().getDisplayMetrics().density);}
-                void loaded(){if(!disposed)pipe.invokeMethod("loaded",null);}
+                void loaded(){if(!disposed)pipe.invokeMethod("loaded",startDetails!=null || startBanner!=null ? "Start.io" : "InMobi");}
+                void loadBackup(){
+                    ensure(ok->{if(disposed)return;if(!ok || !visible() || !allowed){fail("No approved ad network or SDK unavailable");return;} if(nativeAd)loadNative();else loadBanner();});
+                }
+                void startFailed(String reason){
+                    if(disposed || startFinished)return;startFinished=true;
+                    Log.i(TAG,"Start.io: "+reason); stopStart();loadBackup();
+                }
+                void loadStart(){
+                    try{
+                        if(nativeAd){
+                            final StartAppNativeAd ad=new StartAppNativeAd(activity);startNative=ad;
+                            ad.loadAd(new NativeAdPreferences().setAdsNumber(1).setAutoBitmapDownload(true).setPrimaryImageSize(3),new AdEventListener(){
+                                public void onReceiveAd(Ad a){ui.post(()->{
+                                    if(disposed || startFinished || startNative!=ad)return;
+                                    try{
+                                        if(!visible() || !startAllowed || ad.getNativeAds().isEmpty()){startFailed("Native unavailable");return;}
+                                        startDetails=(NativeAdDetails)ad.getNativeAds().get(0);
+                                        LinearLayout card=new LinearLayout(activity);card.setOrientation(LinearLayout.VERTICAL);card.setPadding(dp(12),dp(8),dp(12),dp(8));card.setBackgroundColor(0xff14221c);
+                                        card.addView(label("Sponsored",12));card.addView(label(startDetails.getTitle(),18));card.addView(label(startDetails.getDescription(),13));
+                                        ImageView image=new ImageView(activity);image.setScaleType(ImageView.ScaleType.FIT_CENTER);image.setImageBitmap(startDetails.getImageBitmap());card.addView(image,new LinearLayout.LayoutParams(-1,0,1));
+                                        card.addView(label(String.valueOf(startDetails.getCallToAction()),16));
+                                        root.addView(card,new FrameLayout.LayoutParams(-1,-1));startDetails.registerViewForInteraction(card);startFinished=true;loaded();
+                                    }catch(RuntimeException | LinkageError ex){startFailed("Native render: "+ex.getMessage());}
+                                });}
+                                public void onFailedToReceiveAd(Ad a){ui.post(()->startFailed("Native no fill"));}
+                            });
+                        }else{
+                            startBanner=new Banner(activity,new BannerListener(){
+                                public void onReceiveAd(View v){ui.post(()->{if(!disposed && startBanner==v && !startFinished){startFinished=true;loaded();}});}
+                                public void onFailedToReceiveAd(View v){ui.post(()->{if(startBanner==v)startFailed("Banner no fill");});}
+                                public void onImpression(View v){}
+                                public void onClick(View v){}
+                            });
+                            root.addView(startBanner,new FrameLayout.LayoutParams(dp(320),dp(50),Gravity.CENTER));
+                        }
+                        ui.postDelayed(()->startFailed("Load timeout"),12000);
+                    }catch(RuntimeException | LinkageError ex){startFailed(ex.toString());}
+                }
+                void stopStart(){
+                    Banner old=startBanner;startBanner=null;startNative=null;startDetails=null;
+                    if(old!=null)safe(old::hideBanner);root.removeAllViews();
+                }
                 void fail(String why){if(disposed)return;Log.i(TAG,why);stop();pipe.invokeMethod("failed",why);}
                 void loadBanner(){
                     try{
@@ -665,6 +818,7 @@ jobs:
                     if(icon.getParent()!=null)data.setIconView(icon);ad.registerViewForTracking(data.build());
                 }
                 void stop(){
+                    startFinished=true;stopStart();
                     InMobiBanner b=banner;banner=null;InMobiNative n=nativeUnit;nativeUnit=null;
                     root.removeAllViews();if(b!=null)safe(b::destroy);if(n!=null){safe(n::unTrackViews);safe(n::destroy);}
                 }
@@ -1111,6 +1265,11 @@ jobs:
                 <meta-data android:name="com.google.android.gms.ads.APPLICATION_ID" android:value="ca-app-pub-2838903415772756~9180315931"/>
                 <meta-data android:name="com.onesignal.NotificationServiceExtension" android:value="com.onesignal.notifications.internal.service.impl.NotificationServiceExtension"/>
 
+                <meta-data android:name="com.startapp.sdk.APPLICATION_ID" android:value="210201394" />
+                <meta-data android:name="com.startapp.sdk.RETURN_ADS_ENABLED" android:value="false" />
+                <meta-data android:name="com.startapp.sdk.SPLASH_ENABLED" android:value="false" />
+                <meta-data android:name="com.startapp.sdk.MIXED_AUDIENCE" android:value="true" />
+                <provider android:name="com.startapp.sdk.adsbase.StartAppInitProvider" android:authorities="${applicationId}.startappinitprovider" tools:node="remove" />
                 <activity android:name=".MayaAdsTrialActivity" android:exported="false" android:theme="@android:style/Theme.Material.NoActionBar" />
                 <activity android:name=".MayaVastTrialActivity" android:exported="false" android:theme="@android:style/Theme.Material.NoActionBar" />
                 <activity
@@ -1256,6 +1415,7 @@ jobs:
             implementation 'com.google.android.exoplayer:exoplayer-hls:2.19.1'
             implementation 'com.google.android.exoplayer:exoplayer-core:2.19.1'
             implementation 'com.inmobi.monetization:inmobi-ads-kotlin:11.5.1'
+            implementation 'com.startapp:inapp-sdk:5.4.0'
             implementation 'androidx.media3:media3-exoplayer:1.4.1'
             implementation 'androidx.media3:media3-exoplayer-ima:1.4.1'
             implementation 'androidx.media3:media3-ui:1.4.1'
@@ -1348,7 +1508,10 @@ jobs:
         MAYA_ADS_TRIAL: ${{ github.event_name == 'workflow_dispatch' && inputs.ads_trial && !inputs.publish_release }}
         MAYA_VAST_TEST_TAG: ${{ vars.MAYA_VAST_TEST_TAG }}
         MAYA_ADS_CONTEXTUAL_APPROVED: ${{ vars.MAYA_ADS_CONTEXTUAL_APPROVED }}
-        MAYA_ADS_ENABLED: ${{ (github.event_name == 'push' && vars.MAYA_ADS_PRODUCTION_APPROVED == 'true') || (github.event_name == 'workflow_dispatch' && inputs.ads_enabled && (inputs.ads_trial || vars.MAYA_ADS_PRODUCTION_APPROVED == 'true')) }}
+        MAYA_STARTIO_CONTEXTUAL_APPROVED: ${{ vars.MAYA_STARTIO_CONTEXTUAL_APPROVED }}
+        MAYA_STARTIO_APPROVED: ${{ vars.MAYA_STARTIO_APPROVED }}
+        MAYA_INMOBI_APPROVED: ${{ vars.MAYA_ADS_PRODUCTION_APPROVED }}
+        MAYA_ADS_ENABLED: ${{ (github.event_name == 'push' && (vars.MAYA_ADS_PRODUCTION_APPROVED == 'true' || vars.MAYA_STARTIO_APPROVED == 'true')) || (github.event_name == 'workflow_dispatch' && inputs.ads_enabled && (inputs.ads_trial || (vars.MAYA_ADS_PRODUCTION_APPROVED == 'true' || vars.MAYA_STARTIO_APPROVED == 'true'))) }}
       run: |
         set -euo pipefail
         args=(--release --build-name="$MAYAJAAL_BUILD_NAME" --build-number="$MAYAJAAL_BUILD_NUMBER")
@@ -1358,6 +1521,11 @@ jobs:
         fi
         if [[ "$MAYA_ADS_ENABLED" == "true" ]]; then args+=(--dart-define=MAYA_ADS_ENABLED=true); fi
         if [[ "$MAYA_ADS_ENABLED" == "true" && "$MAYA_ADS_TRIAL" != "true" && "$MAYA_ADS_CONTEXTUAL_APPROVED" == "true" ]]; then args+=(--dart-define=MAYA_ADS_CONTEXTUAL_APPROVED=true); fi
+        if [[ "$MAYA_ADS_ENABLED" == "true" ]]; then
+          if [[ "$MAYA_ADS_TRIAL" == "true" || "$MAYA_STARTIO_APPROVED" == "true" ]]; then args+=(--dart-define=MAYA_STARTIO_ENABLED=true); fi
+          if [[ "$MAYA_ADS_TRIAL" == "true" || "$MAYA_INMOBI_APPROVED" == "true" ]]; then args+=(--dart-define=MAYA_INMOBI_ENABLED=true); fi
+          if [[ "$MAYA_STARTIO_CONTEXTUAL_APPROVED" == "true" && "$MAYA_ADS_TRIAL" != "true" ]]; then args+=(--dart-define=MAYA_STARTIO_CONTEXTUAL_APPROVED=true); fi
+        fi
         # Omit blank values so String.fromEnvironment defaults in Dart still work.
         for name in MAYAJAAL_TERABOX_RESOLVER MAYAJAAL_SOCIAL_RESOLVER MAYAJAAL_CHANNEL_UPLOAD MAYA_LIVE_API; do
           value="${!name}"
@@ -1394,7 +1562,10 @@ jobs:
         MAYA_ADS_TRIAL: ${{ github.event_name == 'workflow_dispatch' && inputs.ads_trial && !inputs.publish_release }}
         MAYA_VAST_TEST_TAG: ${{ vars.MAYA_VAST_TEST_TAG }}
         MAYA_ADS_CONTEXTUAL_APPROVED: ${{ vars.MAYA_ADS_CONTEXTUAL_APPROVED }}
-        MAYA_ADS_ENABLED: ${{ (github.event_name == 'push' && vars.MAYA_ADS_PRODUCTION_APPROVED == 'true') || (github.event_name == 'workflow_dispatch' && inputs.ads_enabled && (inputs.ads_trial || vars.MAYA_ADS_PRODUCTION_APPROVED == 'true')) }}
+        MAYA_STARTIO_CONTEXTUAL_APPROVED: ${{ vars.MAYA_STARTIO_CONTEXTUAL_APPROVED }}
+        MAYA_STARTIO_APPROVED: ${{ vars.MAYA_STARTIO_APPROVED }}
+        MAYA_INMOBI_APPROVED: ${{ vars.MAYA_ADS_PRODUCTION_APPROVED }}
+        MAYA_ADS_ENABLED: ${{ (github.event_name == 'push' && (vars.MAYA_ADS_PRODUCTION_APPROVED == 'true' || vars.MAYA_STARTIO_APPROVED == 'true')) || (github.event_name == 'workflow_dispatch' && inputs.ads_enabled && (inputs.ads_trial || (vars.MAYA_ADS_PRODUCTION_APPROVED == 'true' || vars.MAYA_STARTIO_APPROVED == 'true'))) }}
       run: |
         set -euo pipefail
         args=(--release --build-name="$MAYAJAAL_BUILD_NAME" --build-number="$MAYAJAAL_BUILD_NUMBER")
@@ -1404,6 +1575,11 @@ jobs:
         fi
         if [[ "$MAYA_ADS_ENABLED" == "true" ]]; then args+=(--dart-define=MAYA_ADS_ENABLED=true); fi
         if [[ "$MAYA_ADS_ENABLED" == "true" && "$MAYA_ADS_TRIAL" != "true" && "$MAYA_ADS_CONTEXTUAL_APPROVED" == "true" ]]; then args+=(--dart-define=MAYA_ADS_CONTEXTUAL_APPROVED=true); fi
+        if [[ "$MAYA_ADS_ENABLED" == "true" ]]; then
+          if [[ "$MAYA_ADS_TRIAL" == "true" || "$MAYA_STARTIO_APPROVED" == "true" ]]; then args+=(--dart-define=MAYA_STARTIO_ENABLED=true); fi
+          if [[ "$MAYA_ADS_TRIAL" == "true" || "$MAYA_INMOBI_APPROVED" == "true" ]]; then args+=(--dart-define=MAYA_INMOBI_ENABLED=true); fi
+          if [[ "$MAYA_STARTIO_CONTEXTUAL_APPROVED" == "true" && "$MAYA_ADS_TRIAL" != "true" ]]; then args+=(--dart-define=MAYA_STARTIO_CONTEXTUAL_APPROVED=true); fi
+        fi
         # Omit blank values so String.fromEnvironment defaults in Dart still work.
         for name in MAYAJAAL_TERABOX_RESOLVER MAYAJAAL_SOCIAL_RESOLVER MAYAJAAL_CHANNEL_UPLOAD MAYA_LIVE_API; do
           value="${!name}"
