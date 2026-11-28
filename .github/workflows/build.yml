@@ -719,6 +719,7 @@ jobs:
                 StartAppNativeAd startNative;
                 NativeAdDetails startDetails;
                 boolean startFinished;
+                String primaryFailure="";
                 InMobiBanner banner;
                 InMobiNative nativeUnit;
                 Slot(int id,boolean isNative){
@@ -727,19 +728,27 @@ jobs:
                         if(!"load".equals(call.method)){result.notImplemented();return;}
                         result.success(null);
                         if(disposed || started)return;started=true;
-                        if(startAllowed && startReady) loadStart(); else loadBackup();
+                        if(startAllowed && startReady) loadStart(); else {
+                            if(startAllowed) primaryFailure="Start.io SDK unavailable";
+                            loadBackup();
+                        }
                     });
                 }
                 int dp(int n){return Math.round(n*activity.getResources().getDisplayMetrics().density);}
                 void loaded(){if(!disposed)pipe.invokeMethod("loaded",startDetails!=null || startBanner!=null ? "Start.io" : "InMobi");}
+                void status(String message){if(!disposed){Log.i(TAG,message);pipe.invokeMethod("status",message);}}
                 void loadBackup(){
-                    ensure(ok->{if(disposed)return;if(!ok || !visible() || !allowed){fail("No approved ad network or SDK unavailable");return;} if(nativeAd)loadNative();else loadBanner();});
+                    if(!inmobiAllowed){fail("InMobi not enabled or permitted in this build");return;}
+                    status((primaryFailure.isEmpty()?"":primaryFailure+"; ")+"InMobi: initializing / requesting ad");
+                    ensure(ok->{if(disposed)return;if(!ok || !visible() || !allowed){fail("InMobi SDK unavailable or screen not visible");return;} if(nativeAd)loadNative();else loadBanner();});
                 }
                 void startFailed(String reason){
                     if(disposed || startFinished)return;startFinished=true;
-                    Log.i(TAG,"Start.io: "+reason); stopStart();loadBackup();
+                    primaryFailure="Start.io: "+reason;
+                    Log.i(TAG,primaryFailure); stopStart();loadBackup();
                 }
                 void loadStart(){
+                    status("Start.io: requesting "+(nativeAd?"native":"banner")+" ad");
                     try{
                         if(nativeAd){
                             final StartAppNativeAd ad=new StartAppNativeAd(activity);startNative=ad;
@@ -774,13 +783,13 @@ jobs:
                     Banner old=startBanner;startBanner=null;startNative=null;startDetails=null;
                     if(old!=null)safe(old::hideBanner);root.removeAllViews();
                 }
-                void fail(String why){if(disposed)return;Log.i(TAG,why);stop();pipe.invokeMethod("failed",why);}
+                void fail(String why){if(disposed)return;String report=(primaryFailure.isEmpty()?"":primaryFailure+"; ")+why;Log.i(TAG,report);stop();pipe.invokeMethod("failed",report);}
                 void loadBanner(){
                     try{
                         banner=new InMobiBanner(activity,BANNER);
                         banner.setListener(new BannerAdEventListener(){
                             @Override public void onAdLoadSucceeded(InMobiBanner a,AdMetaInfo info){ui.post(()->{if(!disposed && banner==a)loaded();});}
-                            @Override public void onAdLoadFailed(InMobiBanner a,InMobiAdRequestStatus status){ui.post(()->{if(!disposed && banner==a)fail("Banner: "+status.getMessage());});}
+                            @Override public void onAdLoadFailed(InMobiBanner a,InMobiAdRequestStatus status){ui.post(()->{if(!disposed && banner==a)fail("InMobi banner: "+status.getMessage());});}
                         });
                         root.addView(banner,new FrameLayout.LayoutParams(dp(320),dp(50),Gravity.CENTER));banner.load();
                     }catch(RuntimeException | LinkageError e){fail("Banner: "+e.getMessage());}
