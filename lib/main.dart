@@ -5320,7 +5320,7 @@ class _MainNavigationHolderState extends State<MainNavigationHolder> {
       bottomNavigationBar: Column(
         mainAxisSize: MainAxisSize.min,
         children: [
-          MayaAdSlot(active: !_adsDrawerOpen && _currentIndex != 2),
+          MayaAdSlot(key: const ValueKey('main_bottom_banner'), active: !_adsDrawerOpen && _currentIndex != 2 && MediaQuery.of(context).viewInsets.bottom == 0),
           Container(
         decoration: BoxDecoration(
           color: Colors.black,
@@ -6283,6 +6283,9 @@ class _HomeScreenState extends State<HomeScreen>
                 ),
               ),
 
+              // A separate sponsored slot below the stream URL input.
+              MayaAdSlot(key: const ValueKey('home_below_paste'), active: widget.adsActive && MediaQuery.of(context).viewInsets.bottom == 0),
+              const SizedBox(height: 10),
               Padding(
                 padding: const EdgeInsets.symmetric(
                   horizontal: 14,
@@ -8317,7 +8320,6 @@ class _StreamPreviewScreenState extends State<StreamPreviewScreen>
                     ),
                   ),
                   const SizedBox(height: 10),
-                  const MayaAdSlot(),
 
                   Row(
                     children: [
@@ -8495,6 +8497,8 @@ class _StreamPreviewScreenState extends State<StreamPreviewScreen>
                   ),
                   const SizedBox(height: 12),
 
+                  const MayaAdSlot(key: ValueKey('waiting_above_play')),
+                  const SizedBox(height: 16),
                   if (_isReadyToPlay && !_isResolving && _resolveError.isEmpty)
                     _buildRedSnakePlayButton()
                   else if (!_isResolving && _resolveError.isEmpty)
@@ -8518,6 +8522,8 @@ class _StreamPreviewScreenState extends State<StreamPreviewScreen>
                       ),
                     ),
 
+                  const SizedBox(height: 16),
+                  const MayaAdSlot(key: ValueKey('waiting_below_play')),
                   const SizedBox(height: 14),
 
                   Container(
@@ -10002,6 +10008,8 @@ class _MayaChannelPageState extends State<MayaChannelPage>
     if (mounted) await _load(quiet: true);
   }
 
+  bool _attachmentAdBusy = false;
+
   Future<void> _openMedia(Map<String, dynamic> p) async {
     final url = _mediaLink('${p['media'] ?? ''}');
     if (url == null) return;
@@ -10043,17 +10051,25 @@ class _MayaChannelPageState extends State<MayaChannelPage>
       );
       if (mounted) unawaited(MayaAds.afterVideo(context));
     } else {
-      unawaited(
-        MayaDownloads.start(
-          FirebaseAuth.instance.currentUser?.uid ?? 'guest',
-          url,
-          '${p['filename'] ?? 'Channel attachment'}',
-          thumbnail: '${p['thumbnail'] ?? ''}',
-        ),
-      );
-      await Navigator.of(context).push<void>(
-        MaterialPageRoute(builder: (_) => const MayaDownloadsScreen()),
-      );
+      if (_attachmentAdBusy) return;
+      _attachmentAdBusy = true;
+      try {
+        await MayaAds.videoTransition(context, placement: 'before channel attachment download');
+        if (!mounted || ModalRoute.of(context)?.isCurrent != true) return;
+        unawaited(
+          MayaDownloads.start(
+            FirebaseAuth.instance.currentUser?.uid ?? 'guest',
+            url,
+            '${p['filename'] ?? 'Channel attachment'}',
+            thumbnail: '${p['thumbnail'] ?? ''}',
+          ),
+        );
+        await Navigator.of(context).push<void>(
+          MaterialPageRoute(builder: (_) => const MayaDownloadsScreen()),
+        );
+      } finally {
+        _attachmentAdBusy = false;
+      }
     }
   }
 
@@ -10800,6 +10816,7 @@ class _MayaChannelPageState extends State<MayaChannelPage>
                 onRefresh: _load,
                 child: ListView(
                   padding: const EdgeInsets.only(top: 10, bottom: 24),
+                  cacheExtent: 0,
                   children: [
                     if (_search.text.isNotEmpty)
                       ListTile(
@@ -10842,27 +10859,36 @@ class _MayaChannelPageState extends State<MayaChannelPage>
                           ],
                         ),
                       ),
-                    for (final p in _posts) ...[
+                    for (final entry in _posts.asMap().entries) ...[
                       MayaChannelPost(
-                        key: ValueKey(p['id']),
-                        post: p,
+                        key: ValueKey(entry.value['id']),
+                        post: entry.value,
                         canDelete:
                             _owner ||
-                            p['author'] ==
+                            entry.value['author'] ==
                                 FirebaseAuth.instance.currentUser?.uid,
                         sharing:
                             _channel['visibility'] == 'public' &&
                             _channel['sharing'] == true,
                         translate: _channel['translate'] == true,
-                        onVisible: () => _postAction(p, 'view'),
-                        onMedia: () => _openMedia(p),
-                        onLink: () => _openLink('${p['text'] ?? ''}'),
+                        onVisible: () => _postAction(entry.value, 'view'),
+                        onMedia: () => _openMedia(entry.value),
+                        onLink: () => _openLink('${entry.value['text'] ?? ''}'),
                         onAction:
                             (action, value) =>
-                                _postAction(p, action, value: value),
+                                _postAction(entry.value, action, value: value),
                       ),
-                      if (_channel['visibility'] == 'public' && _search.text.isEmpty && _posts.length >= 3 && identical(p, _posts[2]))
-                        const Padding(padding: EdgeInsets.symmetric(horizontal: 12), child: MayaAdSlot(nativeAd: true)),
+                      // Insert after content, not on top of post action buttons.
+                      if (_channel['visibility'] == 'public' && _search.text.isEmpty &&
+                          ((entry.key + 1) % 3 == 0 || (_posts.length < 3 && entry.key == _posts.length - 1)))
+                        Padding(
+                          key: ValueKey('channel_ad_${entry.value['id']}'),
+                          padding: const EdgeInsets.symmetric(vertical: 12),
+                          child: MayaAdSlot(
+                            nativeAd: (entry.key + 1) % 9 != 6 && (entry.key + 1) % 9 != 0,
+                            mrec: (entry.key + 1) % 9 == 0,
+                          ),
+                        ),
                     ],
                     if (_next != null)
                       TextButton(
@@ -10871,6 +10897,8 @@ class _MayaChannelPageState extends State<MayaChannelPage>
                           _paging ? 'Loading…' : 'Load earlier posts',
                         ),
                       ),
+                    if (_channel['visibility'] == 'public' && _search.text.isEmpty && _posts.length >= 4)
+                      const Padding(padding: EdgeInsets.only(top: 18), child: MayaAdSlot(key: ValueKey('channel_footer_banner'))),
                   ],
                 ),
               ),
@@ -13041,18 +13069,29 @@ class _NativeVideoPlayerScreenState extends State<NativeVideoPlayerScreen>
     if (_adBreakRunning || !mounted || !_playing || !MayaAds.canShow || !MayaAds.scheduledVideoAvailable) return;
     final attempt = _playbackAttempt;
     _adBreakRunning = true;
+    var pausedForAd = false;
     try {
-      await _directPlayer?.pause();
-      await _betterPlayerController?.pause();
       if (!mounted || attempt != _playbackAttempt || ModalRoute.of(context)?.isCurrent != true) return;
-      if (MayaAds.canShow) await MayaAds.playScheduledVideo();
+      if (MayaAds.test) {
+        pausedForAd = true;
+        await _directPlayer?.pause();
+        await _betterPlayerController?.pause();
+        if (MayaAds.canShow) await MayaAds.playScheduledVideo();
+      } else {
+        await MayaAds.videoTransition(context, placement: 'scheduled playback break', mayDisplay: () => mounted && attempt == _playbackAttempt && _playing && !_hasError, beforeDisplay: () async {
+          if (!mounted || attempt != _playbackAttempt || !_playing) return;
+          pausedForAd = true;
+          await _directPlayer?.pause();
+          await _betterPlayerController?.pause();
+        });
+      }
     } catch (e) { debugPrint('Maya video ad: $e'); }
     finally {
       // Activity results can arrive just before Flutter is resumed.
       for (var i = 0; i < 12 && mounted && WidgetsBinding.instance.lifecycleState != AppLifecycleState.resumed; i++) {
         await Future<void>.delayed(const Duration(milliseconds: 150));
       }
-      if (mounted && attempt == _playbackAttempt && !_hasError && ModalRoute.of(context)?.isCurrent == true && WidgetsBinding.instance.lifecycleState == AppLifecycleState.resumed) {
+      if (pausedForAd && mounted && attempt == _playbackAttempt && !_hasError && ModalRoute.of(context)?.isCurrent == true && WidgetsBinding.instance.lifecycleState == AppLifecycleState.resumed) {
         try { await _directPlayer?.play(); await _betterPlayerController?.play(); } catch (_) {}
       }
       _lastAdPosition = null;
@@ -13130,7 +13169,7 @@ class _NativeVideoPlayerScreenState extends State<NativeVideoPlayerScreen>
     }
     if (!_channelVideo) _loadUserPrefs();
     unawaited(_loadCommunity());
-    _initVideo();
+    WidgetsBinding.instance.addPostFrameCallback((_) => unawaited(_startInitialPlayback()));
     if (!_social && !_channelVideo) {
       _startStatsListeners();
       _fetchOwner().then((_) => _loadRelatedVideos());
@@ -13162,6 +13201,14 @@ class _NativeVideoPlayerScreenState extends State<NativeVideoPlayerScreen>
         setState(() {});
       }
     });
+  }
+
+  Future<void> _startInitialPlayback() async {
+    // Allow the route transition to finish before presenting an SDK ad.
+    await Future<void>.delayed(const Duration(milliseconds: 350));
+    if (!mounted) return;
+    await MayaAds.videoTransition(context, placement: 'before playback');
+    if (mounted && _playbackAttempt == 0) await _initVideo();
   }
 
   @override
@@ -14437,12 +14484,31 @@ class _NativeVideoPlayerScreenState extends State<NativeVideoPlayerScreen>
     );
   }
 
+  bool _downloadOpening = false;
+
   Future<void> _startInAppDownload() async {
+    if (_downloadOpening || !mounted) return;
+    _downloadOpening = true;
+    try {
+      await _startInAppDownloadImpl();
+    } finally {
+      _downloadOpening = false;
+    }
+  }
+
+  Future<void> _pauseForDownloadAd() async {
+    await _directPlayer?.pause();
+    await _betterPlayerController?.pause();
+  }
+
+  Future<void> _startInAppDownloadImpl() async {
     if (_channelVideo) {
       try {
         final post = await MayaChannelsApi.request(_channelPostPath);
         final url = _mediaLink('${post['media'] ?? ''}');
         if (url == null || !mounted) return;
+        await MayaAds.videoTransition(context, placement: 'before download', beforeDisplay: _pauseForDownloadAd);
+        if (!mounted || ModalRoute.of(context)?.isCurrent != true) return;
         unawaited(
           MayaDownloads.start(
             FirebaseAuth.instance.currentUser?.uid ?? 'guest',
@@ -14480,6 +14546,8 @@ class _NativeVideoPlayerScreenState extends State<NativeVideoPlayerScreen>
       );
       return;
     }
+    await MayaAds.videoTransition(context, placement: 'before download', beforeDisplay: _pauseForDownloadAd);
+    if (!mounted || ModalRoute.of(context)?.isCurrent != true) return;
     unawaited(
       MayaDownloads.start(
         FirebaseAuth.instance.currentUser?.uid ?? 'guest',
@@ -14823,7 +14891,10 @@ class _NativeVideoPlayerScreenState extends State<NativeVideoPlayerScreen>
         },
         child: Scaffold(
           backgroundColor: Colors.black,
-          body: SafeArea(child: _buildUnifiedPlayback()),
+          body: SafeArea(child: Column(children: [
+            Expanded(child: _buildUnifiedPlayback()),
+            if (!_screenLocked) const MayaAdSlot(key: ValueKey('fullscreen_player_banner')),
+          ])),
         ),
       );
     return Scaffold(
@@ -17330,6 +17401,7 @@ class _MayaSocialMediaScreenState extends State<MayaSocialMediaScreen> {
     MayaResolvedMedia media,
     MayaMediaOption option,
   ) async {
+    if (_preparing || !mounted) return;
     final generation = ++_downloadGeneration;
     setState(() {
       _preparing = true;
@@ -17374,6 +17446,10 @@ class _MayaSocialMediaScreenState extends State<MayaSocialMediaScreen> {
         url = _mediaLink('${job['download_url'] ?? ''}');
       }
       if (url == null || !mounted || generation != _downloadGeneration) return;
+      if (option.kind == 'video') {
+        await MayaAds.videoTransition(context, placement: 'before download');
+        if (!mounted || generation != _downloadGeneration || ModalRoute.of(context)?.isCurrent != true) return;
+      }
       unawaited(
         MayaDownloads.start(
           FirebaseAuth.instance.currentUser?.uid ?? 'guest',
