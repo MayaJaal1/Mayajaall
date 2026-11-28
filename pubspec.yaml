@@ -36,6 +36,7 @@ dependencies:
   flutter_map: ^7.0.2
   latlong2: ^0.9.1
   in_app_update: ^4.2.3
+  # Start.io Android SDK is pinned in the generated Gradle file (build.yml).
 
 dev_dependencies:
   flutter_test:
