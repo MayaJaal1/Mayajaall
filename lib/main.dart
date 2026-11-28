@@ -1169,7 +1169,7 @@ class LegalPolicyDialog {
       ),
       (
         'Optional in-app advertising',
-        'Where enabled, MayaJaal uses InMobi to deliver and measure ads. The SDK may process advertising identifiers, device and network information for advertising and fraud prevention. Non-targeted ads may be enabled where permitted for the app audience and region. Where consent is required, ads remain disabled until an appropriate choice is made. Manage or withdraw your choice in App Settings > Privacy preferences. Watching optional ads never creates cash or creator-view earnings. External sites may have their own advertising and privacy policies.',
+        'Where enabled, MayaJaal uses Start.io and InMobi to deliver and measure ads. The SDKs may process advertising identifiers, device and network information for advertising and fraud prevention. Non-targeted ads may be enabled where permitted for the app audience and region. Where consent is required, ads remain disabled until an appropriate choice is made. Manage or withdraw your choice in App Settings > Privacy preferences. Watching optional ads never creates cash or creator-view earnings. External sites may have their own advertising and privacy policies.',
       ),
       (
         '5. Content and sharing',
@@ -12554,7 +12554,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
             ListTile(
               leading: const Icon(Icons.privacy_tip_outlined, color: AppThemes.kGreen, size: 20),
               title: const Text('Privacy preferences', style: TextStyle(color: Colors.white, fontSize: 13, fontWeight: FontWeight.bold)),
-              subtitle: const Text('Manage data and privacy choices', style: TextStyle(color: Colors.white38, fontSize: 11)),
+              subtitle: const Text('Manage data and privacy choices (Start.io / InMobi)', style: TextStyle(color: Colors.white38, fontSize: 11)),
               trailing: const Icon(Icons.chevron_right, color: Colors.white24),
               onTap: () => MayaAds.settings(context),
             ),
