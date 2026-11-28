@@ -10,8 +10,12 @@ class MayaAds {
   static const test = bool.fromEnvironment('MAYA_ADS_TRIAL');
   // Enable only after verifying non-targeted delivery, audience and regional privacy requirements.
   static const contextualApproved = bool.fromEnvironment('MAYA_ADS_CONTEXTUAL_APPROVED');
+  static const startEnabled = bool.fromEnvironment('MAYA_STARTIO_ENABLED');
+  static const inmobiEnabled = bool.fromEnvironment('MAYA_INMOBI_ENABLED');
+  static const startContextualApproved = bool.fromEnvironment('MAYA_STARTIO_CONTEXTUAL_APPROVED');
   static const _bridge = MethodChannel('mayajaal/ads');
-  static const _consentKey = test ? 'maya_ads_trial_consent_v2' : 'maya_ads_live_consent_v2';
+  static const _oldConsentKey = test ? 'maya_ads_trial_consent_v2' : 'maya_ads_live_consent_v2';
+  static const _consentKey = test ? 'maya_ads_trial_consent_v3' : 'maya_ads_live_consent_v3';
   static const _adFreeKey = test ? 'maya_ads_trial_free_until_v2' : 'maya_ads_live_free_until_v2';
   static const _vastTestTag = String.fromEnvironment('MAYA_VAST_TEST_TAG');
   // Production in-stream ads require a separately approved integration. Never use the sample tag for revenue.
@@ -33,7 +37,9 @@ class MayaAds {
   static Future<void>? _loading;
   static DateTime? _qualifiedExit;
   static bool get available => enabled && Platform.isAndroid;
-  static bool get permitted => available && (consent == true || (!test && contextualApproved && consent == null));
+  static bool get _startPermitted => startEnabled && (consent == true || (!test && startContextualApproved && consent == null));
+  static bool get _inmobiPermitted => inmobiEnabled && (consent == true || (!test && contextualApproved && consent == null));
+  static bool get permitted => available && (_startPermitted || _inmobiPermitted);
   static bool get canShow => permitted && sdkReady && !(adFreeUntil?.isAfter(DateTime.now()) ?? false);
 
   static Future<void> load() => _loading ??= _load();
@@ -41,7 +47,7 @@ class MayaAds {
     if (_loaded || !available) return;
     try {
       final p = await SharedPreferences.getInstance();
-      consent = p.getBool(_consentKey);
+      consent = p.getBool(_consentKey) ?? (p.getBool(_oldConsentKey) == false ? false : null);
       adFreeUntil = DateTime.fromMillisecondsSinceEpoch(p.getInt(_adFreeKey) ?? 0);
       _loaded = true;
       _scheduleExpiry();
@@ -59,16 +65,16 @@ class MayaAds {
   static Future<void> _configure(bool allowed) async {
     configuring = true;
     sdkReady = false;
-    sdkStatus = allowed ? 'Initializing InMobi…' : 'Advertising disabled';
+    sdkStatus = allowed ? 'Initializing ad networks…' : 'Advertising disabled';
     deliveryStatus.value = 'No ad request yet';
     changes.value++;
     try {
-      final ok = await _bridge.invokeMethod<bool>('configure', allowed).timeout(const Duration(seconds: 20));
+      final ok = await _bridge.invokeMethod<bool>('configure', {'start': allowed && _startPermitted, 'inmobi': allowed && _inmobiPermitted}).timeout(const Duration(seconds: 20));
       sdkReady = allowed && ok == true;
-      sdkStatus = allowed ? (sdkReady ? 'InMobi SDK ready' : 'InMobi initialization unsuccessful') : 'Advertising disabled';
+      sdkStatus = allowed ? (sdkReady ? 'Ad SDK ready' : 'Ad SDK initialization unsuccessful') : 'Advertising disabled';
       debugPrint('MayaAds: $sdkStatus');
     } catch (e) {
-      sdkStatus = 'InMobi initialization error: $e';
+      sdkStatus = 'Ad SDK initialization error: $e';
       debugPrint('MayaAds configure: $e');
     } finally {
       configuring = false;
@@ -147,8 +153,8 @@ class _AdsSettingsState extends State<_AdsSettings> {
       const SizedBox(height: 20),
       const Text('Your choice. Your experience.', style: TextStyle(fontSize: 27, color: Colors.white, fontWeight: FontWeight.w700)),
       const SizedBox(height: 12),
-      const Text('MayaJaal uses InMobi to show ads. The ad SDK may collect and use advertising identifiers, device and network information to deliver and measure ads. Non-targeted ads may be shown where permitted. If consent is required, enable only if you are 18 or older and agree to the processing described. You can disable in-app ads here. Core features do not depend on this choice.', style: TextStyle(color: Colors.white70, height: 1.45)),
-      if (MayaAds.test) const Padding(padding: EdgeInsets.only(top: 12), child: Text('Developer build: keep InMobi test mode enabled. No real earnings.', style: TextStyle(color: Colors.amber))),
+      const Text('MayaJaal uses Start.io and InMobi to show ads. The ad SDK may collect and use advertising identifiers, device and network information to deliver and measure ads. Non-targeted ads may be shown where permitted. If consent is required, enable only if you are 18 or older and agree to the processing described. You can disable in-app ads here. Core features do not depend on this choice.', style: TextStyle(color: Colors.white70, height: 1.45)),
+      if (MayaAds.test) const Padding(padding: EdgeInsets.only(top: 12), child: Text('Developer build: keep both networks in test mode. No real earnings.', style: TextStyle(color: Colors.amber))),
       const SizedBox(height: 20),
       FilledButton(onPressed: busy ? null : () => _choose(true), child: const Text('I am 18+ and allow ads')),
       OutlinedButton(onPressed: busy ? null : () => _choose(false), child: const Text('Do not allow ads')),
@@ -234,13 +240,13 @@ class _MayaAdSlotState extends State<MayaAdSlot> with WidgetsBindingObserver {
       if (call.method == 'loaded') {
         _timeout?.cancel();
         _attempt = 0;
-        MayaAds.deliveryStatus.value = widget.nativeAd ? 'Native ad loaded' : 'Banner loaded';
+        MayaAds.deliveryStatus.value = '${call.arguments ?? 'Ad network'}: ${widget.nativeAd ? 'Native ad loaded' : 'Banner loaded'}';
       }
       if (call.method == 'failed') {
         _failed('${call.arguments ?? 'Ad request failed'}');
       }
     });
-    _timeout = Timer(const Duration(seconds: 35), () { if (mounted && _viewId == id) { _failed('Ad request timed out'); } });
+    _timeout = Timer(const Duration(seconds: 55), () { if (mounted && _viewId == id) { _failed('Ad request timed out'); } });
     unawaited(ch.invokeMethod<void>('load').catchError((Object e) { if (mounted && _viewId == id) { _failed('Ad bridge error: $e'); } }));
   }
   @override void dispose() {
