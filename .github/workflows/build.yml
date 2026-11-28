@@ -602,20 +602,26 @@ jobs:
             private void finishTransitionLoad(String status){
                 MethodChannel.Result r=transitionLoad; transitionLoad=null;
                 if(!"ready".equals(status) && transitionShow==null)transitionVideo=null;
+                Log.i(TAG,"Video load: "+status);
                 if(r!=null)safe(()->r.success(status));
             }
             private void finishTransitionShow(String status){
                 MethodChannel.Result r=transitionShow; transitionShow=null;
                 if(r==null)return;
                 startShowing=false; transitionVideo=null; transitionDisplayed=false;
+                Log.i(TAG,"Video display: "+status);
                 safe(()->r.success(status));
             }
             private void prepareTransitionVideo(MethodChannel.Result result){
-                if(!canTransition() || transitionLoad!=null || transitionShow!=null){result.success("unavailable or frequency limit");return;}
+                if(!allowed || !startAllowed || !startReady){result.success("Start.io disabled or SDK not ready");return;}
+                if(!visible() || !activity.hasWindowFocus()){result.success("Activity not focused/visible");return;}
+                if(!frequencyOk()){result.success("Full-screen frequency limit (180s)");return;}
+                if(!canTransition() || transitionLoad!=null || transitionShow!=null){result.success("Another full-screen ad is busy");return;}
                 long now=System.currentTimeMillis();
                 if(transitionVideo!=null && now-transitionLoadedAt<60000){result.success("ready");return;}
-                if(now-lastTransitionRequest<60000){result.success("request cooldown");return;}
+                if(now-lastTransitionRequest<30000){result.success("Video request cooldown (30s)");return;}
                 lastTransitionRequest=now;transitionLoadedAt=0;transitionLoad=result;
+                Log.i(TAG,"Start.io video request sent");
                 try {
                     final StartAppAd ad=new StartAppAd(activity);transitionVideo=ad;
                     ad.loadAd(StartAppAd.AdMode.VIDEO,new AdEventListener(){
@@ -627,7 +633,7 @@ jobs:
                             if(transitionLoad==result && transitionVideo==ad)finishTransitionLoad("video no fill or load failed");
                         });}
                     });
-                    ui.postDelayed(()->{if(transitionLoad==result)finishTransitionLoad("video load timeout");},5000);
+                    ui.postDelayed(()->{if(transitionLoad==result)finishTransitionLoad("video load timeout (12s)");},12000);
                 }catch(RuntimeException | LinkageError e){Log.w(TAG,"Video transition load",e);finishTransitionLoad("video load error");}
             }
             private void showTransitionVideo(MethodChannel.Result result){
@@ -642,7 +648,6 @@ jobs:
                         public void adNotDisplayed(Ad a){ui.post(()->{if(transitionShow==result)finishTransitionShow("display failed");});}
                     });
                     if(!shown){finishTransitionShow("display unavailable");return;}
-                    lastInterstitial=System.currentTimeMillis();
                     ui.postDelayed(()->{if(transitionShow==result){safe(ad::close);finishTransitionShow("display timeout");}},120000);
                 }catch(RuntimeException | LinkageError e){Log.w(TAG,"Video transition show",e);finishTransitionShow("display error");}
             }
