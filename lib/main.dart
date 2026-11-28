@@ -1169,7 +1169,7 @@ class LegalPolicyDialog {
       ),
       (
         'Optional in-app advertising',
-        'Where enabled, MayaJaal uses Start.io and InMobi to deliver and measure ads. The SDKs may process advertising identifiers, device and network information for advertising and fraud prevention. Non-targeted ads may be enabled where permitted for the app audience and region. Where consent is required, ads remain disabled until an appropriate choice is made. Manage or withdraw your choice in App Settings > Privacy preferences. Watching optional ads never creates cash or creator-view earnings. External sites may have their own advertising and privacy policies.',
+        'Where enabled, MayaJaal uses InMobi to deliver and measure ads. The SDK may process advertising identifiers, device and network information for advertising and fraud prevention. Non-targeted ads may be enabled where permitted for the app audience and region. Where consent is required, ads remain disabled until an appropriate choice is made. Manage or withdraw your choice in App Settings > Privacy preferences. Watching optional ads never creates cash or creator-view earnings. External sites may have their own advertising and privacy policies.',
       ),
       (
         '5. Content and sharing',
@@ -1635,12 +1635,18 @@ class SecurityGuard {
       return 'This account is too new. Please wait a minute and try again.';
     }
     try {
-      final token = await user.getIdToken(true);
+      final token = await user.getIdToken(false).timeout(const Duration(seconds: 15));
       if (token == null || token.isEmpty) {
-        return 'Session token invalid. Please re-login.';
+        return 'Session token unavailable. Please retry.';
       }
+    } on FirebaseAuthException catch (e) {
+      debugPrint('Session validation: ${e.code}');
+      if (const {'user-disabled', 'user-not-found', 'user-token-expired', 'invalid-user-token'}.contains(e.code)) {
+        return 'Session rejected by Firebase (${e.code}). Sign in again.';
+      }
+      return 'Session validation temporarily unavailable. Check internet and retry.';
     } catch (_) {
-      return 'Session validation failed. Please retry.';
+      return 'Session validation temporarily unavailable. Check internet and retry.';
     }
     return null;
   }
@@ -1854,7 +1860,7 @@ class SecurityGuard {
     await validateAndBindDevice(user.uid, user.email ?? '');
 
     final sessOk = await validateSession();
-    if (!sessOk) return 'Session invalid. Please login again.';
+    if (!sessOk) return 'Session could not be verified. Check internet and retry. If the session has expired, sign in again.';
 
     return null;
   }
@@ -1939,7 +1945,7 @@ class MayaJaalAccount {
       final err = await SecurityGuard.validateUser(user);
       if (err != null) {
         debugPrint('🚫 init rejected: $err');
-        await signOut();
+        // A temporary validation failure must not delete the persisted session.
         return;
       }
       cachedUid = user.uid;
@@ -2051,8 +2057,13 @@ class MayaJaalAccount {
 
     final err = await SecurityGuard.validateUser(user);
     if (err != null) {
-      await FirebaseAuth.instance.signOut();
-      await googleSignIn.signOut();
+      // AuthGate blocks access until validation succeeds; preserve the session
+      // on transient errors instead of disconnecting the Google account.
+      if (!err.startsWith('Session validation temporarily unavailable') &&
+          !err.startsWith('Session token unavailable')) {
+        await FirebaseAuth.instance.signOut();
+        await googleSignIn.signOut();
+      }
       throw FirebaseAuthException(code: 'invalid-credential', message: err);
     }
 
@@ -3691,7 +3702,7 @@ Future<void> main() async {
       ),
     );
     debugPrint("✅ Firebase Initialized Successfully");
-    await MayaJaalAccount.init();
+    // Firebase restores the persisted Android session through AuthGate.
     final uiPrefs = await SharedPreferences.getInstance();
     themeNotifier.value = uiPrefs.getString('app_theme') ?? 'Cyber Emerald';
     languageNotifier.value = uiPrefs.getString('language') ?? 'English';
@@ -4287,13 +4298,15 @@ class AuthGate extends StatefulWidget {
 }
 
 class _AuthGateState extends State<AuthGate> {
-  bool _initialCheckDone = false;
-  String? _initialPendingUrl;
-  bool _initialHandled = false;
+  StreamSubscription<User?>? _authSubscription;
+  User? _user;
+  bool _checking = true;
+  bool _receivedAuth = false;
   String? _blockingError;
-  bool _gateChecked = false;
-  bool _afterLogout = false;
+  int _generation = 0;
   bool _notificationRequestStarted = false;
+  bool _initialHandled = false;
+  Timer? _restoreTimeout;
 
   Future<void> _requestNotificationPermission(String uid) async {
     _openPendingMayaPushInbox();
@@ -4322,101 +4335,120 @@ class _AuthGateState extends State<AuthGate> {
   @override
   void initState() {
     super.initState();
-    _initialize();
+    _subscribe();
   }
 
-  Future<void> _initialize() async {
-    await Future.delayed(const Duration(milliseconds: 300));
-
-    _initialPendingUrl = _MyAppState.instance?.pendingUrl;
-
-    final user = FirebaseAuth.instance.currentUser;
-    if (user != null) {
-      final err = await SecurityGuard.fullGate(user);
-      if (err != null) {
-        await MayaJaalAccount.signOut();
-        _afterLogout = true;
-        _blockingError = err;
-      }
-    } else {
-      _afterLogout = true;
-    }
-
-    if (mounted) {
+  void _subscribe() {
+    _authSubscription?.cancel();
+    _restoreTimeout?.cancel();
+    _receivedAuth = false;
+    _restoreTimeout = Timer(const Duration(seconds: 20), () {
+      if (!mounted || _receivedAuth) return;
       setState(() {
-        _initialCheckDone = true;
-        _gateChecked = true;
+        _checking = false;
+        _blockingError = 'Could not restore your session. Please retry.';
       });
+    });
+    _authSubscription = FirebaseAuth.instance.authStateChanges().listen(
+      (user) {
+        _receivedAuth = true;
+        _restoreTimeout?.cancel();
+        unawaited(_validate(user));
+      },
+      onError: (Object error) {
+        if (!mounted) return;
+        _generation++;
+        _restoreTimeout?.cancel();
+        setState(() {
+          _checking = false;
+          _blockingError = 'Authentication service unavailable. Please retry.';
+        });
+      },
+    );
+  }
+
+  Future<void> _validate(User? user) async {
+    if (!mounted) return;
+    final generation = ++_generation;
+    setState(() {
+      _user = user;
+      _checking = user != null;
+      _blockingError = null;
+    });
+    if (user == null) {
+      MayaJaalAccount.cachedUid = null;
+      MayaJaalAccount.cachedEmail = null;
+      MayaJaalAccount.cachedName = null;
+      MayaJaalAccount.cachedPhoto = null;
+      MayaJaalAccount.cachedApiKey = null;
+      _notificationRequestStarted = false;
+      return;
     }
+    String? error;
+    try {
+      error = await SecurityGuard.fullGate(user).timeout(const Duration(seconds: 30));
+    } catch (e) {
+      debugPrint('Auth gate check: $e');
+      error = 'Session verification unavailable. Check internet and retry.';
+    }
+    if (!mounted || generation != _generation ||
+        FirebaseAuth.instance.currentUser?.uid != user.uid) return;
+    if (error != null) {
+      // Do not sign out or clear Firebase credentials on a network failure.
+      // Protected screens stay blocked until validation succeeds.
+      setState(() { _blockingError = error; _checking = false; });
+      return;
+    }
+    MayaJaalAccount.cachedUid = user.uid;
+    MayaJaalAccount.cachedEmail = user.email;
+    MayaJaalAccount.cachedName = user.displayName;
+    MayaJaalAccount.cachedPhoto = user.photoURL;
+    setState(() { _checking = false; });
+    WidgetsBinding.instance.addPostFrameCallback((_) async {
+      if (!mounted || generation != _generation ||
+          FirebaseAuth.instance.currentUser?.uid != user.uid) return;
+      unawaited(_requestNotificationPermission(user.uid));
+      await MayaJaalAccount.syncUserToRTDB(user);
+      if (!mounted || generation != _generation ||
+          FirebaseAuth.instance.currentUser?.uid != user.uid) return;
+      await MayaJaalAccount.loadApiKey();
+    });
+  }
+
+  @override
+  void dispose() {
+    _generation++;
+    _restoreTimeout?.cancel();
+    _authSubscription?.cancel();
+    super.dispose();
   }
 
   @override
   Widget build(BuildContext context) {
-    if (!_initialCheckDone) {
-      return const SplashScreen();
-    }
-
+    if (_checking) return const SplashScreen();
     if (_blockingError != null) {
-      return _SecurityBlockScreen(
-        error: _blockingError!,
-        onRetry: () async {
-          setState(() {
-            _blockingError = null;
-            _initialCheckDone = false;
-            _gateChecked = false;
-            _afterLogout = false;
-          });
-          await _initialize();
-        },
-      );
+      return _SecurityBlockScreen(error: _blockingError!, onRetry: () {
+        if (!_receivedAuth) {
+          setState(() { _checking = true; _blockingError = null; });
+          _subscribe();
+        } else {
+          unawaited(_validate(FirebaseAuth.instance.currentUser));
+        }
+      });
     }
-
-    return StreamBuilder<User?>(
-      stream: FirebaseAuth.instance.authStateChanges(),
-      builder: (context, snapshot) {
-        if (snapshot.connectionState == ConnectionState.waiting ||
-            !_gateChecked) {
-          return const SplashScreen();
+    if (_user == null) return const LoginScreen();
+    final pending = _MyAppState.instance?.pendingUrl;
+    if (!_initialHandled && pending != null && pending.isNotEmpty) {
+      _initialHandled = true;
+      _MyAppState.instance?.clearPending();
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (mounted && !_checking && _blockingError == null &&
+            FirebaseAuth.instance.currentUser?.uid == _user?.uid) {
+          navigatorKey.currentState?.push(MaterialPageRoute(builder: (_) => _mayaLinkScreen(pending)));
         }
-
-        if (snapshot.hasData && snapshot.data != null) {
-          final user = snapshot.data!;
-          if (_afterLogout) {
-            Future.microtask(() async {
-              final err = await SecurityGuard.validateUser(user);
-              if (err != null) {
-                await MayaJaalAccount.signOut();
-                if (mounted) setState(() {});
-              }
-            });
-          }
-
-          WidgetsBinding.instance.addPostFrameCallback((_) async {
-            MayaJaalAccount.cachedUid = user.uid;
-            MayaJaalAccount.cachedEmail = user.email;
-            MayaJaalAccount.cachedName = user.displayName;
-            MayaJaalAccount.cachedPhoto = user.photoURL;
-            unawaited(_requestNotificationPermission(user.uid));
-            await MayaJaalAccount.syncUserToRTDB(user);
-            await MayaJaalAccount.loadApiKey();
-          });
-
-          if (!_initialHandled &&
-              _initialPendingUrl != null &&
-              _initialPendingUrl!.isNotEmpty) {
-            _initialHandled = true;
-            final url = _initialPendingUrl!;
-            _initialPendingUrl = null;
-            _MyAppState.instance?.clearPending();
-            return _mayaLinkScreen(url);
-          }
-
-          return const MainNavigationHolder();
-        }
-
-        return const LoginScreen();
-      },
-    );
+      });
+    }
+    return const MainNavigationHolder();
   }
 }
 
@@ -4513,13 +4545,6 @@ class _SecurityBlockScreen extends StatelessWidget {
                     onPressed: () async {
                       SoundService.playClick();
                       await MayaJaalAccount.signOut();
-                      if (context.mounted) {
-                        Navigator.of(context).pushReplacement(
-                          MaterialPageRoute(
-                            builder: (_) => const LoginScreen(),
-                          ),
-                        );
-                      }
                     },
                     icon: const Icon(
                       Icons.logout,
@@ -7767,11 +7792,10 @@ class _StreamPreviewScreenState extends State<StreamPreviewScreen>
     final ok = await SecurityGuard.validateSession();
     if (!ok) {
       if (mounted) {
-        await MayaJaalAccount.signOut();
-        Navigator.pushReplacement(
-          context,
-          MaterialPageRoute(builder: (_) => const LoginScreen()),
-        );
+        setState(() {
+          _isResolving = false;
+          _resolveError = 'Session verification unavailable. Check your internet and reopen this video.';
+        });
       }
       return;
     }
@@ -7812,11 +7836,10 @@ class _StreamPreviewScreenState extends State<StreamPreviewScreen>
     final ok = await SecurityGuard.validateSession();
     if (!ok) {
       if (mounted) {
-        await MayaJaalAccount.signOut();
-        Navigator.pushReplacement(
-          context,
-          MaterialPageRoute(builder: (_) => const LoginScreen()),
-        );
+        setState(() {
+          _isResolving = false;
+          _resolveError = 'Session verification unavailable. Check your internet and reopen this video.';
+        });
       }
       return;
     }
@@ -12554,7 +12577,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
             ListTile(
               leading: const Icon(Icons.privacy_tip_outlined, color: AppThemes.kGreen, size: 20),
               title: const Text('Privacy preferences', style: TextStyle(color: Colors.white, fontSize: 13, fontWeight: FontWeight.bold)),
-              subtitle: const Text('Manage data and privacy choices (Start.io / InMobi)', style: TextStyle(color: Colors.white38, fontSize: 11)),
+              subtitle: const Text('Manage data and privacy choices', style: TextStyle(color: Colors.white38, fontSize: 11)),
               trailing: const Icon(Icons.chevron_right, color: Colors.white24),
               onTap: () => MayaAds.settings(context),
             ),
