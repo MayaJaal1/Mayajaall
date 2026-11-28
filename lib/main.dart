@@ -8286,7 +8286,7 @@ class _StreamPreviewScreenState extends State<StreamPreviewScreen>
           const MatrixRain(opacity: 0.25),
           SafeArea(
             child: SingleChildScrollView(
-              padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
+              padding: EdgeInsets.symmetric(horizontal: ((MediaQuery.of(context).size.width - 320) / 2).clamp(0.0, 14.0).toDouble(), vertical: 8),
               child: Column(
                 children: [
                   SizedBox(
@@ -10885,6 +10885,7 @@ class _MayaChannelPageState extends State<MayaChannelPage>
                           key: ValueKey('channel_ad_${entry.value['id']}'),
                           padding: const EdgeInsets.symmetric(vertical: 12),
                           child: MayaAdSlot(
+                            placement: 'channel feed ${(entry.key + 1)}',
                             nativeAd: (entry.key + 1) % 9 != 6 && (entry.key + 1) % 9 != 0,
                             mrec: (entry.key + 1) % 9 == 0,
                           ),
@@ -13064,9 +13065,14 @@ class _NativeVideoPlayerScreenState extends State<NativeVideoPlayerScreen>
   int _lastAdTick = 0;
   int? _lastAdPosition;
   bool _adBreakRunning = false;
+  Future<String?>? _firstVideoPreload;
 
-  Future<void> _runScheduledAd() async {
-    if (_adBreakRunning || !mounted || !_playing || !MayaAds.canShow || !MayaAds.scheduledVideoAvailable) return;
+  Future<void> _runScheduledAd(int seconds) async {
+    final placement = 'playback ${seconds}s';
+    if (_adBreakRunning || !mounted || !_playing || !MayaAds.canShow || !MayaAds.scheduledVideoAvailable) {
+      MayaAds.recordVideo('$placement: skipped (${!MayaAds.canShow ? 'ads not ready or permitted' : 'player not available'})');
+      return;
+    }
     final attempt = _playbackAttempt;
     _adBreakRunning = true;
     var pausedForAd = false;
@@ -13078,7 +13084,7 @@ class _NativeVideoPlayerScreenState extends State<NativeVideoPlayerScreen>
         await _betterPlayerController?.pause();
         if (MayaAds.canShow) await MayaAds.playScheduledVideo();
       } else {
-        await MayaAds.videoTransition(context, placement: 'scheduled playback break', mayDisplay: () => mounted && attempt == _playbackAttempt && _playing && !_hasError, beforeDisplay: () async {
+        await MayaAds.videoTransition(context, placement: placement, prepared: seconds == 10 ? _firstVideoPreload : null, mayDisplay: () => mounted && attempt == _playbackAttempt && _playing && !_hasError, beforeDisplay: () async {
           if (!mounted || attempt != _playbackAttempt || !_playing) return;
           pausedForAd = true;
           await _directPlayer?.pause();
@@ -13190,9 +13196,12 @@ class _NativeVideoPlayerScreenState extends State<NativeVideoPlayerScreen>
         final advance = previous == null ? 0 : position - previous;
         if (active && elapsed > 0 && elapsed <= 1200 && advance > 0 && advance <= elapsed * 3 + 350) {
           _adPlayMs += elapsed;
+          if (_adPlayMs >= 2000 && _adPlayMs < 10000 && _firstVideoPreload == null && MayaAds.canShow && MayaAds.startEnabled && !MayaAds.test) {
+            _firstVideoPreload = MayaAds.preloadFirstVideo(context);
+          }
           if (MayaAds.scheduledVideoAvailable) {
             final due = _adSchedule.add(elapsed);
-            if (due && MayaAds.canShow) unawaited(_runScheduledAd());
+            if (due != null) unawaited(_runScheduledAd(due));
           } else if (MayaAds.canShow && _adPlayMs >= 45000 && !_adPreloadRequested) {
             _adPreloadRequested = true;
             unawaited(MayaAds.prepareInterstitial());
@@ -13204,10 +13213,8 @@ class _NativeVideoPlayerScreenState extends State<NativeVideoPlayerScreen>
   }
 
   Future<void> _startInitialPlayback() async {
-    // Allow the route transition to finish before presenting an SDK ad.
-    await Future<void>.delayed(const Duration(milliseconds: 350));
-    if (!mounted) return;
-    await MayaAds.videoTransition(context, placement: 'before playback');
+    // Prioritize the first 10 seconds of actual playback. A pre-roll request
+    // used to exhaust the native request cooldown before this first break.
     if (mounted && _playbackAttempt == 0) await _initVideo();
   }
 
@@ -14918,9 +14925,9 @@ class _NativeVideoPlayerScreenState extends State<NativeVideoPlayerScreen>
           ),
           Expanded(
             child: ListView(
-              padding: const EdgeInsets.all(16),
+              padding: EdgeInsets.symmetric(horizontal: ((MediaQuery.of(context).size.width - 320) / 2).clamp(0.0, 16.0).toDouble(), vertical: 16),
               children: [
-                const MayaAdSlot(),
+                const MayaAdSlot(key: ValueKey('player_banner')),
                 Text(
                   widget.title,
                   style: const TextStyle(
