@@ -311,6 +311,16 @@ jobs:
                 super.onPause()
             }
 
+            override fun onSaveInstanceState(outState: android.os.Bundle) {
+                super.onSaveInstanceState(outState)
+                mayaAdsBridge?.saveTransitionState(outState)
+            }
+
+            override fun onRestoreInstanceState(savedInstanceState: android.os.Bundle) {
+                mayaAdsBridge?.restoreTransitionState(savedInstanceState)
+                super.onRestoreInstanceState(savedInstanceState)
+            }
+
             override fun onNewIntent(intent: Intent) {
                 super.onNewIntent(intent)
                 captureShare(intent)
@@ -453,6 +463,7 @@ jobs:
         import com.startapp.sdk.adsbase.adlisteners.AdEventListener;
         import com.startapp.sdk.adsbase.adlisteners.AdDisplayListener;
         import com.startapp.sdk.ads.banner.Banner;
+        import com.startapp.sdk.ads.banner.Mrec;
         import com.startapp.sdk.ads.banner.BannerListener;
         import com.startapp.sdk.ads.nativead.StartAppNativeAd;
         import com.startapp.sdk.ads.nativead.NativeAdPreferences;
@@ -486,6 +497,10 @@ jobs:
             private boolean allowed, ready, initializing, closed, foreground;
             private boolean startAllowed, inmobiAllowed, startReady, startLoading, startShowing;
             private StartAppAd startFull;
+            private StartAppAd transitionVideo;
+            private MethodChannel.Result transitionLoad, transitionShow;
+            private long transitionLoadedAt, lastTransitionRequest;
+            private boolean transitionDisplayed;
             private int startEpoch;
             private boolean initStart() {
                 if (!startAllowed || closed) return false;
@@ -527,6 +542,8 @@ jobs:
                             if(allowed) preloadPrimary(); result.success(null); break;
                         case "showInterstitial": showPrimary(); result.success(null); break;
                         case "reward": rewardPrimary(result); break;
+                        case "prepareTransitionVideo": prepareTransitionVideo(result); break;
+                        case "showTransitionVideo": showTransitionVideo(result); break;
                         case "scheduledVideoTest": beginVideoTest(call.arguments instanceof String ? (String)call.arguments : "", result); break;
                         default: result.notImplemented();
                     }
@@ -561,6 +578,8 @@ jobs:
                 for(Consumer<Boolean> cb:callbacks) safe(()->cb.accept(ok && allowed && inmobiAllowed && !closed));
             }
             private void withdraw() {
+                finishTransitionLoad("ads disabled");
+                if(transitionShow==null)transitionVideo=null;
                 startEpoch++; startFull=null;startLoading=false;
                 if(startReady)safe(()->StartAppSDK.setUserConsent(activity,"pas",System.currentTimeMillis(),false));
                 if(ready)safe(()->InMobiSdk.updateGDPRConsent(consent(false)));
@@ -570,7 +589,63 @@ jobs:
             }
             public void resume(){foreground=true;}
             public void pause(){foreground=false;}
-            public void destroy(){closed=true;allowed=false;withdraw();initGeneration++;finishInit(false);finishReward(false);finishVideoTest(false);channel.setMethodCallHandler(null);}
+            public void destroy(){closed=true;allowed=false;finishTransitionShow("activity closed");withdraw();initGeneration++;finishInit(false);finishReward(false);finishVideoTest(false);channel.setMethodCallHandler(null);}
+            public void saveTransitionState(android.os.Bundle state){
+                if(transitionVideo!=null && transitionShow!=null)safe(()->transitionVideo.onSaveInstanceState(state));
+            }
+            public void restoreTransitionState(android.os.Bundle state){
+                if(transitionVideo!=null && transitionShow!=null)safe(()->transitionVideo.onRestoreInstanceState(state));
+            }
+            private boolean canTransition(){
+                return allowed && startAllowed && startReady && visible() && activity.hasWindowFocus() && frequencyOk() && !startShowing && !showingInterstitial && !showingReward && pendingReward==null && pendingVideoTest==null;
+            }
+            private void finishTransitionLoad(String status){
+                MethodChannel.Result r=transitionLoad; transitionLoad=null;
+                if(!"ready".equals(status) && transitionShow==null)transitionVideo=null;
+                if(r!=null)safe(()->r.success(status));
+            }
+            private void finishTransitionShow(String status){
+                MethodChannel.Result r=transitionShow; transitionShow=null;
+                if(r==null)return;
+                startShowing=false; transitionVideo=null; transitionDisplayed=false;
+                safe(()->r.success(status));
+            }
+            private void prepareTransitionVideo(MethodChannel.Result result){
+                if(!canTransition() || transitionLoad!=null || transitionShow!=null){result.success("unavailable or frequency limit");return;}
+                long now=System.currentTimeMillis();
+                if(transitionVideo!=null && now-transitionLoadedAt<60000){result.success("ready");return;}
+                if(now-lastTransitionRequest<60000){result.success("request cooldown");return;}
+                lastTransitionRequest=now;transitionLoadedAt=0;transitionLoad=result;
+                try {
+                    final StartAppAd ad=new StartAppAd(activity);transitionVideo=ad;
+                    ad.loadAd(StartAppAd.AdMode.VIDEO,new AdEventListener(){
+                        public void onReceiveAd(Ad a){ui.post(()->{
+                            if(transitionLoad!=result || transitionVideo!=ad)return;
+                            transitionLoadedAt=System.currentTimeMillis();finishTransitionLoad("ready");
+                        });}
+                        public void onFailedToReceiveAd(Ad a){ui.post(()->{
+                            if(transitionLoad==result && transitionVideo==ad)finishTransitionLoad("video no fill or load failed");
+                        });}
+                    });
+                    ui.postDelayed(()->{if(transitionLoad==result)finishTransitionLoad("video load timeout");},5000);
+                }catch(RuntimeException | LinkageError e){Log.w(TAG,"Video transition load",e);finishTransitionLoad("video load error");}
+            }
+            private void showTransitionVideo(MethodChannel.Result result){
+                if(!canTransition() || transitionLoad!=null || transitionShow!=null || transitionVideo==null || System.currentTimeMillis()-transitionLoadedAt>=60000){result.success("not ready or frequency limit");return;}
+                final StartAppAd ad=transitionVideo;
+                transitionShow=result;transitionDisplayed=false;startShowing=true;
+                try{
+                    boolean shown=ad.showAd(new AdDisplayListener(){
+                        public void adDisplayed(Ad a){ui.post(()->{if(transitionShow==result){transitionDisplayed=true;lastInterstitial=System.currentTimeMillis();}});}
+                        public void adHidden(Ad a){ui.post(()->{if(transitionShow==result)finishTransitionShow(transitionDisplayed?"displayed and closed":"closed");});}
+                        public void adClicked(Ad a){}
+                        public void adNotDisplayed(Ad a){ui.post(()->{if(transitionShow==result)finishTransitionShow("display failed");});}
+                    });
+                    if(!shown){finishTransitionShow("display unavailable");return;}
+                    lastInterstitial=System.currentTimeMillis();
+                    ui.postDelayed(()->{if(transitionShow==result){safe(ad::close);finishTransitionShow("display timeout");}},120000);
+                }catch(RuntimeException | LinkageError e){Log.w(TAG,"Video transition show",e);finishTransitionShow("display error");}
+            }
             private void preloadPrimary(){
                 if(!visible() || !allowed || !frequencyOk() || startShowing || showingInterstitial || showingReward || pendingReward!=null || pendingVideoTest!=null)return;
                 if(!startAllowed || !startReady){ensure(ok->{if(ok)preload();});return;}
@@ -652,7 +727,7 @@ jobs:
                 }catch(RuntimeException | LinkageError e){Log.w(TAG,"Interstitial load",e);interstitial=null;loadingInterstitial=false;}
             }
             private void showInterstitial(){
-                if(!allowed || !inmobiAllowed || !ready || !visible() || !activity.hasWindowFocus() || !frequencyOk() || loadingInterstitial || showingInterstitial || showingReward || pendingReward!=null || pendingVideoTest!=null || interstitial==null)return;
+                if(!allowed || !inmobiAllowed || !ready || !visible() || !activity.hasWindowFocus() || !frequencyOk() || startShowing || loadingInterstitial || showingInterstitial || showingReward || pendingReward!=null || pendingVideoTest!=null || interstitial==null)return;
                 try{
                     if(!interstitial.isReady()){interstitial=null;return;}
                     showingInterstitial=true;lastInterstitial=System.currentTimeMillis();interstitial.show();
@@ -706,24 +781,26 @@ jobs:
                 return new PlatformViewFactory(StandardMessageCodec.INSTANCE){
                     @Override public PlatformView create(Context context,int id,Object args){
                         boolean nativeAd=args instanceof Map && Boolean.TRUE.equals(((Map<?,?>)args).get("native"));
-                        Slot slot=new Slot(id,nativeAd);slots.add(slot);return slot;
+                        boolean mrec=args instanceof Map && Boolean.TRUE.equals(((Map<?,?>)args).get("mrec"));
+                        Slot slot=new Slot(id,nativeAd,mrec);slots.add(slot);return slot;
                     }
                 };
             }
             private final class Slot implements PlatformView {
                 final FrameLayout root=new FrameLayout(activity);
                 final MethodChannel pipe;
-                final boolean nativeAd;
+                final boolean nativeAd,mrec;
                 boolean disposed,started;
                 Banner startBanner;
+                Mrec startMrec;
                 StartAppNativeAd startNative;
                 NativeAdDetails startDetails;
                 boolean startFinished;
                 String primaryFailure="";
                 InMobiBanner banner;
                 InMobiNative nativeUnit;
-                Slot(int id,boolean isNative){
-                    nativeAd=isNative;pipe=new MethodChannel(messenger,"mayajaal/ads/view/"+id);
+                Slot(int id,boolean isNative,boolean isMrec){
+                    nativeAd=isNative;mrec=isMrec;pipe=new MethodChannel(messenger,"mayajaal/ads/view/"+id);
                     pipe.setMethodCallHandler((call,result)->{
                         if(!"load".equals(call.method)){result.notImplemented();return;}
                         result.success(null);
@@ -735,9 +812,10 @@ jobs:
                     });
                 }
                 int dp(int n){return Math.round(n*activity.getResources().getDisplayMetrics().density);}
-                void loaded(){if(!disposed)pipe.invokeMethod("loaded",startDetails!=null || startBanner!=null ? "Start.io" : "InMobi");}
+                void loaded(){if(!disposed)pipe.invokeMethod("loaded",startDetails!=null || startBanner!=null || startMrec!=null ? "Start.io" : "InMobi");}
                 void status(String message){if(!disposed){Log.i(TAG,message);pipe.invokeMethod("status",message);}}
                 void loadBackup(){
+                    if(mrec){fail("No approved backup MREC placement");return;}
                     if(!inmobiAllowed){fail("InMobi not enabled or permitted in this build");return;}
                     status((primaryFailure.isEmpty()?"":primaryFailure+"; ")+"InMobi: initializing / requesting ad");
                     ensure(ok->{if(disposed)return;if(!ok || !visible() || !allowed){fail("InMobi SDK unavailable or screen not visible");return;} if(nativeAd)loadNative();else loadBanner();});
@@ -748,7 +826,7 @@ jobs:
                     Log.i(TAG,primaryFailure); stopStart();loadBackup();
                 }
                 void loadStart(){
-                    status("Start.io: requesting "+(nativeAd?"native":"banner")+" ad");
+                    status("Start.io: requesting "+(nativeAd?"native":mrec?"MREC":"banner")+" ad");
                     try{
                         if(nativeAd){
                             final StartAppNativeAd ad=new StartAppNativeAd(activity);startNative=ad;
@@ -767,6 +845,15 @@ jobs:
                                 });}
                                 public void onFailedToReceiveAd(Ad a){ui.post(()->startFailed("Native no fill"));}
                             });
+                        }else if(mrec){
+                            startMrec=new Mrec(activity);
+                            startMrec.setBannerListener(new BannerListener(){
+                                public void onReceiveAd(View v){ui.post(()->{if(!disposed && startMrec==v && !startFinished){startFinished=true;loaded();}});}
+                                public void onFailedToReceiveAd(View v){ui.post(()->{if(startMrec==v)startFailed("MREC no fill");});}
+                                public void onImpression(View v){}
+                                public void onClick(View v){}
+                            });
+                            root.addView(startMrec,new FrameLayout.LayoutParams(dp(300),dp(250),Gravity.CENTER));
                         }else{
                             startBanner=new Banner(activity,new BannerListener(){
                                 public void onReceiveAd(View v){ui.post(()->{if(!disposed && startBanner==v && !startFinished){startFinished=true;loaded();}});}
@@ -781,7 +868,7 @@ jobs:
                 }
                 void stopStart(){
                     Banner old=startBanner;startBanner=null;startNative=null;startDetails=null;
-                    if(old!=null)safe(old::hideBanner);root.removeAllViews();
+                    if(old!=null)safe(old::hideBanner); Mrec rect=startMrec;startMrec=null;if(rect!=null)safe(rect::hideBanner);root.removeAllViews();
                 }
                 void fail(String why){if(disposed)return;String report=(primaryFailure.isEmpty()?"":primaryFailure+"; ")+why;Log.i(TAG,report);stop();pipe.invokeMethod("failed",report);}
                 void loadBanner(){
